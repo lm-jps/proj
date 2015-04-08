@@ -18,13 +18,26 @@ endif
 @ SYSER = `echo $1 | sed  -e "s/^0*//"`
 @ CROT = `echo $2 | sed  -e "s/^0*//"`
 
-# modules and programs
+# modules, programs, and scripts
 set DATAVG = datavg
+set QSUB = qsub2
+
+set QUEUE = k.q
 
 # base naming convention for I/O series and logs
 set INMSP = hmi
 if ($TEST) then
+  set TSTOPT = ~rick/hmi/rings/testoptions
+  if (!(-r $TSTOPT)) then
+    echo Error: unable to read file $TSTOPT for test options
+    exit
+  endif
   set ONMSP = hmi_test
+# parse testoptions file for possible substitution of modules
+  grep -q "^DATAVG =" $TSTOPT
+  if ($status == 0) set DATAVG = `grep "^DATAVG =" $TSTOPT | awk '{print $3}'`
+  grep -q "^QSUB =" $TSTOPT
+  if ($status == 0) set QSUB = `grep "^QSUB =" $TSTOPT | awk '{print $3}'`
 else
   set ONMSP = hmi
 endif
@@ -45,8 +58,14 @@ set DATAVG = "$DATAVG -v"
 
 # select from synoptic series
 set TILESS = (  05    15    30)
-set VMEMS =  ( 250  5000 10000)
-set QUEUES = ( j.q  j8.q  j8.q)
+# set VMEMS =  ( 250  5200 10000)
+set VMEMS =  ( 250  4000 8000)
+# New VMEM limits assume no power map output with datavg v 1.5+
+# set PCMDS =  ( ""  "" "-pe smp 2")
+# PCMD should be set for dual if max number of jobs on one node * max vmem
+#   would exceed 120 GB; max number of jobs on one node is either 24, or 12
+#   if smp 2 invoked; but max number of jobs from this script is 9 for 30 deg
+#   or 21 for 15 deg
 
 @ NT = 1
 while ($NT <= $#TILESS)
@@ -88,7 +107,7 @@ set MZERO = -11.5
 # set PSCALE = 0.00025
 # set PZERO = -23.0
 @ VMEM = $VMEMS[$NT]
-set QUEUE = $QUEUES[$NT]
+# set PCMD = "$PCMDS[$NT]"
 
 # auxiliary files
 set HOSTID = `hostname | awk -F. '{print $1}'`
@@ -172,12 +191,21 @@ foreach TLAT ($TLATS)
   echo '  copy= "CarrRot,LatHG,LonCM,DELTA_K,DELTA_NU,D_OMEGA,Apode_f,APOD_MIN,APOD_MAX" \' >> $SCRIPT
   echo '  in= '$PSER'"['$CROT'][][]['$TLAT'][$LON]" >>& $LOG' >> $SCRIPT
   @ BEGUN = `date +%s`
-  qsub -sync yes -t 1-$EXPCT -q $QUEUE -e $QRES -o $QRES $SCRIPT >>& $RLOG
+#  $QSUB $PCMD -sync yes -t 1-$EXPCT -q $QUEUE -e $QRES -o $QRES $SCRIPT >>& $RLOG
+  $QSUB -sync yes -t 1-$EXPCT -q $QUEUE -e $QRES -o $QRES $SCRIPT >>& $RLOG
   @ QJOK = `grep "exited with exit code 0." $RLOG | wc -l`
   @ FAIL = $TOTCT - $QJOK
   if ($FAIL) then
     echo "  $FAIL averaging failures on cluster at Latitude `printf %+05.1f $TLAT`" >> $MMSG
     echo "  ($CROT) $FAIL averaging failures on cluster at Latitude `printf %+05.1f $TLAT`" >> $LOGF
+    set QID = `grep "exited with exit code" $RLOG | awk '{print $2}' | awk -F. '{print $1}' | sort -u`
+    set PROG = `basename $SCRIPT`
+    set ERRLOG = $QRES/$PROG.e$QID
+    set noglob
+    echo "  stderr from module failures in $ERRLOG.*" >> $MMSG
+    unset noglob
+    set JOBID = `grep "Your job-array" $RLOG | awk '{print $3}' | awk -F. '{print $1}'`
+    echo "  For details, qacct[2] -j $JOBID" >> $MMSG
   endif
   @ FINIS = `date +%s`
   @ ELAPS = $FINIS - $BEGUN
