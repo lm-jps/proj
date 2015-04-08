@@ -1,6 +1,18 @@
-#! $Id: std_flight.w,v 1.5 2015/04/07 22:07:27 arta Exp $
+#! $Id: std_flight.w,v 1.6 2015/04/08 18:17:20 arta Exp $
 #! $Name:  $
 #! Description: Standard Wavelength tuning table Apr 2015
+
+####################
+## IMPORTANT NOTE ##
+####################
+# The dcs0x, dcs1x, and dcs2x machines run ingest_lev0, which links against set_HMI_mech_values.o. 
+# The latter file has a function named set_HMI_mech_values() which reads the std_flight.c, std_flight.p,
+# and std_flight.w files. When std_flight.w is updated for "re-tuning", the std_flight.w file must
+# be updated in the /home/prodtest/cvs/JSOC/proj/tables/hmi_mech directories of each of the three
+# data-capture machines. Despite the name /home/prodtest, this directory contains the 
+# production source code and binaries for our data-capture systems.
+# 
+# -- Art April 8, 2015
 
 #Id WT1P  WT2P  WT3P  WT4P      
   1    0     0     0     0      # wobble_10 table
