@@ -86,7 +86,7 @@
 						       /*  module identifier  */
 char *module_name = "rdcoverage";
 char *module_desc = "report input data coverage for tracking options";
-char *version_id = "1.0";
+char *version_id = "1.1";
 
 ModuleArgs_t module_args[] = {
   {ARG_STRING,	"ds", "", "input data series or dataset"}, 
@@ -531,6 +531,7 @@ int DoIt (void) {
   ttrgt = tstrt;
   or = 0;
   badpkey = badqual = badfill = badtime = badpa = blacklist = 0;
+  tlast = tstrt - tstep;
   for (nr = 0; nr < recct; nr++) {
     irec = ds->records[nr];
     quality = drms_getkey_int (irec, qual_key, &status);
@@ -648,24 +649,16 @@ int DoIt (void) {
       extrapolate = 0;
     }
     if (ttrgt < tobs) {
-	/*  linearly interpolate individual pixels between last valid map
-								 and current  */
-      double f, g;
-      int ct, ntot = rgnct * pixct;
-      float *val = (float *)malloc (ntot * sizeof (float));
-      char *skip = (char *)malloc (ntot * sizeof (char));
-      
+					       /*  report interpolated steps  */
       while (ttrgt < tobs) {
-        f = (ttrgt - tlast) / (tobs - tlast);
-	g = 1.0 - f;
-
+/*
 	if (verbose) {
 	  sprint_time (ptbuf, tlast, "", 0);
 	  sprint_time (tbuf, tobs, "", 0);
 	  printf ("step %d to be interpolated from images %s and %s\n",
 	      or, ptbuf, tbuf);
 	}
-
+*/
 	or++;
 	if (or >= length) {
 	  if (nr < recct - 1)
@@ -675,8 +668,6 @@ int DoIt (void) {
 	}
 	ttrgt += tstep;
       }
-      free (val);
-      free (skip);
     }
 
     if (ttrgt == tobs) {
@@ -729,5 +720,7 @@ int DoIt (void) {
  *  13.06.10	general cleanup of unnecessary and sometimes interfering
  *		code for determining ephemeris from time
  *  v 1.0 frozen 2013.11.21
+ *  15.02.24	initialized tlast; removed needless (and uninitialized)
+ *		interpolation code and verbose messages of same
  *
  */
