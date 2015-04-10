@@ -3,3 +3,5 @@ hmi.tdpixlist
 su_tplarson.corr_vw_V_sht_modes
 hmi.MHDcorona_daily_nrt
 hmi_test.gcVbinned_nrt
+hmi.Mrmap_latlon_720s
+hmi.Mrmap_latlon_900x900_720s
