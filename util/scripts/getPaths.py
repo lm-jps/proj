@@ -1,5 +1,9 @@
 #!/usr/bin/env python
 
+# This program takes as input a file containing columns of data. The last column must be a list of SUNUMs.
+# For each of the SUNUMs presented, this program retrieves the path to the referenced SU (if it is exists and is online).
+# The original, non-SUNUMs columns are printed without modification, followed by a column of SUMS paths.
+
 from __future__ import print_function
 import sys
 import re
@@ -37,7 +41,7 @@ if __name__ == "__main__":
     if sumsDrmsParams is None:
         raise Exception('drmsParams', 'Unable to locate DRMS parameters file (drmsparams.py).')
             
-    regexp = re.compile(r'\s*(\S+)\s+(\S+)\s+(\S+)')
+    regexp = re.compile(r'^\s*(.+)\s+(\S+)\s*$')
     file = sys.argv[1]
     with open(file, 'r') as fin:
         with psycopg2.connect(database=sumsDrmsParams.get('DBNAME') + '_sums', user='production', host=sumsDrmsParams.get('SUMS_DB_HOST'), port=sumsDrmsParams.get('SUMPGPORT')) as conn:
@@ -50,9 +54,9 @@ if __name__ == "__main__":
                 for line in fin:
                     match = regexp.match(line)
                     if match is not None:
-                        sunumStr = match.group(3)
+                        sunumStr = match.group(2)
                         if int(sunumStr) >= 0:
-                            recInfo.append((match.group(1), match.group(2), sunumStr))
+                            recInfo.append((match.group(1), sunumStr))
                             sunums.append(sunumStr)
 
                             if iloop == 0:
@@ -68,12 +72,11 @@ if __name__ == "__main__":
                     
                 # Match up the series information with the paths obtained.
                 for rec in recInfo:
-                    series = rec[0]
-                    recnum = rec[1]
-                    sunumStr = rec[2]
+                    info = rec[0]
+                    sunumStr = rec[1]
                     if sunumStr in sunumMap:
                         path = sunumMap[sunumStr]
                     else:
                         path = 'badSUNUM'
                         
-                    print(series + '\t' + recnum + '\t' + sunumStr + '\t' + path)
+                    print(info + '\t' + sunumStr + '\t' + path)
