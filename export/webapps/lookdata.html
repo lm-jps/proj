@@ -4,11 +4,15 @@
 <meta http-equiv="Content-Type" content="text/html; CHARSET=iso-8859-1">
 <title>JSOC Lookdata</title>
 
-<script type="text/javascript" src="js/prototype.js"></script>
+<script type="text/javascript" src="js/prototype-1.7.2.js"></script>
 <script type="text/javascript" src="js/cookies.js"></script>
 <script type="text/javascript" src="js/prototip.js"></script>
-<script type="text/javascript" src="js/amCharts_2.2/amcharts_2.2.1/amcharts/javascript/amcharts.js"></script>
-<script type="text/javascript" src="js/amCharts_2.2/amcharts_2.2.1/amcharts/javascript/raphael.js"></script>
+
+<script type="text/javascript" src="js/amCharts_3/amcharts.js"></script>
+<script type="text/javascript" src="js/amCharts_3/serial.js"></script>
+<script type="text/javascript" src="js/amCharts_3/export/export.js"></script>
+<script type="text/javascript" src="js/amCharts_3/lookdata_export_config.js"></script>
+<link  type="text/css"        href="js/amCharts_3/export/export.css" rel="stylesheet">
 
 <!-- activewidgets fix box model in firefox/safari/opera -->
 <style type="text/css">
@@ -23,7 +27,8 @@
 <script type="text/javascript" src="js/ActiveWidgets/runtime/lib/aw.js"></script>
 <link href="js/ActiveWidgets/runtime/styles/system/aw.css" rel="stylesheet">
 <!-- add activewidgets image libraries -->
-<link href="js/ActiveWidgets/mini.css" rel="stylesheet"></link>
+<!-- <link href="js/ActiveWidgets/mini.css" rel="stylesheet"></link> -->
+<link href="js/ActiveWidgets/mini.css" rel="stylesheet">
 
 <!-- activewidgets change default styles, set control size and position -->
 <style type="text/css">
@@ -82,7 +87,7 @@
 #InfoTable { border-spacing:1px; white-space:nowrap; }
 td {padding:2px; }
 
-span.tip { background-color:yellow }
+#span.tip {"background-color":yellow }
 
 </style>
  
@@ -2046,7 +2051,8 @@ function GraphPickKeys()
   var ikey = 0;
   var nkeys = RecordData.keywords.length;
   var graphKeysSelected = 0;
-  var yDesc = "<table id='graphYTable' border=1><tr><td>Keyword</td><td>Type</td></tr>";
+  var yDesc = '<form id="graphMinMax"><table id="graphYTable" border=1><tr><td>Keyword</td><td>Type</td>';
+  yDesc += '<td>min</td><td>max</td></tr>';
   graphcols = new Array();
   
   for (igraphkey=0; igraphkey < ngraphkeys; igraphkey++)
@@ -2057,18 +2063,35 @@ function GraphPickKeys()
         if ($("GraphKeysSelect")[igraphkey].text == RecordData.keywords[ikey].name)
           {
           var ntype = "unk";
+          var this_name = RecordData.keywords[ikey].name;
           var jkey; for (jkey=0; jkey < SeriesInfo.keywords.length; jkey++)
-            if (RecordData.keywords[ikey].name == SeriesInfo.keywords[jkey].name)
+            if (this_name == SeriesInfo.keywords[jkey].name)
                { // now have access to SeriesInfo for this keyword
                ntype = SeriesInfo.keywords[jkey].type;
                break;
                }
-          yDesc = yDesc + "<td>" + RecordData.keywords[ikey].name + "</td><td>"+ntype+"</td></tr>";
+          yDesc = yDesc + "<td>" + this_name + "</td><td>"+ntype+"</td>";
+          yDesc += '<td><input type="text" id="min_'+this_name+'" onChange="graphSetMinMax();"></td>';
+          yDesc += '<td><input type="text" id="max_'+this_name+'" onChange="graphSetMinMax();"></td><tr>';
           graphAddCol(RecordData.keywords[ikey].name, ikey);
           }
         }
       }
-  $("graphYAxis").innerHTML = yDesc + "</table>";
+  $("graphYAxis").innerHTML = yDesc + "</table></form>";
+  }
+
+function graphSetMinMax()
+  {
+  var gcols = graphcols.length;
+  var icols;
+  for (icol=0; icol<gcols; icol++)
+    {
+    var valAxis = valAxes[icol];
+    var this_name = valAxis.title;
+    valAxis.minimum = $("min_"+this_name).value;
+    valAxis.maximum = $("max_"+this_name).value;
+    }
+  chart.validateNow();
   }
 
 function GraphPickXKey()
@@ -2135,15 +2158,13 @@ function strToDate(timestr)
   return(new Date(t1));
   }
 
-function saveGraph(node)
-  {
-//alert(node.localName);
-  var dataURL = node.toDataURL();
-  $("graphImage").src = dataURL;
-  }
-
+var valAxes; // place these globally for access to the min and max values via form input
+var chart;
 function GraphCreate()
   {
+  // Graph will be made by amChart code in amChartDiv
+  $("amChartDiv").style.display = "block";
+  // $("amLegendDiv").style.display = "block";
   var n=RecordData.count;
   var graphDesc = "<table><tr><td>Graph for:</td><td>" + $("RecordSet").value;
   if ($("RecordLimit").value != "none")
@@ -2154,17 +2175,19 @@ function GraphCreate()
   graphDesc = graphDesc + "</table>";
   $("graphDescription").innerHTML = graphDesc;
 
+  // Prepare the data
   var gcols = graphcols.length;
   var ncols = RecordData.keywords.length;
   if (gcols > 0)
     {
-    var chartData = new Array();
+    $("graphComment").innerHTML = "";
     GraphPickXKey();
     var xname, yname;
     if (datecol == -1)
       xname = "index";
     else
       xname = RecordData.keywords[datecol].name;
+    var chartData = new Array();
     var i; for (i=0; i<n; i++)
       {
       var lineObj = new Object();
@@ -2187,11 +2210,7 @@ function GraphCreate()
         var pcol = graphcols[icol].col;
         val = RecordData.keywords[pcol].values[i];
         if (val === "MISSING")
-{
-//          y = 0.0;
-// continue;
-y = NaN;
-}
+	  y = NaN;
         else
           y = val;
         lineObj[graphcols[icol].name] = y;
@@ -2200,18 +2219,29 @@ y = NaN;
       if (yvals) chartData.push(lineObj);
       }
   
-    var ndata = chartData.length;
-    var chart = new AmCharts.AmSerialChart();
-    chart.pathToImages = "js/amCharts_2.2/amcharts_2.2.1/amcharts/javascript/images/";
-    chart.dataProvider = chartData;
-    chart.categoryField = xname;
-    chart.marginTop = 20;
-    chart.marginLeft = 80;
-    chart.marginRight = gcols*50;
+    // Generate the graph
+    var recSetName = $("RecordSet").value;
+    chart = AmCharts.makeChart("amChartDiv",
+        {
+        type:"serial",
+        theme:"none",
+        dataProvider:chartData,
+        categoryField:xname,
+        marginTop:20,
+        marginLeft:80,
+        marginRight:gcols*70,
+        titles:[{"text":recSetName}],
+        pathToImages:"js/amCharts_3/images/",
+        export:AmCharts.lookdata_exportCFG
+        });
 
+    var graphColors = chart.colors; // this is the default, change to new colorswith new array of colors.
     var legend = new AmCharts.AmLegend();
+    legend.rollOverGraphAlpha = 0.3;
+    legend.valueFunction = function() {return "";};
     chart.addLegend(legend);
-  
+    // chart.addLegend(legend, "amLegendDiv");
+
     var catAxis = chart.categoryAxis;
     catAxis.axisColor = "#FF0000";
     catAxis.gridColor = "#FF00FF";
@@ -2235,23 +2265,25 @@ y = NaN;
       //catAxis.minPeriod = 5;
       }
     
-    graphs = new Array();
-    valAxes = new Array();
+    valAxes = new Array(); // use global for access to the min and max values via form input
     for (icol=0; icol<gcols; icol++)
       {
       var valAxis = new AmCharts.ValueAxis();
-      valAxis.axisColor = "#FF0000";
-      valAxis.gridColor = "#FF00FF";
-      valAxis.gridAlpha = "0.5";
+      var this_name = graphcols[icol].name;
+      valAxis.axisColor = graphColors[icol];
+      valAxis.gridColor = graphColors[icol];
+      valAxis.gridAlpha = "0.4";
       valAxis.dashLength = 5;
       valAxis.useScientificNotation = true;
-      valAxis.title = graphcols[icol].name;
-      valAxis.titleTextColor = "#000000";
-      // chart.addLabel(50,50,graphcols[icol].name);
+      valAxis.title = this_name;
+      valAxis.titleColor = graphColors[icol];
       if (icol > 0)
         {
         valAxis.position = "right";
-        valAxis.offset = (icol-1)*50;
+        valAxis.offset = (icol-1)*70;
+        }
+      else
+        {
         }
       chart.addValueAxis(valAxis);
       valAxes[icol] = valAxis;
@@ -2262,7 +2294,6 @@ y = NaN;
       graph.title = graphcols[icol].name;
       graph.type = "line";
       chart.addGraph(graph);
-      graphs[icol] = graph;
       }
   
     var chartCursor = new AmCharts.ChartCursor();
@@ -2272,25 +2303,22 @@ y = NaN;
     chart.addChartCursor(chartCursor);
   
     var chartScrollbar = new AmCharts.ChartScrollbar();
-    // chartScrollbar.graph = graphs[0];
     chartScrollbar.backgroundAlpha = 0.1;
     chartScrollbar.backgroundColor = "#000000";
-    // chartScrollbar.scrollbarHeight = 40;
-    chartScrollbar.scrollbarHeight = 20;
-  
+    chartScrollbar.scrollbarHeight = 15;
     chartScrollbar.selectedBackgroundColor = "#FFCC32";
     chart.addChartScrollbar(chartScrollbar);
   
-    $("graphPlace").innerHTML = "";
-    $("amChartDiv").innerHTML = "";
-    $("amChartDiv").style.display = "block";
-    
-    chart.write($("amChartDiv"));
+    chart.write("amChartDiv");
+    chart.invalidateSize(); // allow chart to get current window size
     for (icol=0; icol<gcols; icol++)
       {
-      $("graphYTable").rows[icol+1].cells[0].style.backgroundColor = chart.graphs[icol].lineColor;
+      var valAxis = valAxes[icol];
+      var this_name = valAxis.title;
+      $("graphYTable").rows[icol+1].style.backgroundColor = graphColors[icol];
+      $("min_"+this_name).value = valAxis.min;
+      $("max_"+this_name).value = valAxis.max;
       }
-saveGraph($("amChartDiv").childNodes[0].childNodes[0]);
     }
   else
     {
@@ -2604,14 +2632,13 @@ jsoc.stanford.edu gives access to export series. Consult JSOC staff for access t
   <input type="button" value="Create Graph"  style="background-color:#FFFF80" onClick="GraphCreate();" >
   <input type="button" value="Delete Graph"  style="background-color:#FFFF80" onClick="GraphDelete();" >
   <br>
-  <span id="graphPlace"> <strong>No graph created yet</strong> </span>
+  <span id="graphComment"> <strong>No graph created yet</strong> </span>
   <div id="amChartDiv" style="display:none; height:600px; background-color:#FFFFFF">
   </div> <!-- amChartDiv -->
+  <div id="amLegendDiv" style="display:none; height:100px; background-color:#FFFFFF">
+  </div> <!-- amLegendDiv -->
 </div> <!-- /div TabPlotDiv -->
 </div> <!-- /div Main including all tab divs -->
-<div>
-<img id="graphImage" alt="Right click to save me!">
-</div>
 <P style="height:1px">
 <div id="footer" style="vertical-align:bottom;text-align:center;">
 <hr>
