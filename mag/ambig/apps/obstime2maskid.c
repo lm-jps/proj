@@ -4,36 +4,82 @@
  * Description:		Convert TAI to noise mask id.
  *
  * Version:		v1.0		Dec 11 2013
+ *				v2.0		Apr 22 2015
  *
- * Issues:
+ * Note:
+ * v2.0
+ * 		Move the times into external text file, return -1 if not found
+ *		times in the text file must be sorted
  *			
  */
 
-int obstime2maskid(tobs)
-    TIME tobs;
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+
+#define TIMEFILE	"proj/mag/ambig/apps/data/masktime.txt"
+
+int obstime2maskid(TIME tobs)
 {
     char ttemp[64];
-    TIME ChangeTime1, ChangeTime2, ChangeTime3, ChangeTime4, ChangeTime5, ChangeTime6, ChangeTime7, ChangeTime8, ChangeTime9;
     int MaskIndex = 0;
+	FILE *fptr;
+	TIME tid;
+	
+	/* Snippet from Art to obtain data file */
+	
+	char lpath[256], spath[256], *needle;
 
-    strcpy(ttemp, "2010.12.13_19:47:00_TAI");
-    ChangeTime1 = sscan_time(ttemp);
+	/* Obtain data path relative to binary path. */
+	if (readlink("/proc/self/exe", spath, sizeof(spath)) == -1)
+	{
+		fprintf(stderr, "Cannot locate this binary.\n");
+		return -1;
+	}
+	else
+	{
+		if ((needle = strstr(spath, DRMS_ARCH)) != NULL)
+		{
+			needle += strlen(DRMS_ARCH);
+			*needle = '\0';
+			
+			/* We have the path to the make output directory. Now we need
+			 * to get the parent and append the data file */
+			snprintf(lpath,
+					sizeof(lpath),
+					"%s/../%s",
+					spath,
+					TIMEFILE);
+		}
+		else
+		{
+			fprintf(stderr, "Cannot find architecture %s subpath.\n", DRMS_ARCH);
+			return -1;
+		}
+	}
+	printf("lpath: %s\n", lpath);
 
-    strcpy(ttemp, "2011.07.13_18:35:00_TAI");
-    ChangeTime2 = sscan_time(ttemp);
+	/* Start */
+	
+	fptr = fopen(lpath, "r");
+	if (!fptr) {
+		printf("Time file for mask cannot be found, return -1.\n");
+		return -1;		// if error, return -1, so no mask will be found
+	}
+	
+	while (fgets(ttemp, 64, fptr) != NULL) {
+		tid = sscan_time(ttemp);
+//		printf("id=%d; t=%s; tid=%lf\n", MaskIndex, ttemp, tid);
+		if (tobs < tid) {
+			fclose(fptr);
+			return MaskIndex;
+		}
+		MaskIndex++;
+	}
 
-    strcpy(ttemp, "2012.01.18_18:15:00_TAI");
-    ChangeTime3 = sscan_time(ttemp);
+    fclose(fptr);
 
-    strcpy(ttemp, "2013.03.14_06:40:00_TAI");
-    ChangeTime4 = sscan_time(ttemp);
-
-    if (tobs<ChangeTime1) MaskIndex = 0;
-    if (tobs>ChangeTime1 && tobs<ChangeTime2) MaskIndex = 1;
-    if (tobs>ChangeTime2 && tobs<ChangeTime3) MaskIndex = 2;
-    if (tobs>ChangeTime3 && tobs<ChangeTime4) MaskIndex = 3;
-    if (tobs>ChangeTime4) MaskIndex = 4;
-
-  return MaskIndex;
+	return MaskIndex;
+	
 }
 
