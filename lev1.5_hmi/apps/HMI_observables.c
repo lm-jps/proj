@@ -37,7 +37,7 @@ Under normal operations, if "_720s" observables have been produced, other DRMS m
 \li \c levout="level" where level is a string describing the level of the output data. Level should always be lev1.5 (the value by default) for normal processing, except when the code is run in debugging mode, where the output level can be either lev1d or lev1p. Lev1d and lev1p are intermediate data levels that are used internally by the observables code but have not been officially defined in JSOC documents. Lev1d refers to a level 1 filtergram that has been gapfilled (to correct for, among others, bad CCD pixels and cosmic-ray hits), de-rotated, un-distorted, and interpolated in time at a given slotted target time. Lev1p refers to a lev1d filtergram that has been calibrated in polarization.
 \li \c wavelength=number where number is an integer and is the filter index of the target wavelength. For an observables sequence with 6 wavelengths, with corresponding filter indices ranging from I0 to I5 (for filters nominally centered at +172 mA to -172 mA from the Fe I line central wavelength at rest), the first wavelength of the sequence is I3. Therefore, it is best to set wavelength to 3 (the value by default). This wavelength is used by HMI_observables as the reference one, for identifying the sequence run, for deciding how to group the level 1 filtergrams for the temporal interpolation, and so on... 
 \li \c quicklook=number where number is an integer equal to either 0 (for the production of definitive observables) or 1 (for the production of quicklook/nrt observables). The value by default is 0.
-\li \c camid=number where number is an integer equal to either 0 (to use input filtergrams taken by the side camera) or 1 (to use input filtergrams taken by the front camera). Currently, the line-of-sight observable sequence is taken on the front camera only, and therefore camid should be set to 1 (the value by default). The value of camid might be irrelevant for certain observables sequences that require combining both cameras (sequences currently not used). Camid is also used by HMI_observables to decide which look-up tables to apply if the observables are obtained by the MDI-like algorithm, in case two tables are available for the same prime key (one table for the front camera, one for the side camera).
+\li \c camid=number where number is an integer equal to either 0 (to use input filtergrams taken by the side camera) or 1 (to use input filtergrams taken by the front camera) or 3 (if cameras need to be combined, e.g. with a mod L sequence). Currently, the line-of-sight observable sequence is taken on the front camera only, and therefore camid should be set to 1 (the value by default). The value of camid needs to be carefully chosen for certain observables sequences that require combining both cameras (mod L). Camid is also used by HMI_observables to decide which look-up tables to apply if the observables are obtained by the MDI-like algorithm, in case two tables are available for the same prime key (one table for the front camera, one for the side camera).
 \li \c cadence=number where number is a float and is the cadence of the observable sequence in seconds. Currently, it should be set to 45 seconds for the line-of-sight observables (45.0 is the value by default).
 \li \c lev1="series" where series is a string and is the name of the DRMS series holding the level 1 records to be used by the observables code. For normal observables processing either of these two series should be used: hmi.lev1_nrt for the quicklook/nrt level 1 records, and hmi.lev1 for the definitive level 1 records.
 The value by default is hmi.lev1 (to be consistent with the default value of quicklook=0).
@@ -74,6 +74,7 @@ v 1.26: possibility to apply a rotational flat field instead of the pzt flat fie
 v 1.27: code now aborts when status of drms_segment_read() or drms_segment_write() is not DRMS_SUCCESS
 v 1.28: possibility to apply a rotational flat field instead of the pzt flat field, and possibility to use smooth look-up tables instead of the standard ones. support for the 8- and 10-wavelength observable sequences
 v 1.29: correcting for non-linearity of cameras
+on May 1, 2015: code modified to run on FTSID=1022 (mod L observables sequence)
 
 */
 
@@ -152,7 +153,7 @@ char *module_name= "HMI_observables"; //name of the module
 #define kTypeSetOut    "levout"       //data level of the output series (lev1d,lev1p, or lev1.5) LEV1.5 BY DEFAULT
 #define WaveLengthIn   "wavelength"   //filtergram name Ii starting the framelist (i ranges from 0 to 5). MANDATORY PARAMETER.
 #define QuickLookIn    "quicklook"    //quicklook data (yes=1,no=0)? 0 BY DEFAULT
-#define CamIDIn        "camid"        //front camera (camid=1) or side camera (camid=0)?
+#define CamIDIn        "camid"        //front camera (camid=1), side camera (camid=0), or both cameras (camid=3)?
                                       //NB: the user provides the camera wanted instead of the type of observables wanted (l.o.s. or full vector)
                                       //because for some framelists for instance, both camera produce l.o.s. data or both camera produce
                                       //full vector data. so there would be the need to specify, at some point, which camera to use  
@@ -183,6 +184,7 @@ char *module_name= "HMI_observables"; //name of the module
 //#define CALVER_LINEARITY 0x1000       //bitmask for CALVER64 to indicate the use of non-linearity correction //VALUE USED BEFORE JANUARY 15, 2014
 #define CALVER_LINEARITY 0x2000       //bitmask for CALVER64 to indicate the use of non-linearity correction //VALUE USED AFTER JANUARY 15, 2014
 #define CALVER_ROTATIONAL 0x10000     //bitmask for CALVER64 to indicate the use of rotational flat fields 
+#define CALVER_MODL 0x20000           //bitmask for CALVER64 to indicate the use of a mod L observables sequence
 #define Q_CAMERA_ANOMALY 0x00000080   //camera issue with HMI (e.g. DATAMIN=0): resulting images might be usable, but most likely bad
 
 //definitions for the QUALITY keyword for the lev1.5 records
@@ -236,7 +238,7 @@ ModuleArgs_t module_args[] =
      {ARG_STRING, kTypeSetOut,"lev1.5",  "Level of output series, combination of: 1d,1p,1.5. For example: 1p,1.5"},
      {ARG_INT   , WaveLengthIn,"3"    ,  "Index (0 to 5) of the wavelength starting the framelist"},
      {ARG_INT   , QuickLookIn, "0"    ,  "Quicklook data? No=0; Yes=1"},
-     {ARG_INT   , CamIDIn    , "1"    ,  "Front (1) or side (0) camera?"},
+     {ARG_INT   , CamIDIn    , "1"    ,  "Front (1), side (0), or both (3) cameras?"},
      {ARG_DOUBLE, DataCadenceIn,"45.0"  ,"Cadence (in seconds)"},
      {ARG_STRING, SeriesIn, "hmi.lev1",  "Name of the lev1 series"},
      {ARG_INT   , SmoothTables, "0", "Use smooth look-up tables? yes=1, no=0 (default)"},
@@ -263,6 +265,8 @@ int needtochangeFID(int HFLID)
   switch(HFLID)
     {
     case 58312: need=1;
+      break;
+    case 1022: need=1;
       break;
     default: need=0;
     }
@@ -1098,7 +1102,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.44 2014/09/18 16:22:06 couvidat Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.45 2015/05/02 01:12:34 couvidat Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -1193,10 +1197,14 @@ int DoIt(void)
   initfiles.dist_file_side =DISTCOEFFILES;
   initfiles.diffrot_coef   =ROTCOEFFILE;
 
-
-  if(CamId == 0) CamId = LIGHT_SIDE;
-  else           CamId = LIGHT_FRONT;
-
+  int CamId0=CamId;
+  if(CamId == 0)
+    {CamId = LIGHT_SIDE;}
+  else
+    {if(CamId == 1)
+      {CamId = LIGHT_FRONT;}
+    else if(CamId == 3) CamId = LIGHT_SIDE; //when we combine the camera, it's a mod L so we assume it's mainly from the side camera
+    }
 
   if(QuickLook != 0 && QuickLook != 1)                                                 //check that the command line parameter for the quicklook data is valid (must be either 0 or 1)
     {
@@ -1788,7 +1796,7 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
       if(DataCadence == 45.0)  strcpy(HMISeriesLev1d,"hmi.HMISeriesLev1d45Q");
       if(DataCadence == 60.0)  strcpy(HMISeriesLev1d,"su_couvidat.HMISeriesLev1d60Q");
       if(DataCadence == 75.0)  strcpy(HMISeriesLev1d,"su_couvidat.HMISeriesLev1d75Q");
-      if(DataCadence == 90.0)  strcpy(HMISeriesLev1d,"su_couvidat.HMISeriesLev1d90Q");
+      if(DataCadence == 90.0)  strcpy(HMISeriesLev1d,"hmi.HMISeriesLev1d90Q");
       if(DataCadence == 120.0) strcpy(HMISeriesLev1d,"su_couvidat.HMISeriesLev1d120Q");
       if(DataCadence == 135.0) strcpy(HMISeriesLev1d,"hmi.HMISeriesLev1d135Q");
       if(DataCadence == 150.0) strcpy(HMISeriesLev1d,"su_couvidat.HMISeriesLev1d150Q");
@@ -1799,7 +1807,7 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
       if(DataCadence == 45.0)  strcpy(HMISeriesLev1d,"hmi.HMISeriesLev1d45");
       if(DataCadence == 60.0)  strcpy(HMISeriesLev1d,"hmi_test.HMISeriesLev1d60");
       if(DataCadence == 75.0)  strcpy(HMISeriesLev1d,"hmi_test.HMISeriesLev1d75");
-      if(DataCadence == 90.0)  strcpy(HMISeriesLev1d,"su_couvidat.HMISeriesLev1d90");
+      if(DataCadence == 90.0)  strcpy(HMISeriesLev1d,"hmi.HMISeriesLev1d90");
       if(DataCadence == 120.0) strcpy(HMISeriesLev1d,"su_couvidat.HMISeriesLev1d120");
       if(DataCadence == 135.0) strcpy(HMISeriesLev1d,"hmi.HMISeriesLev1d135");
       if(DataCadence == 150.0) strcpy(HMISeriesLev1d,"su_couvidat.HMISeriesLev1d150");
@@ -1944,7 +1952,7 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
   if(QuickLook == 1)                                                //Quick-look data
     {
       if( DataCadence == 45.0)  strcpy(HMISeriesLev1pa,"hmi.HMISeriesLev1pa45Q");
-      if( DataCadence == 90.0)  strcpy(HMISeriesLev1pa,"su_couvidat.HMISeriesLev1pa90Q");
+      if( DataCadence == 90.0)  strcpy(HMISeriesLev1pa,"hmi.HMISeriesLev1pa90Q");
       if( DataCadence == 120.0) strcpy(HMISeriesLev1pa,"su_couvidat.HMISeriesLev1pa120Q");
       if( DataCadence == 135.0) strcpy(HMISeriesLev1pa,"hmi.HMISeriesLev1pa135Q");
       if( DataCadence == 150.0) strcpy(HMISeriesLev1pa,"su_couvidat.HMISeriesLev1pa150Q");
@@ -1954,7 +1962,7 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
   else                                                              //Final data
     {
       if( DataCadence == 45.0)  strcpy(HMISeriesLev1pa,"hmi.HMISeriesLev1pa45");
-      if( DataCadence == 90.0)  strcpy(HMISeriesLev1pa,"su_couvidat.HMISeriesLev1pa90");
+      if( DataCadence == 90.0)  strcpy(HMISeriesLev1pa,"hmi.HMISeriesLev1pa90");
       if( DataCadence == 120.0) strcpy(HMISeriesLev1pa,"su_couvidat.HMISeriesLev1pa120");
       if( DataCadence == 135.0) strcpy(HMISeriesLev1pa,"hmi.HMISeriesLev1pa135");
       if( DataCadence == 150.0) strcpy(HMISeriesLev1pa,"su_couvidat.HMISeriesLev1pa150");
@@ -3110,7 +3118,7 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 			  image[i]=(image[i]*pztflat[i])/rotflat[i];
 			  //remove non-linearity of cameras
 			  tempvalue = image[i]*EXPTIME[temp];
-			  if(CamId == LIGHT_FRONT) tempvalue = (nonlinf[0]+nonlinf[1]*tempvalue+nonlinf[2]*tempvalue*tempvalue+nonlinf[3]*tempvalue*tempvalue*tempvalue)+tempvalue;
+			  if(HCAMID[temp] == LIGHT_FRONT) tempvalue = (nonlinf[0]+nonlinf[1]*tempvalue+nonlinf[2]*tempvalue*tempvalue+nonlinf[3]*tempvalue*tempvalue*tempvalue)+tempvalue;
 			  else tempvalue = (nonlins[0]+nonlins[1]*tempvalue+nonlins[2]*tempvalue*tempvalue+nonlins[3]*tempvalue*tempvalue*tempvalue)+tempvalue;
 			  image[i]  = tempvalue/EXPTIME[temp];    
 			}
@@ -3134,7 +3142,7 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 			{
 			  //remove non-linearity of cameras
 			  tempvalue = image[i]*EXPTIME[temp];
-			  if(CamId == LIGHT_FRONT) tempvalue = (nonlinf[0]+nonlinf[1]*tempvalue+nonlinf[2]*tempvalue*tempvalue+nonlinf[3]*tempvalue*tempvalue*tempvalue)+tempvalue;
+			  if(HCAMID[temp] == LIGHT_FRONT) tempvalue = (nonlinf[0]+nonlinf[1]*tempvalue+nonlinf[2]*tempvalue*tempvalue+nonlinf[3]*tempvalue*tempvalue*tempvalue)+tempvalue;
 			  else tempvalue = (nonlins[0]+nonlins[1]*tempvalue+nonlins[2]*tempvalue*tempvalue+nonlins[3]*tempvalue*tempvalue*tempvalue)+tempvalue;
 			  image[i]  = tempvalue/EXPTIME[temp];
 			}
@@ -4056,7 +4064,7 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 							  image[iii]=(image[iii]*pztflat[iii])/rotflat[iii];
 							  //remove non-linearity of cameras
 							  tempvalue = image[iii]*EXPTIME[temp];
-							  if(CamId == LIGHT_FRONT) tempvalue = (nonlinf[0]+nonlinf[1]*tempvalue+nonlinf[2]*tempvalue*tempvalue+nonlinf[3]*tempvalue*tempvalue*tempvalue)+tempvalue;
+							  if(HCAMID[temp] == LIGHT_FRONT) tempvalue = (nonlinf[0]+nonlinf[1]*tempvalue+nonlinf[2]*tempvalue*tempvalue+nonlinf[3]*tempvalue*tempvalue*tempvalue)+tempvalue;
 							  else tempvalue = (nonlins[0]+nonlins[1]*tempvalue+nonlins[2]*tempvalue*tempvalue+nonlins[3]*tempvalue*tempvalue*tempvalue)+tempvalue;
 							  image[iii]  = tempvalue/EXPTIME[temp]; 
 							}
@@ -4083,7 +4091,7 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 							{						     
 							  //remove non-linearity of cameras
 							  tempvalue = image[iii]*EXPTIME[temp];
-							  if(CamId == LIGHT_FRONT) tempvalue = (nonlinf[0]+nonlinf[1]*tempvalue+nonlinf[2]*tempvalue*tempvalue+nonlinf[3]*tempvalue*tempvalue*tempvalue)+tempvalue;
+							  if(HCAMID[temp] == LIGHT_FRONT) tempvalue = (nonlinf[0]+nonlinf[1]*tempvalue+nonlinf[2]*tempvalue*tempvalue+nonlinf[3]*tempvalue*tempvalue*tempvalue)+tempvalue;
 							  else tempvalue = (nonlins[0]+nonlins[1]*tempvalue+nonlins[2]*tempvalue*tempvalue+nonlins[3]*tempvalue*tempvalue*tempvalue)+tempvalue;
 							  image[iii]  = tempvalue/EXPTIME[temp];
 							}
@@ -4444,6 +4452,7 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 		      if(inLinearity == 1)      CALVER32[0] = CALVER32[0] | CALVER_LINEARITY;
 		      if(inRotationalFlat == 1) CALVER32[0] = CALVER32[0] | CALVER_ROTATIONAL;
 		      if(inSmoothTables == 1)   CALVER32[0] = CALVER32[0] | CALVER_SMOOTH;
+		      if(TargetHFLID == 58312 || TargetHFLID == 1022) CALVER32[0] = CALVER32[0] | CALVER_MODL;
 		      statusA[48]= drms_setkey_longlong(recLev1d->records[k],CALVER64S,CALVER32[0]); 
 
 		      TotalStatus=0;
@@ -4524,6 +4533,7 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 	  PolarizationType=1; 
 	  if(CamId  == LIGHT_SIDE)  camera=1; //side camera
 	  if(CamId  == LIGHT_FRONT) camera=2; //front camera
+	  if(CamId0 == 3) camera=3; //combining both cameras for a mod L (FTSID=1022 or 58312)
 	  if(camera == 2)
 	    {
 	      printf("Error: the use of time-averaged IQUV data as input requires CamId = side camera\n");
@@ -5330,9 +5340,10 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 		    }
 		    }*/
 
-	      printf("READING DATA SEGMENTS OF LEVEL 1p RECORDS\n");
+	      printf("READING %d DATA SEGMENTS OF LEVEL 1p RECORDS\n",nSegs1p);
 	      for(i=0;i<nSegs1p;++i)
 		{
+		  printf("%d\n",i);
 		  segin   = drms_segment_lookupnum(recLev1p->records[0],i);
 		  arrLev1p[i] = drms_segment_read(segin,type1p,&status); //pointer toward the segment. THE SEGMENTS ARE READ FROM LEV 1P DATA SERIES, SO ARE ORDERED IN I0 LCP,RCP, I1 LCP,RCP, I2... AND ARE CONVERTED INTO TYPE 1p
 		  if(status != DRMS_SUCCESS || arrLev1p[i] == NULL)

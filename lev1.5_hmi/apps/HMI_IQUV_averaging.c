@@ -73,6 +73,7 @@ v 1.18 and 1.19: code now aborts when status of drms_segment_read() or drms_segm
 v 1.20: possibility to apply a rotational flat field instead of the pzt flat field, and possibility to use smooth look-up tables instead of the standard ones
         support for the 8- and 10-wavelength observable sequences run in April 2010
 v 1.21: correcting for non-linearity of cameras
+on May 1, 2015: code modified to run on FTSID=1022 (mod L observables sequence)
 
 */
 
@@ -177,6 +178,7 @@ char *module_name    = "HMI_IQUV_averaging"; //name of the module
 //#define CALVER_LINEARITY 0x1000       //bitmask for CALVER64 to indicate the use of non-linearity correction //VALUE USED BEFORE JANUARY 15, 2014
 #define CALVER_LINEARITY 0x2000       //bitmask for CALVER64 to indicate the use of non-linearity correction //VALUE USED AFTER JANUARY 15, 2014
 #define CALVER_ROTATIONAL 0x10000      //bitmask for CALVER64 to indicate the use of rotational flat fields 
+#define CALVER_MODL 0x20000           //bitmask for CALVER64 to indicate the use of a mod L observables sequence
 
  //definitions for the QUALITY keyword for the lev1.5 records
 
@@ -252,6 +254,8 @@ int needtochangeFID(int HFLID)
   switch(HFLID)
     {
     case 58312: need=1;
+      break;
+    case 1022: need=1;
       break;
     default: need=0;
     }
@@ -1020,7 +1024,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.38 2014/09/18 16:22:24 couvidat Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.39 2015/05/02 01:13:06 couvidat Exp $");
 }
 
 
@@ -3709,7 +3713,7 @@ int DoIt(void)
 							  image[iii]=(image[iii]*pztflat[iii])/rotflat[iii];
 							  //remove non-linearity of cameras
 							  tempvalue = image[iii]*EXPTIME[temp];
-							  if(CamId == LIGHT_FRONT) tempvalue = (nonlinf[0]+nonlinf[1]*tempvalue+nonlinf[2]*tempvalue*tempvalue+nonlinf[3]*tempvalue*tempvalue*tempvalue)+tempvalue;
+							  if(HCAMID[temp] == LIGHT_FRONT) tempvalue = (nonlinf[0]+nonlinf[1]*tempvalue+nonlinf[2]*tempvalue*tempvalue+nonlinf[3]*tempvalue*tempvalue*tempvalue)+tempvalue;
 							  else tempvalue = (nonlins[0]+nonlins[1]*tempvalue+nonlins[2]*tempvalue*tempvalue+nonlins[3]*tempvalue*tempvalue*tempvalue)+tempvalue;
 							  image[iii]  = tempvalue/EXPTIME[temp];    
 							}
@@ -3736,7 +3740,7 @@ int DoIt(void)
 							{
 							  //remove non-linearity of cameras
 							  tempvalue = image[iii]*EXPTIME[temp];
-							  if(CamId == LIGHT_FRONT) tempvalue = (nonlinf[0]+nonlinf[1]*tempvalue+nonlinf[2]*tempvalue*tempvalue+nonlinf[3]*tempvalue*tempvalue*tempvalue)+tempvalue;
+							  if(HCAMID[temp] == LIGHT_FRONT) tempvalue = (nonlinf[0]+nonlinf[1]*tempvalue+nonlinf[2]*tempvalue*tempvalue+nonlinf[3]*tempvalue*tempvalue*tempvalue)+tempvalue;
 							  else tempvalue = (nonlins[0]+nonlins[1]*tempvalue+nonlins[2]*tempvalue*tempvalue+nonlins[3]*tempvalue*tempvalue*tempvalue)+tempvalue;
 							  image[iii]  = tempvalue/EXPTIME[temp];
 							}
@@ -4156,6 +4160,7 @@ int DoIt(void)
 	      //statusA[45]= drms_setkey_string(recLev1p->records[timeindex],ROTFLAT,QueryFlatField); //apply a rotational flat field yes (query used) or no (empty string)?
 	      if(inLinearity == 1)      CALVER32[0] = CALVER32[0] | CALVER_LINEARITY;
 	      if(inRotationalFlat == 1) CALVER32[0] = CALVER32[0] | CALVER_ROTATIONAL;
+	      if(TargetHFLID == 58312 || TargetHFLID == 1022) CALVER32[0] = CALVER32[0] | CALVER_MODL;
 	      statusA[45]= drms_setkey_longlong(recLev1p->records[timeindex],CALVER64S,CALVER32[0]); 
 
 	      TotalStatus=0;
