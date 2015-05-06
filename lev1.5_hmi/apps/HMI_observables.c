@@ -185,6 +185,7 @@ char *module_name= "HMI_observables"; //name of the module
 #define CALVER_LINEARITY 0x2000       //bitmask for CALVER64 to indicate the use of non-linearity correction //VALUE USED AFTER JANUARY 15, 2014
 #define CALVER_ROTATIONAL 0x10000     //bitmask for CALVER64 to indicate the use of rotational flat fields 
 #define CALVER_MODL 0x20000           //bitmask for CALVER64 to indicate the use of a mod L observables sequence
+#define CALVER_NOMODL 0x1FFFF         //to reset the mask
 #define Q_CAMERA_ANOMALY 0x00000080   //camera issue with HMI (e.g. DATAMIN=0): resulting images might be usable, but most likely bad
 
 //definitions for the QUALITY keyword for the lev1.5 records
@@ -1102,7 +1103,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.45 2015/05/02 01:12:34 couvidat Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.46 2015/05/06 23:34:18 couvidat Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -4452,7 +4453,7 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 		      if(inLinearity == 1)      CALVER32[0] = CALVER32[0] | CALVER_LINEARITY;
 		      if(inRotationalFlat == 1) CALVER32[0] = CALVER32[0] | CALVER_ROTATIONAL;
 		      if(inSmoothTables == 1)   CALVER32[0] = CALVER32[0] | CALVER_SMOOTH;
-		      if(TargetHFLID == 58312 || TargetHFLID == 1022) CALVER32[0] = CALVER32[0] | CALVER_MODL;
+		      if(TargetHFLID == 58312 || TargetHFLID == 1022) {CALVER32[0] = CALVER32[0] | CALVER_MODL;} else CALVER32[0] = CALVER32[0] & CALVER_NOMODL;
 		      statusA[48]= drms_setkey_longlong(recLev1d->records[k],CALVER64S,CALVER32[0]); 
 
 		      TotalStatus=0;

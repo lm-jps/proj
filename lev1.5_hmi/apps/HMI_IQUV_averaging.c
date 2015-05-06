@@ -74,6 +74,7 @@ v 1.20: possibility to apply a rotational flat field instead of the pzt flat fie
         support for the 8- and 10-wavelength observable sequences run in April 2010
 v 1.21: correcting for non-linearity of cameras
 on May 1, 2015: code modified to run on FTSID=1022 (mod L observables sequence)
+on May 6, 2015: RSUNerr changed from 0.8 to 1.0 pixels
 
 */
 
@@ -179,6 +180,7 @@ char *module_name    = "HMI_IQUV_averaging"; //name of the module
 #define CALVER_LINEARITY 0x2000       //bitmask for CALVER64 to indicate the use of non-linearity correction //VALUE USED AFTER JANUARY 15, 2014
 #define CALVER_ROTATIONAL 0x10000      //bitmask for CALVER64 to indicate the use of rotational flat fields 
 #define CALVER_MODL 0x20000           //bitmask for CALVER64 to indicate the use of a mod L observables sequence
+#define CALVER_NOMODL 0x1FFFF         //to reset the mask
 
  //definitions for the QUALITY keyword for the lev1.5 records
 
@@ -1024,7 +1026,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.39 2015/05/02 01:13:06 couvidat Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.40 2015/05/06 23:34:32 couvidat Exp $");
 }
 
 
@@ -1086,7 +1088,7 @@ int DoIt(void)
   char HISTORY[MaxNString];                                                            //history of the data
 
   char COMMENT[MaxNString];
-  strcpy(COMMENT,"De-rotation: ON; Un-distortion: ON; Re-centering: ON; Re-sizing: OFF; correction for cosmic-ray hits; RSUNerr=0.8 pixels; dpath="); //comment about what the observables code is doing
+  strcpy(COMMENT,"De-rotation: ON; Un-distortion: ON; Re-centering: ON; Re-sizing: OFF; correction for cosmic-ray hits; RSUNerr=1.0 pixels; dpath="); //comment about what the observables code is doing
   strcat(COMMENT,dpath);
   if(inLinearity == 1) strcat(COMMENT,"; linearity=1 with coefficients updated on 2014/01/15");
   if(inRotationalFlat == 1) strcat(COMMENT,"; rotational=1");
@@ -1310,7 +1312,7 @@ int DoIt(void)
   float *CRLNOBS=NULL;
   //float *HGLNOBS=NULL;
   float *CDELT1=NULL;                                                //image scale in the x direction (in arcseconds)
-  float RSUNerr=0.8;//0.6;                                                //maximum change tolerated on RSUN=1.82*RSUNerr, maximum change tolerated on CRPIX1 and CRPIX2=RSUNerr, from image to image,in pixels
+  float RSUNerr=1.0;//0.8;//0.6;                                     //maximum change tolerated on RSUN=1.82*RSUNerr, maximum change tolerated on CRPIX1 and CRPIX2=RSUNerr, from image to image,in pixels
   float diffXfs= 6.14124;                                            //difference between CRPIX1 of front and side cameras in pixels (!!! WARNING !!!! SHOULD NOT BE A CONSTANT: VARIES WITH ORBITAL VELOCITY)
   float diffYfs=-4.28992;                                            //difference between CRPIX2 of front and side cameras in pixels (!!! WARNING !!!! SHOULD NOT BE A CONSTANT: VARIES WITH ORBITAL VELOCITY)
   float correction,correction2;
@@ -4160,7 +4162,7 @@ int DoIt(void)
 	      //statusA[45]= drms_setkey_string(recLev1p->records[timeindex],ROTFLAT,QueryFlatField); //apply a rotational flat field yes (query used) or no (empty string)?
 	      if(inLinearity == 1)      CALVER32[0] = CALVER32[0] | CALVER_LINEARITY;
 	      if(inRotationalFlat == 1) CALVER32[0] = CALVER32[0] | CALVER_ROTATIONAL;
-	      if(TargetHFLID == 58312 || TargetHFLID == 1022) CALVER32[0] = CALVER32[0] | CALVER_MODL;
+	      if(TargetHFLID == 58312 || TargetHFLID == 1022) {CALVER32[0] = CALVER32[0] | CALVER_MODL;} else CALVER32[0] = CALVER32[0] & CALVER_NOMODL;
 	      statusA[45]= drms_setkey_longlong(recLev1p->records[timeindex],CALVER64S,CALVER32[0]); 
 
 	      TotalStatus=0;
