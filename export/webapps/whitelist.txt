@@ -5,3 +5,4 @@ hmi.MHDcorona_daily_nrt
 hmi_test.gcVbinned_nrt
 hmi.Mrmap_latlon_720s
 hmi.Mrmap_latlon_900x900_720s
+hmi.Mrmap_latlon_900x900_720s_nrt
