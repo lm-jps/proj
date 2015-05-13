@@ -75,6 +75,7 @@ v 1.27: code now aborts when status of drms_segment_read() or drms_segment_write
 v 1.28: possibility to apply a rotational flat field instead of the pzt flat field, and possibility to use smooth look-up tables instead of the standard ones. support for the 8- and 10-wavelength observable sequences
 v 1.29: correcting for non-linearity of cameras
 on May 1, 2015: code modified to run on FTSID=1022 (mod L observables sequence)
+on May 13, 2015: code modified to correct for higher front camera intensity when both cameras need to be combined
 
 */
 
@@ -185,7 +186,7 @@ char *module_name= "HMI_observables"; //name of the module
 #define CALVER_LINEARITY 0x2000       //bitmask for CALVER64 to indicate the use of non-linearity correction //VALUE USED AFTER JANUARY 15, 2014
 #define CALVER_ROTATIONAL 0x10000     //bitmask for CALVER64 to indicate the use of rotational flat fields 
 #define CALVER_MODL 0x20000           //bitmask for CALVER64 to indicate the use of a mod L observables sequence
-#define CALVER_NOMODL 0x1FFFF         //to reset the mask
+#define CALVER_NOMODL 0xFFFFFFFFFFF1FFFF //to reset the mask
 #define Q_CAMERA_ANOMALY 0x00000080   //camera issue with HMI (e.g. DATAMIN=0): resulting images might be usable, but most likely bad
 
 //definitions for the QUALITY keyword for the lev1.5 records
@@ -1103,7 +1104,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.46 2015/05/06 23:34:18 couvidat Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.47 2015/05/13 23:01:43 couvidat Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -1161,7 +1162,7 @@ int DoIt(void)
   char HISTORY[MaxNString];                                                            //history of the data
 
   char COMMENT[MaxNString];
-  strcpy(COMMENT,"De-rotation: ON; Un-distortion: ON; Re-centering: ON; Re-sizing: OFF; correction for cosmic-ray hits; dpath="); //comment about what the observables code is doing
+  strcpy(COMMENT,"De-rotation: ON; Un-distortion: ON; Re-centering: ON; Re-sizing: OFF; correction for cosmic-ray hits; correction front/side intensity implemented for mod L; dpath="); //comment about what the observables code is doing
   strcat(COMMENT,dpath);
   if(inLinearity == 1) strcat(COMMENT,"; linearity=1 with coefficients updated on 2014/01/15");
   if(inRotationalFlat == 1) strcat(COMMENT,"; rotational=1");
@@ -1423,6 +1424,7 @@ int DoIt(void)
   float *rotflat;
   float *EXPTIME=NULL;
   float tempvalue=0.0;
+  float *DATAMEAN=NULL;
 
   //KEYWORD FROM INPUT LEVEL 1 DATA
   char *FSNS              = "FSN";                                    //Filtergram Sequence Number
@@ -1612,6 +1614,11 @@ int DoIt(void)
                                                                      //[0:23] are the segments for IQUV data, [24:35] are the segments for LCP+RCP data
 char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2","V2","I3","Q3","U3","V3","I4","Q4","U4","V4","I5","Q5","U5","V5","I6","Q6","U6","V6","I7","Q7","U7","V7","I8","Q8","U8","V8","I9","Q9","U9","V9","LCP0","RCP0","LCP1","RCP1","LCP2","RCP2","LCP3","RCP3","LCP4","RCP4","LCP5","RCP5","LCP6","RCP6","LCP7","RCP7","LCP8","RCP8","LCP9","RCP9"};   //[0,39] are the segments for IQUV data
 
+  float totalfront=0.0;
+  float totalside=0.0;
+  int countfront=0;
+  int countside=0;
+  float iratio=0.0;
 
   //Parallelization
   /******************************************************************************************************************/
@@ -2274,6 +2281,12 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 	      printf("Error: memory could not be allocated to CAMERA\n");
 	      return 1;//exit(EXIT_FAILURE);
 	    }
+	  DATAMEAN = (float *)malloc(nRecs1*sizeof(float)); 
+	  if(DATAMEAN == NULL)
+	    {
+	      printf("Error: memory could not be allocated to DATAMEAN\n");
+	      return 1;//exit(EXIT_FAILURE);
+	    }
 
 
 
@@ -2425,6 +2438,9 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 	      CAMERA[i]  = drms_getkey_int(recLev1->records[i],CAMERAS,&statusA[35]); //Phil required a test on CAMERA on 12/20/2012
 	      if(CAMERA[i] == -2147483648 || statusA[35] != DRMS_SUCCESS) KeywordMissing[i]=1;//missing CAMERA keyword
 
+	      DATAMEAN[i]    = (float)drms_getkey_double(recLev1->records[i],"DATAMEAN",&statusA[36]);
+	      if(statusA[36] != DRMS_SUCCESS) KeywordMissing[i]=1;
+
 	      //CORRECTION OF R_SUN and CRPIX1 FOR LIMB FINDER ARTIFACTS
 	      
 	      /*
@@ -2483,7 +2499,7 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 		  HWLTID[i]     = MISSINGKEYWORD;
 		  strcpy(HWLTNSET[i],"NONE");
 		  EXPTIME[i]    = MISSINGKEYWORD;
-
+		  DATAMEAN[i]   = MISSINGKEYWORD;
 		  //SegmentRead[i]= -1;
 		  KeywordMissing[i]=1;
 		}
@@ -2517,6 +2533,30 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 	  return 1;//exit(EXIT_FAILURE);
 	}    
 
+      //DETERMINING THE INTENSITY RATIO FRONT/SIDE CAMERA
+      for(i=0;i<nRecs1;++i)  //loop over all the opened level 1 records
+	{
+	  if( (KeywordMissing[i] !=1) && (HCAMID[i] == LIGHT_FRONT) && (WhichWavelength(FID[i]) == 5) ) //we only use the wavelength index 5 (-172 mA from center of Fe I line at rest)
+	    {totalfront += DATAMEAN[i];
+	      countfront += 1;
+	    } 
+	  if( (KeywordMissing[i] !=1) && (HCAMID[i] == LIGHT_SIDE) && (WhichWavelength(FID[i]) == 5) )
+	    {totalside += DATAMEAN[i];
+	      countside += 1;
+	    } 
+	}
+      if(countfront != 0 && countside !=0)
+	{
+	  totalfront = totalfront/(float)countfront; //average DATAMEAN over all the front-camera records
+	  totalside = totalside/(float)countside; //average DATAMEAN over all of the side-camera records
+	  iratio = totalfront/totalside;
+	  printf("INTENSITY RATIO FRONT/SIDE CAMERAS = %f BASED ON %d FRONT and %d SIDE IMAGES \n",iratio,countfront,countside);
+	} 
+      else
+	{
+	  printf("WARNING: THERE WAS NOT ENOUGH LEV1 AT WAVELENGTH INDEX 5 TO COMPUTE AN INTENSITY RATIO BETWEEN FRONT AND SIDE CAMERAS: THE CODE WILL USE THE VALUE 1.05 IF CAMERAS HAVE TO BE COMBINED \n");
+	  iratio = 1.05;
+	}
     }
 
 
@@ -4265,6 +4305,12 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 			    }
 			}
 		      images[ii]=arrin[i]->data;
+		      image=arrin[i]->data;
+		      if( (combine == 1) && (HCAMID[temp] == LIGHT_FRONT)){ //we need to combine both cameras
+			//IF NEED TO COMBINE BOTH CAMERAS, WE NEED TO CORRECT FOR THE FRONT vs SIDE CAMERA INTENSITY DIFFERENCE
+			for(iii=0;iii<axisin[0]*axisin[1];++iii) image[iii]= image[iii]/iratio;
+			printf("MOD L intensity correction applied to FSN=%d \n",FSN[temp]);
+		      }
 		      ierrors[ii]=arrerrors[i]->data;
 		      if(HCAMID[temp] == LIGHT_FRONT) KeyInterp[ii].camera=0; //WARNING: the convention of Richard's subroutine is that 0=front camera, 1=side camera
 		      else KeyInterp[ii].camera=1;

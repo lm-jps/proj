@@ -75,6 +75,7 @@ v 1.20: possibility to apply a rotational flat field instead of the pzt flat fie
 v 1.21: correcting for non-linearity of cameras
 on May 1, 2015: code modified to run on FTSID=1022 (mod L observables sequence)
 on May 6, 2015: RSUNerr changed from 0.8 to 1.0 pixels
+on May 13, 2015: code modified to correct for higher front camera intensity when both cameras need to be combined
 
 */
 
@@ -139,7 +140,7 @@ on May 6, 2015: RSUNerr changed from 0.8 to 1.0 pixels
 
 #undef I                              //I is the complex number (0,1) in complex.h. We un-define it to avoid confusion with the loop iterative variable i
 
-char *module_name    = "HMI_IQUV_averaging"; //name of the module
+char *module_name    = "HMI_IQUV_averaging_modL"; //name of the module
 
 #define kRecSetIn      "begin"        //beginning time for which an output is wanted. MANDATORY PARAMETER.
 #define kRecSetIn2     "end"          //end time for which an output is wanted. MANDATORY PARAMETER.
@@ -180,7 +181,7 @@ char *module_name    = "HMI_IQUV_averaging"; //name of the module
 #define CALVER_LINEARITY 0x2000       //bitmask for CALVER64 to indicate the use of non-linearity correction //VALUE USED AFTER JANUARY 15, 2014
 #define CALVER_ROTATIONAL 0x10000      //bitmask for CALVER64 to indicate the use of rotational flat fields 
 #define CALVER_MODL 0x20000           //bitmask for CALVER64 to indicate the use of a mod L observables sequence
-#define CALVER_NOMODL 0x1FFFF         //to reset the mask
+#define CALVER_NOMODL 0xFFFFFFFFFFF1FFFF //to reset the mask
 
  //definitions for the QUALITY keyword for the lev1.5 records
 
@@ -1026,7 +1027,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.40 2015/05/06 23:34:32 couvidat Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.41 2015/05/13 23:02:02 couvidat Exp $");
 }
 
 
@@ -1088,7 +1089,7 @@ int DoIt(void)
   char HISTORY[MaxNString];                                                            //history of the data
 
   char COMMENT[MaxNString];
-  strcpy(COMMENT,"De-rotation: ON; Un-distortion: ON; Re-centering: ON; Re-sizing: OFF; correction for cosmic-ray hits; RSUNerr=1.0 pixels; dpath="); //comment about what the observables code is doing
+  strcpy(COMMENT,"De-rotation: ON; Un-distortion: ON; Re-centering: ON; Re-sizing: OFF; correction for cosmic-ray hits; RSUNerr=1.0 pixels; correction front/side intensity implemented for mod L; dpath="); //comment about what the observables code is doing
   strcat(COMMENT,dpath);
   if(inLinearity == 1) strcat(COMMENT,"; linearity=1 with coefficients updated on 2014/01/15");
   if(inRotationalFlat == 1) strcat(COMMENT,"; rotational=1");
@@ -1322,6 +1323,7 @@ int DoIt(void)
   float *rotflat;
   float *EXPTIME=NULL;
   float tempvalue=0.0;
+  float *DATAMEAN=NULL;
 
   //KEYWORD FROM INPUT LEVEL 1 DATA
   char *FSNS              = "FSN";                                    //Filtergram Sequence Number
@@ -1476,6 +1478,11 @@ int DoIt(void)
 
   DRMS_Record_t *rec = NULL;
 
+  float totalfront=0.0;
+  float totalside=0.0;
+  int countfront=0;
+  int countside=0;
+  float iratio=0.0;
 
   //Parallelization
   /******************************************************************************************************************/
@@ -1898,6 +1905,12 @@ int DoIt(void)
 	  printf("Error: memory could not be allocated to CAMERA\n");
 	  return 1;//exit(EXIT_FAILURE);
 	}
+      DATAMEAN = (float *)malloc(nRecs1*sizeof(float)); 
+      if(DATAMEAN == NULL)
+	{
+	  printf("Error: memory could not be allocated to DATAMEAN\n");
+	  return 1;//exit(EXIT_FAILURE);
+	}
       
       //reading some keyword values for all the open records (PUT MISSINGKEYWORD OR MISSINGKEYWORDINT IF THE KEYWORD IS MISSING) and
       //create an array IndexFiltergram with the record index of all the filtergrams with the wavelength WavelengthID
@@ -2039,6 +2052,9 @@ int DoIt(void)
 	  CAMERA[i]  = drms_getkey_int(recLev1->records[i],CAMERAS,&statusA[35]); //Phil required a test on CAMERA on 12/20/2012
 	  if(CAMERA[i] == -2147483648 || statusA[35] != DRMS_SUCCESS) KeywordMissing[i]=1;//missing CAMERA keyword
 
+	  DATAMEAN[i]    = (float)drms_getkey_double(recLev1->records[i],"DATAMEAN",&statusA[36]);
+	  if(statusA[36] != DRMS_SUCCESS) KeywordMissing[i]=1;
+
 	  //CORRECTION OF R_SUN and CRPIX1 FOR LIMB FINDER ARTIFACTS
 	  /*if(statusA[9] == DRMS_SUCCESS && statusA[16] == DRMS_SUCCESS && statusA[14] == DRMS_SUCCESS && statusA[22] == DRMS_SUCCESS && statusA[21] == DRMS_SUCCESS)
 	    {
@@ -2060,7 +2076,7 @@ int DoIt(void)
 	  if(TotalStatus != 0 || !strcmp(IMGTYPE[i],"DARK") )  //at least one keyword is missing or the image is a dark frame
 	    {
 	      printf("Error: the level 1 filtergram index %d is missing at least one keyword, or is a dark frame\n",i);
-	      for(iii=0;iii<=31;++iii) printf(" %d ",statusA[iii]);
+	      for(iii=0;iii<=36;++iii) printf(" %d ",statusA[iii]);
 	      printf("\n");
 	      //we set some keywords to unrealistic values so that this record cannot be considered a valid record later in the program and will be rejected
 	      FID[i]        = MISSINGKEYWORDINT;
@@ -2092,7 +2108,7 @@ int DoIt(void)
 	      HPLTID[i]     = MISSINGKEYWORD;
 	      strcpy(HWLTNSET[i],"NONE");
 	      EXPTIME[i]    = MISSINGKEYWORD;
-
+	      DATAMEAN[i]   = MISSINGKEYWORD;
 	      //SegmentRead[i]= -1; //-1 denotes a problem with the data segment
 	      KeywordMissing[i]=1;
 	    }
@@ -2122,7 +2138,32 @@ int DoIt(void)
       return 1;//exit(EXIT_FAILURE)    
     }    
   
-  
+
+  //DETERMINING THE INTENSITY RATIO FRONT/SIDE CAMERA
+  for(i=0;i<nRecs1;++i)  //loop over all the opened level 1 records
+	{
+	  if( (KeywordMissing[i] !=1) && (HCAMID[i] == LIGHT_FRONT) && (WhichWavelength(FID[i]) == 5) ) //we only use the wavelength index 5 (-172 mA from center of Fe I line at rest)
+	   {totalfront += DATAMEAN[i];
+	   countfront += 1;
+	   } 
+	 if( (KeywordMissing[i] !=1) && (HCAMID[i] == LIGHT_SIDE) && (WhichWavelength(FID[i]) == 5) )
+	   {totalside += DATAMEAN[i];
+	   countside += 1;
+	   } 
+	}
+  if(countfront != 0 && countside !=0)
+    {
+      totalfront = totalfront/(float)countfront; //average DATAMEAN over all the front-camera records
+      totalside = totalside/(float)countside; //average DATAMEAN over all of the side-camera records
+      iratio = totalfront/totalside;
+      printf("INTENSITY RATIO FRONT/SIDE CAMERAS = %f BASED ON %d FRONT and %d SIDE IMAGES \n",iratio,countfront,countside);
+    } 
+  else
+    {
+      printf("WARNING: THERE WAS NOT ENOUGH LEV1 AT WAVELENGTH INDEX 5 TO COMPUTE AN INTENSITY RATIO BETWEEN FRONT AND SIDE CAMERAS: THE CODE WILL USE THE VALUE 1.05 IF CAMERAS HAVE TO BE COMBINED \n");
+      iratio = 1.05;
+    }
+
   //CREATING THE RECORDS FOR THE LEVEL 1P DATA (NB: 1 RECORD HOLDS ALL THE WAVELENGTHS AND POLARIZATIONS)
   //******************************************************************************************
   
@@ -3715,7 +3756,7 @@ int DoIt(void)
 							  image[iii]=(image[iii]*pztflat[iii])/rotflat[iii];
 							  //remove non-linearity of cameras
 							  tempvalue = image[iii]*EXPTIME[temp];
-							  if(HCAMID[temp] == LIGHT_FRONT) tempvalue = (nonlinf[0]+nonlinf[1]*tempvalue+nonlinf[2]*tempvalue*tempvalue+nonlinf[3]*tempvalue*tempvalue*tempvalue)+tempvalue;
+							  if(HCAMID[temp] == LIGHT_FRONT)tempvalue = (nonlinf[0]+nonlinf[1]*tempvalue+nonlinf[2]*tempvalue*tempvalue+nonlinf[3]*tempvalue*tempvalue*tempvalue)+tempvalue;
 							  else tempvalue = (nonlins[0]+nonlins[1]*tempvalue+nonlins[2]*tempvalue*tempvalue+nonlins[3]*tempvalue*tempvalue*tempvalue)+tempvalue;
 							  image[iii]  = tempvalue/EXPTIME[temp];    
 							}
@@ -3878,7 +3919,6 @@ int DoIt(void)
 			      Y0AVGT=Y0AVG[timeindex];
 			    }
 
-
 			  if(fabs(X0[temp]-X0AVGT) > RSUNerr || isnan(X0[temp])) 
 			    {
 			      printf("Warning: image %d passed to do_interpolate has a X0 value %f too different from the median value and will be rejected\n",i,X0[temp]);
@@ -3896,6 +3936,13 @@ int DoIt(void)
 
 			}
 		      imagesi[ii]=arrin[i]->data;
+		      image=arrin[i]->data;
+		      if( (combine == 1) && (HCAMID[temp] == LIGHT_FRONT)){ //we need to combine both cameras
+			//IF NEED TO COMBINE BOTH CAMERAS, WE NEED TO CORRECT FOR THE FRONT vs SIDE CAMERA INTENSITY DIFFERENCE
+			for(iii=0;iii<axisin[0]*axisin[1];++iii) image[iii]= image[iii]/iratio;
+			printf("MOD L intensity correction applied to FSN=%d \n",FSN[temp]);
+		      }
+
 		      ierrors[ii]=arrerrors[i]->data;
 		      printf("FSN filtergram used: %d %d %f %f %f %f %f %f %f\n",FSN[temp],HCAMID[temp],RSUN[temp],X0[temp],Y0[temp],DSUNOBS[temp]/AstroUnit,CRLTOBS[temp],CROTA2[temp],internTOBS[temp]);
 		      if(HCAMID[temp] == LIGHT_FRONT) KeyInterp[ii].camera=0; //WARNING: the convention of Richard's subroutine is that 0=front camera, 1=side camera
@@ -3958,7 +4005,6 @@ int DoIt(void)
 		  if(ActualTempIntNum >= ThresholdPol)
 		    {
 		      printf("KEYWORDS OUT: %f %f %f %f %f %f %f %d\n",KeyInterpOut.rsun,KeyInterpOut.xx0,KeyInterpOut.yy0,KeyInterpOut.dist,KeyInterpOut.b0,KeyInterpOut.p0,KeyInterpOut.time,KeyInterpOut.focus);
-
 		      //printf("JESPER !!! %f %d\n",imagesi[0][40970],ierrors[0][40970]);
 		      status=do_interpolate(imagesi,ierrors,arrLev1d[it2]->data,KeyInterp,&KeyInterpOut,&const_param,ActualTempIntNum,axisin[0],axisin[1],AverageTime,dpath2);
 		      //float *richard;
