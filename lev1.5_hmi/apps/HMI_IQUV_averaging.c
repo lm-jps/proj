@@ -76,7 +76,7 @@ v 1.21: correcting for non-linearity of cameras
 on May 1, 2015: code modified to run on FTSID=1022 (mod L observables sequence)
 on May 6, 2015: RSUNerr changed from 0.8 to 1.0 pixels
 on May 13, 2015: code modified to correct for higher front camera intensity when both cameras need to be combined
-
+on May 14, 2015: RSUNerr changed from 1.0 to 5.0 pixels (I'M TIRED OF INCREASING THE LIMIT INCREMENTALLY!!!!)
 */
 
 /*----------------------------------------------------------------------------------------------------------------------------------------*/
@@ -1027,7 +1027,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.41 2015/05/13 23:02:02 couvidat Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.42 2015/05/14 23:21:11 couvidat Exp $");
 }
 
 
@@ -1089,7 +1089,7 @@ int DoIt(void)
   char HISTORY[MaxNString];                                                            //history of the data
 
   char COMMENT[MaxNString];
-  strcpy(COMMENT,"De-rotation: ON; Un-distortion: ON; Re-centering: ON; Re-sizing: OFF; correction for cosmic-ray hits; RSUNerr=1.0 pixels; correction front/side intensity implemented for mod L; dpath="); //comment about what the observables code is doing
+  strcpy(COMMENT,"De-rotation: ON; Un-distortion: ON; Re-centering: ON; Re-sizing: OFF; correction for cosmic-ray hits; RSUNerr=5.0 pixels; correction front/side intensity implemented for mod L; dpath="); //comment about what the observables code is doing
   strcat(COMMENT,dpath);
   if(inLinearity == 1) strcat(COMMENT,"; linearity=1 with coefficients updated on 2014/01/15");
   if(inRotationalFlat == 1) strcat(COMMENT,"; rotational=1");
@@ -1313,7 +1313,7 @@ int DoIt(void)
   float *CRLNOBS=NULL;
   //float *HGLNOBS=NULL;
   float *CDELT1=NULL;                                                //image scale in the x direction (in arcseconds)
-  float RSUNerr=1.0;//0.8;//0.6;                                     //maximum change tolerated on RSUN=1.82*RSUNerr, maximum change tolerated on CRPIX1 and CRPIX2=RSUNerr, from image to image,in pixels
+  float RSUNerr=5.0;//0.8;//0.6;                                     //maximum change tolerated on RSUN=1.82*RSUNerr, maximum change tolerated on CRPIX1 and CRPIX2=RSUNerr, from image to image,in pixels
   float diffXfs= 6.14124;                                            //difference between CRPIX1 of front and side cameras in pixels (!!! WARNING !!!! SHOULD NOT BE A CONSTANT: VARIES WITH ORBITAL VELOCITY)
   float diffYfs=-4.28992;                                            //difference between CRPIX2 of front and side cameras in pixels (!!! WARNING !!!! SHOULD NOT BE A CONSTANT: VARIES WITH ORBITAL VELOCITY)
   float correction,correction2;
