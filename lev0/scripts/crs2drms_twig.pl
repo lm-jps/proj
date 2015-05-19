@@ -12,7 +12,7 @@ $ENV{"TZ"} = "UTC";
 
 my ($inpname, $dcrname);
 my $seg_base = '.';
-my $set_info = '/home/jsoc/cvs/Development/JSOC/bin/linux_x86_64/set_info -c';
+my $set_info = "/home/jsoc/cvs/Development/JSOC/bin/$ENV{JSOC_MACHINE}/set_info -c";
 my $series = 'iris_ground.crs_table';
 my $reg_max = 0;
 my ($dt, $crs_id, $crs_desc, $crs_type, $sumsptrl, $sumspat, $numregn, $srid);
@@ -118,8 +118,8 @@ for (my $i=1;  $i<9; $i++) {
   $cmd = join (' ',  $cmd, $winflip, $CRS_SR[$i], $CRS_ER[$i], $CRS_SC[$i],
                $CRS_EC[$i], $Tsr[$i], $Ter[$i], $Tsc[$i], $Tec[$i]);
 }
-
-$seg = sprintf "decrop_table=%s/crop%d", $seg_base, $crsid;
+if ($dcrname) { $seg = sprintf "decrop_table=%s", $dcrname; }
+else { $seg = sprintf "decrop_table=%s/crop%d", $seg_base, $crsid; }
 $cmd = join (' ',  $cmd, $seg);
 $seg = sprintf "crs_xml=%s", $inpname;
 $cmd = join (' ',  $cmd, $seg);
