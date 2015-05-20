@@ -76,7 +76,7 @@ v 1.28: possibility to apply a rotational flat field instead of the pzt flat fie
 v 1.29: correcting for non-linearity of cameras
 on May 1, 2015: code modified to run on FTSID=1022 (mod L observables sequence)
 on May 13, 2015: code modified to correct for higher front camera intensity when both cameras need to be combined
-
+on May 15, 2015: increased RSUNerr from 0.5 to 5.0 pixels, to match changes in HMI_IQUV_averaging.c
 */
 
 /*----------------------------------------------------------------------------------------------------------------------------------------*/
@@ -1104,7 +1104,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.47 2015/05/13 23:01:43 couvidat Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.48 2015/05/20 18:05:45 couvidat Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -1162,7 +1162,7 @@ int DoIt(void)
   char HISTORY[MaxNString];                                                            //history of the data
 
   char COMMENT[MaxNString];
-  strcpy(COMMENT,"De-rotation: ON; Un-distortion: ON; Re-centering: ON; Re-sizing: OFF; correction for cosmic-ray hits; correction front/side intensity implemented for mod L; dpath="); //comment about what the observables code is doing
+  strcpy(COMMENT,"De-rotation: ON; Un-distortion: ON; Re-centering: ON; Re-sizing: OFF; correction for cosmic-ray hits; correction front/side intensity implemented for mod L; RSUNerr=5.0 pixels; dpath="); //comment about what the observables code is doing
   strcat(COMMENT,dpath);
   if(inLinearity == 1) strcat(COMMENT,"; linearity=1 with coefficients updated on 2014/01/15");
   if(inRotationalFlat == 1) strcat(COMMENT,"; rotational=1");
@@ -1414,7 +1414,7 @@ int DoIt(void)
   double OBSVRint,OBSVWint,OBSVNint,DSUNOBSint;
   float cdelt1;
   float *X0ARR=NULL, *Y0ARR=NULL, *RSUNARR=NULL;
-  float RSUNerr=0.5;                                                  //maximum change tolerated on RSUN=1.82*RSUNerr, maximum change tolerated on CRPIX1 and CRPIX2=RSUNerr, from image to image,in pixels
+  float RSUNerr=5.0;//0.5;                                                  //maximum change tolerated on RSUN=1.82*RSUNerr, maximum change tolerated on CRPIX1 and CRPIX2=RSUNerr, from image to image,in pixels
   float correction,correction2;
   float *temparr1=NULL,*temparr2=NULL,*temparr3=NULL,*temparr4=NULL,*LCP=NULL,*RCP=NULL;
   float distance;
