@@ -40,7 +40,8 @@
 #define LEV0SERIESNAMEIRIS "iris_ground.lev0_dc1"
 #define LEV1SERIESNAMEIRIS "iris_ground.lev1_dc1"
 //#define DSCRSNAME "iris_ground.crs_table"
-#define DSCRSNAME "iris_ground.window_table"
+#define DSCRSNAME "iris.crs_table"
+//#define DSCRSNAME "iris_ground.window_table"
 #define DSFFNAME "iris.flatfield_prelim"
 //#define DSFFNAME "iris_ground.flatfield_test"
 
