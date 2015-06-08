@@ -28,10 +28,10 @@ if(system($rmcmd0)) {
   exit;
 }
 
-$cmd0 = "ingest_lev0_irisdc --loopconn  vc=@vcnames[0] indir=/sds/soc2pipe/iris logfile=/usr/local/logs/lev0/@lognames[0] &";
+$cmd0 = "ingest_lev0_irisdc --loopconn -c vc=@vcnames[0] indir=/sds/soc2pipe/iris logfile=/usr/local/logs/lev0/@lognames[0] &";
 $log1 = sprintf("/usr/local/logs/lev0/%sX", @lognames[0]);
 
-$cmd1 = "ingest_lev0_irisdc --loopconn  vc=@vcnames[0] indir=/sds/soc2pipe/iris/rexmit logfile=$log1 &";
+$cmd1 = "ingest_lev0_irisdc --loopconn -c vc=@vcnames[0] indir=/sds/soc2pipe/iris/rexmit logfile=$log1 &";
 
 print "$cmd0\n";
 if(system($cmd0)) {
@@ -98,12 +98,12 @@ doingestlev0_IRIS.pl\n\n";
   }
   sleep(5);                     #make sure previous commit to db is done
       `$rmcmd0`;
-      $cmd = "ingest_lev0_irisdc --loopconn -r vc=@vcnames[0] indir=/sds/soc2pipe/iris logfile=/usr/local/logs/lev0/VC03_$ldate.log &";
+      $cmd = "ingest_lev0_irisdc --loopconn -c -r vc=@vcnames[0] indir=/sds/soc2pipe/iris logfile=/usr/local/logs/lev0/VC03_$ldate.log &";
       if(system($cmd)) {
         print "Failed: $cmd\n";
       }
       print "Restart:\n$cmd\n";
-      $cmd = "ingest_lev0_irisdc --loopconn -r vc=@vcnames[0] indir=/sds/soc2pipe/iris/rexmit logfile=/usr/local/logs/lev0/VC03_$ldate.logX &";
+      $cmd = "ingest_lev0_irisdc --loopconn -c -r vc=@vcnames[0] indir=/sds/soc2pipe/iris/rexmit logfile=/usr/local/logs/lev0/VC03_$ldate.logX &";
       if(system($cmd)) {
         print "Failed: $cmd\n";
       }
