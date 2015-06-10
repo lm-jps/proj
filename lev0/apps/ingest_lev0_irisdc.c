@@ -1121,7 +1121,7 @@ int fsn_change_normal()
     //if(hmiaiaflg)
       //sprintf(reopen_dsname, "%s[%u]", LEV0SERIESNAMEAIA, fsnx);
     //else
-      sprintf(reopen_dsname, "%s[%u]", dsout, fsnx);
+      snprintf(reopen_dsname, 256, "%s[%u]", dsout, fsnx);
     printk("Open normal prev ds: %s\n", reopen_dsname);
     rset = drms_open_records(drms_env, reopen_dsname, &rstatus);
     if(rstatus) {
@@ -1287,7 +1287,7 @@ int fsn_change_rexmit()
   //if(hmiaiaflg) 
     //sprintf(rexmit_dsname, "%s[%u]", LEV0SERIESNAMEAIA, fsnx);
   //else 
-    sprintf(rexmit_dsname, "%s[%u]", dsout, fsnx);
+    snprintf(rexmit_dsname, 256, "%s[%u]", dsout, fsnx);
   printk("Open prev ds: %s\n", rexmit_dsname);
   rset = drms_open_records(drms_env, rexmit_dsname, &rstatus); 
   if(rstatus) {
@@ -2274,7 +2274,7 @@ void setup()
       }
       else {
         sprintf(tlmseriesname, "%s", TLMSERIESNAMEHMI);
-        sprintf(lev0seriesname, "%s", dsout);
+        snprintf(lev0seriesname, 128, "%s", dsout);
       }
     }
   }
@@ -2422,7 +2422,7 @@ int DoIt(void)
       //Must use doingestlev0_HMI(AIA).pl to start ingest_lev0
       //sprintf(callcmd, "/bin/rm -f %s", stopfile);
       //system(callcmd);
-      sprintf(callcmd, "touch %s/lev0/%s_exit", logroot, pchan);
+      snprintf(callcmd, 256, "touch %s/lev0/%s_exit", logroot, pchan);
       system(callcmd);		//let the world know we're gone
       wflg = 0; //leave DoIt()
       continue;
