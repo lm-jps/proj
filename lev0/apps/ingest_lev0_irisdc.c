@@ -150,6 +150,8 @@ ModuleArgs_t module_args[] = {
   {ARG_STRING, "outdir", NOTSPECIFIED, "directory to move the files to after the ingest"}, 
   {ARG_STRING, "pipedir", NOTSPECIFIED, "directory to get parc files from JSOC backend"}, 
   {ARG_STRING, "logfile", NOTSPECIFIED, "optional log file name. Will create one if not given"},
+  {ARG_STRING, "logroot", "/usr/local/logs", "optional log root directory"},
+  {ARG_STRING, "dsout", "iris.lev0", "optional IRIS level 0 output series"},
   {ARG_FLAG, "A", "0", "use Ames datasets"},
   {ARG_FLAG, "v", "0", "verbose flag"},
   {ARG_FLAG, "h", "0", "help flag"},
@@ -197,6 +199,7 @@ static char bld_vers[16];
 //char dtime[80];
 static struct timeval first[NUMTIMERS], second[NUMTIMERS];
 static char Indir[300];  //CARL-ingest_lev0_iris
+static char *dsout, *logroot, hlogfile[256]; // jps soften hardwiring
 char wdlogname[128],oldwdlogname[128],Incmd[128];  //CARL-ingest_lev0_iris
 
 int INVALtime;
@@ -1118,7 +1121,7 @@ int fsn_change_normal()
     //if(hmiaiaflg)
       //sprintf(reopen_dsname, "%s[%u]", LEV0SERIESNAMEAIA, fsnx);
     //else
-      sprintf(reopen_dsname, "%s[%u]", LEV0SERIESNAMEHMI, fsnx);
+      sprintf(reopen_dsname, "%s[%u]", dsout, fsnx);
     printk("Open normal prev ds: %s\n", reopen_dsname);
     rset = drms_open_records(drms_env, reopen_dsname, &rstatus);
     if(rstatus) {
@@ -1284,7 +1287,7 @@ int fsn_change_rexmit()
   //if(hmiaiaflg) 
     //sprintf(rexmit_dsname, "%s[%u]", LEV0SERIESNAMEAIA, fsnx);
   //else 
-    sprintf(rexmit_dsname, "%s[%u]", LEV0SERIESNAMEHMI, fsnx);
+    sprintf(rexmit_dsname, "%s[%u]", dsout, fsnx);
   printk("Open prev ds: %s\n", rexmit_dsname);
   rset = drms_open_records(drms_env, rexmit_dsname, &rstatus); 
   if(rstatus) {
@@ -2234,7 +2237,7 @@ void setup()
     printk("Also check for .parc files in %s\n", argpipedir);
   } 
   strcpy(pchan, vc);		// virtual channel primary 
-  sprintf(stopfile, "/usr/local/logs/lev0/%s_stop", pchan);
+  sprintf(stopfile, "%s/lev0%s_stop", logroot, pchan);
   sprintf(string, "/bin/rm -f %s", stopfile);	//remove any stop file
   system(string);
   for(i=0; ; i++) {		// ck for valid and get redundant chan 
@@ -2271,7 +2274,7 @@ void setup()
       }
       else {
         sprintf(tlmseriesname, "%s", TLMSERIESNAMEHMI);
-        sprintf(lev0seriesname, "%s", LEV0SERIESNAMEHMI);
+        sprintf(lev0seriesname, "%s", dsout);
       }
     }
   }
@@ -2357,6 +2360,9 @@ int DoIt(void)
   outdir = (char *)cmdparams_get_str(&cmdparams, "outdir", NULL);
   pipedir = (char *)cmdparams_get_str(&cmdparams, "pipedir", NULL);
   logfile = (char *)cmdparams_get_str(&cmdparams, "logfile", NULL);
+  logroot = strdup(cmdparams_get_str(&cmdparams, "logroot", NULL));
+  dsout = strdup(cmdparams_get_str(&cmdparams, "dsout", NULL));
+  sprintf(hlogfile, "%s/lev0/ingest_lev0.%%s.%%s.%%s.log", logroot);
   if (strcmp(vc, NOTSPECIFIED) == 0) {
     fprintf(stderr, "'vc' virt channel must be specified.  Abort\n");
     return(1);
@@ -2379,7 +2385,7 @@ int DoIt(void)
     }
   }
   if (strcmp(logfile, NOTSPECIFIED) == 0) {
-    sprintf(logname, H0LOGFILE, username, vc, gettimetag());
+    sprintf(logname, hlogfile, username, vc, gettimetag());
   }
   else {
     sprintf(logname, "%s", logfile);
@@ -2416,7 +2422,7 @@ int DoIt(void)
       //Must use doingestlev0_HMI(AIA).pl to start ingest_lev0
       //sprintf(callcmd, "/bin/rm -f %s", stopfile);
       //system(callcmd);
-      sprintf(callcmd, "touch /usr/local/logs/lev0/%s_exit", pchan);
+      sprintf(callcmd, "touch %s/lev0/%s_exit", logroot, pchan);
       system(callcmd);		//let the world know we're gone
       wflg = 0; //leave DoIt()
       continue;
