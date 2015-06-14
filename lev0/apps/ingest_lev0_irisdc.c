@@ -152,6 +152,7 @@ ModuleArgs_t module_args[] = {
   {ARG_STRING, "logfile", NOTSPECIFIED, "optional log file name. Will create one if not given"},
   {ARG_STRING, "logroot", "/usr/local/logs", "optional log root directory"},
   {ARG_STRING, "dsout", "iris.lev0", "optional IRIS level 0 output series"},
+  {ARG_STRING, "tlm_name", TLMSERIESNAMEHMI, "IRIS tlm output series"},
   {ARG_FLAG, "A", "0", "use Ames datasets"},
   {ARG_FLAG, "v", "0", "verbose flag"},
   {ARG_FLAG, "h", "0", "help flag"},
@@ -199,7 +200,7 @@ static char bld_vers[16];
 //char dtime[80];
 static struct timeval first[NUMTIMERS], second[NUMTIMERS];
 static char Indir[300];  //CARL-ingest_lev0_iris
-static char *dsout, *logroot, hlogfile[256]; // jps soften hardwiring
+static char *dsout, *logroot, hlogfile[256], *tlm_name; //jps soften hardwiring
 char wdlogname[128],oldwdlogname[128],Incmd[128];  //CARL-ingest_lev0_iris
 
 int INVALtime;
@@ -2273,7 +2274,7 @@ void setup()
         sprintf(lev0seriesname, "%s", LEV0SERIESNAMEHMIAMES);
       }
       else {
-        sprintf(tlmseriesname, "%s", TLMSERIESNAMEHMI);
+        snprintf(tlmseriesname, 128, "%s", tlm_name);
         snprintf(lev0seriesname, 128, "%s", dsout);
       }
     }
@@ -2362,6 +2363,7 @@ int DoIt(void)
   logfile = (char *)cmdparams_get_str(&cmdparams, "logfile", NULL);
   logroot = strdup(cmdparams_get_str(&cmdparams, "logroot", NULL));
   dsout = strdup(cmdparams_get_str(&cmdparams, "dsout", NULL));
+  tlm_name = strdup(cmdparams_get_str(&cmdparams, "tlm_name", NULL));
   sprintf(hlogfile, "%s/lev0/ingest_lev0.%%s.%%s.%%s.log", logroot);
   if (strcmp(vc, NOTSPECIFIED) == 0) {
     fprintf(stderr, "'vc' virt channel must be specified.  Abort\n");
