@@ -150,6 +150,7 @@ ModuleArgs_t module_args[] = {
   {ARG_STRING, "outdir", NOTSPECIFIED, "directory to move the files to after the ingest"}, 
   {ARG_STRING, "pipedir", NOTSPECIFIED, "directory to get parc files from JSOC backend"}, 
   {ARG_STRING, "logfile", NOTSPECIFIED, "optional log file name. Will create one if not given"},
+  {ARG_STRING, "envfile", ENVFILE, "env file name."},
   {ARG_STRING, "logroot", "/usr/local/logs", "optional log root directory"},
   {ARG_STRING, "dsout", "iris.lev0", "optional IRIS level 0 output series"},
   {ARG_STRING, "tlm_name", TLMSERIESNAMEHMI, "IRIS tlm output series"},
@@ -2295,7 +2296,8 @@ void setup()
   if(grounddata) strcpy(envfile, ENVFILE_GND );
   else {
     if(amesflg) strcpy(envfile, ENVFILEA);
-    else strcpy(envfile, ENVFILE);
+    else strncpy(envfile, (char *)cmdparams_get_str(&cmdparams,
+                 "envfile", NULL), 100);
   }
   //fopen file
   if(!(fp=fopen(envfile, "r"))) {
