@@ -499,7 +499,7 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
   if(seqerror) {
     printk("**Sequence error during fsn %u. No closed image\n", fsn);
     seqerror = 0;
-    return;
+//    return;
   }
   if(ispfoundreopen != fsn) {  //Not a reopen at the start of a tlm file
     if(ispfound != fsn) {
