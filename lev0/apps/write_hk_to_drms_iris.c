@@ -1,4 +1,4 @@
-#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/write_hk_to_drms_iris.c,v 1.2 2013/05/14 17:07:40 prodtest Exp $"
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/write_hk_to_drms_iris.c,v 1.3 2015/06/18 17:14:45 jps Exp $"
 /*****************************************************************************
  * Filename: write_hk_to_drms.c                                              *
  * Author: Carl                                                              *
@@ -52,6 +52,7 @@ extern int  get_yr_from_pkttime(double ptime);
 extern char ispquery[];
 extern DRMS_RecordSet_t *RSISP, *RSISPTO;
 extern unsigned int fsnx;
+extern int verbose;
 
 HK_DSN_RANGE_t *dsr_head=NULL;
 char IRIS_ISP_DS[80];	//dataset name. set by lookup_data_series_name()
@@ -410,7 +411,7 @@ int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt)
         /* set drms value by casting up for unsigned values */
         key_anyval.short_val = (int16_t)kw->eng_value.uint8_val;
     //!!TEMP
-    printf("KEYWORD: %s %d\n", keyname, key_anyval.short_val);
+    if (verbose) printf("KEYWORD: %s %d\n", keyname, key_anyval.short_val);
         status = drms_setkey(rec, keyname, keytype, &key_anyval);
 
       }
@@ -431,7 +432,7 @@ int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt)
         /* set drms value by casting up for unsigned values */
         key_anyval.int_val = (int32_t)kw->eng_value.uint16_val;
     //!!TEMP
-    printf("KEYWORD: %s %d\n", keyname, key_anyval.int_val);
+    if (verbose) printf("KEYWORD: %s %d\n", keyname, key_anyval.int_val);
         status = drms_setkey(rec, keyname, keytype, &key_anyval);
 
       }
@@ -452,7 +453,7 @@ int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt)
         /* set drms value by casting up for unsigned values */
         key_anyval.longlong_val = (int64_t)kw->eng_value.uint32_val;
     //!!TEMP
-    printf("KEYWORD: %s %ld\n", keyname, key_anyval.longlong_val);
+    if (verbose) printf("KEYWORD: %s %ld\n", keyname, key_anyval.longlong_val);
         status = drms_setkey(rec, keyname, keytype, &key_anyval);
 
       }
@@ -471,7 +472,7 @@ int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt)
          keytype= DRMS_TYPE_SHORT;
          key_anyval.short_val = (int16_t)kw->eng_value.int8_val;
     //!!TEMP
-    printf("KEYWORD: %s %d\n", keyname, key_anyval.short_val);
+    if (verbose) printf("KEYWORD: %s %d\n", keyname, key_anyval.short_val);
          status = drms_setkey(rec, keyname, keytype, &key_anyval);
 
       }
@@ -490,7 +491,7 @@ int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt)
         keytype= DRMS_TYPE_DOUBLE;
         key_anyval.double_val = kw->eng_value.double_val;
     //!!TEMP
-    printf("KEYWORD: %s %g\n", keyname, key_anyval.double_val);
+    if (verbose) printf("KEYWORD: %s %g\n", keyname, key_anyval.double_val);
         status = drms_setkey(rec, keyname, keytype, &key_anyval);
 
       }
@@ -509,7 +510,7 @@ int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt)
         keytype= DRMS_TYPE_SHORT;
         key_anyval.short_val = kw->eng_value.int16_val;
     //!!TEMP
-    printf("KEYWORD: %s %d\n", keyname, key_anyval.short_val);
+    if (verbose) printf("KEYWORD: %s %d\n", keyname, key_anyval.short_val);
         status = drms_setkey(rec, keyname, keytype, &key_anyval);
 
       }
@@ -527,7 +528,7 @@ int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt)
         keytype= DRMS_TYPE_INT;
         key_anyval.int_val= kw->eng_value.int32_val;
     //!!TEMP
-    printf("KEYWORD: %s %d\n", keyname, key_anyval.int_val);
+    if (verbose) printf("KEYWORD: %s %d\n", keyname, key_anyval.int_val);
         status = drms_setkey(rec, keyname, keytype, &key_anyval);
 
       }
@@ -549,7 +550,7 @@ int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt)
         key_anyval.string_val = (char *)malloc(sizeof(char) * 100);
         strcpy(key_anyval.string_val, kw->eng_value.string_val);
     //!!TEMP
-    printf("KEYWORD: %s %s\n", keyname, key_anyval.string_val);
+    if (verbose) printf("KEYWORD: %s %s\n", keyname, key_anyval.string_val);
         status = drms_setkey(rec, keyname, keytype, &key_anyval);
         free(key_anyval.string_val);
 
