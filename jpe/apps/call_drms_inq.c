@@ -144,6 +144,7 @@ KEY *call_drms_inq(KEY *list, int dbflg)
   DRMS_RecordSet_t *rset;
   DRMS_Record_t *rec;
   SUM_info_t *sinfo;
+  uint64_t sunum;
   FILE *fin;
   char argname[MAX_STR], inname[MAX_STR], ext[MAX_STR];
   double dbytes;
@@ -244,10 +245,20 @@ KEY *call_drms_inq(KEY *list, int dbflg)
       sprintf(ext, "%s_ds_index", inname);
       setkey_ulong(&alist, ext, dsindex);
       if(!wdonly) {		//need to get info from SUM_info()
-        if(SUM_info(sumhandle, dsindex, printk)) {
+        sunum = (uint64_t)(rec->sunum);
+        
+        /* SUM_info() is not supported by the new MT SUMS. Convert to SUM_infoArray(), 
+         * providing an array of size one. A better solution would be to re-write the 
+         * enclosing loop to batch the records. This way, many records could be
+         * opened at once, and then a chunk of SUNUMs could be provided to 
+         * SUM_infoArray(). However, this program isn't likely to be used again, 
+         * so we'll leave the loop inefficient.
+         */
+        if(SUM_infoArray(sumhandle, &sunum, 1, printk)) {
           printk("Fail on SUM_info() for sunum=%u\n", dsindex);
         }
         else {
+            /* sumhandle->sinfo is the first node in a linked list of size one. */
           sinfo = sumhandle->sinfo;
           sprintf(ext, "%s_creat_date", inname);
           setkey_str(&alist, ext, sinfo->creat_date);

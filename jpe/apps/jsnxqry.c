@@ -149,6 +149,7 @@ int DoIt()
   DRMS_SeriesInfo_t *seriesinfo;
   SUM_t *sumhandle = NULL;
   SUM_info_t *sinfo;
+  uint64_t sunum;
 
 printf("here we are in DoIt()\n"); //!!TEMP
 
@@ -209,12 +210,21 @@ printf("here we are in DoIt()\n"); //!!TEMP
         continue;
       }
       rec = rset->records[0];
-  
-        if(SUM_info(sumhandle, rec->sunum, printk)) {
+      sunum = (uint64_t)(rec->sunum);
+
+        /* SUM_info() is not supported by the new MT SUMS. Convert to SUM_infoArray(), 
+         * providing an array of size one. A better solution would be to re-write the 
+         * enclosing loop to batch the records. This way, many records could be
+         * opened at once, and then a chunk of SUNUMs could be provided to 
+         * SUM_infoArray(). However, this program isn't likely to be used again, 
+         * so we'll leave the loop inefficient.
+         */
+        if(SUM_infoArray(sumhandle, &sunum, 1, printk)) {
           printk("Fail on SUM_info() for sunum=%u\n", rec->sunum);
           return(1);  
         }
         else {
+            /* sumhandle->sinfo is the first node in a linked list of size one. */
           sinfo = sumhandle->sinfo;
         } 
 
