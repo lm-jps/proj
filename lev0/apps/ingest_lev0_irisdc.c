@@ -154,6 +154,8 @@ ModuleArgs_t module_args[] = {
   {ARG_STRING, "logroot", "/usr/local/logs", "optional log root directory"},
   {ARG_STRING, "dsout", "iris.lev0", "optional IRIS level 0 output series"},
   {ARG_STRING, "tlm_name", TLMSERIESNAMEHMI, "IRIS tlm output series"},
+  {ARG_STRING, "bfsn", "1", "Skip FSN before"},
+  {ARG_STRING, "efsn", "1073741823", "Skip FSN after"},
   {ARG_FLAG, "A", "0", "use Ames datasets"},
   {ARG_FLAG, "v", "0", "verbose flag"},
   {ARG_FLAG, "h", "0", "help flag"},
@@ -205,6 +207,8 @@ static char *dsout, *logroot, hlogfile[256], *tlm_name; //jps soften hardwiring
 char wdlogname[128],oldwdlogname[128],Incmd[128];  //CARL-ingest_lev0_iris
 
 int INVALtime;
+unsigned int bfsn = 1;
+unsigned int efsn = 0x3fffffff;
 unsigned int fsn = 0;
 unsigned int fsnx = 0;
 unsigned int fsnISP = 0;
@@ -406,7 +410,8 @@ int send_mail(char *fmt, ...)
 
   va_start(args, fmt);
   vsprintf(string, fmt, args);
-  sprintf(cmd, "echo \"%s\" | Mail -s \"ingest_lev0_iris mail\" lev0_user", string);
+  sprintf(cmd, "echo \"%s\" | Mail -s \"ingest_lev0_iris mail\" %s",
+          string, username);
   system(cmd);
   va_end(args);
   return(0);
@@ -1566,6 +1571,16 @@ int get_tlm(char *file, int rexmit, int higherver)
       continue; 		// go on to next packet 
     }
 
+    if(appid == APID_IRIS_TIME) {
+      int fsn = ((((((cbuf[48]  & 0x3f) << 8) | cbuf[49]) << 8) |
+                cbuf[50]) << 8) | cbuf[51];
+      if (fsn < bfsn) continue;
+      if (fsn > efsn) {
+        abortflg = 1;
+        return 0;
+      }
+    }
+
     //printk("$$$$$ appid found =  0x%x %d\n", appid, appid); //!!TEMP
     // Parse tlm packet headers. 
     //if(appid == APID_HMI_SCIENCE_1 || appid == APID_HMI_SCIENCE_2 || 
@@ -1639,6 +1654,8 @@ if(!printflg) {		//!!TEMP
       fsnx = (unsigned int)(cnt1<<16)+(unsigned int)(cnt2);
       fsnx = fsnx & 0x3fffffff;		//low 30bits for fsn */
       if(fsnx == 0) continue;		//a 0 fsn is not acceptable
+      if(fsnx < bfsn) continue;
+      if(fsnx > efsn) continue;
       if(tapcode == 10) {
         //fsnx = fsnx + 100000000;
         fsnx++;		//treat as next fsn
@@ -2366,6 +2383,8 @@ int DoIt(void)
   logroot = strdup(cmdparams_get_str(&cmdparams, "logroot", NULL));
   dsout = strdup(cmdparams_get_str(&cmdparams, "dsout", NULL));
   tlm_name = strdup(cmdparams_get_str(&cmdparams, "tlm_name", NULL));
+  bfsn = cmdparams_get_int(&cmdparams, "bfsn", NULL);
+  efsn = cmdparams_get_int(&cmdparams, "efsn", NULL);
   sprintf(hlogfile, "%s/lev0/ingest_lev0.%%s.%%s.%%s.log", logroot);
   if (strcmp(vc, NOTSPECIFIED) == 0) {
     fprintf(stderr, "'vc' virt channel must be specified.  Abort\n");
