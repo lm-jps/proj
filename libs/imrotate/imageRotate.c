@@ -99,6 +99,7 @@ int regrid(
  /* creat the result array, the same type as input (data_type) */
  i = ana_type_size[data_type];
  bq = malloc(nx * ny * i);
+ if (!bq) {fprintf(stderr,"$$$$ malloc failed in imrotate $$$$\n"); return(1);}
  
  *outarray = bq;
  jpbase.l = (int *) *outarray;
