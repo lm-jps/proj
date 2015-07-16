@@ -1197,6 +1197,7 @@ ObsInfo_t *GetObsInfo(DRMS_Segment_t *seg, ObsInfo_t *pObsLoc, int *rstatus)
   double dv;
   ObsInfo_t *ObsLoc;
   int status;
+  char t_key[100];
 
   if (!seg || !(rec = seg->record))
     { *rstatus = 1; return(NULL); }
@@ -1206,7 +1207,11 @@ ObsInfo_t *GetObsInfo(DRMS_Segment_t *seg, ObsInfo_t *pObsLoc, int *rstatus)
     memset(ObsLoc, 0, sizeof(ObsInfo_t));
 
   t_prev = ObsLoc->t_obs;
-  t_obs = drms_getkey_time(rec, "T_OBS", &status); CHECK("T_OBS");
+  if (drms_keyword_lookup(rec, "T_OBS", 0))
+    strcpy(t_key, "T_OBS");
+  else
+    strcpy(t_key, "T_REC");
+  t_obs = drms_getkey_time(rec, t_key, &status); CHECK(t_key);
 
   if (t_obs <= 0.0)
     { *rstatus = 2; return(NULL); }
