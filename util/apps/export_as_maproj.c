@@ -618,6 +618,9 @@ img_lat *= raddeg;
     perform_mapping (image, data, maplat, maplon, map_coslat, map_sinlat,
         pixct, offsun, img_lat, img_lon, img_xc, img_yc, img_radius, img_pa,
 	ellipse_e, ellipse_pa, x_invrt, y_invrt, intrpopt, MDI_correct_distort);
+    
+    drms_free_array (image); // PHS
+
     if (overlay) {
         for (n = 0; n < pixct; n++) 
             if (ongrid[n]) data[n] = (isfinite (data[n])) ? bblank : wblank;
