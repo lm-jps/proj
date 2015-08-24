@@ -2256,7 +2256,7 @@ void setup()
     printk("Also check for .parc files in %s\n", argpipedir);
   } 
   strcpy(pchan, vc);		// virtual channel primary 
-  sprintf(stopfile, "%s/lev0%s_stop", logroot, pchan);
+  sprintf(stopfile, "%s/lev0/%s_stop", logroot, pchan);
   sprintf(string, "/bin/rm -f %s", stopfile);	//remove any stop file
   system(string);
   for(i=0; ; i++) {		// ck for valid and get redundant chan 
