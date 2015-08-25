@@ -9,7 +9,9 @@ MODEXE		:= $(MODEXE) $(MODEXE_$(d))
 
 EXE_$(d)	:= $(MODEXE_$(d))
 
-OBJsegment_$(d) := $(addprefix $(d)/, cJSON.o segment_modelset.o)
+# Do Not directly include this file into projects. The actual cJSON library is in base/libs/cjson. Link to that library.
+# OBJsegment_$(d) := $(addprefix $(d)/, cJSON.o segment_modelset.o)
+OBJsegment_$(d) := $(addprefix $(d)/, segment_modelset.o)
 
 # these files are needed by hmi_segment_module
 OBJ_$(d)	:= $(EXE_$(d):%=%.o) $(OBJsegment_$(d))
