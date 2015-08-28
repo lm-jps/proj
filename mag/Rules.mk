@@ -26,6 +26,8 @@ dir     := $(d)/remapmags
 -include                $(SRCDIR)/$(dir)/Rules.mk
 dir     := $(d)/synop
 -include                $(SRCDIR)/$(dir)/Rules.mk
+dir     := $(d)/polarfield
+-include                $(SRCDIR)/$(dir)/Rules.mk
 
 # Standard things
 d               := $(dirstack_$(sp))
