@@ -44,7 +44,7 @@ function email_getargs()
     }
   }
 
-function startEmailCheck()
+function startEmailCheck(callbackFxn)
   { // This is called when the check params button is pressed.
     // if not ready, complain and do nothing.
   if ( $("ExportNotify").value.toUpperCase() ===  "SOLARMAIL" )
@@ -79,10 +79,12 @@ function startEmailCheck()
     return;
     } 
     $("ExportCheckMsg").innerHTML = 'Submitted address is: "' + ExportEmail + '".';
-  ExportNotifyOK = CheckNotifyValidity();
+  ExportNotifyOK = CheckNotifyValidity(callbackFxn);
   }
 
 // SetExportUser is called from change in either the Requester or Notify input text boxes.
+// There is no call made to check the validity of the notification email address provided
+// however. Instead, the user must click on the "Check Params for Export" button.
 function SetExportUser()
   {  
   if (ExportNotifyOK == 4)
@@ -103,12 +105,12 @@ function SetExportUser()
     else
       {
       ExportUserOK = 1;
-      $("RequestorMessage").innerHTML = "Provide an identifier for you, e.g. your SolarMail name.";
+      $("RequestorMessage").innerHTML = "Provide your identifier, e.g. your SolarMail name.";
       }
     }
   else
     {
-    $("RequestorMessage").innerHTML = "Provide an identifier for you, e.g. your SolarMail name.";
+    $("RequestorMessage").innerHTML = "Provide your identifier, e.g. your SolarMail name.";
     $("ExportRequestor").value = "none";
     EXPORTUSER = "NONE";
     ExportUserOK = 0;
@@ -116,8 +118,9 @@ function SetExportUser()
   SetExportNotify();
   }
 
+// This function gets called when the Notify field gets modified.
 function SetExportNotify()
-  {   
+  {
   // ExportNotifyOK values:
   //  0 - not OK to proceed
   //  1 - OK to proceed, email is validated 
@@ -174,7 +177,7 @@ function NotifyTimer()
   }
 
 
-function CheckNotifyValidity()
+function CheckNotifyValidity(callbackFxn)
   {
   // this is called when a valid format Notify or Requestor and Notify==solarmail is present.
   // On entry ExportNotifyOK is 2 or 4.
@@ -303,6 +306,11 @@ function CheckNotifyValidity()
         ExportNotifyOK = 0;
         $("ExportNotifyMsg").innerHTML = "";
         $("ExportCheckMsg").innerHTML = "Current attempt cancelled by typing, try again when ready.";
+        }
+        
+        if (callbackFxn)
+        {
+            callbackFxn();
         }
       },
       onFailure: function() { alert('oops, our code is broken'); }

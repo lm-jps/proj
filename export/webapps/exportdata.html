@@ -1275,6 +1275,45 @@ function CheckRediness()
   return(status);
   }
 
+// This is a callback function. It is invoked after the email check has completed.
+function SetExportParams()
+{
+    // All these variables on the RHS are global.
+    var isOK = ExportRecordSetOK * ExportMethodOK * ExportFilenameFmtOK * ExportProcessingOK * ExportProtocolOK * (ExportNotifyOK==1);
+
+    if (isOK)
+    {
+        var protocolparam = $("ExportProtocolHidden").value;
+        var RecordSet = $("ExportRecordSet").value;
+
+        // exportparameters is a global.
+        exportparameters = new Hash({"op" : $("ExportOpID").value,
+                                    "ds" : RecordSet, 
+                                    "sizeratio" : $("ExportSizeRatio").value,
+                                    "process" :  ExportProcessingArgs,
+                                    "requestor" : $("ExportRequestor").value,
+                                    "notify" : $("ExportNotify").value,
+                                    "method" : ExportMethodValue,
+                                    "filenamefmt" : $("ExportFilenameFmt").value,
+                                    "format" : "json",
+                                    "protocol" : protocolparam });
+
+        ExportShowQuery();
+        ExportQueryOK = 1;
+    }
+    else
+    {
+        // exportparameters is a global.
+        exportparameters = null;
+        $("ExportParameters").innerHTML = "";
+        ExportQueryOK = 0;
+    }
+    
+    CheckRediness();
+}
+
+// This function is called when the user clicks on the "Check Params for Export"
+// button. 
 function CheckExportParams()
   {
   if ($("RSCountPlace").innerHTML == RSCountActiveMSg)
@@ -1325,7 +1364,11 @@ function CheckExportParams()
       }
     if (ExportNotifyOK == 0 || ExportNotifyOK == 2)
       {
-      startEmailCheck();
+      // This is an asynchronous call, so we need to put the following "isOK" check into a
+      // callback function. Return isOK == 0 since we do not know if it is OK to do an export
+      // at this point.
+      startEmailCheck(SetExportParams);
+      return false;
       break;
       }
     $("ExportCheckMsg").innerHTML = "OK to proceed";
