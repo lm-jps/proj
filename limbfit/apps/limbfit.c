@@ -6,8 +6,8 @@
 
 
 	#define CODE_NAME 		"limbfit"
-	#define CODE_VERSION 	"V4.0r6" 
-	#define CODE_DATE 		"Tue May  7 21:27:32 PDT 2013" 
+	#define CODE_VERSION 	"V4.0r9" 
+	#define CODE_DATE 		"Mon Aug 31 17:16:24 PDT 2015" 
 */
 
 #include "limbfit.h"
@@ -362,9 +362,9 @@ float sav_max=0.;
 		 /* copy the last pixel of the mean ldf in the prev one to correct a fortran issue */
 		lprf[(nprf*nang)+63]=lprf[(nprf*nang)+62];
 			
-		//for (cont=0; cont<=nang; cont++)
-		{ // only the mean ldf
-		 cont=nang;
+		for (cont=0; cont<=nang; cont++)
+		{ // if only the mean ldf replace above line by below line
+		 //  cont=nang;
 			ret_gsl=0;
 			 ip1=0.;
 			 /* dx */
