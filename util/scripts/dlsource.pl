@@ -936,12 +936,30 @@ sub BuildFilespec
                 push(@$fsout, @$core);
                 if ($dltype eq kDlUpdate)
                 {
-                    push(@$fsout, @$coreDel);
+                    # If the user has these obsolete files in their working directory, the
+                    # only safe way to remove them is to run cvs update on them. But we do 
+                    # not want to run that command if the files do not exist.
+                    foreach $delFile (@$coreDel)
+                    {
+                        if (-e $delFile)
+                        {
+                            push(@$fsout, $delFile);
+                        }
+                    }
                 }
                 push(@$fsout, @$netonly);
                 if ($dltype eq kDlUpdate)
                 {
-                    push(@$fsout, @$netDel);
+                    # If the user has these obsolete files in their working directory, the
+                    # only safe way to remove them is to run cvs update on them. But we do 
+                    # not want to run that command if the files do not exist.
+                    foreach $delFile (@$netDel)
+                    {
+                        if (-e $delFile)
+                        {
+                            push(@$fsout, $delFile);
+                        }
+                    }
                 }
                 push(@$bfsout, @$fsout);
             }
@@ -950,12 +968,30 @@ sub BuildFilespec
                 push(@$fsout, @$core);
                 if ($dltype eq kDlUpdate)
                 {
-                    push(@$fsout, @$coreDel);
+                    # If the user has these obsolete files in their working directory, the
+                    # only safe way to remove them is to run cvs update on them. But we do 
+                    # not want to run that command if the files do not exist.
+                    foreach $delFile (@$coreDel)
+                    {
+                        if (-e $delFile)
+                        {
+                            push(@$fsout, $delFile);
+                        }
+                    }
                 }
                 push(@$fsout, @$sdponly);
                 if ($dltype eq kDlUpdate)
                 {
-                    push(@$fsout, @$sdpDel);
+                    # If the user has these obsolete files in their working directory, the
+                    # only safe way to remove them is to run cvs update on them. But we do 
+                    # not want to run that command if the files do not exist.
+                    foreach $delFile (@$sdpDel)
+                    {
+                        if (-e $delFile)
+                        {
+                            push(@$fsout, $delFile);
+                        }
+                    }
                 }
                 push(@$bfsout, @$fsout);
             }
