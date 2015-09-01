@@ -53,3 +53,4 @@ mdi.vw_v_sht_modes_asym
 mdi.vw_v_sht_modes_asym_archive
 mdi.vw_v_sht_secs_72d
 hmi.lev1_cal
+hmi.meanpf_720s
