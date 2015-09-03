@@ -54,3 +54,5 @@ mdi.vw_v_sht_modes_asym_archive
 mdi.vw_v_sht_secs_72d
 hmi.lev1_cal
 hmi.meanpf_720s
+su_mbobra.sharp_720s_clean_v2
+su_mbobra.sharp_cea_720s_clean_v2
