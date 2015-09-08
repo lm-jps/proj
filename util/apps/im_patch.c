@@ -226,7 +226,10 @@ int DoIt(void)
 {
   CmdParams_t *params = &cmdparams;
   DRMS_RecordSet_t *inRS, *outRS;
-  DRMS_Record_t *inRec, *outRec, *inTemplate, *outTemplate;
+  DRMS_Record_t *inRec = NULL;
+  DRMS_Record_t *outRec = NULL;
+  DRMS_Record_t *inTemplate = NULL;
+  DRMS_Record_t *outTemplate = NULL;
   DRMS_Segment_t *inSeg, *outSeg;
   DRMS_Array_t *inArray, *outArray;
   int i, ii, status = DRMS_SUCCESS, nrecs; 
@@ -666,8 +669,8 @@ fprintf(stderr,"at do reftime, center_x=%f\n", center_x);
            DIE("No input data found");
   nrecs = inRS->n;
 
-  // extract patches from each record
-  for (irec = 0; irec < nrecs; irec ++)
+    // extract patches from each record
+    for (irec = 0; irec < nrecs; irec ++)
     {
     double use_bzero, use_bscale;
     char history[4096];
@@ -994,14 +997,11 @@ fprintf(stderr,"after flip x1=%d, target_x=%lf, y1=%d, target_y=%lf\n",x1,target
       outArray->bzero = use_bzero;
       outArray->bscale = use_bscale;
       }
-
-/*
- *               writing the extracted region data file
-*/
+    
     outRS = drms_create_records(drms_env, 1, outseries, DRMS_PERMANENT, &status);
     if (status) {fprintf(stderr,"Output series is %s, ",outseries); DIE("Cant make outout record");}
     outRec = outRS->records[0];
-    outSeg = drms_segment_lookupnum(outRec, 0);
+      
     drms_copykeys(outRec, inRec, 0, kDRMS_KeyClass_Explicit);
     drms_sprint_rec_query(inQuery, inRec);
     drms_setkey_string(outRec, "SOURCE", inQuery);
@@ -1030,7 +1030,7 @@ fprintf(stderr,"after flip x1=%d, target_x=%lf, y1=%d, target_y=%lf\n",x1,target
     drms_setkey_string(outRec, "HGQUERY", in);
     drms_setkey_float(outRec, "XCEN", WX((outArray->axis[0]+1)/2, (outArray->axis[1]+1)/2));
     drms_setkey_float(outRec, "YCEN", WY((outArray->axis[0]+1)/2, (outArray->axis[1]+1)/2));
-    set_statistics(outSeg, outArray, 1);
+
 fprintf(stderr,"DATA_MIN=%f, DATA_MAX=%f\n",drms_getkey_float(outRec,"DATA_MIN",NULL),drms_getkey_float(outRec,"DATA_MAX",NULL));
     if (wantFAKE && FDSfile)
       {
@@ -1078,12 +1078,116 @@ fprintf(stderr,"DATA_MIN=%f, DATA_MAX=%f\n",drms_getkey_float(outRec,"DATA_MIN",
          } 
       }
 
-    if (export_keys)
-      status = drms_segment_writewithkeys(outSeg, outArray, 0);
-    else
-      status = drms_segment_write(outSeg, outArray, 0);
-    if (status) DIE("problem writing file");
+/*
+ *               writing the extracted region data file
+*/
+    /* Make sure the output series is compatible with the input series. 
+     * The input series and output series must have the same-named segments in
+     * the same order, with one exception. If there is only a single segment in 
+     * the input series and only a single segment in the output segment, then 
+     * the names can differ. In that case, this code will assume that the output
+     * patch will go in the single output series.
+     */
+    int numInSegs = hcon_size(&(inTemplate->segments));
+    int numOutSegs = hcon_size(&(outTemplate->segments));
+    
+    if (numInSegs != numOutSegs)
+    {
+        DIE("Input and output series are incompatible (the number of segments differs).\n");
+    }
+    
+    if (numInSegs < 1)
+    {
+        DIE("The input series must have at least one segment.\n");
+    }
+    
+    /* inSeg - 
+     * The third argument to drms_record_nextseg2() indicates that a link should be followed.
+     * 
+     */
+    int iSeg = 0;
+    HIterator_t *segIter = NULL;
+    DRMS_Segment_t *orig = NULL;
 
+    while ((inSeg = drms_record_nextseg2(inRec, &segIter, 1, &orig)) != NULL)
+    {
+        /* Pin the first segment that meets these conditions:
+         * + The segment protocol is either FITS or TAS.
+         * + NAXIS == 2.
+         * + CTYPE1 == CTYPE2 == 'HPLN-TAN' (but the keyword-reading code
+         *   already rejects records for which this isn't true).
+         * + The existence of these keywords for the segment:
+         *   CAR_ROT
+         *   CRLT_OBS
+         *   CRLN_OBS
+         *   CRPIX1
+         *   CRPIX2
+         *   CRVAL1
+         *   CRVAL2
+         *   CROTA2
+         *   CTYPE1
+         *   CTYPE2
+         *   DSUN_OBS
+         *   CDELT1
+         *   T_REC or T_OBS
+         *   (but the keyword-reading code already rejects records for which 
+         *   this isn't true).
+         * 
+         * Once a segment is pinned, then all following segments must have WCS
+         * keyword values that match the WCS keyword values of the pinned segment.
+         * However, since this module rejects series with per-segment WCS keywords, 
+         * this will also already be true. 
+         * 
+         * So as long as the current segment has NAXIS == 2 and is a FITS or TAS segment,
+         * then we can process it, even if it is a linked segment.
+         */
+        
+        /* The input series and output series must have the same-named segments in
+         * the same order, with one exception. If there is only a single segment in 
+         * the input series and only a single segment in the output segment, then 
+         * the names can differ. In that case, this code will assume that the output
+         * patch will go in the single output series.
+         *
+         * A check for the two series having the same number of segments was already performed, 
+         * before the segment loop.
+         *
+         * Must use orig, not inSeg, since inSeg could be a followed link.
+         */
+        outSeg = drms_segment_lookupnum(outRec, orig->info->segnum);
+        
+        if (outSeg == NULL || (numInSegs != 1 && strncasecmp(orig->info->name, outSeg->info->name, DRMS_MAXSEGNAMELEN - 1) != 0))
+        {
+            /* Incompatible output series. */
+            char msgBuf[512];
+            
+            snprintf(msgBuf, sizeof(msgBuf), "Input and output series are incompatible (there is no segment named %s in the output series).\n", orig->info->name);
+            DIE(msgBuf);
+        }
+        
+        set_statistics(outSeg, outArray, 1);
+        
+        if (export_keys)
+        {
+            status = drms_segment_writewithkeys(outSeg, outArray, 0);
+        }
+        else
+        {
+            status = drms_segment_write(outSeg, outArray, 0);
+        }
+        
+        if (status)
+        {
+            DIE("problem writing file");
+        }
+
+        iSeg++;
+    } /* end segment loop */
+    
+    if (segIter)
+    {
+        hiter_destroy(&segIter);
+    }
+    
     OK_recs += 1;
 
     if (log)
@@ -1091,11 +1195,13 @@ fprintf(stderr,"DATA_MIN=%f, DATA_MAX=%f\n",drms_getkey_float(outRec,"DATA_MIN",
       drms_fprint_rec_query(log, outRec);
       fprintf(log, "\n");
       }
+      
     if (*history)
       drms_appendhistory(outRec, history, 1);
+      
     drms_close_records(outRS, DRMS_INSERT_RECORD);
     drms_free_array(outArray);
-    } 
+    } /* end record loop */
 
   drms_close_records(inRS, DRMS_FREE_RECORD); 
   if (in_filename)
