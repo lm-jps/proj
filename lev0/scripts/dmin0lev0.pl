@@ -6,7 +6,7 @@
 #        '6502248075@txt.att.net', '6503878335@txt.att.net',
 #        '4153141403@vtext.com',   '6034963597@vtext.com';
 $to_list = join ",", 'jps@lmsal.com', 'wolfson@lmsal.com',
-                      'couvidat@stanford.edu';
+                      'zoe@lmsal.com';
 $msg_file = "$ENV{HOME}/bit_flip.txt";
 exit if -e $msg_file;
 if ($t = shift @ARGV) { $threshold = $t; } else { $threshold = 200; }
