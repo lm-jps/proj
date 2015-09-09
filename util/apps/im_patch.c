@@ -1108,6 +1108,7 @@ fprintf(stderr,"DATA_MIN=%f, DATA_MAX=%f\n",drms_getkey_float(outRec,"DATA_MIN",
     int iSeg = 0;
     HIterator_t *segIter = NULL;
     DRMS_Segment_t *orig = NULL;
+    char msgBuf[512];
 
     while ((inSeg = drms_record_nextseg2(inRec, &segIter, 1, &orig)) != NULL)
     {
@@ -1157,11 +1158,15 @@ fprintf(stderr,"DATA_MIN=%f, DATA_MAX=%f\n",drms_getkey_float(outRec,"DATA_MIN",
         
         if (outSeg == NULL || (numInSegs != 1 && strncasecmp(orig->info->name, outSeg->info->name, DRMS_MAXSEGNAMELEN - 1) != 0))
         {
-            /* Incompatible output series. */
-            char msgBuf[512];
-            
+            /* Incompatible output series. */    
             snprintf(msgBuf, sizeof(msgBuf), "Input and output series are incompatible (there is no segment named %s in the output series).\n", orig->info->name);
             DIE(msgBuf);
+        }
+        
+        if (inSeg->info->naxis != 2 || (inSeg->info->protocol != DRMS_FITZ && inSeg->info->protocol != DRMS_FITS && inSeg->info->protocol != DRMS_TAS))
+        {
+            /* The input series' segment must be a 2D FITS-type of segment. */
+            snprintf(msgBuf, sizeof(msgBuf), "Input segment %s is not a 2D FITS segment.\n", orig->info->name);
         }
         
         set_statistics(outSeg, outArray, 1);
