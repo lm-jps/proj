@@ -225,13 +225,16 @@ char *get_input_recset(DRMS_Env_t *drms_env, char *inQuery);
 int DoIt(void)
 {
   CmdParams_t *params = &cmdparams;
-  DRMS_RecordSet_t *inRS, *outRS;
+  DRMS_RecordSet_t *inRS = NULL;
+  DRMS_RecordSet_t *outRS = NULL;
   DRMS_Record_t *inRec = NULL;
   DRMS_Record_t *outRec = NULL;
   DRMS_Record_t *inTemplate = NULL;
   DRMS_Record_t *outTemplate = NULL;
-  DRMS_Segment_t *inSeg, *outSeg;
-  DRMS_Array_t *inArray, *outArray;
+  DRMS_Segment_t *inSeg = NULL;
+  DRMS_Segment_t *outSeg = NULL;
+  DRMS_Array_t *inArray = NULL;
+  DRMS_Array_t *outArray = NULL;
   int i, ii, status = DRMS_SUCCESS, nrecs; 
   int  irec;
   int  OK_recs = 0;
@@ -839,164 +842,6 @@ fprintf(stderr,"at box define, crpix1=%f, x0=%f, x1=%d\n",crpix1,x0,x1);
 
     int start1[2] = {x1, y1};
     int end1[2] = {x2, y2};
-
-    inSeg = drms_segment_lookupnum(inRec, 0);
-    inAxis[0] = inSeg->axis[0];
-    inAxis[1] = inSeg->axis[1];
-
-    if (x1 >= inAxis[0] || y1 >= inAxis[1] || x2 < 0 || y2 < 0)
-      {  // patch completely outside image
-fprintf(stderr, "patch completely outside image, x1=%d, y1=%d, x2=%d, y2=%d\n",x1,y1,x2,y2); 
-      continue;
-      }
-    else if (x1>=0 && y1>=0 && x2<inAxis[0] && y2<inAxis[1])
-      {  // patch entirely in image.
-      status = 0;
-      outArray = drms_segment_readslice(inSeg, DRMS_TYPE_FLOAT, start1, end1, &status);
-      if (status) DIE("Cant read input record");
-fprintf(stderr,"$$$$$$$ outArray bzero, bscale are %f, %f\n", outArray->bzero, outArray->bscale);
-      }
-    else
-      { // patch partly outside image.
-      int dims[2] = {x2-x1+1,y2-y1+1};
-      int start2[2], end2[2];
-      int x,y;
-      outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, dims, NULL, &status);
-      drms_array2missing(outArray);
-      start2[0] = x1 < 0 ? 0 : x1;
-      start2[1] = y1 < 0 ? 0 : y1;
-      end2[0] = x2 >= inAxis[0] ? inAxis[0]-1 : x2;
-      end2[1] = y2 >= inAxis[1] ? inAxis[1]-1 : y2;
-      status = 0;
-      inArray = drms_segment_readslice(inSeg, DRMS_TYPE_FLOAT, start2, end2, &status);
-      if (status || !inArray) DIE("Cant read input record");
-//fprintf(stderr,"$$$$$$$ inArray bzero, bscale are %f, %f\n",inArray->bzero, inArray->bscale);
-      outArray->bzero = inArray->bzero;
-      outArray->bscale = inArray->bscale;
-      int start3[2] = {start2[0]-start1[0],start2[1]-start1[1]}; // fetched slice offset in outarray
-      int end3[2] = {end2[0]-end1[0],end2[1]-end1[1]};           // fetched slice offset in outarray
-      int n3x = end2[0] - start2[0] + 1;
-      int n3y = end2[1] - start2[1] + 1;
-      for (y=0; y< n3y; y++)
-        for (x=0; x < n3x; x++)
-          *((float *)outArray->data + ((start3[1]+y)*dims[0] + x + start3[0])) =
-            *((float *)inArray->data + (y*n3x + x));
-      drms_free_array(inArray);
-      }
-    use_bzero = outArray->bzero;
-    use_bscale = outArray->bscale;
-    // Handle crop if wanted
-    if (do_crop)
-      {
-      int stat;
-      // rsun_ref and cdelt defined above
-      double rsun_obs = drms_getkey_double(inRec, "RSUN_OBS", &stat);
-      double dsun_obs = drms_getkey_double(inRec, "DSUN_OBS", &stat);
-      rsun_rad = asin(rsun_ref/dsun_obs); 
-      double rsun = rsun_rad*Rad2arcsec/cdelt;
-      double r2 = rsun*rsun;
-      r2 *= 0.9995;
-      double this_x0 = crpix1 - 1;
-      double this_y0 = crpix2 - 1;
-      float *data = (float *)outArray->data;
-      int i,j;
-      int nx = outArray->axis[0];
-      int ny = outArray->axis[1];
-      for (j=0; j<ny; j++)
-        for (i=0; i<nx; i++)
-          {
-          double x = i - this_x0;
-          double y = j - this_y0;
-          if ((x*x + y*y) >= r2)
-            data[j*nx + i] = DRMS_MISSING_FLOAT;
-          }
-      }
-    // Always handle special case where |pa| == 180
-    if (fabs(fabs(pa)-180.0) < 1.0)
-      {
-      // Tracking should be OK for center, but patch rotated.  Flip on both axes.
-      float *data = (float *)outArray->data;
-      int i,j;
-      int nx = outArray->axis[0];
-      int ny = outArray->axis[1];
-      int midrow = (ny)/2;
-      int midcol = (nx)/2;
-      float val;
-      for (j=0; j<midrow; j++)
-        for (i=0; i<nx; i++)
-          {
-          val = data[j*nx + i];
-          data[j*nx + i] = data[(ny - 1 - j)*nx + nx - 1 - i];
-	  data[(ny - 1 - j)*nx + nx - 1 - i] = val;
-	  }
-      if ((nx & 1) != 0)
-        {
-        for (i=0; i<midcol; i++)
-          {
-          val = data[midrow*nx + i];
-          data[midrow*nx + i] = data[midrow*nx + nx - 1 - i];
-	  data[midrow*nx + nx - 1 - i] = val;
-          }
-        }
-      pa -= 180.0;
-      crota -= 180.0;  // why was this missing in hg_patch??
-      crpix1 = 1 + x2 - x0;
-      crpix2 = 1 + y2 - y0;
-fprintf(stderr,"after rotate, crpix1=%f\n",crpix1);
-      // adjust internal quantities for after the flip, may be needed by do_register.
-      x1 = inAxis[0] - 1 - x2;
-      y1 = inAxis[1] - 1 - y2;
-      target_x = inAxis[0] - 1 - center_x;
-      target_y = inAxis[1] - 1 - center_y;
-      // cosa = 1.0; sina = 0.0;
-      strcat(history, "Image rotated 180 degrees.");
-fprintf(stderr,"after flip x1=%d, target_x=%lf, y1=%d, target_y=%lf\n",x1,target_x,y1,target_y);
-      }
-
-/*
- *  Register fraction of pixel to target location, if desired
- */
-    if (do_register)
-      {
-      DRMS_Array_t *tmpArray;
-      int status;
-      int i,j;
-      float *data = (float *)outArray->data;
-      float *newdata = NULL;
-      int newnx, newny;
-      int nx = outArray->axis[0];
-      int ny = outArray->axis[1];
-      int wantnewdims[2] = {nx - 2 * register_padding, ny - 2 * register_padding};
-      float midx=(nx-1)/2.0, midy = (ny-1)/2.0;
-      int dtyp = 3;
-      float dx = (x1 + midx) - target_x;
-      float dy = (y1 + midy) - target_y;
-      if (status=image_magrotate((void *)data, nx, ny, dtyp, crota, 1.0, dx, dy, &(void *)newdata, &newnx, &newny, 1, 0))
-        DIE("XXXX Failure in call to image_magrotate.  Either malloc error or nx or ny too large. Must quit.\n");
-      if (newnx != nx || newny != ny)
-        fprintf(stderr,"image_magrotate changed dimensions: nx want %d got %d, ny want %d got %d\n",nx,newnx,ny,newny);
-      crota = 0.0;
-      drms_free_array(outArray);
-      int outdims[2] = {pixwidth, pixheight};
-      outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outdims, NULL, &status);
-      data = (float *)outArray->data;
-      for (j=0; j<pixheight; j++)
-        for (i=0; i< pixwidth; i++)
-          data[j*pixwidth + i] = newdata[(j+register_padding)*nx + i+register_padding];
-      
-      /* This was being leaked - over 4MB per call. */
-      if (newdata)
-      {
-          free(newdata);
-          newdata = NULL;
-      }
-          
-      sprintf(history+strlen(history), "\nImage registered by shift of (%0.3f,%0.3f) pixels.", dx, dy);
-      crpix1 += dx - register_padding;
-      crpix2 += dy - register_padding;
-      outArray->bzero = use_bzero;
-      outArray->bscale = use_bscale;
-      }
     
     outRS = drms_create_records(drms_env, 1, outseries, DRMS_PERMANENT, &status);
     if (status) {fprintf(stderr,"Output series is %s, ",outseries); DIE("Cant make outout record");}
@@ -1028,55 +873,11 @@ fprintf(stderr,"after flip x1=%d, target_x=%lf, y1=%d, target_y=%lf\n",x1,target
     drms_setkey_time(outRec, "HGTSTOP", t_stop);
     drms_setkey_time(outRec, "DATE", time(0) + UNIX_EPOCH);
     drms_setkey_string(outRec, "HGQUERY", in);
-    drms_setkey_float(outRec, "XCEN", WX((outArray->axis[0]+1)/2, (outArray->axis[1]+1)/2));
-    drms_setkey_float(outRec, "YCEN", WY((outArray->axis[0]+1)/2, (outArray->axis[1]+1)/2));
 
 fprintf(stderr,"DATA_MIN=%f, DATA_MAX=%f\n",drms_getkey_float(outRec,"DATA_MIN",NULL),drms_getkey_float(outRec,"DATA_MAX",NULL));
-    if (wantFAKE && FDSfile)
-      {
-      double r;
-      int ix0, iy0;
-      int nx = outArray->axis[0];
-      int ny = outArray->axis[1];
-      double x0, y0, r2;
-      float *data = (float *)outArray->data;
-      float datamax = drms_getkey_float(outRec, "DATAMAX", NULL);
-      int ix,iy,ir,ir2;
-      if (NoTrack)
-        {
-        x0 = trackx/cdelt + crpix1;
-        y0 = tracky/cdelt + crpix2;
-        }
-      else
-        {
-        x0 = nx/2.0;
-        y0 = ny/2.0;
-        }
-      ix0 = x0+0.5;
-      iy0 = y0+0.5;
-      // r = 28.9/cdelt;  // venus radius in pixels
-      r = track_radius/cdelt;  // venus radius in pixels
-      ir = r + 0.5;
-      r2 = r*r;
-      for (ix = -ir; ix <= ir; ix++)
-       for (iy = -ir; iy <= ir; iy++)
-         {
-         x = x0 - ix0 + ix;
-         y = y0 - iy0 + iy;
-         if (x*x + y*y < r2 && ix0+ix >=0 && ix0+ix < nx && iy0+iy >=0 && iy0+iy < ny)
-           {
-           if (wantFAKEwhite)
-             data[(iy+iy0)*nx + (ix+ix0)] = datamax;
-           else
-             {
-             if (ix==0 || iy==0)
-               data[(iy+iy0)*nx + (ix+ix0)] = datamax;
-             else
-               data[(iy+iy0)*nx + (ix+ix0)] = 0.0;
-             }
-           }
-         } 
-      }
+
+/* START - stuff to move into seg loop. */
+/* END - stuff to move into seg loop */
 
 /*
  *               writing the extracted region data file
@@ -1169,6 +970,252 @@ fprintf(stderr,"DATA_MIN=%f, DATA_MAX=%f\n",drms_getkey_float(outRec,"DATA_MIN",
             snprintf(msgBuf, sizeof(msgBuf), "Input segment %s is not a 2D FITS segment.\n", orig->info->name);
         }
         
+        inAxis[0] = inSeg->axis[0];
+        inAxis[1] = inSeg->axis[1];
+
+        if (x1 >= inAxis[0] || y1 >= inAxis[1] || x2 < 0 || y2 < 0)
+        {  // patch completely outside image
+fprintf(stderr, "patch completely outside image, x1=%d, y1=%d, x2=%d, y2=%d\n",x1,y1,x2,y2); 
+            continue;
+        }
+        else if (x1>=0 && y1>=0 && x2<inAxis[0] && y2<inAxis[1])
+        {  // patch entirely in image.
+            status = 0;
+            outArray = drms_segment_readslice(inSeg, DRMS_TYPE_FLOAT, start1, end1, &status);
+            if (status) DIE("Cant read input record");
+fprintf(stderr,"$$$$$$$ outArray bzero, bscale are %f, %f\n", outArray->bzero, outArray->bscale);
+        }
+        else
+        { // patch partly outside image.
+            int dims[2] = {x2-x1+1,y2-y1+1};
+            int start2[2], end2[2];
+            int x,y;
+            outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, dims, NULL, &status);
+            drms_array2missing(outArray);
+            start2[0] = x1 < 0 ? 0 : x1;
+            start2[1] = y1 < 0 ? 0 : y1;
+            end2[0] = x2 >= inAxis[0] ? inAxis[0]-1 : x2;
+            end2[1] = y2 >= inAxis[1] ? inAxis[1]-1 : y2;
+            status = 0;
+            inArray = drms_segment_readslice(inSeg, DRMS_TYPE_FLOAT, start2, end2, &status);        
+            if (status || !inArray) DIE("Cant read input record");
+        
+//fprintf(stderr,"$$$$$$$ inArray bzero, bscale are %f, %f\n",inArray->bzero, inArray->bscale);
+            outArray->bzero = inArray->bzero;
+            outArray->bscale = inArray->bscale;
+            int start3[2] = {start2[0]-start1[0],start2[1]-start1[1]}; // fetched slice offset in outarray
+            int end3[2] = {end2[0]-end1[0],end2[1]-end1[1]};           // fetched slice offset in outarray
+            int n3x = end2[0] - start2[0] + 1;
+            int n3y = end2[1] - start2[1] + 1;
+        
+            for (y=0; y< n3y; y++)
+            {
+                for (x=0; x < n3x; x++)
+                {
+                    *((float *)outArray->data + ((start3[1]+y)*dims[0] + x + start3[0])) =
+                        *((float *)inArray->data + (y*n3x + x));
+                }
+            }
+        
+            drms_free_array(inArray);
+        }
+
+        use_bzero = outArray->bzero;
+        use_bscale = outArray->bscale;
+    
+        // Handle crop if wanted
+        if (do_crop)
+        {
+            int stat;
+            // rsun_ref and cdelt defined above
+            double rsun_obs = drms_getkey_double(inRec, "RSUN_OBS", &stat);
+            double dsun_obs = drms_getkey_double(inRec, "DSUN_OBS", &stat);
+            rsun_rad = asin(rsun_ref/dsun_obs); 
+            double rsun = rsun_rad*Rad2arcsec/cdelt;
+            double r2 = rsun*rsun;
+            r2 *= 0.9995;
+            double this_x0 = crpix1 - 1;
+            double this_y0 = crpix2 - 1;
+            float *data = (float *)outArray->data;
+            int i,j;
+            int nx = outArray->axis[0];        
+            int ny = outArray->axis[1];
+        
+            for (j=0; j<ny; j++)
+            {
+                for (i=0; i<nx; i++)
+                {
+                    double x = i - this_x0;
+                    double y = j - this_y0;
+                
+                    if ((x*x + y*y) >= r2)
+                    {
+                        data[j*nx + i] = DRMS_MISSING_FLOAT;
+                    }
+                }
+            }
+        }
+        
+        // Always handle special case where |pa| == 180
+        if (fabs(fabs(pa)-180.0) < 1.0)
+        {
+            // Tracking should be OK for center, but patch rotated.  Flip on both axes.
+            float *data = (float *)outArray->data;
+            int i,j;
+            int nx = outArray->axis[0];
+            int ny = outArray->axis[1];
+            int midrow = (ny)/2;
+            int midcol = (nx)/2;
+            float val;
+        
+            for (j=0; j<midrow; j++)
+            {
+                for (i=0; i<nx; i++)
+                {
+                    val = data[j*nx + i];
+                    data[j*nx + i] = data[(ny - 1 - j)*nx + nx - 1 - i];
+                    data[(ny - 1 - j)*nx + nx - 1 - i] = val;
+                }
+            }
+        
+            if ((nx & 1) != 0)
+            {
+                for (i=0; i<midcol; i++)
+                {
+                    val = data[midrow*nx + i];
+                    data[midrow*nx + i] = data[midrow*nx + nx - 1 - i];
+                    data[midrow*nx + nx - 1 - i] = val;
+                }
+            }
+        
+            pa -= 180.0;
+            crota -= 180.0;  // why was this missing in hg_patch??
+            crpix1 = 1 + x2 - x0;
+            crpix2 = 1 + y2 - y0;
+fprintf(stderr,"after rotate, crpix1=%f\n",crpix1);
+            // adjust internal quantities for after the flip, may be needed by do_register.
+            x1 = inAxis[0] - 1 - x2;
+            y1 = inAxis[1] - 1 - y2;
+            target_x = inAxis[0] - 1 - center_x;
+            target_y = inAxis[1] - 1 - center_y;
+            // cosa = 1.0; sina = 0.0;
+            strcat(history, "Image rotated 180 degrees.");
+fprintf(stderr,"after flip x1=%d, target_x=%lf, y1=%d, target_y=%lf\n",x1,target_x,y1,target_y);
+        }
+    
+        /*
+         *  Register fraction of pixel to target location, if desired
+         */
+        if (do_register)
+        {
+            DRMS_Array_t *tmpArray;
+            int status;
+            int i,j;
+            float *data = (float *)outArray->data;
+            float *newdata = NULL;
+            int newnx, newny;
+            int nx = outArray->axis[0];
+            int ny = outArray->axis[1];
+            int wantnewdims[2] = {nx - 2 * register_padding, ny - 2 * register_padding};
+            float midx=(nx-1)/2.0, midy = (ny-1)/2.0;
+            int dtyp = 3;
+            float dx = (x1 + midx) - target_x;
+            float dy = (y1 + midy) - target_y;
+        
+            if (status=image_magrotate((void *)data, nx, ny, dtyp, crota, 1.0, dx, dy, &(void *)newdata, &newnx, &newny, 1, 0))
+            {
+                DIE("XXXX Failure in call to image_magrotate.  Either malloc error or nx or ny too large. Must quit.\n");
+            }
+        
+            if (newnx != nx || newny != ny)
+            {
+                fprintf(stderr,"image_magrotate changed dimensions: nx want %d got %d, ny want %d got %d\n",nx,newnx,ny,newny);
+            }
+        
+            crota = 0.0;
+            drms_free_array(outArray);
+            int outdims[2] = {pixwidth, pixheight};
+            outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outdims, NULL, &status);
+            data = (float *)outArray->data;
+            for (j=0; j<pixheight; j++)
+            {
+                for (i=0; i< pixwidth; i++)
+                {
+                    data[j*pixwidth + i] = newdata[(j+register_padding)*nx + i+register_padding];
+                }
+            }
+
+            /* This was being leaked - over 4MB per call. */
+            if (newdata)
+            {
+                free(newdata);
+                newdata = NULL;
+            }
+  
+            sprintf(history+strlen(history), "\nImage registered by shift of (%0.3f,%0.3f) pixels.", dx, dy);
+            crpix1 += dx - register_padding;
+            crpix2 += dy - register_padding;
+            outArray->bzero = use_bzero;
+            outArray->bscale = use_bscale;
+        }
+    
+        if (wantFAKE && FDSfile)
+        {
+            double r;
+            int ix0, iy0;
+            int nx = outArray->axis[0];
+            int ny = outArray->axis[1];
+            double x0, y0, r2;
+            float *data = (float *)outArray->data;
+            float datamax = drms_getkey_float(outRec, "DATAMAX", NULL);
+            int ix,iy,ir,ir2;
+        
+            if (NoTrack)
+            {
+                x0 = trackx/cdelt + crpix1;
+                y0 = tracky/cdelt + crpix2;
+            }
+            else
+            {
+                x0 = nx/2.0;
+                y0 = ny/2.0;
+            }
+    
+            ix0 = x0+0.5;
+            iy0 = y0+0.5;
+            // r = 28.9/cdelt;  // venus radius in pixels
+            r = track_radius/cdelt;  // venus radius in pixels
+            ir = r + 0.5;
+            r2 = r*r;
+        
+            for (ix = -ir; ix <= ir; ix++)
+            {
+                for (iy = -ir; iy <= ir; iy++)
+                {
+                    x = x0 - ix0 + ix;
+                    y = y0 - iy0 + iy;
+                    if (x*x + y*y < r2 && ix0+ix >=0 && ix0+ix < nx && iy0+iy >=0 && iy0+iy < ny)
+                    {
+                        if (wantFAKEwhite)
+                        {
+                            data[(iy+iy0)*nx + (ix+ix0)] = datamax;
+                        }
+                        else
+                        {
+                            if (ix==0 || iy==0)
+                            {
+                                data[(iy+iy0)*nx + (ix+ix0)] = datamax;
+                            }
+                            else
+                            {
+                                data[(iy+iy0)*nx + (ix+ix0)] = 0.0;
+                            }
+                         }
+                    }
+                }
+            }
+        }
+
         set_statistics(outSeg, outArray, 1);
         
         if (export_keys)
