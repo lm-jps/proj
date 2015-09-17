@@ -225,24 +225,15 @@ char *get_input_recset(DRMS_Env_t *drms_env, char *inQuery);
 int DoIt(void)
 {
   CmdParams_t *params = &cmdparams;
-  DRMS_RecordSet_t *inRS = NULL;
-  DRMS_RecordSet_t *outRS = NULL;
-  DRMS_Record_t *inRec = NULL;
-  DRMS_Record_t *outRec = NULL;
-  DRMS_Record_t *inTemplate = NULL;
-  DRMS_Record_t *outTemplate = NULL;
-  DRMS_Segment_t *inSeg = NULL;
-  DRMS_Segment_t *outSeg = NULL;
-  DRMS_Array_t *inArray = NULL;
-  DRMS_Array_t *outArray = NULL;
+  DRMS_RecordSet_t *inRS, *outRS;
+  DRMS_Record_t *inRec, *outRec, *inTemplate, *outTemplate;
+  DRMS_Segment_t *inSeg, *outSeg;
+  DRMS_Array_t *inArray, *outArray;
   int i, ii, status = DRMS_SUCCESS, nrecs; 
   int  irec;
   int  OK_recs = 0;
   double center_x, center_y, crpix1, crpix2, x0, y0; 
   double rsun_ref, dsun_obs, rsun, rsun_rad, rsunpix;
-  double r2;
-  double this_x0;
-  double this_y0;
   double crln_obs, crlt_obs;
   double crln_obs_rad, crlt_obs_rad;
   double crln_rad, crlt_rad;
@@ -675,20 +666,14 @@ fprintf(stderr,"at do reftime, center_x=%f\n", center_x);
            DIE("No input data found");
   nrecs = inRS->n;
 
-    // extract patches from each record
-    int nextRec = 0;
-    for (irec = 0; irec < nrecs; irec ++)
+  // extract patches from each record
+  for (irec = 0; irec < nrecs; irec ++)
     {
     double use_bzero, use_bscale;
     char history[4096];
-    
-    nextRec = 0;
-    
     *history = '\0';
     inRec = inRS->records[irec];
     if (status || !inRec) DIE("Record read failed.");
-    
-    
     TIME trec = drms_getkey_time(inRec, timekeyname, &status); TEST_PARAM(timekeyname);
     if (t_start != tNotSpecified && trec < t_start)
       {
@@ -725,13 +710,6 @@ fprintf(stderr,"at do reftime, center_x=%f\n", center_x);
     crota = drms_getkey_double(inRec, "CROTA2", &status); TEST_PARAM("CROTA2");
     cdelt = drms_getkey_double(inRec, "CDELT1", &status); TEST_PARAM("CDELT1");
     pa = -crota;
-    
-    int paIs180 = 0;
-    if (fabs(fabs(pa)-180.0) < 1.0)
-    {
-        paIs180 = 1;
-    }
-    
     crlt_obs_rad = Deg2Rad * crlt_obs;
     crln_obs_rad = Deg2Rad * crln_obs;
     pa_rad = Deg2Rad * pa;
@@ -782,8 +760,7 @@ fprintf(stderr,"T_OBS=%s, crpix1=%f, crpix2=%f\n", drms_getkey_string(inRec,"T_O
         rsun_ref = drms_getkey_double(inRec, "RSUN_REF", &status);
         if (status) rsun_ref = 6.96e8;
         dsun_obs = drms_getkey_double(inRec, "DSUN_OBS", &status); TEST_PARAM("DSUN_OBS");
-        rsun_rad = asin(rsun_ref/dsun_obs); 
-        rsun = rsun_rad*Rad2arcsec; 
+        rsun = asin(rsun_ref/dsun_obs)*Rad2arcsec; 
         cdelt = drms_getkey_double(inRec, "CDELT1", &status); TEST_PARAM("CDELT1");
         // in principle use deltlong to get time to use for correcting crlt_obs, ignore for now
         // get ur, ll coords of box at CM.
@@ -859,130 +836,172 @@ fprintf(stderr,"at box define, crpix1=%f, x0=%f, x1=%d\n",crpix1,x0,x1);
 
     int start1[2] = {x1, y1};
     int end1[2] = {x2, y2};
-    
+
+    inSeg = drms_segment_lookupnum(inRec, 0);
+    inAxis[0] = inSeg->axis[0];
+    inAxis[1] = inSeg->axis[1];
+
+    if (x1 >= inAxis[0] || y1 >= inAxis[1] || x2 < 0 || y2 < 0)
+      {  // patch completely outside image
+fprintf(stderr, "patch completely outside image, x1=%d, y1=%d, x2=%d, y2=%d\n",x1,y1,x2,y2); 
+      continue;
+      }
+    else if (x1>=0 && y1>=0 && x2<inAxis[0] && y2<inAxis[1])
+      {  // patch entirely in image.
+      status = 0;
+      outArray = drms_segment_readslice(inSeg, DRMS_TYPE_FLOAT, start1, end1, &status);
+      if (status) DIE("Cant read input record");
+fprintf(stderr,"$$$$$$$ outArray bzero, bscale are %f, %f\n", outArray->bzero, outArray->bscale);
+      }
+    else
+      { // patch partly outside image.
+      int dims[2] = {x2-x1+1,y2-y1+1};
+      int start2[2], end2[2];
+      int x,y;
+      outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, dims, NULL, &status);
+      drms_array2missing(outArray);
+      start2[0] = x1 < 0 ? 0 : x1;
+      start2[1] = y1 < 0 ? 0 : y1;
+      end2[0] = x2 >= inAxis[0] ? inAxis[0]-1 : x2;
+      end2[1] = y2 >= inAxis[1] ? inAxis[1]-1 : y2;
+      status = 0;
+      inArray = drms_segment_readslice(inSeg, DRMS_TYPE_FLOAT, start2, end2, &status);
+      if (status || !inArray) DIE("Cant read input record");
+//fprintf(stderr,"$$$$$$$ inArray bzero, bscale are %f, %f\n",inArray->bzero, inArray->bscale);
+      outArray->bzero = inArray->bzero;
+      outArray->bscale = inArray->bscale;
+      int start3[2] = {start2[0]-start1[0],start2[1]-start1[1]}; // fetched slice offset in outarray
+      int end3[2] = {end2[0]-end1[0],end2[1]-end1[1]};           // fetched slice offset in outarray
+      int n3x = end2[0] - start2[0] + 1;
+      int n3y = end2[1] - start2[1] + 1;
+      for (y=0; y< n3y; y++)
+        for (x=0; x < n3x; x++)
+          *((float *)outArray->data + ((start3[1]+y)*dims[0] + x + start3[0])) =
+            *((float *)inArray->data + (y*n3x + x));
+      drms_free_array(inArray);
+      }
+    use_bzero = outArray->bzero;
+    use_bscale = outArray->bscale;
+    // Handle crop if wanted
+    if (do_crop)
+      {
+      int stat;
+      // rsun_ref and cdelt defined above
+      double rsun_obs = drms_getkey_double(inRec, "RSUN_OBS", &stat);
+      double dsun_obs = drms_getkey_double(inRec, "DSUN_OBS", &stat);
+      rsun_rad = asin(rsun_ref/dsun_obs); 
+      double rsun = rsun_rad*Rad2arcsec/cdelt;
+      double r2 = rsun*rsun;
+      r2 *= 0.9995;
+      double this_x0 = crpix1 - 1;
+      double this_y0 = crpix2 - 1;
+      float *data = (float *)outArray->data;
+      int i,j;
+      int nx = outArray->axis[0];
+      int ny = outArray->axis[1];
+      for (j=0; j<ny; j++)
+        for (i=0; i<nx; i++)
+          {
+          double x = i - this_x0;
+          double y = j - this_y0;
+          if ((x*x + y*y) >= r2)
+            data[j*nx + i] = DRMS_MISSING_FLOAT;
+          }
+      }
+    // Always handle special case where |pa| == 180
+    if (fabs(fabs(pa)-180.0) < 1.0)
+      {
+      // Tracking should be OK for center, but patch rotated.  Flip on both axes.
+      float *data = (float *)outArray->data;
+      int i,j;
+      int nx = outArray->axis[0];
+      int ny = outArray->axis[1];
+      int midrow = (ny)/2;
+      int midcol = (nx)/2;
+      float val;
+      for (j=0; j<midrow; j++)
+        for (i=0; i<nx; i++)
+          {
+          val = data[j*nx + i];
+          data[j*nx + i] = data[(ny - 1 - j)*nx + nx - 1 - i];
+	  data[(ny - 1 - j)*nx + nx - 1 - i] = val;
+	  }
+      if ((nx & 1) != 0)
+        {
+        for (i=0; i<midcol; i++)
+          {
+          val = data[midrow*nx + i];
+          data[midrow*nx + i] = data[midrow*nx + nx - 1 - i];
+	  data[midrow*nx + nx - 1 - i] = val;
+          }
+        }
+      pa -= 180.0;
+      crota -= 180.0;  // why was this missing in hg_patch??
+      crpix1 = 1 + x2 - x0;
+      crpix2 = 1 + y2 - y0;
+fprintf(stderr,"after rotate, crpix1=%f\n",crpix1);
+      // adjust internal quantities for after the flip, may be needed by do_register.
+      x1 = inAxis[0] - 1 - x2;
+      y1 = inAxis[1] - 1 - y2;
+      target_x = inAxis[0] - 1 - center_x;
+      target_y = inAxis[1] - 1 - center_y;
+      // cosa = 1.0; sina = 0.0;
+      strcat(history, "Image rotated 180 degrees.");
+fprintf(stderr,"after flip x1=%d, target_x=%lf, y1=%d, target_y=%lf\n",x1,target_x,y1,target_y);
+      }
+
+/*
+ *  Register fraction of pixel to target location, if desired
+ */
+    if (do_register)
+      {
+      DRMS_Array_t *tmpArray;
+      int status;
+      int i,j;
+      float *data = (float *)outArray->data;
+      float *newdata = NULL;
+      int newnx, newny;
+      int nx = outArray->axis[0];
+      int ny = outArray->axis[1];
+      int wantnewdims[2] = {nx - 2 * register_padding, ny - 2 * register_padding};
+      float midx=(nx-1)/2.0, midy = (ny-1)/2.0;
+      int dtyp = 3;
+      float dx = (x1 + midx) - target_x;
+      float dy = (y1 + midy) - target_y;
+      if (status=image_magrotate((void *)data, nx, ny, dtyp, crota, 1.0, dx, dy, &(void *)newdata, &newnx, &newny, 1, 0))
+        DIE("XXXX Failure in call to image_magrotate.  Either malloc error or nx or ny too large. Must quit.\n");
+      if (newnx != nx || newny != ny)
+        fprintf(stderr,"image_magrotate changed dimensions: nx want %d got %d, ny want %d got %d\n",nx,newnx,ny,newny);
+      crota = 0.0;
+      drms_free_array(outArray);
+      int outdims[2] = {pixwidth, pixheight};
+      outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outdims, NULL, &status);
+      data = (float *)outArray->data;
+      for (j=0; j<pixheight; j++)
+        for (i=0; i< pixwidth; i++)
+          data[j*pixwidth + i] = newdata[(j+register_padding)*nx + i+register_padding];
+      
+      /* This was being leaked - over 4MB per call. */
+      if (newdata)
+      {
+          free(newdata);
+          newdata = NULL;
+      }
+          
+      sprintf(history+strlen(history), "\nImage registered by shift of (%0.3f,%0.3f) pixels.", dx, dy);
+      crpix1 += dx - register_padding;
+      crpix2 += dy - register_padding;
+      outArray->bzero = use_bzero;
+      outArray->bscale = use_bscale;
+      }
+
+/*
+ *               writing the extracted region data file
+*/
     outRS = drms_create_records(drms_env, 1, outseries, DRMS_PERMANENT, &status);
     if (status) {fprintf(stderr,"Output series is %s, ",outseries); DIE("Cant make outout record");}
     outRec = outRS->records[0];
-      
-    
-    if (do_crop)
-    {
-        int retStat;
-        dsun_obs = drms_getkey_double(inRec, "DSUN_OBS", &retStat);
-        rsun_rad = asin(rsun_ref/dsun_obs); 
-        rsun = rsun_rad*Rad2arcsec/cdelt;
-        r2 = rsun*rsun;
-        r2 *= 0.9995;
-        this_x0 = crpix1 - 1;
-        this_y0 = crpix2 - 1;
-    }
-      
-    /* We need to adjust pa and crota if |pa| == 180. Originally, this was done in code that was mixed with 
-     * per-segment code. But now that we made a per-segment loop, we do not want to execute this code more than 
-     * once. So I moved it here, right before the segment loop. */
-    if (paIs180)
-    {
-        pa -= 180.0; /* This actually does not get used again during the rest of the record loop, and is not used by the segment loop. */
-        crota -= 180.0;
-
-        crpix1 = 1 + x2 - x0;
-        crpix2 = 1 + y2 - y0;
-fprintf(stderr,"after rotate, crpix1=%f\n",crpix1);
-
-        // adjust internal quantities for after the flip, may be needed by do_register.    
-        x1 = inAxis[0] - 1 - x2;
-        y1 = inAxis[1] - 1 - y2;
-        target_x = inAxis[0] - 1 - center_x;
-        target_y = inAxis[1] - 1 - center_y;
-        // cosa = 1.0; sina = 0.0;
-        strcat(history, "Image rotated 180 degrees.");
-fprintf(stderr,"after flip x1=%d, target_x=%lf, y1=%d, target_y=%lf\n",x1,target_x,y1,target_y);
-    }
-    
-    /* At this point, all the modifications to x1, y1, target_x, and target_y have been performed, 
-     * so it is safe to calculate dx and dy. */
-     
-    /*
-     * To simplify things, error-out if the input segment's patches dimensions are not equivalent.
-     * Also, we need to calculate dx and dy, which require that we know the intersection of the
-     * patch box with the image.
-     */
-    DRMS_Segment_t *firstSeg = NULL;
-    HIterator_t *segIter = NULL;
-    DRMS_Segment_t *orig = NULL;
-
-    int numXPix = -1;
-    int numYPix = -1;
-    float regShiftX = 0;
-    float regShiftY = 0;
-    char patchIntersection;
-    
-    while ((inSeg = drms_record_nextseg2(inRec, &segIter, 1, &orig)) != NULL)
-    {
-        if (!firstSeg)
-        {
-            firstSeg = inSeg;
-            
-            /* Calculate the ultimate patch dimensions. */            
-            if (x1 >= inSeg->axis[0] || y1 >= inSeg->axis[1] || x2 < 0 || y2 < 0)
-            {  
-                // patch completely outside image
-                patchIntersection = 'N';
-                /* The record needs to be skipped. Downstream code will handle this. */
-            }
-            else if (x1 >= 0 && y1 >= 0 && x2 < inSeg->axis[0] && y2 < inSeg->axis[1])
-            {  
-                // patch entirely in image.
-                patchIntersection = 'F';
-                numXPix = inSeg->axis[0];
-                numYPix = inSeg->axis[1];
-            }
-            else
-            { 
-                // patch partly outside image.
-                patchIntersection = 'P';
-                numXPix = x2 - x1 + 1;
-                numYPix = y2 - y1 + 1;
-            }
-        }
-        else
-        {
-            if (!drms_segment_segsmatch(firstSeg, inSeg))
-            {
-                DIE("When processing more than one segment, all segments' dimensions must match.");
-            }
-        }
-    }
-    
-    if (segIter)
-    {
-        hiter_destroy(&segIter);
-    }
-     
-    if (do_register)
-    {
-        /* Cannot be in segment loop - we only do this once per record. But we need to know the dimensions
-         * of the output segment, which requires us to be in the segment loop. And then some of
-         * these quantities have to be available to the segment-loop code, like nx.
-         *
-         * To simplify things, error-out if the segments' dimensions are not equivalent.
-         */       
-         
-        int nx = numXPix;
-        int ny = numYPix;
-        float midx=(nx-1)/2.0;
-        float midy = (ny-1)/2.0;
-        float dx = (x1 + midx) - target_x;
-        float dy = (y1 + midy) - target_y;
-      
-        sprintf(history+strlen(history), "\nImage registered by shift of (%0.3f,%0.3f) pixels.", dx, dy);
-        crpix1 += dx - register_padding;
-        crpix2 += dy - register_padding;
-        
-        regShiftX = dx;
-        regShiftY = dy;
-    }
-     
+    outSeg = drms_segment_lookupnum(outRec, 0);
     drms_copykeys(outRec, inRec, 0, kDRMS_KeyClass_Explicit);
     drms_sprint_rec_query(inQuery, inRec);
     drms_setkey_string(outRec, "SOURCE", inQuery);
@@ -994,21 +1013,7 @@ fprintf(stderr,"after flip x1=%d, target_x=%lf, y1=%d, target_y=%lf\n",x1,target
     drms_setkey_double(outRec, "CRVAL2", 0.0);
     drms_setkey_double(outRec, "CRDELT1", cdelt);
     drms_setkey_double(outRec, "CRDELT2", cdelt);
-    
-    if (do_register)
-    {
-        /* It used to be the case that in the per-segment code, if do_register was set, then 
-         * crota got set to 0.0, and they the crota2 keyword got assigned that value. 
-         * But now that we have a segment loop, we cannot set crota to 0.0 in the per-segment
-         * code, otherwise we lose the value of crota needed by the second and greater 
-         * segment. */
-        drms_setkey_double(outRec, "CROTA2", 0.0);
-    }
-    else
-    {
-        drms_setkey_double(outRec, "CROTA2", crota);
-    }
-        
+    drms_setkey_double(outRec, "CROTA2", crota);
     drms_setkey_string(outRec, "CONTENT", "Tracked Extracted Patches, made by im_patch");
     drms_appendcomment(outRec, "Patches", 1);
     drms_setkey_string(outRec, "RequestID", requestid);
@@ -1023,367 +1028,74 @@ fprintf(stderr,"after flip x1=%d, target_x=%lf, y1=%d, target_y=%lf\n",x1,target
     drms_setkey_time(outRec, "HGTSTOP", t_stop);
     drms_setkey_time(outRec, "DATE", time(0) + UNIX_EPOCH);
     drms_setkey_string(outRec, "HGQUERY", in);
+    drms_setkey_float(outRec, "XCEN", WX((outArray->axis[0]+1)/2, (outArray->axis[1]+1)/2));
+    drms_setkey_float(outRec, "YCEN", WY((outArray->axis[0]+1)/2, (outArray->axis[1]+1)/2));
+    set_statistics(outSeg, outArray, 1);
 fprintf(stderr,"DATA_MIN=%f, DATA_MAX=%f\n",drms_getkey_float(outRec,"DATA_MIN",NULL),drms_getkey_float(outRec,"DATA_MAX",NULL));
+    if (wantFAKE && FDSfile)
+      {
+      double r;
+      int ix0, iy0;
+      int nx = outArray->axis[0];
+      int ny = outArray->axis[1];
+      double x0, y0, r2;
+      float *data = (float *)outArray->data;
+      float datamax = drms_getkey_float(outRec, "DATAMAX", NULL);
+      int ix,iy,ir,ir2;
+      if (NoTrack)
+        {
+        x0 = trackx/cdelt + crpix1;
+        y0 = tracky/cdelt + crpix2;
+        }
+      else
+        {
+        x0 = nx/2.0;
+        y0 = ny/2.0;
+        }
+      ix0 = x0+0.5;
+      iy0 = y0+0.5;
+      // r = 28.9/cdelt;  // venus radius in pixels
+      r = track_radius/cdelt;  // venus radius in pixels
+      ir = r + 0.5;
+      r2 = r*r;
+      for (ix = -ir; ix <= ir; ix++)
+       for (iy = -ir; iy <= ir; iy++)
+         {
+         x = x0 - ix0 + ix;
+         y = y0 - iy0 + iy;
+         if (x*x + y*y < r2 && ix0+ix >=0 && ix0+ix < nx && iy0+iy >=0 && iy0+iy < ny)
+           {
+           if (wantFAKEwhite)
+             data[(iy+iy0)*nx + (ix+ix0)] = datamax;
+           else
+             {
+             if (ix==0 || iy==0)
+               data[(iy+iy0)*nx + (ix+ix0)] = datamax;
+             else
+               data[(iy+iy0)*nx + (ix+ix0)] = 0.0;
+             }
+           }
+         } 
+      }
 
-/*
- *               writing the extracted region data file
-*/
-    /* Make sure the output series is compatible with the input series. 
-     * The input series and output series must have the same-named segments in
-     * the same order, with one exception. If there is only a single segment in 
-     * the input series and only a single segment in the output segment, then 
-     * the names can differ. In that case, this code will assume that the output
-     * patch will go in the single output series.
-     */
-    int numInSegs = hcon_size(&(inTemplate->segments));
-    int numOutSegs = hcon_size(&(outTemplate->segments));
-    
-    if (numInSegs != numOutSegs)
-    {
-        DIE("Input and output series are incompatible (the number of segments differs).\n");
-    }
-    
-    if (numInSegs < 1)
-    {
-        DIE("The input series must have at least one segment.\n");
-    }
-    
-    /* inSeg - 
-     * The third argument to drms_record_nextseg2() indicates that a link should be followed.
-     * 
-     */
-    int iSeg = 0;
-    char msgBuf[512];
+    if (export_keys)
+      status = drms_segment_writewithkeys(outSeg, outArray, 0);
+    else
+      status = drms_segment_write(outSeg, outArray, 0);
+    if (status) DIE("problem writing file");
 
-    while ((inSeg = drms_record_nextseg2(inRec, &segIter, 1, &orig)) != NULL)
-    {
-        /* Pin the first segment that meets these conditions:
-         * + The segment protocol is either FITS or TAS.
-         * + NAXIS == 2.
-         * + CTYPE1 == CTYPE2 == 'HPLN-TAN' (but the keyword-reading code
-         *   already rejects records for which this isn't true).
-         * + The existence of these keywords for the segment:
-         *   CAR_ROT
-         *   CRLT_OBS
-         *   CRLN_OBS
-         *   CRPIX1
-         *   CRPIX2
-         *   CRVAL1
-         *   CRVAL2
-         *   CROTA2
-         *   CTYPE1
-         *   CTYPE2
-         *   DSUN_OBS
-         *   CDELT1
-         *   T_REC or T_OBS
-         *   (but the keyword-reading code already rejects records for which 
-         *   this isn't true).
-         * 
-         * Once a segment is pinned, then all following segments must have WCS
-         * keyword values that match the WCS keyword values of the pinned segment.
-         * However, since this module rejects series with per-segment WCS keywords, 
-         * this will also already be true. 
-         * 
-         * So as long as the current segment has NAXIS == 2 and is a FITS or TAS segment,
-         * then we can process it, even if it is a linked segment.
-         */
-        
-        /* The input series and output series must have the same-named segments in
-         * the same order, with one exception. If there is only a single segment in 
-         * the input series and only a single segment in the output segment, then 
-         * the names can differ. In that case, this code will assume that the output
-         * patch will go in the single output series.
-         *
-         * A check for the two series having the same number of segments was already performed, 
-         * before the segment loop.
-         *
-         * Must use orig, not inSeg, since inSeg could be a followed link.
-         */
-        outSeg = drms_segment_lookupnum(outRec, orig->info->segnum);
-        
-        if (outSeg == NULL || (numInSegs != 1 && strncasecmp(orig->info->name, outSeg->info->name, DRMS_MAXSEGNAMELEN - 1) != 0))
-        {
-            /* Incompatible output series. */    
-            snprintf(msgBuf, sizeof(msgBuf), "Input and output series are incompatible (there is no segment named %s in the output series).\n", orig->info->name);
-            DIE(msgBuf);
-        }
-        
-        if (inSeg->info->naxis != 2 || (inSeg->info->protocol != DRMS_FITZ && inSeg->info->protocol != DRMS_FITS && inSeg->info->protocol != DRMS_TAS))
-        {
-            /* The input series' segment must be a 2D FITS-type of segment. */
-            snprintf(msgBuf, sizeof(msgBuf), "Input segment %s is not a 2D FITS segment.\n", orig->info->name);
-        }
-        
-        inAxis[0] = inSeg->axis[0];
-        inAxis[1] = inSeg->axis[1];
-
-        if (patchIntersection == 'N')
-        {  // patch completely outside image
-fprintf(stderr, "patch completely outside image, x1=%d, y1=%d, x2=%d, y2=%d\n",x1,y1,x2,y2); 
-            /* If the patch is completely outside of one image, it is completely outside all images
-             * since all images must be of the same dimensions. So break out of segment loop. */
-            nextRec = 1;
-            break;
-        }
-        else if (patchIntersection == 'F')
-        {  // patch entirely in image.
-            status = 0;
-            outArray = drms_segment_readslice(inSeg, DRMS_TYPE_FLOAT, start1, end1, &status);
-            if (status) DIE("Cant read input record");
-fprintf(stderr,"$$$$$$$ outArray bzero, bscale are %f, %f\n", outArray->bzero, outArray->bscale);
-        }
-        else
-        { // patch partly outside image.
-            int dims[2] = {x2-x1+1,y2-y1+1};
-            int start2[2], end2[2];
-            
-            int x,y;
-            outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, dims, NULL, &status);
-            drms_array2missing(outArray);
-            
-            start2[0] = x1 < 0 ? 0 : x1;
-            start2[1] = y1 < 0 ? 0 : y1;
-            end2[0] = x2 >= inAxis[0] ? inAxis[0]-1 : x2;
-            end2[1] = y2 >= inAxis[1] ? inAxis[1]-1 : y2;
-            
-            status = 0;
-            inArray = drms_segment_readslice(inSeg, DRMS_TYPE_FLOAT, start2, end2, &status);        
-            if (status || !inArray) DIE("Cant read input record");
-        
-//fprintf(stderr,"$$$$$$$ inArray bzero, bscale are %f, %f\n",inArray->bzero, inArray->bscale);
-            outArray->bzero = inArray->bzero;
-            outArray->bscale = inArray->bscale;
-            
-            int start3[2] = {start2[0]-start1[0],start2[1]-start1[1]}; // fetched slice offset in outarray
-            int end3[2] = {end2[0]-end1[0],end2[1]-end1[1]};           // fetched slice offset in outarray
-            int n3x = end2[0] - start2[0] + 1;
-            int n3y = end2[1] - start2[1] + 1;
-        
-            for (y=0; y< n3y; y++)
-            {
-                for (x=0; x < n3x; x++)
-                {
-                    *((float *)outArray->data + ((start3[1]+y)*dims[0] + x + start3[0])) =
-                        *((float *)inArray->data + (y*n3x + x));
-                }
-            }
-        
-            drms_free_array(inArray);
-        }
-
-        use_bzero = outArray->bzero;
-        use_bscale = outArray->bscale;
-    
-        // Handle crop if wanted
-        if (do_crop)
-        {
-            int stat;
-            // rsun_ref and cdelt defined above            
-            float *data = (float *)outArray->data;
-            int i,j;
-            int nx = outArray->axis[0];        
-            int ny = outArray->axis[1];
-        
-            for (j=0; j<ny; j++)
-            {
-                for (i=0; i<nx; i++)
-                {
-                    double x = i - this_x0;
-                    double y = j - this_y0;
-                
-                    if ((x*x + y*y) >= r2)
-                    {
-                        data[j*nx + i] = DRMS_MISSING_FLOAT;
-                    }
-                }
-            }
-        }
-        
-        // Always handle special case where |pa| == 180
-        if (paIs180)
-        {
-            // Tracking should be OK for center, but patch rotated.  Flip on both axes.
-            float *data = (float *)outArray->data;
-            int i,j;
-            int nx = outArray->axis[0];
-            int ny = outArray->axis[1];
-            int midrow = (ny)/2;
-            int midcol = (nx)/2;
-            float val;
-        
-            for (j=0; j<midrow; j++)
-            {
-                for (i=0; i<nx; i++)
-                {
-                    val = data[j*nx + i];
-                    data[j*nx + i] = data[(ny - 1 - j)*nx + nx - 1 - i];
-                    data[(ny - 1 - j)*nx + nx - 1 - i] = val;
-                }
-            }
-        
-            if ((nx & 1) != 0)
-            {
-                for (i=0; i<midcol; i++)
-                {
-                    val = data[midrow*nx + i];
-                    data[midrow*nx + i] = data[midrow*nx + nx - 1 - i];
-                    data[midrow*nx + nx - 1 - i] = val;
-                }
-            }            
-        }
-    
-        /*
-         *  Register fraction of pixel to target location, if desired
-         */
-        if (do_register)
-        {
-            DRMS_Array_t *tmpArray;
-            int status;
-            int i,j;
-            float *data = (float *)outArray->data;
-            float *newdata = NULL;
-            int newnx, newny;
-            int nx = outArray->axis[0];
-            int ny = outArray->axis[1];
-            int dtyp = 3;
-        
-            if (status=image_magrotate((void *)data, nx, ny, dtyp, crota, 1.0, regShiftX, regShiftY, &(void *)newdata, &newnx, &newny, 1, 0))
-            {
-                DIE("XXXX Failure in call to image_magrotate.  Either malloc error or nx or ny too large. Must quit.\n");
-            }
-        
-            if (newnx != nx || newny != ny)
-            {
-                fprintf(stderr,"image_magrotate changed dimensions: nx want %d got %d, ny want %d got %d\n",nx,newnx,ny,newny);
-            }
-        
-            drms_free_array(outArray);
-            int outdims[2] = {pixwidth, pixheight};
-            outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outdims, NULL, &status);
-            data = (float *)outArray->data;
-            for (j=0; j<pixheight; j++)
-            {
-                for (i=0; i< pixwidth; i++)
-                {
-                    data[j*pixwidth + i] = newdata[(j+register_padding)*nx + i+register_padding];
-                }
-            }
-
-            /* This was being leaked - over 4MB per call. */
-            if (newdata)
-            {
-                free(newdata);
-                newdata = NULL;
-            }
-
-            outArray->bzero = use_bzero;
-            outArray->bscale = use_bscale;
-        }
-    
-        if (wantFAKE && FDSfile)
-        {
-            double r;
-            int ix0, iy0;
-            int nx = outArray->axis[0];
-            int ny = outArray->axis[1];
-            double x0, y0, r2;
-            float *data = (float *)outArray->data;
-            float datamax = drms_getkey_float(outRec, "DATAMAX", NULL);
-            int ix,iy,ir,ir2;
-        
-            if (NoTrack)
-            {
-                x0 = trackx/cdelt + crpix1;
-                y0 = tracky/cdelt + crpix2;
-            }
-            else
-            {
-                x0 = nx/2.0;
-                y0 = ny/2.0;
-            }
-    
-            ix0 = x0+0.5;
-            iy0 = y0+0.5;
-            // r = 28.9/cdelt;  // venus radius in pixels
-            r = track_radius/cdelt;  // venus radius in pixels
-            ir = r + 0.5;
-            r2 = r*r;
-        
-            for (ix = -ir; ix <= ir; ix++)
-            {
-                for (iy = -ir; iy <= ir; iy++)
-                {
-                    x = x0 - ix0 + ix;
-                    y = y0 - iy0 + iy;
-                    if (x*x + y*y < r2 && ix0+ix >=0 && ix0+ix < nx && iy0+iy >=0 && iy0+iy < ny)
-                    {
-                        if (wantFAKEwhite)
-                        {
-                            data[(iy+iy0)*nx + (ix+ix0)] = datamax;
-                        }
-                        else
-                        {
-                            if (ix==0 || iy==0)
-                            {
-                                data[(iy+iy0)*nx + (ix+ix0)] = datamax;
-                            }
-                            else
-                            {
-                                data[(iy+iy0)*nx + (ix+ix0)] = 0.0;
-                            }
-                         }
-                    }
-                }
-            }
-        }
-
-        set_statistics(outSeg, outArray, 1);
-        
-        if (export_keys)
-        {
-            status = drms_segment_writewithkeys(outSeg, outArray, 0);
-        }
-        else
-        {
-            status = drms_segment_write(outSeg, outArray, 0);
-        }
-        
-        if (status)
-        {
-            DIE("problem writing file");
-        }
-
-        iSeg++;
-    } /* end segment loop */
-    
-    if (segIter)
-    {
-        hiter_destroy(&segIter);
-    }
+    OK_recs += 1;
 
     if (log)
       {
       drms_fprint_rec_query(log, outRec);
       fprintf(log, "\n");
       }
-      
     if (*history)
       drms_appendhistory(outRec, history, 1);
-      
-    if (nextRec)
-    {    
-        drms_close_records(outRS, DRMS_FREE_RECORD);
-        drms_free_array(outArray);
-        continue;
-    }
-    else
-    {      
-        drms_close_records(outRS, DRMS_INSERT_RECORD);
-        drms_free_array(outArray);
-    }
-    
-    OK_recs += 1;
-    } /* end record loop */
+    drms_close_records(outRS, DRMS_INSERT_RECORD);
+    drms_free_array(outArray);
+    } 
 
   drms_close_records(inRS, DRMS_FREE_RECORD); 
   if (in_filename)
