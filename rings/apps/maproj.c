@@ -107,7 +107,7 @@
 						       /*  module identifier  */
 char *module_name = "maproj";
 char *module_desc = "mapping from solar images";
-char *version_id = "1.0";
+char *version_id = "1.1";
 
 ModuleArgs_t module_args[] = {
   {ARG_DATASET,	"in", "", "input data set"}, 
@@ -736,6 +736,7 @@ img_lat *= raddeg;
       drms_close_records (ods, DRMS_FREE_RECORD);
       return 1;
     }
+    drms_free_array (image);
   }
   drms_close_records (ods, DRMS_INSERT_RECORD);
   drms_free_array (map);
@@ -769,5 +770,7 @@ img_lat *= raddeg;
  *		added setting of optional keywords LoS2Rad and MDICorr depending
  *		on flag values
  *  v 1.0 frozen 15.01.13
+ *  15.07.27	free each input image array
+ *  v 1.1 frozen 15.09.21
  *
  */
