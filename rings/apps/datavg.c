@@ -1508,4 +1508,5 @@ int DoIt (void) {
  *	15.02.24	added initializations of several variables; made
  *		calculation of power values conditional on presence of the
  *		appropriate segment in the output record
+ *  v 1.5 frozen 15.04.08
  */
