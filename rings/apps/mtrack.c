@@ -41,7 +41,7 @@
  *	cvno	string	none		64-bit mask of acceptable values for
  *				calibration veraion of input; default -> no
  *				values unacceptable
- *	max_miss int	0		Tolerance threshold for number of blank
+ *	max_miss int	All		Tolerance threshold for number of blank
  *				values in image (assumed to exclude crop)
  *	tmid	string	-		Midpoint of target tracking interval;
  *				ignored if input specified as data set; defined
@@ -76,11 +76,11 @@
  *				0.03 for HMI or AIA
  *	cols	int	0		Columns in output maps; 0 -> rows
  *	rows	int	0		Rows in output maps; 0 -> cols
- *      map_pa  float   0.0             The angle between heliographic north
- *				and "up" on the output map (in the direction
- *				of increasing rows) [deg[, in the sense that a
- *				positive position angle represents a clockwise
- *				displacement of the north axis.
+ *      map_pa  float*  [0.0]           The angle(s) between heliographic
+ *				north and "up" on the output map (in the
+ *				direction of increasing rows) [deg[, in the
+ *				sense that a positive position angle represents
+ *				a clockwise displacement of the north axis.
  *      a0      float   -0.02893	Coefficients in sin^2 (latitude)
  *      a2      float   -0.3441		expansion of rotation rate minus
  *      a4      float   -0.5037		Carrington rotation (urad/sec)
@@ -218,7 +218,8 @@ ModuleArgs_t module_args[] = {
       "background record-segment image to be subtracted from input data"}, 
   {ARG_STRING,	"reject", "Not Specified", "file containing rejection list"}, 
   {ARG_INT,	"qmask", "0x80000000", "quality bit mask for image rejection"},
-  {ARG_INT,	"max_miss", "0", "missing values threshold for image rejection"},
+  {ARG_INT,	"max_miss", "All",
+      "missing values threshold for image rejection"},
   {ARG_STRING,	"tmid", "Not Specified", "midpoint of tracking interval"}, 
   {ARG_INT,	"length", "0",
       "target length of tracking interval [input cadence]"}, 
@@ -237,7 +238,7 @@ ModuleArgs_t module_args[] = {
   {ARG_FLOAT,	"scale", "Not specified", "map scale at center [deg/pxl]"},
   {ARG_INT,     "cols", "0", "columns in output map(s)"},
   {ARG_INT,     "rows", "0", "rows in output map(s)"},
-  {ARG_FLOAT,	"map_pa", "0.0", "position angle of north on output map"},
+  {ARG_FLOATS,	"map_pa", "0.0", "position angle(s) of north on output map"},
   {ARG_FLOAT,	"a0", "-0.02893",
       "equatorial rotation - Carrington rate [urad/sec]"},
   {ARG_FLOAT,	"a2", "-0.3441", "solar rotation parameter A2 [urad/sec]"},
@@ -955,7 +956,7 @@ int DoIt (void) {
   TIME trec, tobs, tmid, tbase, tfirst, tlast, ttrgt;
   double *maplat, *maplon, *map_coslat, *map_sinlat = NULL;
   double *cmaplat, *cmaplon, *ctrmu, *ctrx, *ctry, *muavg, *xavg, *yavg, *latavg;
-  double *delta_rot;
+  double *delta_rot, *map_pa;
   double *minval, *maxval, *datamean, *datarms, *dataskew, *datakurt;
   double min_scaled, max_scaled;
   double carr_lon, cm_lon_start, cm_lon_stop, lon_span;
@@ -964,7 +965,7 @@ int DoIt (void) {
   double lat, lon, img_lat, img_lon;
   double t_cl, tmid_cl, lon_cm;
   double x, y, x0, y0, xstp, ystp;
-  double cos_phi, sin_phi;
+  double *cos_phi, *sin_phi;
   double img_xc, img_yc, img_xscl, img_yscl, img_radius, img_pa;
   double ellipse_e, ellipse_pa;
   double kscale;
@@ -1032,12 +1033,12 @@ int DoIt (void) {
   int latct = params_get_int (params, "lat_nvals");
   int lonct = params_get_int (params, "lon_nvals");
   int maict = params_get_int (params, "mai_nvals");
+  int pact = params_get_int (params, "map_pa_nvals");
   int proj = params_get_int (params, "map");
   int intrpopt = params_get_int (params, "interp");
   double map_scale = params_get_double (params, "scale");
   int map_cols = params_get_int (params, "cols");
   int map_rows = params_get_int (params, "rows");
-  double map_pa = params_get_double (params, "map_pa") * raddeg;
   double a0 = params_get_double (params, "a0");
   double a2 = params_get_double (params, "a2");
   double a4 = params_get_double (params, "a4");
@@ -1128,8 +1129,6 @@ need_limb_dist = 1;
   }
   MDI_correct = MDI_correct_distort = MDI_proc;
   pixct = map_rows * map_cols;
-  cos_phi = cos (map_pa);
-  sin_phi = sin (map_pa);
   xstp = ystp = map_scale * raddeg;
   x0 = 0.5 * (1.0 - map_cols) * xstp;
   y0 = 0.5 * (1.0 - map_rows) * ystp;
@@ -1667,6 +1666,9 @@ need_limb_dist = 1;
   clat = (float *)malloc (rgnct * sizeof (float));
   clon = (float *)malloc (rgnct * sizeof (float));
   mai = (float *)malloc (rgnct * sizeof (float));
+  map_pa = (double *)malloc (rgnct * sizeof (double));
+  cos_phi = (double *)malloc (rgnct * sizeof (double));
+  sin_phi = (double *)malloc (rgnct * sizeof (double));
   delta_rot = (double *)malloc (rgnct * sizeof (double));
   for (i = 0; i < latct; i++) {
     snprintf (key, 64, "lat_%d_value", i);
@@ -1678,6 +1680,17 @@ need_limb_dist = 1;
   }
   for (i = latct; i < rgnct; i++) clat[i] = clat[i-1];
   for (i = lonct; i < rgnct; i++) clon[i] = clon[i-1];
+  for (i = 0; i < pact; i++) {
+    snprintf (key, 64, "map_pa_%d_value", i);
+    map_pa[i] = params_get_double (params, key) * raddeg;
+    cos_phi[i] = cos (map_pa[i]);
+    sin_phi[i] = sin (map_pa[i]);
+  }
+  for (; i < rgnct; i++) {
+    map_pa[i] = map_pa[i-1];
+    cos_phi[i] = cos_phi[i-1];
+    sin_phi[i] = sin_phi[i-1];
+  }
   if (setmais) {
     for (i = 0; i < rgnct; i++) {
       snprintf (key, 64, "mai_%d_value", i);
@@ -1733,8 +1746,8 @@ need_limb_dist = 1;
     double xrot, yrot;
     for (row=0, y=y0; row < map_rows; row++, y +=ystp) {
       for (col=0, x=x0; col < map_cols; col++, x +=xstp, n++) {
-	xrot = x * cos_phi - y * sin_phi;
-	yrot = y * cos_phi + x * sin_phi;
+	xrot = x * cos_phi[rgn] - y * sin_phi[rgn];
+	yrot = y * cos_phi[rgn] + x * sin_phi[rgn];
 	offsun[n] = plane2sphere (xrot, yrot, clat[rgn], clon[rgn], &lat, &lon,
 	    proj);
 	maplat[n] = lat;
@@ -1884,7 +1897,7 @@ need_limb_dist = 1;
       continue;
     } else qualcheck = 1;
     blankvals = drms_getkey_int (irec, "MISSVALS", &status);
-    if (blankvals > max_miss && !status) {
+    if ((max_miss >= 0) && (blankvals > max_miss) && !status) {
 						    /*  partial image, skip  */
       badfill++;
       continue;
@@ -2464,7 +2477,7 @@ printf ("%4d: %f %f %.3f %.3f\n", nr, img_xc, img_yc, obsvr, rgnavg / vct);
     kstat += check_and_set_key_float (orec, "Width", map_cols * map_scale);
     kstat += check_and_set_key_float (orec, "Height", map_rows * map_scale);
     kstat += check_and_set_key_float (orec, "Size", sqrt (map_rows * map_cols) * map_scale);
-    kstat += check_and_set_key_float (orec, "Map_PA", map_pa / raddeg);
+    kstat += check_and_set_key_float (orec, "Map_PA", map_pa[rgn] / raddeg);
     kstat += check_and_set_key_float (orec, "RSunRef", 1.0e-6 * RSUNM);
     if (setmais && isfinite (mai[rgn]))
       kstat += check_and_set_key_float (orec, "MAI", mai[rgn]);
@@ -2678,5 +2691,9 @@ printf ("%4d: %f %f %.3f %.3f\n", nr, img_xc, img_yc, obsvr, rgnavg / vct);
  *    1.8	Removed functions drms_appendstr_tokey() and append_args_tokey()
  *	(now in keystuff) (2014.10.19)
  *  v 1.8 frozen 2015.01.13
+ *    1.9	Added option for position angle of output maps to be individually
+ *	specified rather than uniform (2015.08.20)
+ *		Changed default for max_miss from 0 to "All" (i.e. no check)
+ *	(2015.09.21)
  */
 
