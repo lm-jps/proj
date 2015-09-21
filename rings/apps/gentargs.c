@@ -64,7 +64,7 @@
  *				(2748 or 2727, varying with B0)
  *		rdsyn15		HMI ring-diagrams synoptic set of 15-deg tiles
  *				(284 or 281, varying with B0)
- *		rdsyn30		HMI ring-diagrams synoptic set of 15-deg tiles
+ *		rdsyn30		HMI ring-diagrams synoptic set of 30-deg tiles
  *				(69, varying with B0)
  *		timed20		HMI time-distance synoptic set of 25 tiles at
  *				20 deg spacings
@@ -97,6 +97,9 @@
  *	M		use SOHO ephemeris for B0 calculation or conversion of
  *		time in calendar-clock format to Carrington time
  *	c		report longitudes relative to CM rather than HG
+ *	r		report distances and position angles relative to disc
+ *		center for each location as third and fourth lines (not
+ *		implemented)
  *	v		run in verbose mode (with commentary to stderr)
  *	
  *
@@ -110,6 +113,10 @@
  *	has only been implemented for the timed* grids
  *    There is no check in the -B case that the requested targets do not go
  *	beyond the poles
+ *    The "radial coordinates" option for printing additional lines of central
+ *	angles and position angles is only implemented for the rdsyn30, rd+30,
+ *	rd+15, and rdx30 options, and the position angle calculation is a quick
+ *	hack assuming flat geometry
  *
  *  Revision history is at end of file.
  */
@@ -120,7 +127,7 @@
 #include "soho_ephem.c"
 						      /*  module identifier  */
 char *module_name = "track_target_list";
-char *version_id = "1.2";
+char *version_id = "1.3";
 
 ModuleArgs_t module_args[] = {
   {ARG_TIME,   "time",  "now-120deg", "midpoint of desired tracking interval"},
@@ -132,6 +139,7 @@ ModuleArgs_t module_args[] = {
       "use midtime geocentric latitude of disc center as base for latitude targets"}, 
   {ARG_FLAG,   "M", "", "midtime Carrington longitude appropriate for MDI"}, 
   {ARG_FLAG,   "c", "", "report longitudes relative to CM rather than HG"}, 
+  {ARG_FLAG,   "r", "", "also report center angles and position angles"}, 
   {ARG_FLAG,   "v", "", "run verbose (with commentary to stderr)"}, 
   {}
 };
@@ -208,6 +216,20 @@ static TIME earth_meridian_crossing (double lonn, int crr) {
     while (phi < -180.0) phi += 360.0;
   }
   return secapp;
+}
+
+static double arc_distance (double lat, double lon, double latc, double lonc) {
+  static double radeg = M_PI / 180.0;
+  static double degrad = 180.0 / M_PI;
+  double cosa = sin (radeg * lat) * sin (radeg * latc) +
+      cos (radeg * lat) * cos (radeg * latc) * cos (radeg * (lon - lonc));
+  return degrad * acos (cosa);
+}
+
+static double position_angle (double lat, double lon, double latc, double lonc) {
+  static double degrad = 180.0 / M_PI;
+  double pa = -degrad * atan2 (lon - lonc, lat - latc);
+  return (pa < 0) ? pa + 360.0 : pa;
 }
 
 int struc_pack_list (double clon) {
@@ -389,7 +411,7 @@ int timed_grid_list_plus (double clon, double clat, int stony) {
   return 0;
 }
 
-int hmi30_pack_list (double clon, double b0) {
+int hmi30_pack_list (double clon, double b0, int radial) {
   float lat, lon, loncm, lim;
 
   lat = -60.0;
@@ -456,6 +478,52 @@ int hmi30_pack_list (double clon, double b0) {
   }
   printf ("\n");
 
+  if (radial) {
+    lat = -60.0;
+    lim = (b0 < -3.625) ? 60.0 : 30.0;
+    for (loncm = -lim; loncm <= lim; loncm += 30.0)
+      printf (" %05.2f", arc_distance (lat, loncm, b0, 0.0));
+    lat = -45.0;
+    lim = (b0 <= 3.625) ? 60.0 : 45.0;
+    for (loncm = -lim; loncm <= lim; loncm += 15.0)
+      printf (" %05.2f", arc_distance (lat, loncm, b0, 0.0));
+    for (lat = -30.0; lat <= 30.0; lat += 15.0) {
+      for (loncm = -60.0; loncm <= 60.0; loncm += 15.0)
+	printf (" %05.2f", arc_distance (lat, loncm, b0, 0.0));
+    }
+    lat = 45.0;
+    lim = (b0 >= -3.625) ? 60.0 : 45.0;
+    for (loncm = -lim; loncm <= lim; loncm += 15.0)
+      printf (" %05.2f", arc_distance (lat, loncm, b0, 0.0));
+    lat = 60.0;
+    lim = (b0 > 3.625) ? 60.0 : 30.0;
+    for (loncm = -lim; loncm <= lim; loncm += 30.0)
+      printf (" %05.2f", arc_distance (lat, loncm, b0, 0.0));
+    printf ("\n");
+
+    lat = -60.0;
+    lim = (b0 < -3.625) ? 60.0 : 30.0;
+    for (loncm = -lim; loncm <= lim; loncm += 30.0)
+      printf (" %05.1f", position_angle (lat, loncm, b0, 0.0));
+    lat = -45.0;
+    lim = (b0 <= 3.625) ? 60.0 : 45.0;
+    for (loncm = -lim; loncm <= lim; loncm += 15.0)
+      printf (" %05.1f", position_angle (lat, loncm, b0, 0.0));
+    for (lat = -30.0; lat <= 30.0; lat += 15.0) {
+      for (loncm = -60.0; loncm <= 60.0; loncm += 15.0)
+	printf (" %05.1f", position_angle (lat, loncm, b0, 0.0));
+    }
+    lat = 45.0;
+    lim = (b0 >= -3.625) ? 60.0 : 45.0;
+    for (loncm = -lim; loncm <= lim; loncm += 15.0)
+      printf (" %05.1f", position_angle (lat, loncm, b0, 0.0));
+    lat = 60.0;
+    lim = (b0 > 3.625) ? 60.0 : 30.0;
+    for (loncm = -lim; loncm <= lim; loncm += 30.0)
+      printf (" %05.1f", position_angle (lat, loncm, b0, 0.0));
+    printf ("\n");
+  }
+
   return 0;
 }
 
@@ -485,7 +553,7 @@ int hmi30_eq_list (double clon, int stony) {
   return 0;
 }
 
-int hmi30_stgrg_list (double clon, int stony) {
+int hmi30_stgrg_list (double clon, double b0, int stony, int radial) {
   float lat, lon, loncm;
 
   for (lat = -60.0; lat < 0.0; lat += 15.0) printf (" %+05.1f", lat);
@@ -509,10 +577,28 @@ int hmi30_stgrg_list (double clon, int stony) {
     for (lat = 15.0; lat <= 60.0; lat += 15.0) printf (" %05.1f", clon);
   }
   printf ("\n");
+  if (radial) {
+    for (lat = -60.0; lat < 0.0; lat += 15.0)
+      printf (" %05.2f", arc_distance (lat, 0.0, b0, 0.0));
+    lat = 0.0;
+    for (loncm = -60.0; loncm <= 60.0; loncm += 15.0)
+      printf (" %05.2f", arc_distance (lat, loncm, b0, 0.0));
+    for (lat = 15.0; lat <= 60.0; lat += 15.0)
+      printf (" %05.2f", arc_distance (lat, 0.0, b0, 0.0));
+    printf ("\n");
+    for (lat = -60.0; lat < 0.0; lat += 15.0)
+      printf (" %05.1f", position_angle (lat, 0.0, b0, 0.0));
+    lat = 0.0;
+    for (loncm = -60.0; loncm <= 60.0; loncm += 15.0)
+      printf (" %05.1f", position_angle (lat, loncm, b0, 0.0));
+    for (lat = 15.0; lat <= 60.0; lat += 15.0)
+      printf (" %05.1f", position_angle (lat, 0.0, b0, 0.0));
+    printf ("\n");
+  }
   return 0;
 }
 
-int hmi30_stand_list (double clon, int stony) {
+int hmi30_stand_list (double clon, double b0, int stony, int radial) {
   float lat, lon, loncm;
 
   for (lat = -60.0; lat < 0.0; lat += 15.0) printf (" %+05.1f %+05.1f", lat, lat);
@@ -551,10 +637,34 @@ int hmi30_stand_list (double clon, int stony) {
     }
   }
   printf ("\n");
+  if (radial) {
+    for (lat = -60.0; lat < 0.0; lat += 15.0) {
+      printf (" %05.2f", arc_distance (lat, lat, b0, 0.0));
+      printf (" %05.2f", arc_distance (lat, -lat, b0, 0.0));
+    }
+    lat = 0.0;
+    printf (" %05.2f", arc_distance (lat, lat, b0, 0.0));
+    for (lat = 15.0; lat <= 60.0; lat += 15.0) {
+      printf (" %05.2f", arc_distance (lat, lat, b0, 0.0));
+      printf (" %05.2f", arc_distance (lat, -lat, b0, 0.0));
+    }
+    printf ("\n");
+    for (lat = -60.0; lat < 0.0; lat += 15.0) {
+      printf (" %05.1f", position_angle (lat, lat, b0, 0.0));
+      printf (" %05.1f", position_angle (lat, -lat, b0, 0.0));
+    }
+    lat = 0.0;
+    printf (" %05.1f", position_angle (lat, lat, b0, 0.0));
+    for (lat = 15.0; lat <= 60.0; lat += 15.0) {
+      printf (" %05.1f", position_angle (lat, lat, b0, 0.0));
+      printf (" %05.1f", position_angle (lat, -lat, b0, 0.0));
+    }
+    printf ("\n");
+  }
   return 0;
 }
 
-int hmi15_pack_list (double clon, double b0) {
+int hmi15_pack_list (double clon, double b0, int radial) {
   float lat, lon, loncm, lim;
 
   if (b0 < -3.625) {
@@ -693,6 +803,104 @@ int hmi15_pack_list (double clon, double b0) {
       printf (" %05.1f", lon);
     }
     printf ("\n");
+    if (radial) {
+				        /*  print heliocentric central angle  */
+      lat = -75.0;
+      printf (" %05.2f", arc_distance (lat, loncm, b0, 0.0));
+      lat = -67.5;
+      lim = 60.0;
+      for (loncm = -lim; loncm <= lim; loncm += 20.0)
+	printf (" %05.2f", arc_distance (lat, loncm, b0, 0.0));
+      lat = -60.0;
+      lim = 75.0;
+      for (loncm = -lim; loncm <= lim; loncm += 15.0)
+	printf (" %05.2f", arc_distance (lat, loncm, b0, 0.0));
+      lat = -52.5;
+      lim = 75.0;
+      for (loncm = -lim; loncm <= lim; loncm += 12.5)
+	printf (" %05.2f", arc_distance (lat, loncm, b0, 0.0));
+      lim = 70.0;
+      for (lat = -45.0; lat <= -37.5; lat += 7.5) {
+	for (loncm = -lim; loncm <= lim; loncm += 10.0)
+	  printf (" %05.2f", arc_distance (lat, loncm, b0, 0.0));
+      }
+      lim = 75.0;
+      for (lat = -30.0; lat <= -15.0; lat += 7.5) {
+	for (loncm = -lim; loncm <= lim; loncm += 7.5)
+	  printf (" %05.2f", arc_distance (lat, loncm, b0, 0.0));
+      }
+      lim = 67.5;
+      for (lat = -7.5; lat <= 30.0; lat += 7.5) {
+	for (loncm = -lim; loncm <= lim; loncm += 7.5)
+	  printf (" %05.2f", arc_distance (lat, loncm, b0, 0.0));
+      }
+      lim = 60.0;
+      for (lat = 37.5; lat <= 45.0; lat += 7.5) {
+	for (loncm = -lim; loncm <= lim; loncm += 10.0)
+	  printf (" %05.2f", arc_distance (lat, loncm, b0, 0.0));
+      }
+      lat = 52.5;
+      lim = 50.0;
+      for (loncm = -lim; loncm <= lim; loncm += 12.5)
+	printf (" %05.2f", arc_distance (lat, loncm, b0, 0.0));
+      lat = 60.0;
+      lim = 45.0;
+      for (loncm = -lim; loncm <= lim; loncm += 15.0)
+	printf (" %05.2f", arc_distance (lat, loncm, b0, 0.0));
+      lat = 67.5;
+      lim = 20.0;
+      for (loncm = -lim; loncm <= lim; loncm += 20.0)
+	printf (" %05.2f", arc_distance (lat, loncm, b0, 0.0));
+      printf ("\n");
+				       /*  print heliocentric position angle  */
+      lat = -75.0;
+      printf (" %05.1f", position_angle (lat, loncm, b0, 0.0));
+      lat = -67.5;
+      lim = 60.0;
+      for (loncm = -lim; loncm <= lim; loncm += 20.0)
+	printf (" %05.1f", position_angle (lat, loncm, b0, 0.0));
+      lat = -60.0;
+      lim = 75.0;
+      for (loncm = -lim; loncm <= lim; loncm += 15.0)
+	printf (" %05.1f", position_angle (lat, loncm, b0, 0.0));
+      lat = -52.5;
+      lim = 75.0;
+      for (loncm = -lim; loncm <= lim; loncm += 12.5)
+	printf (" %05.1f", position_angle (lat, loncm, b0, 0.0));
+      lim = 70.0;
+      for (lat = -45.0; lat <= -37.5; lat += 7.5) {
+	for (loncm = -lim; loncm <= lim; loncm += 10.0)
+	  printf (" %05.1f", position_angle (lat, loncm, b0, 0.0));
+      }
+      lim = 75.0;
+      for (lat = -30.0; lat <= -15.0; lat += 7.5) {
+	for (loncm = -lim; loncm <= lim; loncm += 7.5)
+	  printf (" %05.1f", position_angle (lat, loncm, b0, 0.0));
+      }
+      lim = 67.5;
+      for (lat = -7.5; lat <= 30.0; lat += 7.5) {
+	for (loncm = -lim; loncm <= lim; loncm += 7.5)
+	  printf (" %05.1f", position_angle (lat, loncm, b0, 0.0));
+      }
+      lim = 60.0;
+      for (lat = 37.5; lat <= 45.0; lat += 7.5) {
+	for (loncm = -lim; loncm <= lim; loncm += 10.0)
+	  printf (" %05.1f", position_angle (lat, loncm, b0, 0.0));
+      }
+      lat = 52.5;
+      lim = 50.0;
+      for (loncm = -lim; loncm <= lim; loncm += 12.5)
+	printf (" %05.1f", position_angle (lat, loncm, b0, 0.0));
+      lat = 60.0;
+      lim = 45.0;
+      for (loncm = -lim; loncm <= lim; loncm += 15.0)
+	printf (" %05.1f", position_angle (lat, loncm, b0, 0.0));
+      lat = 67.5;
+      lim = 20.0;
+      for (loncm = -lim; loncm <= lim; loncm += 20.0)
+	printf (" %05.1f", position_angle (lat, loncm, b0, 0.0));
+      printf ("\n");
+    }
   } else if (b0 > 3.625) {
     lat = -67.5;
     lim = 20.0;
@@ -829,7 +1037,106 @@ int hmi15_pack_list (double clon, double b0) {
     lat = 75.0;
     printf (" %05.1f", clon);
     printf ("\n");
+    if (radial) {
+				        /*  print heliocentric central angle  */
+      lat = -67.5;
+      lim = 20.0;
+      for (loncm = -lim; loncm <= lim; loncm += 20.0)
+	printf (" %05.2f", arc_distance (lat, loncm, b0, 0.0));
+      lat = -60.0;
+      lim = 45.0;
+      for (loncm = -lim; loncm <= lim; loncm += 15.0)
+	printf (" %05.2f", arc_distance (lat, loncm, b0, 0.0));
+      lat = -52.5;
+      lim = 50.0;
+      for (loncm = -lim; loncm <= lim; loncm += 12.5)
+	printf (" %05.2f", arc_distance (lat, loncm, b0, 0.0));
+      lim = 60.0;
+      for (lat = -45.0; lat <= -37.5; lat += 7.5) {
+	for (loncm = -lim; loncm <= lim; loncm += 10.0)
+	  printf (" %05.2f", arc_distance (lat, loncm, b0, 0.0));
+      }
+      lim = 67.5;
+      for (lat = -30.0; lat <= 7.5; lat += 7.5) {
+	for (loncm = -lim; loncm <= lim; loncm += 7.5)
+	  printf (" %05.2f", arc_distance (lat, loncm, b0, 0.0));
+      }
+      lim = 75.0;
+      for (lat = 15.0; lat <= 30.0; lat += 7.5) {
+	for (loncm = -lim; loncm <= lim; loncm += 7.5)
+	  printf (" %05.2f", arc_distance (lat, loncm, b0, 0.0));
+      }
+      lim = 70.0;
+      for (lat = 37.5; lat <= 45.0; lat += 7.5) {
+	for (loncm = -lim; loncm <= lim; loncm += 10.0)
+	  printf (" %05.2f", arc_distance (lat, loncm, b0, 0.0));
+      }
+      lat = 52.5;
+      lim = 75.0;
+      for (loncm = -lim; loncm <= lim; loncm += 12.5)
+	printf (" %05.2f", arc_distance (lat, loncm, b0, 0.0));
+      lat = 60.0;
+      lim = 75.0;
+      for (loncm = -lim; loncm <= lim; loncm += 15.0)
+	printf (" %05.2f", arc_distance (lat, loncm, b0, 0.0));
+      lat = 67.5;
+      lim = 60.0;
+      for (loncm = -lim; loncm <= lim; loncm += 20.0)
+	printf (" %05.2f", arc_distance (lat, loncm, b0, 0.0));
+      lat = 75.0;
+      printf (" %05.2f", arc_distance (lat, loncm, b0, 0.0));
+      printf ("\n");
+				       /*  print heliocentric position angle  */
+      lat = -67.5;
+      lim = 20.0;
+      for (loncm = -lim; loncm <= lim; loncm += 20.0)
+	printf (" %05.1f", position_angle (lat, loncm, b0, 0.0));
+      lat = -60.0;
+      lim = 45.0;
+      for (loncm = -lim; loncm <= lim; loncm += 15.0)
+	printf (" %05.1f", position_angle (lat, loncm, b0, 0.0));
+      lat = -52.5;
+      lim = 50.0;
+      for (loncm = -lim; loncm <= lim; loncm += 12.5)
+	printf (" %05.1f", position_angle (lat, loncm, b0, 0.0));
+      lim = 60.0;
+      for (lat = -45.0; lat <= -37.5; lat += 7.5) {
+	for (loncm = -lim; loncm <= lim; loncm += 10.0)
+	  printf (" %05.1f", position_angle (lat, loncm, b0, 0.0));
+      }
+      lim = 67.5;
+      for (lat = -30.0; lat <= 7.5; lat += 7.5) {
+	for (loncm = -lim; loncm <= lim; loncm += 7.5)
+	  printf (" %05.1f", position_angle (lat, loncm, b0, 0.0));
+      }
+      lim = 75.0;
+      for (lat = 15.0; lat <= 30.0; lat += 7.5) {
+	for (loncm = -lim; loncm <= lim; loncm += 7.5)
+	  printf (" %05.1f", position_angle (lat, loncm, b0, 0.0));
+      }
+      lim = 70.0;
+      for (lat = 37.5; lat <= 45.0; lat += 7.5) {
+	for (loncm = -lim; loncm <= lim; loncm += 10.0)
+	  printf (" %05.1f", position_angle (lat, loncm, b0, 0.0));
+      }
+      lat = 52.5;
+      lim = 75.0;
+      for (loncm = -lim; loncm <= lim; loncm += 12.5)
+	printf (" %05.1f", position_angle (lat, loncm, b0, 0.0));
+      lat = 60.0;
+      lim = 75.0;
+      for (loncm = -lim; loncm <= lim; loncm += 15.0)
+	printf (" %05.1f", position_angle (lat, loncm, b0, 0.0));
+      lat = 67.5;
+      lim = 60.0;
+      for (loncm = -lim; loncm <= lim; loncm += 20.0)
+	printf (" %05.1f", position_angle (lat, loncm, b0, 0.0));
+      lat = 75.0;
+      printf (" %05.1f", position_angle (lat, 0.0, b0, 0.0));
+      printf ("\n");
+    }
   } else {
+	    /*  print latitudes in range +/- 67.5 and symmetric in longitude  */
     lat = -67.5;
     lim = 40.0;
     for (loncm = -lim; loncm <= lim; loncm += 20.0)
@@ -870,7 +1177,7 @@ int hmi15_pack_list (double clon, double b0) {
     for (loncm = -lim; loncm <= lim; loncm += 20.0)
       printf (" %+05.1f", lat);
     printf ("\n");
-
+	  /*  print longitudes in latitude range +/- 67.5 symmetric about CM  */
     lat = -67.5;
     lim = 40.0;
     for (loncm = -lim; loncm <= lim; loncm += 20.0) {
@@ -947,6 +1254,90 @@ int hmi15_pack_list (double clon, double b0) {
       printf (" %05.1f", lon);
     }
     printf ("\n");
+    if (radial) {
+				        /*  print heliocentric central angle  */
+      lat = -67.5;
+      lim = 40.0;
+      for (loncm = -lim; loncm <= lim; loncm += 20.0)
+	printf (" %05.2f", arc_distance (lat, loncm, b0, 0.0));
+      lat = -60.0;
+      lim = 60.0;
+      for (loncm = -lim; loncm <= lim; loncm += 15.0)
+	printf (" %05.2f", arc_distance (lat, loncm, b0, 0.0));
+      lat = -52.5;
+      lim = 62.5;
+      for (loncm = -lim; loncm <= lim; loncm += 12.5)
+	printf (" %05.2f", arc_distance (lat, loncm, b0, 0.0));
+      lim = 70.0;
+      for (lat = -45.0; lat <= -37.5; lat += 7.5) {
+	for (loncm = -lim; loncm <= lim; loncm += 10.0)
+	  printf (" %05.2f", arc_distance (lat, loncm, b0, 0.0));
+      }
+      lim = 67.5;
+      for (lat = -30.0; lat <= 30.0; lat += 7.5) {
+	for (loncm = -lim; loncm <= lim; loncm += 7.5)
+	  printf (" %05.2f", arc_distance (lat, loncm, b0, 0.0));
+      }
+      lim = 70.0;
+      for (lat = 37.5; lat <= 45.0; lat += 7.5) {
+	for (loncm = -lim; loncm <= lim; loncm += 10.0)
+	  printf (" %05.2f", arc_distance (lat, loncm, b0, 0.0));
+      }
+      lat = 52.5;
+      lim = 62.5;
+      for (loncm = -lim; loncm <= lim; loncm += 12.5)
+	printf (" %05.2f", arc_distance (lat, loncm, b0, 0.0));
+      lat = 60.0;
+      lim = 60.0;
+      for (loncm = -lim; loncm <= lim; loncm += 15.0)
+	printf (" %05.2f", arc_distance (lat, loncm, b0, 0.0));
+      lat = 67.5;
+      lim = 40.0;
+      for (loncm = -lim; loncm <= lim; loncm += 20.0)
+	printf (" %05.2f", arc_distance (lat, loncm, b0, 0.0));
+      printf ("\n");
+				       /*  print heliocentric position angle  */
+      lat = -67.5;
+      lim = 40.0;
+      for (loncm = -lim; loncm <= lim; loncm += 20.0)
+	printf (" %05.1f", position_angle (lat, loncm, b0, 0.0));
+      lat = -60.0;
+      lim = 60.0;
+      for (loncm = -lim; loncm <= lim; loncm += 15.0)
+	printf (" %05.1f", position_angle (lat, loncm, b0, 0.0));
+      lat = -52.5;
+      lim = 62.5;
+      for (loncm = -lim; loncm <= lim; loncm += 12.5)
+	printf (" %05.1f", position_angle (lat, loncm, b0, 0.0));
+      lim = 70.0;
+      for (lat = -45.0; lat <= -37.5; lat += 7.5) {
+	for (loncm = -lim; loncm <= lim; loncm += 10.0)
+	  printf (" %05.1f", position_angle (lat, loncm, b0, 0.0));
+      }
+      lim = 67.5;
+      for (lat = -30.0; lat <= 30.0; lat += 7.5) {
+	for (loncm = -lim; loncm <= lim; loncm += 7.5)
+	  printf (" %05.1f", position_angle (lat, loncm, b0, 0.0));
+      }
+      lim = 70.0;
+      for (lat = 37.5; lat <= 45.0; lat += 7.5) {
+	for (loncm = -lim; loncm <= lim; loncm += 10.0)
+	  printf (" %05.1f", position_angle (lat, loncm, b0, 0.0));
+      }
+      lat = 52.5;
+      lim = 62.5;
+      for (loncm = -lim; loncm <= lim; loncm += 12.5)
+	printf (" %05.1f", position_angle (lat, loncm, b0, 0.0));
+      lat = 60.0;
+      lim = 60.0;
+      for (loncm = -lim; loncm <= lim; loncm += 15.0)
+	printf (" %05.1f", position_angle (lat, loncm, b0, 0.0));
+      lat = 67.5;
+      lim = 40.0;
+      for (loncm = -lim; loncm <= lim; loncm += 20.0)
+	printf (" %05.1f", position_angle (lat, loncm, b0, 0.0));
+      printf ("\n");
+    }
   }
 
   return 0;
@@ -981,7 +1372,7 @@ int hmi15_eq_list (double clon, int stony) {
   return 0;
 }
 
-int hmi15_stgrg_list (double clon, double b0, int stony) {
+int hmi15_stgrg_list (double clon, double b0, int stony, int radial) {
   float lat, latmin, latmax, lon, loncm;
 
   latmin = -67.5;
@@ -1010,6 +1401,25 @@ int hmi15_stgrg_list (double clon, double b0, int stony) {
     for (lat = 7.5; lat <= latmax; lat += 7.5) printf (" %05.1f", clon);
   }
   printf ("\n");
+  if (radial) {
+    for (lat = latmin; lat < 0.0; lat += 7.5)
+      printf (" %05.2f", arc_distance (lat, 0.0, b0, 0.0));
+    lat = 0.0;
+    for (loncm = -67.5; loncm <= 67.5; loncm += 7.5)
+      printf (" %05.2f", arc_distance (lat, loncm, b0, 0.0));
+    for (lat = 7.5; lat <= latmax; lat += 7.5)
+      printf (" %05.2f", arc_distance (lat, 0.0, b0, 0.0));
+    printf ("\n");
+
+    for (lat = latmin; lat < 0.0; lat += 7.5)
+      printf (" %05.1f", position_angle (lat, 0.0, b0, 0.0));
+    lat = 0.0;
+    for (loncm = -67.5; loncm <= 67.5; loncm += 7.5)
+      printf (" %05.1f", position_angle (lat, loncm, b0, 0.0));
+    for (lat = 7.5; lat <= latmax; lat += 7.5)
+      printf (" %05.1f", position_angle (lat, 0.0, b0, 0.0));
+    printf ("\n");
+  }
   return 0;
 }
 
@@ -1323,415 +1733,6 @@ int hmi5_pack_list (double clon, double b0) {
   return 0;
 }
 
-int orig_hmi5_pack_list (double clon, double b0) {
-/*  This is the orignal version of hmi5_pack_list, designed to produce no
-  			more than 195 targets per pair of lines of output
-  					   it is here only for documentation  */
-  float limit[X25_85N + 1], latv[X25_85N + 1], step[X25_85N + 1];
-  float lat, lon, loncm, lim;
-  int nlat;
-
-  for (nlat = X25_85S; nlat <= X25_85N; nlat++)
-    latv[nlat] = -85.0 + 2.5 * nlat;
-  for (nlat = X25_85S; nlat <= X25_75S; nlat++)
-    step[nlat] = 10.0;
-  for (nlat = X25_725S; nlat <= X25_675S; nlat++)
-    step[nlat] = 7.5;
-  for (nlat = X25_65S; nlat <= X25_425S; nlat++)
-    step[nlat] = 5.0;
-  for (nlat = X25_40S; nlat <= X25_40N; nlat++)
-    step[nlat] = 2.5;
-  for (nlat = X25_425N; nlat <= X25_65N; nlat++)
-    step[nlat] = 5.0;
-  for (nlat = X25_675N; nlat <= X25_725N; nlat++)
-    step[nlat] = 7.5;
-  for (nlat = X25_75N; nlat <= X25_85N; nlat++)
-    step[nlat] = 10.0;
-
-  if (b0 < -3.625) {
-    limit[X25_85S] = 50.0;
-    for (nlat = X25_825S; nlat <= X25_75S; nlat++)
-      limit[nlat] = 70.0;
-    for (nlat = X25_725S; nlat <= X25_425S; nlat++)
-      limit[nlat] = 75.0;
-    for (nlat = X25_40S; nlat <= X25_125S; nlat++)
-      limit[nlat] = 80.0;
-    for (nlat = X25_10S; nlat <= X25_075N; nlat++)
-      limit[nlat] = 77.5;
-    for (nlat = X25_10N; nlat <= X25_20N; nlat++)
-      limit[nlat] = 75.0;
-    for (nlat = X25_225N; nlat <= X25_30N; nlat++)
-      limit[nlat] = 72.5;
-    for (nlat = X25_325N; nlat <= X25_375N; nlat++)
-      limit[nlat] = 70.0;
-    limit[X25_40N] = 67.5;
-    limit[X25_425N] = 65.0;
-    for (nlat = X25_45N; nlat <= X25_55N; nlat++)
-      limit[nlat] = 60.0;
-    limit[X25_575N] = 55.0;
-    for (nlat = X25_60N; nlat <= X25_625N; nlat++)
-      limit[nlat] = 50.0;
-    limit[X25_65N] = 40.0;
-    limit[X25_675N] = 30.0;
-    limit[X25_70N] = 22.5;
-    limit[X25_725N] = 7.5;
-    for (nlat = X25_75N; nlat <= X25_85N; nlat++)
-      limit[nlat] = -1;
-  } else if (b0 > 3.625) {
-    for (nlat = X25_85S; nlat <= X25_75S; nlat++)
-      limit[nlat] = -1;
-    limit[X25_725S] = 7.5;
-    limit[X25_70S] = 22.5;
-    limit[X25_675S] = 30.0;
-    limit[X25_65S] = 40.0;
-    for (nlat = X25_625S; nlat <= X25_60S; nlat++)
-      limit[nlat] = 50.0;
-    limit[X25_575S] = 55.0;
-    for (nlat = X25_55S; nlat <= X25_45S; nlat++)
-      limit[nlat] = 60.0;
-    limit[X25_425S] = 65.0;
-    limit[X25_40S] = 67.5;
-    for (nlat = X25_375S; nlat <= X25_325S; nlat++)
-      limit[nlat] = 70.0;
-    for (nlat = X25_30S; nlat <= X25_225S; nlat++)
-      limit[nlat] = 72.5;
-    for (nlat = X25_20S; nlat <= X25_10S; nlat++)
-      limit[nlat] = 75.0;
-    for (nlat = X25_075S; nlat <= X25_10N; nlat++)
-      limit[nlat] = 77.5;
-    for (nlat = X25_125N; nlat <= X25_40N; nlat++)
-      limit[nlat] = 80.0;
-    for (nlat = X25_425N; nlat <= X25_725N; nlat++)
-      limit[nlat] = 75.0;
-    for (nlat = X25_75N; nlat <= X25_825N; nlat++)
-      limit[nlat] = 70.0;
-    limit[X25_85N] = 50.0;
-  } else {
-    for (nlat = X25_85S; nlat <= X25_825S; nlat++)
-      limit[nlat] = -1;
-    limit[X25_80S] = limit[X25_80N] = 0.0;
-    limit[X25_775S] = limit[X25_775N] = 30.0;
-    limit[X25_75S] = limit[X25_75N] = 40.0;
-    limit[X25_725S] = limit[X25_725N] = 45.0;
-    for (nlat = X25_70S; nlat <= X25_675S; nlat++)
-      limit[nlat] = 52.5;
-    limit[X25_65S] = limit[X25_65N] = 60.0;
-    for (nlat = X25_625S; nlat <= X25_525S; nlat++)
-      limit[nlat] = 65.0;
-    for (nlat = X25_50S; nlat <= X25_425S; nlat++)
-      limit[nlat] = 70.0;
-    for (nlat = X25_40S; nlat <= X25_275S; nlat++)
-      limit[nlat] = 75.0;
-    for (nlat = X25_25S; nlat <= X25_25N; nlat++)
-      limit[nlat] = 77.5;
-    for (nlat = X25_275N; nlat <= X25_40N; nlat++)
-      limit[nlat] = 75.0;
-    for (nlat = X25_425N; nlat <= X25_50N; nlat++)
-      limit[nlat] = 70.0;
-    for (nlat = X25_525N; nlat <= X25_625N; nlat++)
-      limit[nlat] = 65.0;
-    for (nlat = X25_675N; nlat <= X25_70N; nlat++)
-      limit[nlat] = 52.5;
-    for (nlat = X25_825N; nlat <= X25_85N; nlat++)
-      limit[nlat] = -1;
-  }
-
-  if (b0 > 3.625) {
-    for (nlat = X25_85S; nlat <= X25_55S; nlat++) {
-      for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
-	printf (" %+05.1f", latv[nlat]);
-    }
-    printf ("\n");
-    for (nlat = X25_85S; nlat <= X25_55S; nlat++) {
-      for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat]) {
-	lon = clon + loncm;
-	while (lon < 0.0) lon += 360.0;
-	while (lon >= 360.0) lon -= 360.0;
-	printf (" %05.1f", lon);
-      }
-    }
-    printf ("\n");
-							     /*  126 targets  */
-  } else {
-    for (nlat = X25_85S; nlat <= X25_675S; nlat++) {
-      for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
-	printf (" %+05.1f", latv[nlat]);
-    }
-    printf ("\n");
-    for (nlat = X25_85S; nlat <= X25_675S; nlat++) {
-      for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat]) {
-	lon = clon + loncm;
-	while (lon < 0.0) lon += 360.0;
-	while (lon >= 360.0) lon -= 360.0;
-	printf (" %05.1f", lon);
-      }
-    }
-    printf ("\n");
-						/*  60 targets, B00; 134 B0-  */
-    for (nlat = X25_65S; nlat <= X25_55S; nlat++) {
-      for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
-	printf (" %+05.1f", latv[nlat]);
-    }
-    printf ("\n");
-    for (nlat = X25_65S; nlat <= X25_55S; nlat++) {
-      for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat]) {
-	lon = clon + loncm;
-	while (lon < 0.0) lon += 360.0;
-	while (lon >= 360.0) lon -= 360.0;
-	printf (" %05.1f", lon);
-      }
-    }
-    printf ("\n");
-					       /*  133 targets, B00; 155 B0-  */
-  }
-
-  for (nlat = X25_525S; nlat <= X25_425S; nlat++) {
-    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
-      printf (" %+05.1f", latv[nlat]);
-  }
-  printf ("\n");
-  for (nlat = X25_525S; nlat <= X25_425S; nlat++) {
-    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat]) {
-      lon = clon + loncm;
-      while (lon < 0.0) lon += 360.0;
-      while (lon >= 360.0) lon -= 360.0;
-      printf (" %05.1f", lon);
-    }
-  }
-  printf ("\n");
-				      /*  127 targets, B0+; 143 B00; 155 B0-  */
-  for (nlat = X25_40S; nlat <= X25_35S; nlat++) {
-    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
-      printf (" %+05.1f", latv[nlat]);
-  }
-  printf ("\n");
-  for (nlat = X25_40S; nlat <= X25_35S; nlat++) {
-    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat]) {
-      lon = clon + loncm;
-      while (lon < 0.0) lon += 360.0;
-      while (lon >= 360.0) lon -= 360.0;
-      printf (" %05.1f", lon);
-    }
-  }
-  printf ("\n");
-							   /*  169, 183, 195  */
-  for (nlat = X25_325S; nlat <= X25_275S; nlat++) {
-    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
-      printf (" %+05.1f", latv[nlat]);
-  }
-  printf ("\n");
-  for (nlat = X25_325S; nlat <= X25_275S; nlat++) {
-    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat]) {
-      lon = clon + loncm;
-      while (lon < 0.0) lon += 360.0;
-      while (lon >= 360.0) lon -= 360.0;
-      printf (" %05.1f", lon);
-    }
-  }
-  printf ("\n");
-							   /*  175, 183, 195  */
-  for (nlat = X25_25S; nlat <= X25_20S; nlat++) {
-    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
-      printf (" %+05.1f", latv[nlat]);
-  }
-  printf ("\n");
-  for (nlat = X25_25S; nlat <= X25_20S; nlat++) {
-    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat]) {
-      lon = clon + loncm;
-      while (lon < 0.0) lon += 360.0;
-      while (lon >= 360.0) lon -= 360.0;
-      printf (" %05.1f", lon);
-    }
-  }
-  printf ("\n");
-							   /*  179, 189, 195  */
-  for (nlat = X25_175S; nlat <= X25_125S; nlat++) {
-    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
-      printf (" %+05.1f", latv[nlat]);
-  }
-  printf ("\n");
-  for (nlat = X25_175S; nlat <= X25_125S; nlat++) {
-    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat]) {
-      lon = clon + loncm;
-      while (lon < 0.0) lon += 360.0;
-      while (lon >= 360.0) lon -= 360.0;
-      printf (" %05.1f", lon);
-    }
-  }
-  printf ("\n");
-							   /*  183, 189, 195  */
-  for (nlat = X25_10S; nlat <= X25_05S; nlat++) {
-    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
-      printf (" %+05.1f", latv[nlat]);
-  }
-  printf ("\n");
-  for (nlat = X25_10S; nlat <= X25_05S; nlat++) {
-    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat]) {
-      lon = clon + loncm;
-      while (lon < 0.0) lon += 360.0;
-      while (lon >= 360.0) lon -= 360.0;
-      printf (" %05.1f", lon);
-    }
-  }
-  printf ("\n");
-							   /*  187, 189, 189  */
-  for (nlat = X25_025S; nlat <= X25_025N; nlat++) {
-    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
-      printf (" %+05.1f", latv[nlat]);
-  }
-  printf ("\n");
-  for (nlat = X25_025S; nlat <= X25_025N; nlat++) {
-    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat]) {
-      lon = clon + loncm;
-      while (lon < 0.0) lon += 360.0;
-      while (lon >= 360.0) lon -= 360.0;
-      printf (" %05.1f", lon);
-    }
-  }
-  printf ("\n");
-							   /*  189, 189, 189  */
-  for (nlat = X25_05N; nlat <= X25_10N; nlat++) {
-    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
-      printf (" %+05.1f", latv[nlat]);
-  }
-  printf ("\n");
-  for (nlat = X25_05N; nlat <= X25_10N; nlat++) {
-    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat]) {
-      lon = clon + loncm;
-      while (lon < 0.0) lon += 360.0;
-      while (lon >= 360.0) lon -= 360.0;
-      printf (" %05.1f", lon);
-    }
-  }
-  printf ("\n");
-							   /*  189, 189, 187  */
-  for (nlat = X25_125N; nlat <= X25_175N; nlat++) {
-    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
-      printf (" %+05.1f", latv[nlat]);
-  }
-  printf ("\n");
-  for (nlat = X25_125N; nlat <= X25_175N; nlat++) {
-    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat]) {
-      lon = clon + loncm;
-      while (lon < 0.0) lon += 360.0;
-      while (lon >= 360.0) lon -= 360.0;
-      printf (" %05.1f", lon);
-    }
-  }
-  printf ("\n");
-							   /*  195, 189, 183  */
-  for (nlat = X25_20N; nlat <= X25_25N; nlat++) {
-    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
-      printf (" %+05.1f", latv[nlat]);
-  }
-  printf ("\n");
-  for (nlat = X25_20N; nlat <= X25_25N; nlat++) {
-    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat]) {
-      lon = clon + loncm;
-      while (lon < 0.0) lon += 360.0;
-      while (lon >= 360.0) lon -= 360.0;
-      printf (" %05.1f", lon);
-    }
-  }
-  printf ("\n");
-							   /*  195, 189, 179  */
-  for (nlat = X25_275N; nlat <= X25_325N; nlat++) {
-    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
-      printf (" %+05.1f", latv[nlat]);
-  }
-  printf ("\n");
-  for (nlat = X25_275N; nlat <= X25_325N; nlat++) {
-    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat]) {
-      lon = clon + loncm;
-      while (lon < 0.0) lon += 360.0;
-      while (lon >= 360.0) lon -= 360.0;
-      printf (" %05.1f", lon);
-    }
-  }
-  printf ("\n");
-							   /*  195, 183, 175  */
-  for (nlat = X25_35N; nlat <= X25_40N; nlat++) {
-    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
-      printf (" %+05.1f", latv[nlat]);
-  }
-  printf ("\n");
-  for (nlat = X25_35N; nlat <= X25_40N; nlat++) {
-    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat]) {
-      lon = clon + loncm;
-      while (lon < 0.0) lon += 360.0;
-      while (lon >= 360.0) lon -= 360.0;
-      printf (" %05.1f", lon);
-    }
-  }
-  printf ("\n");
-							   /*  195, 183, 169  */
-  for (nlat = X25_425N; nlat <= X25_525N; nlat++) {
-    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
-      printf (" %+05.1f", latv[nlat]);
-  }
-  printf ("\n");
-  for (nlat = X25_425N; nlat <= X25_525N; nlat++) {
-    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat]) {
-      lon = clon + loncm;
-      while (lon < 0.0) lon += 360.0;
-      while (lon >= 360.0) lon -= 360.0;
-      printf (" %05.1f", lon);
-    }
-  }
-  printf ("\n");
-							   /*  155, 143, 127  */
-  if (b0 < -3.625) {
-    for (nlat = X25_55N; nlat <= X25_85N; nlat++) {
-      for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
-	printf (" %+05.1f", latv[nlat]);
-    }
-    printf ("\n");
-    for (nlat = X25_55N; nlat <= X25_85N; nlat++) {
-      for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat]) {
-	lon = clon + loncm;
-	while (lon < 0.0) lon += 360.0;
-	while (lon >= 360.0) lon -= 360.0;
-	printf (" %05.1f", lon);
-    		}
-    }
-    printf ("\n");
-							     /*  126 targets  */
-  } else {
-    for (nlat = X25_55N; nlat <= X25_65N; nlat++) {
-      for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
-	printf (" %+05.1f", latv[nlat]);
-    }
-    printf ("\n");
-    for (nlat = X25_55N; nlat <= X25_65N; nlat++) {
-      for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat]) {
-	lon = clon + loncm;
-	while (lon < 0.0) lon += 360.0;
-	while (lon >= 360.0) lon -= 360.0;
-	printf (" %05.1f", lon);
-    		}
-    }
-    printf ("\n");
-					       /*  133 targets, B00; 155 B0+  */
-    for (nlat = X25_675N; nlat <= X25_85N; nlat++) {
-      for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
-	printf (" %+05.1f", latv[nlat]);
-    }
-    printf ("\n");
-    for (nlat = X25_675N; nlat <= X25_85N; nlat++) {
-      for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat]) {
-	lon = clon + loncm;
-	while (lon < 0.0) lon += 360.0;
-	while (lon >= 360.0) lon -= 360.0;
-	printf (" %05.1f", lon);
-      }
-    }
-    printf ("\n");
-						/*  60 targets, B00; 134 B0+  */
-  }
-
-  return 0;
-}
-
 int hmi5_cm_list (double b0) {
   float lat, latmin, latmax;
 
@@ -1863,6 +1864,7 @@ int main (int argc, char **argv) {
   int relB0 = cmdparams_isflagset (params, "B");
   int formdi = cmdparams_isflagset (params, "M");
   int stony = cmdparams_isflagset (params, "c");
+  int radial = cmdparams_isflagset (params, "r");
   int verbose = cmdparams_isflagset (params, "v");
   char *tstr = strdup (params_get_str (params, "time"));
 
@@ -1886,6 +1888,16 @@ int main (int argc, char **argv) {
   int do_stand30 = target_grid == RD_X30;
   int do_stand15 = target_grid == RD_X15;
   int do_stand05 = target_grid == RD_X05;
+
+  if (radial) {
+    if (do_dense_pack || do_struc_pack || do_hmi5_pack || do_timed_grid20 ||
+	do_timed_grid24 || do_timed_grid24p || do_cm30 || do_cm15 || do_cm05 ||
+	do_eq30 || do_eq15 || do_eq05 || do_stgrg05) {
+      fprintf (stderr,
+	  "radial distance and angle reporting not implemented for this target list\n");
+      return (1);
+    }
+  }
 
   lonstp = (do_dense_pack || do_struc_pack || do_hmi15_pack|| do_cm15 || do_eq15) ? 150 :
       (do_hmi30_pack|| do_eq30 || do_cm30) ? 300 : \
@@ -1960,8 +1972,8 @@ int main (int argc, char **argv) {
 
   if (do_dense_pack) return dense_pack_list (cl);
   if (do_struc_pack) return struc_pack_list (cl);
-  if (do_hmi30_pack) return hmi30_pack_list (cl, b0);
-  if (do_hmi15_pack) return hmi15_pack_list (cl, b0);
+  if (do_hmi30_pack) return hmi30_pack_list (cl, b0, radial);
+  if (do_hmi15_pack) return hmi15_pack_list (cl, b0, radial);
   if (do_hmi5_pack) return hmi5_pack_list (cl, b0);
   if (do_timed_grid20) return (relB0) ? timed_grid_list (cl, b0, 20.0, stony) :
       timed_grid_list (cl, 0.0, 20.0, stony);
@@ -1975,10 +1987,10 @@ int main (int argc, char **argv) {
   if (do_eq30) return hmi30_eq_list (cl, stony);
   if (do_eq15) return hmi15_eq_list (cl, stony);
   if (do_eq05) return hmi5_eq_list (cl, stony);
-  if (do_stgrg30) return hmi30_stgrg_list (cl, stony);
-  if (do_stgrg15) return hmi15_stgrg_list (cl, b0, stony);
+  if (do_stgrg30) return hmi30_stgrg_list (cl, b0, stony, radial);
+  if (do_stgrg15) return hmi15_stgrg_list (cl, b0, stony, radial);
   if (do_stgrg05) return hmi5_stgrg_list (cl, b0, stony);
-  if (do_stand30) return hmi30_stand_list (cl, stony);
+  if (do_stand30) return hmi30_stand_list (cl, b0, stony, radial);
   if (do_stand15 || do_stand05) {
     fprintf (stderr, "Error: selected grid option is unimplemented\n");
     return 1;
@@ -2332,4 +2344,7 @@ for (n = L25_825S; n <= L25_825N; n++) printf ("%5.1f: %d\n", lat25[n], trlat25[
  *	13.01.11	Implemented Stonyhurst longitude reporting option for
  *		grids timed*
  *  v 1.2 frozen 2013.01.16
+ *	15.08.19	Added option for providing polar coordinates relative
+ *		to disc center
+ *	15.09.21	Removed documentation code for orig_hmi5_pack_list()
  */
