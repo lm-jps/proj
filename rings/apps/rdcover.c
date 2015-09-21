@@ -20,7 +20,7 @@
  *				of quality mask values
  *	qmask	int	0x80000000	Quality mask for data acceptability;
  *				records rejected if (qmask & qkey:value) != 0
- *	max_miss int	0		Tolerance threshold for number of blank
+ *	max_miss int	All		Tolerance threshold for number of blank
  *				values in image (assumed to exclude crop)
  *	tmid	string	-		Midpoint of target interval;
  *				ignored if input specified as data set; defined
@@ -65,9 +65,8 @@
  *	to bugs in DRMS treatment of scans of invalid strings for times
  *	(ticket #177)
  *    Will not accept an input dataset specification of @*
- *    There is no verification that numerous essential key data are actually
- *	in the input dataset, in particular trec_key, tobs_key, and
- *	crot_key
+ *    There is no verification that some essential key data are actually
+ *	in the input dataset, in particular tobs_key and crot_key
  *    When a target time and length are given, the actual number of records
  *	may differ by one from the expected number; this only occurs if
  *	the target time differs by a small but non-zero amount (< 0.1 sec)
@@ -78,6 +77,9 @@
  *    When the target cadence is much larger than the input cadence, many
  *	input records are read needlessly; likewise, if there are multiple
  *	records for the same reference time
+ *    The call to drms_record_getvector uses a double rather than equivalent
+ *	time type due to a bug in the function scheduled to be fixed with the
+ *	DRMS 8.11 release
  *
  *  Revision history is at end of file
  */
@@ -86,13 +88,13 @@
 						       /*  module identifier  */
 char *module_name = "rdcoverage";
 char *module_desc = "report input data coverage for tracking options";
-char *version_id = "1.1";
+char *version_id = "1.2";
 
 ModuleArgs_t module_args[] = {
   {ARG_STRING,	"ds", "", "input data series or dataset"}, 
   {ARG_STRING,	"reject", "Not Specified", "file containing rejection list"}, 
   {ARG_INT,	"qmask", "0x80000000", "quality bit mask for image rejection"},
-  {ARG_INT,	"max_miss", "0",
+  {ARG_INT,	"max_miss", "All",
       "missing values threshold for image rejection"},
   {ARG_STRING,	"tmid", "Not Specified", "midpoint of tracking interval"}, 
   {ARG_INT,	"length", "0",
@@ -174,10 +176,22 @@ static int read_reject_list (FILE *file, int **list) {
 		 /*  global declaration of missing to be initialized as NaN  */
 float missing_val;
 
-static int verify_keys (DRMS_Record_t *rec, const char *clon,
-    const char *clat, double *keyscale) {
+static int verify_keys (DRMS_Record_t *rec, const char *trec, const char *clon,
+    const char *clat, int *slotted) {
   DRMS_Keyword_t *keywd;
-  
+
+  keywd = drms_keyword_lookup (rec, trec, 1);
+  if (!keywd) {
+    fprintf (stderr,
+	"Error: Keyword \"%s\" for slotted time not found\n", trec);
+    fprintf (stderr, "       Must supply an appropriate value for trec_key\n");
+    return -1;
+  }
+				       /*  check whether trec key is slotted  */
+  *slotted = drms_keyword_isslotted (keywd);
+  if (!(*slotted))
+    fprintf (stderr, "Warning: Keyword \"%s\" is not slotted\n", trec);
+
   keywd = drms_keyword_lookup (rec, clon, 1);
   if (!keywd) {
     fprintf (stderr,
@@ -237,13 +251,13 @@ int DoIt (void) {
   CmdParams_t *params = &cmdparams;
   DRMS_RecordSet_t *ds = NULL;
   DRMS_Record_t *irec;
+  DRMS_Array_t *tvec;
   DRMS_Keyword_t *keywd;
-  TIME trec, tobs, tmid, tbase, tfirst, tlast, ttrgt, tstrt, tstop;
+  TIME trec, tobs, tmid, tbase, tfirst, tlast, tstrt, tstop;
   double data_cadence, coverage, t_eps, phase;
   double lat, lon, img_lat, img_lon;
   double tmid_cl;
   double img_xc, img_yc, img_xscl, img_yscl, img_radius, img_pa;
-  double kscale;
   float pa_rec, dpa;
 
   long long nn;
@@ -251,10 +265,11 @@ int DoIt (void) {
   int *reject_list;
   int recct, rgn, rgnct, segct, valid;
   int tmid_cr;
-  int col, row, pixct, i, found, n, nr, or;
+  int col, row, pixct, i, found, n, nr;
   int blankvals, no_merid_v, rejects, status;
   int need_cadence;
   int badpkey, badqual, badfill, badtime, badpa, blacklist;
+  int pkeyslotted;
   char rec_query[256];
   char module_ident[64], key[64], tbuf[64], ptbuf[64], ctime_str[16];
   char keyvalstr[DRMS_DEFVAL_MAXLEN];
@@ -263,7 +278,6 @@ int DoIt (void) {
       LOC_SDO} platform = LOC_UNKNOWN;
 
   int check_platform = 0;
-  int extrapolate = 1;
   int found_first = 0, found_last = 0;
 						  /*  process command params  */
   char *inset = strdup (params_get_str (params, "ds"));
@@ -296,24 +310,35 @@ int DoIt (void) {
   need_cadence = isnan (tstep);
 
   if (key_params_from_dspec (inset)) {
+    TIME *tvals;
 				    /*  input specified as specific data set  */
-    if (!(ds = drms_open_records (drms_env, inset, &status))) {
+    if (!(ds = drms_open_recordset (drms_env, inset, &status))) {
       fprintf (stderr, "Error: (%s) unable to open input data set %s\n",
         module_ident, inset);
       fprintf (stderr, "       status = %d\n", status);
       return 1;
     }
-    if ((recct = ds->n) < 2) {
-      printf (" <2 records in selected input set\n");
+    irec = drms_recordset_fetchnext (drms_env, ds, &status, NULL, NULL);
+    if (!irec) {
+      printf (" No records in selected input set\n");
       drms_close_records (ds, DRMS_FREE_RECORD);
-      return 0;
+      return 1;
     }
-    irec = ds->records[0];
-    status = verify_keys (irec, clon_key, clat_key, &kscale);
+    status = verify_keys (irec, trec_key, clon_key, clat_key, &pkeyslotted);
     if (status) {
       fprintf (stderr, "Error: unable to verify keys\n");
       drms_close_records (ds, DRMS_FREE_RECORD);
       return 1;
+    }
+    tvec = drms_record_getvector (drms_env, inset, trec_key, DRMS_TYPE_DOUBLE,
+	0, &status);
+    tvals = (TIME *)tvec->data;
+    recct = tvec->axis[1];
+    if (recct  < 2) {
+      printf ("<2 records in selected input set\n");
+      drms_free_array (tvec);
+      drms_close_records (ds, DRMS_FREE_RECORD);
+      return 0;
     }
     if (need_cadence) {
 			  /*  output cadence not specified, use data cadence  */
@@ -337,26 +362,26 @@ int DoIt (void) {
       data_cadence = drms_getkey_double (irec, tstp_key, &status);
       tstep = data_cadence;
     }
-    tstrt = drms_getkey_time (irec, trec_key, &status);
-    tstop = drms_getkey_time (ds->records[recct - 1], trec_key, &status);
+    tstrt = tvals[0];
+    tstop = tvals[recct - 1];
     length = (tstop - tstrt + 1.01 * tstep) / tstep;
     tmid = 0.5 * (tstrt + tstop);
     segct = drms_record_numsegments (irec);
   } else {
 			/*  only the input data series is named:
-				get record specifications from arguments  */
-		/*  get required series info from first record in series  */
-					    /*  platform, cadence, phase  */
-    snprintf (rec_query, 256, "%s[#^]", inset);
-    if (!(ds = drms_open_records (drms_env, rec_query, &status))) {
-      fprintf (stderr, "Error: unable to open input data set %s\n", inset);
+				    get record specifications from arguments  */
+		    /*  get required series info from series template record  */
+						/*  platform, cadence, phase  */
+    irec = drms_template_record (drms_env, inset, &status);
+    if (status) {
+      fprintf (stderr, "Error: unable to create template record in %s\n", inset);
       fprintf (stderr, "       status = %d\n", status);
       return 1;
     }
-    irec = ds->records[0];
-    status = verify_keys (irec, clon_key, clat_key, &kscale);
+    status = verify_keys (irec, trec_key, clon_key, clat_key, &pkeyslotted);
     if (status) {
-      drms_close_records (ds, DRMS_FREE_RECORD);
+      fprintf (stderr, "Error: unable to verify keys from template record\n");
+      drms_free_record (irec);
       return 1;
     }
     if ((keywd = drms_keyword_lookup (irec, tstp_key, 1))) {
@@ -374,7 +399,7 @@ int DoIt (void) {
           "Error: data cadence keyword %s not in input series %s\n",
 	  tstp_key, inset);
       fprintf (stderr, "       Specify desired output cadence as tstep\n");
-      drms_close_records (ds, DRMS_FREE_RECORD);
+      drms_free_record (irec);
       return 1;
     }
     data_cadence = drms_getkey_double (irec, tstp_key, &status);
@@ -449,7 +474,7 @@ int DoIt (void) {
 	} else {
 	  fprintf (stderr,
 	      "Time specification in CR:CL for observing platform not supported\n");
-	  drms_close_records (ds, DRMS_FREE_RECORD);
+	  drms_free_record (irec);
 	  return 1;
 	}
       } else {
@@ -464,7 +489,7 @@ int DoIt (void) {
 	fprintf (stderr,
 	    "Error: requested end time before or at start time for ");
 	fprintf (stderr, "length= %d\n", length);
-	drms_close_records (ds, DRMS_FREE_RECORD);
+	drms_free_record (irec);
 	return 1;
       }
 			  /*  adjust stop time to reflect sampling symmetry  */
@@ -488,27 +513,54 @@ int DoIt (void) {
       } else tstop = sscan_time (tstop_str);
       length = (tstop - tstrt + 1.01 * tstep) / tstep;
     }
-    drms_close_records (ds, DRMS_FREE_RECORD);
+    drms_free_record (irec);
+    if (pkeyslotted) {
+      TIME pbase;
+      double pstep;
+      int tstrt_ind, tstop_ind;
+      char pkeyindx[32], pkeyepoch[32], pkeystep[32];
 
-    snprintf (rec_query, 256, "%s[?%s > %23.16e and %s < %23.16e?]", inset,
-	trec_key, tstrt - t_eps, trec_key, tstop + t_eps);
-    if (!(ds = drms_open_records (drms_env, rec_query, &status))) {
+      sprintf (pkeyindx, "%s_index", trec_key);
+      sprintf (pkeyepoch, "%s_epoch", trec_key);
+      sprintf (pkeystep, "%s_step", trec_key);
+      pbase = drms_getkey_time (irec, pkeyepoch, &status);
+      pstep = drms_getkey_double (irec, pkeystep, &status);
+      tstrt_ind = (tstrt - pbase) / pstep;
+      tstop_ind = (tstop + t_eps - pbase) / pstep;
+      snprintf (rec_query, 256, "%s[?%s between %d and %d?]", inset,
+	  pkeyindx, tstrt_ind, tstop_ind);
+    } else {
+      snprintf (rec_query, 256, "%s[?%s between %23.16e and %23.16e?]", inset,
+	  trec_key, tstrt - t_eps, tstop + t_eps);
+    }
+    if (!(ds = drms_open_recordset (drms_env, rec_query, &status))) {
       fprintf (stderr, "Error: unable to open input data set %s\n", rec_query);
       fprintf (stderr, "       status = %d\n", status);
       drms_close_records (ds, DRMS_FREE_RECORD);
       return 1;
     }
-    if ((recct = ds->n) < 2) {
+    irec = drms_recordset_fetchnext (drms_env, ds, &status, NULL, NULL);
+    if (!irec) {
+      printf (" No records in selected input set\n");
+      drms_close_records (ds, DRMS_FREE_RECORD);
+      return 1;
+    }
+    tvec = drms_record_getvector (drms_env, rec_query, trec_key, DRMS_TYPE_DOUBLE,
+	0, &status);
+    recct = tvec->axis[1];
+    if (recct  < 2) {
       printf ("<2 records in selected input set\n");
+      drms_free_array (tvec);
       drms_close_records (ds, DRMS_FREE_RECORD);
       return 0;
     }
   }
+  drms_free_array (tvec);
 			     /*  end determination of record set from params  */
   if (verbose) {
-    sprint_time (ptbuf, tstrt, "", -1);
-    sprint_time (tbuf, tstop, "", -1);
-    printf ("checking data from %s - %s at cadence of %.1f s\n", ptbuf, tbuf,
+    sprint_time (ptbuf, tstrt, "TAI", 0);
+    sprint_time (tbuf, tstop, "TAI", 0);
+    printf ("checking data from %s - %s\n  at cadence of %.1f s\n", ptbuf, tbuf,
 	tstep);
     printf ("         %d data records\n", recct);
   }
@@ -528,12 +580,9 @@ int DoIt (void) {
   found = 0;
 					      /*  loop through input records  */
   valid = 0;
-  ttrgt = tstrt;
-  or = 0;
   badpkey = badqual = badfill = badtime = badpa = blacklist = 0;
-  tlast = tstrt - tstep;
+  tlast = tstrt - 2 * tstep;
   for (nr = 0; nr < recct; nr++) {
-    irec = ds->records[nr];
     quality = drms_getkey_int (irec, qual_key, &status);
     if ((quality & qmask) && !status) {
 					 /*  unacceptable quality bits, skip  */
@@ -544,6 +593,7 @@ int DoIt (void) {
 	printf ("%s: %s = %08x matches %08x\n", keyvalstr, qual_key, quality,
 	    qmask);
       }
+      irec = drms_recordset_fetchnext (drms_env, ds, &status, NULL, NULL);
       continue;
     }
     tobs = drms_getkey_time (irec, tobs_key, &status);
@@ -555,10 +605,27 @@ int DoIt (void) {
 	    keyvalstr, DRMS_DEFVAL_MAXLEN);
 	printf ("%s: %s invalid\n", keyvalstr, tobs_key);
       }
+      irec = drms_recordset_fetchnext (drms_env, ds, &status, NULL, NULL);
       continue;
+    } else {
+      if (tobs == tlast) {
+				       /*  same obstime as last record, skip  */
+	badtime++;
+	if (verbose) {
+	  drms_keyword_snprintfval (drms_keyword_lookup (irec, trec_key, 1),
+	      keyvalstr, DRMS_DEFVAL_MAXLEN);
+	  printf ("%s: %s = ", keyvalstr, tobs_key);
+	  drms_keyword_snprintfval (drms_keyword_lookup (irec, tobs_key, 1),
+	      keyvalstr, DRMS_DEFVAL_MAXLEN);
+	  printf ("%s duplicated\n", keyvalstr);
+	}
+	irec = drms_recordset_fetchnext (drms_env, ds, &status, NULL, NULL);
+	continue;
+      }
+      tlast = tobs;
     }
     blankvals = drms_getkey_int (irec, "MISSVALS", &status);
-    if (blankvals > max_miss && !status) {
+    if ((max_miss >= 0) && (blankvals > max_miss) && !status) {
 					     /*  too many blank values, skip  */
       badfill++;
       if (verbose) {
@@ -567,20 +634,7 @@ int DoIt (void) {
 	printf ("%s: %s = %d > %d\n", keyvalstr, "MISSVALS", blankvals,
 	    max_miss);
       }
-      continue;
-    }
-    if (tobs == tlast) {
-				       /*  same obstime as last record, skip  */
-      badtime++;
-      if (verbose) {
-	drms_keyword_snprintfval (drms_keyword_lookup (irec, trec_key, 1),
-	    keyvalstr, DRMS_DEFVAL_MAXLEN);
-	printf ("%s: %s = ", keyvalstr, tobs_key);
-	drms_keyword_snprintfval (drms_keyword_lookup (irec, tobs_key, 1),
-	    keyvalstr, DRMS_DEFVAL_MAXLEN);
-	sprint_time (tbuf, tlast, "", 0);
-	printf ("%s = %s\n", keyvalstr, tbuf);
-      }
+      irec = drms_recordset_fetchnext (drms_env, ds, &status, NULL, NULL);
       continue;
     }
     if (check_pa) {
@@ -604,6 +658,7 @@ int DoIt (void) {
 	    printf ("%s: |%s - %.2f] = %.2f > %.2f\n", keyvalstr, pang_key,
 		pa_nom, dpa, dpa_max);
 	  }
+	  irec = drms_recordset_fetchnext (drms_env, ds, &status, NULL, NULL);
 	  continue;
 	}
       }
@@ -629,57 +684,13 @@ int DoIt (void) {
       }
       if (match) {
         blacklist++;
+	irec = drms_recordset_fetchnext (drms_env, ds, &status, NULL, NULL);
         continue;
       }
     }
-		       /*  loop through output records, appending time slice  */
-	     /*  extrapolate first image backward to start time if necessary  */
-    if (extrapolate) {
-      while (ttrgt < tobs) {
-	if (verbose) printf ("step %d to be extrapolated from image %s\n",
-	    or, tbuf);
-	or++;
-	if (or >= length) {
-	  fprintf (stderr, "Error: reached output length limit\n");
-	  drms_close_records (ds, DRMS_FREE_RECORD);
-	  return 1;
-	}
-	ttrgt += tstep;
-      }
-      extrapolate = 0;
-    }
-    if (ttrgt < tobs) {
-					       /*  report interpolated steps  */
-      while (ttrgt < tobs) {
-/*
-	if (verbose) {
-	  sprint_time (ptbuf, tlast, "", 0);
-	  sprint_time (tbuf, tobs, "", 0);
-	  printf ("step %d to be interpolated from images %s and %s\n",
-	      or, ptbuf, tbuf);
-	}
-*/
-	or++;
-	if (or >= length) {
-	  if (nr < recct - 1)
-	    fprintf (stderr,
-	      "Warning: reached output limit before last input record processed\n");
-	  ttrgt = tstop;
-	}
-	ttrgt += tstep;
-      }
-    }
 
-    if (ttrgt == tobs) {
-/*
-      if (verbose) printf ("step %d mapped from image %s\n", or, tbuf);
-*/
-      or++;
-      ttrgt += tstep;
-    }
-    tlast = tobs;
-    strcpy (ptbuf, tbuf);
     valid++;
+    irec = drms_recordset_fetchnext (drms_env, ds, &status, NULL, NULL);
   }
 
   drms_close_records (ds, DRMS_FREE_RECORD);
@@ -687,18 +698,18 @@ int DoIt (void) {
   coverage = (double)valid / (double)length;
   printf ("%d of %d possible input records accepted\n", valid, recct);
   printf ("    effective coverage = %.3f\n", coverage);
-  if (badpkey)
-    printf ("    %d input records rejected for invalid values of %s\n",
-	badpkey, tobs_key);
   if (badqual)
     printf ("    %d input records rejected for quality matching %08x\n",
 	badqual, qmask);
-  if (badfill)
-    printf ("    %d input records rejected for missing values exceeding %d\n",
-	badfill, max_miss);
+  if (badpkey)
+    printf ("    %d input records rejected for invalid values of %s\n",
+	badpkey, tobs_key);
   if (badtime)
     printf ("    %d input records rejected for duplicate values of %s\n",
 	badtime, tobs_key);
+  if (badfill)
+    printf ("    %d input records rejected for missing values exceeding %d\n",
+	badfill, max_miss);
   if (badpa)
     printf ("    %d input records rejected for PA more than %.2f from %.2f\n",
 	badpa, dpa_max, pa_nom);
@@ -722,5 +733,22 @@ int DoIt (void) {
  *  v 1.0 frozen 2013.11.21
  *  15.02.24	initialized tlast; removed needless (and uninitialized)
  *		interpolation code and verbose messages of same
+ *  v 1.1 frozen 2015.04.08
+ *  15.09.08	use template record rather than first in series for keyword
+ *	verification;
+ *		check for existence and slotting of trec_key;
+ *		use slotted query if possible;
+ *		use drms_open_recordset instead of drms_open_records to
+ *	eliminate length restriction, and drms_getvector to get record count;
+ *	also results in substantial speed increas (~80%);
+ *		changed default value for max_miss from 0 to "All" (i.e.
+ *	undefined);
+ *		fixed check for multiple values of T_OBS (which is probably
+ *	obsolete) to ignore missing values
+ *		print verbose diagnostic times in TAI
+ *		altered order of detail reports to match order of tests
+ *		removed needless interpolation code and verbose messages of
+ *	same (only partially removed in v 1.1)
+ *  15.09.14	fixed bug in slot index calculation
  *
  */
