@@ -43,6 +43,7 @@
 #define NO_OBSERVER_LON	(0x0004)
 
 #define KEYSCOPE_VARIABLE	(0x80000000)
+#define LOCALHS_IMGINFO_VERSION	("1.0")
 
 /*
  *  process image info (attitude, plate scale, distortion)
@@ -209,7 +210,6 @@ static int solar_image_info (DRMS_Record_t *img, double *xscl, double *yscl,
 */
 	strncpy (param[RSUN].name, rsun_key, 31);
 	strncpy (param[APSD].name, apsd_key, 31);
-	sprintf (param[APSD].name, "OBS_ASD");
 	sprintf (param[PANG].name, "CROTA2");
 	param[PANG].scale = -raddeg;
 	if (AIPS_convention) param[PANG].scale *= -1;
@@ -272,5 +272,7 @@ static int solar_image_info (DRMS_Record_t *img, double *xscl, double *yscl,
  *		CROTA2; added argument AIPS_convention to solar_image_info to
  *		be set if the CROTA2 keyword conforms to the AIPS convention
  *  14.10.04		added AIPS-convention correction for ellipse angle
+ *  15.06.19		corrected erroneous overwrite of apsd_key
+ *			added definition of code version number
  */
 
