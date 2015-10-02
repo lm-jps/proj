@@ -452,7 +452,7 @@ int do_ingest(long long bbrec, long long eerec, const char *dpath)
 
   if(modeflg) sprintf(recrange, ":#%lld-#%lld", bbrec, eerec);
   else sprintf(recrange, "%lld-%lld", bbrec, eerec);
-  sprintf(open_dsname, "%s[%s]", dsin, recrange);
+  sprintf(open_dsname, "%s[%s][? t_obs > 0 ?]", dsin, recrange);
   printk("open_dsname = %s\n", open_dsname);
   printk("#levnum recnum fsn\n");
 
