@@ -947,10 +947,46 @@ fprintf(stderr,"after flip x1=%d, target_x=%lf, y1=%d, target_y=%lf\n",x1,target
         }
         else
         {
-            if (!drms_segment_segsmatch(firstSeg, inSeg))
+            /* Ensure that both segments are of the same dimensions (both in number and size of each dimension). */
+            int iSeg;
+            int mismatch;
+            
+            mismatch = 0;
+            if (firstSeg->info->naxis == inSeg->info->naxis)
+            {
+                for (iSeg = 0; iSeg < firstSeg->info->naxis; iSeg++)
+                {
+                    if (firstSeg->axis[iSeg] != inSeg->axis[iSeg])
+                    {
+                       mismatch = 1;
+                       break;
+                    }
+                }
+            }
+            else
+            {
+                mismatch = 1;
+            }
+
+            if (!mismatch)
+            {
+                if (firstSeg->info->protocol == DRMS_TAS && inSeg->info->protocol == DRMS_TAS)
+                {
+                    for (iSeg = 0; iSeg < firstSeg->info->protocol; iSeg++)
+                    {
+                        if (firstSeg->blocksize[iSeg] != inSeg->blocksize[iSeg])
+                        {
+                            mismatch = 1;
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            if (mismatch)
             {
                 DIE("When processing more than one segment, all segments' dimensions must match.");
-            }
+            }        
         }
     }
     
