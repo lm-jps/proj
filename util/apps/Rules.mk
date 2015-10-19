@@ -5,7 +5,7 @@ d		:= $(dir)
 
 # Local variables
 MODEXE_$(d)	:= $ (addprefix $(d)/, arithtool rebin2 ingest_from_fits hg_patch render_image index_convert hmi_limbdark drms2hdir pfss_backup jsoc_resize jsoc_rebin im_patch  hmi_fixCROTA2 aia_fixCROTA2 export_as_maproj hmib2ptr jsoc_getimages)
->>>>>>> 1.24
+
 MODEXE		:= $(MODEXE) $(MODEXE_$(d)) 
 
 MODEXE_SOCK_$(d):= $(MODEXE_$(d):%=%_sock)
