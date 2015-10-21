@@ -754,7 +754,7 @@ fprintf(stderr,"T_OBS=%s, crpix1=%f, crpix2=%f\n", drms_getkey_string(inRec,"T_O
       if (loctype==LOCCARR)
         {
            tmpstr = drms_getkey_string(inRec, "CTYPE1", &status);
-        ctype1 = strdup(tmpstr); TEST_PARAM("CTYPE1");
+            ctype1 = strdup(tmpstr); TEST_PARAM("CTYPE1");
         if (tmpstr)
         {
            free(tmpstr);
@@ -842,6 +842,9 @@ fprintf(stderr,"center_x=%f,center_y=%f\n",center_x,center_y);
 
     target_x = center_x;
     target_y = center_y;
+    int x1Orig;
+    int y1Orig;
+    
     int x1 = round(target_x + llx);
     int y1 = round(target_y + lly);
     int x2 = x1 + pixwidth - 1;
@@ -889,7 +892,13 @@ fprintf(stderr,"at box define, crpix1=%f, x0=%f, x1=%d\n",crpix1,x0,x1);
         crpix2 = 1 + y2 - y0;
 fprintf(stderr,"after rotate, crpix1=%f\n",crpix1);
 
-        // adjust internal quantities for after the flip, may be needed by do_register.    
+        // adjust internal quantities for after the flip, may be needed by do_register. 
+        /* Ah - we do not want to change these four quantities here. If we change them here
+         * then we accidentally change them for the code that determines patch overlap. However,
+         * the patch overlap code needs the original quantities.
+         */
+        x1Orig = x1;
+        y1Orig = y1;
         x1 = inAxis[0] - 1 - x2;
         y1 = inAxis[1] - 1 - y2;
         target_x = inAxis[0] - 1 - center_x;
@@ -923,14 +932,15 @@ fprintf(stderr,"after flip x1=%d, target_x=%lf, y1=%d, target_y=%lf\n",x1,target
         {
             firstSeg = inSeg;
             
-            /* Calculate the ultimate patch dimensions. */            
-            if (x1 >= inSeg->axis[0] || y1 >= inSeg->axis[1] || x2 < 0 || y2 < 0)
+            /* Calculate the ultimate patch dimensions. */
+            /* We need to use the original x1 and y1, not the ones modified by paIs180. */
+            if (x1Orig >= inSeg->axis[0] || y1Orig >= inSeg->axis[1] || x2 < 0 || y2 < 0)
             {  
                 // patch completely outside image
                 patchIntersection = 'N';
                 /* The record needs to be skipped. Downstream code will handle this. */
             }
-            else if (x1 >= 0 && y1 >= 0 && x2 < inSeg->axis[0] && y2 < inSeg->axis[1])
+            else if (x1Orig >= 0 && y1Orig >= 0 && x2 < inSeg->axis[0] && y2 < inSeg->axis[1])
             {  
                 // patch entirely in image.
                 patchIntersection = 'F';
@@ -941,8 +951,8 @@ fprintf(stderr,"after flip x1=%d, target_x=%lf, y1=%d, target_y=%lf\n",x1,target
             { 
                 // patch partly outside image.
                 patchIntersection = 'P';
-                numXPix = x2 - x1 + 1;
-                numYPix = y2 - y1 + 1;
+                numXPix = x2 - x1Orig + 1;
+                numYPix = y2 - y1Orig + 1;
             }
         }
         else
@@ -1153,9 +1163,10 @@ fprintf(stderr,"DATA_MIN=%f, DATA_MAX=%f\n",drms_getkey_float(outRec,"DATA_MIN",
         inAxis[0] = inSeg->axis[0];
         inAxis[1] = inSeg->axis[1];
 
+        /* We need to use the original x1 and y1, not the ones modified in paIs180. */
         if (patchIntersection == 'N')
         {  // patch completely outside image
-fprintf(stderr, "patch completely outside image, x1=%d, y1=%d, x2=%d, y2=%d\n",x1,y1,x2,y2); 
+fprintf(stderr, "patch completely outside image, x1=%d, y1=%d, x2=%d, y2=%d\n", x1Orig, y1Orig, x2, y2); 
             /* If the patch is completely outside of one image, it is completely outside all images
              * since all images must be of the same dimensions. So break out of segment loop. */
             nextRec = 1;
@@ -1170,15 +1181,15 @@ fprintf(stderr,"$$$$$$$ outArray bzero, bscale are %f, %f\n", outArray->bzero, o
         }
         else
         { // patch partly outside image.
-            int dims[2] = {x2-x1+1,y2-y1+1};
+            int dims[2] = {x2-x1Orig+1,y2-y1Orig+1};
             int start2[2], end2[2];
             
             int x,y;
             outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, dims, NULL, &status);
             drms_array2missing(outArray);
             
-            start2[0] = x1 < 0 ? 0 : x1;
-            start2[1] = y1 < 0 ? 0 : y1;
+            start2[0] = x1Orig < 0 ? 0 : x1Orig;
+            start2[1] = y1Orig < 0 ? 0 : y1Orig;
             end2[0] = x2 >= inAxis[0] ? inAxis[0]-1 : x2;
             end2[1] = y2 >= inAxis[1] ? inAxis[1]-1 : y2;
             
