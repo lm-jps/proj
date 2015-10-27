@@ -311,6 +311,7 @@ int DoIt(void)
   double crpix1_0, crpix2_0;
   int register_padding = 5; // later this should be based on crota2 and box size.
   char *tmpstr = NULL;
+  int hasSegList = 0;
 
   FILE *log = NULL;
 
@@ -363,6 +364,26 @@ int DoIt(void)
     where = strdup(wherework);
     }
 
+    /* Determine if there is a segment list specifier. I believe this is true if the last non-ws char of the specification is a '}'. 
+     * Of course, the specification could be invalid, but in that event the drms_open_records() call will fail and catch the error and
+     * the module run will abort. */
+     char *testSegList = NULL;
+     char *pCh = NULL;
+     
+     testSegList = rindex(ingiven, '}');
+     if (testSegList)
+     {
+        for (pCh = testSegList + 1, hasSegList = 1; *pCh; pCh++)
+        {
+            if (!isspace(*pCh))
+            {
+                /* There is a non-ws char after '}' - this is not a valid seglist. */
+                hasSegList = 0;
+                break;
+            }
+        }
+     }
+
   inparam = strdup(ingiven);
   if (strcasecmp(inparam, "NOTSPECIFIED") == 0) DIE("Input series must be specified.");
   // WARNING - there should be a check here to make sure the first prime key is a time and that the first bracket
@@ -392,7 +413,7 @@ int DoIt(void)
     }
   else
     {
-    strcpy(inseries, inparam);
+    strcpy(inseries, inparam); // Not quite right - there could be a segment list after the series name.
     if (t_start == tNotSpecified || t_stop == tNotSpecified)
         times_source = TIMES_IMPLICIT;
     else
@@ -953,10 +974,16 @@ fprintf(stderr,"after flip x1=%d, target_x=%lf, y1=%d, target_y=%lf\n",x1,target
                 patchIntersection = 'P';
                 numXPix = x2 - x1Orig + 1;
                 numYPix = y2 - y1Orig + 1;
-            }
+            }            
         }
         else
         {
+            if (!hasSegList)
+            {
+                /* No need to ensure post-first segment matches the first segment since we are processing only the first segment. */
+                break;
+            }
+
             /* Ensure that both segments are of the same dimensions (both in number and size of each dimension). */
             int iSeg;
             int mismatch;
@@ -1103,6 +1130,13 @@ fprintf(stderr,"DATA_MIN=%f, DATA_MAX=%f\n",drms_getkey_float(outRec,"DATA_MIN",
 
     while ((inSeg = drms_record_nextseg2(inRec, &segIter, 1, &orig)) != NULL)
     {
+        if (!hasSegList && iSeg > 0)
+        {
+            /* We've already processed the first segment, and there is no seglist specifier, so we are not processing segments other 
+             * than the first one. */
+             break;
+        }
+        
         /* Pin the first segment that meets these conditions:
          * + The segment protocol is either FITS or TAS.
          * + NAXIS == 2.
