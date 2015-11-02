@@ -5,9 +5,10 @@ d		:= $(dir)
 
 # Local variables
 # NOTE: Add the base of the module's filename below (next to mymod)
-DEFMAKE_$(d)	:= $(addprefix $(d)/, HMI_observables HMI_IQUV_averaging correction_velocities)
+DEFMAKE_$(d)	:= $(addprefix $(d)/, HMI_observables HMI_IQUV_averaging correction_velocities phasemaps_voigt ingest_dcon)
+GSLEXE_$(d)	:= $(addprefix $(d)/, HMI_observables2 undistort_lev1) $(DEFMAKE_$(d))
 
-GSLEXE_$(d)	:= $(addprefix $(d)/, lookup phasemaps HMIfilters Leka smoothing HMI_Simulate_Doppler phasemaps_old HMI_observables_test2 HMI_IQUV_averaging_test2 phasemaps2 phasemaps_test phasemaps_FeI phasemaps_test_doublegaussian phasemaps_test_voigt ingest_lookup ingest_core_intensity lookup_test phasemaps_test_voigt_obsmode phasemaps_test_RogerKittPeak phasemaps_test_voigt_Iripple ingest_Thomas phasemaps_test_voigt_Iripple2 phasemaps_test_voigt_Iripple3 lookup_Iripple ingest_Fleck phasemaps_test_voigt_Iripple2_all ingest_corrected_phasemaps ingest_Yang HMI_observables_test HMI_observables2 HMI_IQUV_averaging_test phasemaps_test_voigt_obsmode_Iripple_all lookup_test2 ingest_v50 undistort_lev1 HMI_observables_duvall ingest_KokLengYeo ingest_FleckS ingest_FleckN ingest_FleckSN limbfit_sc time_convert ingest_Aimee) $(DEFMAKE_$(d))
+# THERE IS AN HMI_IQUV_averaging2.c IN THE SOURCE DIRECTORY, BUT THERE IS NO RULE TO MAKE THIS FILE.
 
 GSLOBJ_$(d)	:= $(GSLEXE_$(d):%=%.o) 
 
