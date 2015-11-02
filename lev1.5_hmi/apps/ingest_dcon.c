@@ -96,8 +96,7 @@ int DoIt(void) {
 
   //READ THE INPUT FITS FILE (lev1 image)
   DRMS_Array_t *image;
-  HContainer_t **keywords;
-  image=drms_fitsrw_read(drms_env,infile,0,keywords,&status);
+  image=drms_fitsrw_read(drms_env,infile,0,NULL,&status);
     
 
   //OPEN hmi.lev1 RECORDS
