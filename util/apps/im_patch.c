@@ -891,12 +891,15 @@ fprintf(stderr,"at box define, crpix1=%f, x0=%f, x1=%d\n",crpix1,x0,x1);
     
     if (do_crop)
     {
+        /* BEFORE SEG LOOP */
         int retStat;
         dsun_obs = drms_getkey_double(inRec, "DSUN_OBS", &retStat);
         rsun_rad = asin(rsun_ref/dsun_obs); 
         rsun = rsun_rad*Rad2arcsec/cdelt;
         r2 = rsun*rsun;
         r2 *= 0.9995;
+        
+        /* WE HAVE TO CALCULATE this_x0 and this_y0 now, before paIs180 modifies crpix1 and crpix2. */
         this_x0 = crpix1 - 1;
         this_y0 = crpix2 - 1;
     }
@@ -904,6 +907,12 @@ fprintf(stderr,"at box define, crpix1=%f, x0=%f, x1=%d\n",crpix1,x0,x1);
     /* We need to adjust pa and crota if |pa| == 180. Originally, this was done in code that was mixed with 
      * per-segment code. But now that we made a per-segment loop, we do not want to execute this code more than 
      * once. So I moved it here, right before the segment loop. */
+
+    /* These might be modified in the paIs180 block of code, but we need to use the original values 
+     * later. */     
+    x1Orig = x1;
+    y1Orig = y1;
+
     if (paIs180)
     {
         pa -= 180.0; /* This actually does not get used again during the rest of the record loop, and is not used by the segment loop. */
@@ -914,12 +923,9 @@ fprintf(stderr,"at box define, crpix1=%f, x0=%f, x1=%d\n",crpix1,x0,x1);
 fprintf(stderr,"after rotate, crpix1=%f\n",crpix1);
 
         // adjust internal quantities for after the flip, may be needed by do_register. 
-        /* Ah - we do not want to change these four quantities here. If we change them here
-         * then we accidentally change them for the code that determines patch overlap. However,
-         * the patch overlap code needs the original quantities.
+        /* But we will need the original values of x1 and y1 in the code that handles the patch-image intersection.
+         * These quantities are saved in x1orig and y1orig.
          */
-        x1Orig = x1;
-        y1Orig = y1;
         x1 = inAxis[0] - 1 - x2;
         y1 = inAxis[1] - 1 - y2;
         target_x = inAxis[0] - 1 - center_x;
@@ -941,8 +947,6 @@ fprintf(stderr,"after flip x1=%d, target_x=%lf, y1=%d, target_y=%lf\n",x1,target
     HIterator_t *segIter = NULL;
     DRMS_Segment_t *orig = NULL;
 
-    int numXPix = -1;
-    int numYPix = -1;
     float regShiftX = 0;
     float regShiftY = 0;
     char patchIntersection;
@@ -965,15 +969,11 @@ fprintf(stderr,"after flip x1=%d, target_x=%lf, y1=%d, target_y=%lf\n",x1,target
             {  
                 // patch entirely in image.
                 patchIntersection = 'F';
-                numXPix = inSeg->axis[0];
-                numYPix = inSeg->axis[1];
             }
             else
             { 
                 // patch partly outside image.
                 patchIntersection = 'P';
-                numXPix = x2 - x1Orig + 1;
-                numYPix = y2 - y1Orig + 1;
             }            
         }
         else
@@ -1025,35 +1025,11 @@ fprintf(stderr,"after flip x1=%d, target_x=%lf, y1=%d, target_y=%lf\n",x1,target
                 DIE("When processing more than one segment, all segments' dimensions must match.");
             }        
         }
-    }
+    } /* Not the real segment loop. */
     
     if (segIter)
     {
         hiter_destroy(&segIter);
-    }
-     
-    if (do_register)
-    {
-        /* Cannot be in segment loop - we only do this once per record. But we need to know the dimensions
-         * of the output segment, which requires us to be in the segment loop. And then some of
-         * these quantities have to be available to the segment-loop code, like nx.
-         *
-         * To simplify things, error-out if the segments' dimensions are not equivalent.
-         */       
-         
-        int nx = numXPix;
-        int ny = numYPix;
-        float midx=(nx-1)/2.0;
-        float midy = (ny-1)/2.0;
-        float dx = (x1 + midx) - target_x;
-        float dy = (y1 + midy) - target_y;
-      
-        sprintf(history+strlen(history), "\nImage registered by shift of (%0.3f,%0.3f) pixels.", dx, dy);
-        crpix1 += dx - register_padding;
-        crpix2 += dy - register_padding;
-        
-        regShiftX = dx;
-        regShiftY = dy;
     }
      
     drms_copykeys(outRec, inRec, 0, kDRMS_KeyClass_Explicit);
@@ -1061,8 +1037,6 @@ fprintf(stderr,"after flip x1=%d, target_x=%lf, y1=%d, target_y=%lf\n",x1,target
     drms_setkey_string(outRec, "SOURCE", inQuery);
     drms_appendhistory(outRec, inQuery, 1);
     drms_setkey_time(outRec, "T_REC", trec);
-    drms_setkey_double(outRec, "CRPIX1", crpix1);
-    drms_setkey_double(outRec, "CRPIX2", crpix2);
     drms_setkey_double(outRec, "CRVAL1", 0.0);
     drms_setkey_double(outRec, "CRVAL2", 0.0);
     drms_setkey_double(outRec, "CRDELT1", cdelt);
@@ -1130,6 +1104,7 @@ fprintf(stderr,"DATA_MIN=%f, DATA_MAX=%f\n",drms_getkey_float(outRec,"DATA_MIN",
 
     while ((inSeg = drms_record_nextseg2(inRec, &segIter, 1, &orig)) != NULL)
     {
+        /* THIS IS THE REAL SEGMENT LOOP. */
         if (!hasSegList && iSeg > 0)
         {
             /* We've already processed the first segment, and there is no seglist specifier, so we are not processing segments other 
@@ -1318,6 +1293,7 @@ fprintf(stderr,"$$$$$$$ outArray bzero, bscale are %f, %f\n", outArray->bzero, o
          */
         if (do_register)
         {
+            /* IN SEG LOOP */
             DRMS_Array_t *tmpArray;
             int status;
             int i,j;
@@ -1326,6 +1302,22 @@ fprintf(stderr,"$$$$$$$ outArray bzero, bscale are %f, %f\n", outArray->bzero, o
             int newnx, newny;
             int nx = outArray->axis[0];
             int ny = outArray->axis[1];
+            float midx=(nx-1)/2.0;
+            float midy = (ny-1)/2.0;
+            float dx = (x1 + midx) - target_x;
+            float dy = (y1 + midy) - target_y;
+
+            /* We do not want to adjust crpix1 and crpix2 more than once per record. */
+            if (iSeg == 0)
+            {
+                sprintf(history+strlen(history), "\nImage registered by shift of (%0.3f,%0.3f) pixels.", dx, dy);
+                crpix1 += dx - register_padding;
+                crpix2 += dy - register_padding;
+            }
+        
+            regShiftX = dx;
+            regShiftY = dy;
+        
             int dtyp = 3;
         
             if (status=image_magrotate((void *)data, nx, ny, dtyp, crota, 1.0, regShiftX, regShiftY, &(void *)newdata, &newnx, &newny, 1, 0))
@@ -1436,6 +1428,11 @@ fprintf(stderr,"$$$$$$$ outArray bzero, bscale are %f, %f\n", outArray->bzero, o
 
         iSeg++;
     } /* end segment loop */
+
+    /* These could be modified by the segment loop. */    
+    drms_setkey_double(outRec, "CRPIX1", crpix1);
+    drms_setkey_double(outRec, "CRPIX2", crpix2);
+
     
     if (segIter)
     {
