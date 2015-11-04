@@ -1425,6 +1425,12 @@ fprintf(stderr,"$$$$$$$ outArray bzero, bscale are %f, %f\n", outArray->bzero, o
         {
             DIE("problem writing file");
         }
+        
+        if (outArray)
+        {
+            drms_free_array(outArray);
+            outArray = NULL;
+        }
 
         iSeg++;
     } /* end segment loop */
@@ -1451,7 +1457,6 @@ fprintf(stderr,"$$$$$$$ outArray bzero, bscale are %f, %f\n", outArray->bzero, o
     if (nextRec)
     {    
         drms_close_records(outRS, DRMS_FREE_RECORD);
-        drms_free_array(outArray);
         continue;
     }
     else
