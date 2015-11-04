@@ -530,7 +530,7 @@ static int setKey(DRMS_Record_t *rec, const char *key, DRMS_Value_t *value)
 {
     int rv = 0;
 
-    if (!rec || !key || !*key || value)
+    if (!rec || !key || !*key || !value)
     {
         rv = 1;
     }
@@ -577,6 +577,7 @@ int DoIt(void) {
   int calibration      = cmdparams_get_int(&cmdparams,   "cal"   , NULL); 
 
   char COMMENT[256];
+    
   strcpy(COMMENT,"Code used: phasemaps_test_voigt.c; CALIBRATION USED IS:"); //comment about the phase-map code
   if(calibration == 0)
     {
@@ -1783,6 +1784,7 @@ int DoIt(void) {
       DRMS_Segment_t *segout    = NULL;
 
       dataout = drms_create_records(drms_env,1,dsout,DRMS_PERMANENT,&status);
+      
       if (status != DRMS_SUCCESS)
 	{
 	  printf("Could not create a record for the phase maps\n");
@@ -1794,6 +1796,7 @@ int DoIt(void) {
 	    
 	  printf("Writing a record on the DRMS for the phase maps\n");
 	  recout = dataout->records[0];
+
 
 	  //WRITE KEYWORDS
 	  
