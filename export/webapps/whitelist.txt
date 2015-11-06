@@ -77,9 +77,12 @@ mdi.fd_i0
 mdi.fd_i0_extract
 mdi.fd_ic
 mdi.fd_ic_06h
+mdi.fd_ic_interp
 mdi.fd_ld
 mdi.fd_m_extract
+mdi.fd_marmask
 mdi.fd_m_lev182
+mdi.fd_spotmask
 mdi.fd_v_bin2x2
 mdi.fd_v_extract
 mdi.fd_v_sht
@@ -101,6 +104,7 @@ mdi.hr_v_12s
 mdi.hr_v_bin2x2
 mdi.ice
 mdi.limb_figure
+mdi.mtarp
 mdi.rdvfitsc_dp
 mdi.rdvfitsf_dp
 mdi.rdvflows_dp
