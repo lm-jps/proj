@@ -99,6 +99,7 @@
    will fail so use the cadence parameter instead.
 
    @par Flags:
+   -A   Generate output for all segments.
    -t   Disable tracking.
    -h   Include header keywords
    -r   register to first frame
@@ -175,6 +176,7 @@ ModuleArgs_t module_args[] =
     {ARG_STRING, "where", "NOTSPECIFIED", "Additional 'where' clause if needed"},
     {ARG_FLOAT, "x", "0", "Location of extract box center in pixels in array (1,1), arcsec from Sun center, degrees from Sun center, or Carrington longitude"},
     {ARG_FLOAT, "y", "0", "Location of extract box center, same units as x"},
+    {ARG_FLAG, "A", NULL, "Generate output for all input segments"},
     {ARG_FLAG, "t", "0", "Disable Carrington rate tracking"},
     {ARG_FLAG, "h", "0", "Export keywords, i.e. include full metadata in FITS files"},
     {ARG_FLAG, "c", "0", "Crop at limb, useful for HMI M data."},
@@ -312,6 +314,7 @@ int DoIt(void)
   int register_padding = 5; // later this should be based on crota2 and box size.
   char *tmpstr = NULL;
   int hasSegList = 0;
+  int doingAllSegs = params_isflagset(params, "A");
 
   FILE *log = NULL;
 
@@ -978,7 +981,7 @@ fprintf(stderr,"after flip x1=%d, target_x=%lf, y1=%d, target_y=%lf\n",x1,target
         }
         else
         {
-            if (!hasSegList)
+            if (!hasSegList && !doingAllSegs)
             {
                 /* No need to ensure post-first segment matches the first segment since we are processing only the first segment. */
                 break;
@@ -1105,7 +1108,7 @@ fprintf(stderr,"DATA_MIN=%f, DATA_MAX=%f\n",drms_getkey_float(outRec,"DATA_MIN",
     while ((inSeg = drms_record_nextseg2(inRec, &segIter, 1, &orig)) != NULL)
     {
         /* THIS IS THE REAL SEGMENT LOOP. */
-        if (!hasSegList && iSeg > 0)
+        if (!hasSegList && !doingAllSegs && iSeg > 0)
         {
             /* We've already processed the first segment, and there is no seglist specifier, so we are not processing segments other 
              * than the first one. */
