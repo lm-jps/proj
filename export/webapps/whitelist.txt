@@ -129,3 +129,4 @@ sid_awe.sid
 su_mbobra.sharp_720s_clean_v2
 su_mbobra.sharp_cea_720s_clean_v2
 su_tplarson.corr_vw_V_sht_modes
+su_yang.B3comp_noisemask_remap_deglatlon_720s
