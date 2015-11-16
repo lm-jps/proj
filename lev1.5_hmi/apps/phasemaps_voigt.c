@@ -65,10 +65,6 @@ char *module_name    = "phasemaps_test_voigt";   //name of the module
 #define KEY_PHASE_LINEWIDTH "PHASELWI"
 #define KEY_PHASE_LINEDEPTH "PHASELDE"
 #define KEY_PHASE_LINECONTINUUM "PHASECON"
-#define KEY_TUNEPOSITION_LYOT "TUNEPLYO"
-#define KEY_TUNEPOSITION_WBMICHELSON "TUNEPWBM"
-#define KEY_TUNEPOSITION_POLARIZER "TUNEPPOL"
-#define KEY_TUNEPOSITION_NBMICHELSON "TUNEPNBM"
 
 //arguments of the module
 ModuleArgs_t module_args[] =        
@@ -1801,31 +1797,9 @@ int DoIt(void) {
 	  //WRITE KEYWORDS
 	  
         /* Set the 10 detunes keywords added on October 20, 1025. */
-        val.type = DRMS_TYPE_INT;
-        val.value.int_val = table[0][10];
-        if (setKey(recout, KEY_TUNEPOSITION_LYOT, &val))
-        {
-            return EXIT_FAILURE;
-        }
-	  
-        val.value.int_val = table[1][10];
-        if (setKey(recout, KEY_TUNEPOSITION_WBMICHELSON, &val))
-        {
-            return EXIT_FAILURE;
-        }
-
-        val.value.int_val = table[2][10];
-        if (setKey(recout, KEY_TUNEPOSITION_POLARIZER, &val))
-        {
-            return EXIT_FAILURE;
-        }
-
-        val.value.int_val = table[3][10];
-        if (setKey(recout, KEY_TUNEPOSITION_NBMICHELSON, &val))
-        {
-            return EXIT_FAILURE;
-        }
-
+        /* Actually, 4 of these were identical to 4 previously-defined keywords. Removed 
+         * KEY_TUNEPOSITION_LYOT, KEY_TUNEPOSITION_WBMICHELSON, KEY_TUNEPOSITION_POLARIZER, and NBMICHELSON 
+         * on November 15, 2015. */
         val.type = DRMS_TYPE_FLOAT;
         val.value.float_val = (float)NBphase;
         if (setKey(recout, KEY_PHASE_NBMICHELSON, &val))
