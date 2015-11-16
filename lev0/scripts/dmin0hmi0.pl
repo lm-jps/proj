@@ -2,7 +2,6 @@
 $to_list = join ",", 'jps@lmsal.com', 'boerner@lmsal.com', 'green@lmsal.com',
         'wolfson@lmsal.com', 'zoe@lmsal.com', 'jeneen@sun.stanford.edu',
         'rock@sun.stanford.edu', 'thailand@sun.stanford.edu',
-        'couvidat@stanford.edu',
         '6509965043@txt.att.net',
         '6504503716@txt.att.net',
         '6502248075@txt.att.net',
