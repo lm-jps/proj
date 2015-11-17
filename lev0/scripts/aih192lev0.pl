@@ -1,4 +1,10 @@
 #!/usr/bin/perl -w
+# Count number of AIA images per camera with AIHIS192 > 9 for 4000 most
+# recent recnums (about 1000 per camera). If count > threshold (default 5)
+# send email to list. Body of email is written to $ENV{HOME}/bit_flip_his.txt
+# which also serves as a flag that camera anomaly was detected. To prevent
+# flood of mail at cron cadence, $ENV{HOME}/bit_flip_his.txt must be
+# deleted after anomaly is fixed to re-enable automatic anomaly detection.
 $to_list = join ",", 'jps@lmsal.com', 'boerner@lmsal.com', 'green@lmsal.com',
         'wolfson@lmsal.com', 'zoe@lmsal.com', 'jeneen@sun.stanford.edu',
         'rock@sun.stanford.edu', 'thailand@sun.stanford.edu',
