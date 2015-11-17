@@ -6,8 +6,10 @@
 # flood of mail at cron cadence, $ENV{HOME}/bit_flip_his.txt must be
 # deleted after anomaly is fixed to re-enable automatic anomaly detection.
 $to_list = join ",", 'jps@lmsal.com', 'boerner@lmsal.com', 'green@lmsal.com',
-        'wolfson@lmsal.com', 'zoe@lmsal.com', 'jeneen@sun.stanford.edu',
+        'zoe@lmsal.com', 'jeneen@sun.stanford.edu',
         'rock@sun.stanford.edu', 'thailand@sun.stanford.edu',
+        'wolfsonjake@gmail.com', 'mbobra@sun.stanford.edu',
+        'aanorton@stanford.edu', 'baldner@sun.stanford.edu',
         '6509965043@txt.att.net',
         '6504503716@txt.att.net',
         '6502248075@txt.att.net',
