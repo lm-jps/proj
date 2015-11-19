@@ -14,8 +14,7 @@ function AddOnTips(tipstyle, Tip)
       "provide Carrington location and size of patch in degrees or ref time and location.",tipstyle);
   new Tip("ImNoaaTip","Enter 4- or 5-digit NOAA AR number to preload location type, reference time, " +
       "and location for the NOAA AR region.  Will find entry in NOAA region table that is closest to CM.",tipstyle);
-  new Tip("ImPatchResetHelp","After change in series use these to reset all impatch params or just the T_START and T_STOP times.",
-       tipstyle);
+  new Tip("ImPatchResetHelp","After change in series use these to reset all impatch params or just the T_START and T_STOP times.", tipstyle);
   new Tip("ImTStartHelp", "T_START, T_STOP, and CADENCE take default values from the RecordSet specification. " +
       "The final query is formed from T_START and T_STOP.", tipstyle);
   new Tip("ImTStopHelp", "T_START, T_STOP, and CADENCE take default values from the RecordSet specification. " +
@@ -40,6 +39,7 @@ function AddOnTips(tipstyle, Tip)
       " to pixels with img2sphere projection based on DSUN_OBS, RSUN_REF, T_Ref, X, and Y.and CDELT1.", tipstyle);
   new Tip("ImVerifyHelp", "Check all parameters for presence if required and some checks for consistency.", tipstyle);
   new Tip("ImagesHelp","Select details for images and movies.",tipstyle);
+  new Tip("HmiB2ptrHelp","HmiB2ptr processing reprojects HMI Vector field B to spherical coordinates (phi,theta,r).",tipstyle);
   new Tip("AiaScaleHelp",'When normalize scale processing is selected, the images will be scaled to AIA normal scale ' +
       'of 0.6 arcsec per pixel.',tipstyle);
   new Tip("RebinHelp",'Reduce or Enlarge image size.  If scale < 1 reduce size by scale, reciprocal of scale ' +
