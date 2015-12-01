@@ -1104,7 +1104,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables_dcon.c,v 1.1 2015/11/30 14:46:33 arta Exp $");
+  return strdup("$Id: HMI_observables_dcon.c,v 1.2 2015/12/01 17:55:04 arta Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -1879,11 +1879,11 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
     {	
       if(DataCadence == 45.0)
 	{						             
-	  strcpy(HMISeriesLev15a,"hmi_test.V2_45s_dcon");              
-	  strcpy(HMISeriesLev15b,"hmi_test.M2_45s_dcon" );              
-	  strcpy(HMISeriesLev15c,"hmi_test.Ld2_45s_dcon" );              
-	  strcpy(HMISeriesLev15d,"hmi_test.Lw2_45s_dcon" );              
-	  strcpy(HMISeriesLev15e,"hmi_test.Ic2_45s_dcon" );
+	  strcpy(HMISeriesLev15a,"hmi_test.V_45s_dcon");              
+	  strcpy(HMISeriesLev15b,"hmi_test.M_45s_dcon" );              
+	  strcpy(HMISeriesLev15c,"hmi_test.Ld_45s_dcon" );              
+	  strcpy(HMISeriesLev15d,"hmi_test.Lw_45s_dcon" );              
+	  strcpy(HMISeriesLev15e,"hmi_test.Ic_45s_dcon" );
 	}
       if(DataCadence == 22.5)
 	{
