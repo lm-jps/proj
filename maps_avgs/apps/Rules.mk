@@ -24,7 +24,10 @@ S_$(d)		:= $(notdir $(EXE_$(d)) $(MODEXE_SOCK_$(d)))
 
 # Local rules
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
-$(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\""
+$(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" -I$(SRCDIR)/$(d)/../../libs/astro -I$(SRCDIR)/$(d)/../../libs/stats -I$(SRCDIR)/$(d)/../../libs/interpolate -I$(SRCDIR)/$(d)/src/ $(FMATHLIBSH) -I$(SRCDIR)/lib_third_party/include -I/home/jsoc/include -I$(SRCDIR)/$(d)/src/
+
+ALL_$(d)	:= $(MODEXE_$(d)) $(MODEXE_SOCK_$(d))
+$(ALL_$(d)) : $(LIBASTRO) $(LIBSTATS) $(LIBINTERP)
 
 # NOTE: Add dependent libraries with the -I compiler flag, and make the module depend
 #   on that library
