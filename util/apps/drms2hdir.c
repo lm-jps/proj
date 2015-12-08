@@ -29,7 +29,7 @@ ModuleArgs_t module_args[] =
   {ARG_END}
 };
 
-char *module_name = "aia_lev0_fits";
+char *module_name = "drms2hdir";
 
 int de_compress=0, do_compress=0, do_sleep = 0, verbose = 0, do_1segment = 0;
 int skip = 0, segment;
