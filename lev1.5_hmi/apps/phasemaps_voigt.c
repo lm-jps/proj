@@ -573,8 +573,16 @@ int DoIt(void) {
   int calibration      = cmdparams_get_int(&cmdparams,   "cal"   , NULL); 
 
   char COMMENT[256];
-    
-  strcpy(COMMENT,"Code used: phasemaps_test_voigt.c; CALIBRATION USED IS:"); //comment about the phase-map code
+  
+  char *fnamePath = strdup(__FILE__);
+  
+  XASSERT(fnamePath != NULL);
+  
+  char *fname = basename(fnamePath);
+  
+  XASSERT(strlen(fname) > 1 || *fname != '.');
+  
+  snprintf(COMMENT, sizeof(COMMENT), "Code used: %s; CALIBRATION USED IS:", fname); //comment about the phase-map code
   if(calibration == 0)
     {
       printf("CALIBRATION USED IS CALIBRATION 11, VALID FROM MAY 2010 TO JANUARY 18, 2012\n");
@@ -1881,6 +1889,12 @@ int DoIt(void) {
 	}      
       drms_free_array(arrout);   
       drms_free_array(arrout3); 
+    }
+    
+    if (fnamePath)
+    {
+        free(fnamePath);
+        fnamePath = NULL;
     }
   
   return error;
