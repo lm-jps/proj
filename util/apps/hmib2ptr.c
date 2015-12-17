@@ -17,7 +17,7 @@
  *      Need to check externally that the input is hmi.B_720s
  *
  *	Example Calls:
- *      hmib2ptr "in=hmi.B_720s[2011.02.15_00:00]" "out=hmi_test.Bptr_720s" -e -l
+ *      hmib2ptr "in=hmi.B_720s[2011.02.15_00:00]" "out=hmi_test.Bptr_720s" "requestid=test" -e -l
  *
  */
 
@@ -30,7 +30,6 @@
 #include "jsoc_main.h"
 #include "astro.h"
 #include "fstats.h"
-// Functions below are included in this module
 //#include "cartography.c"
 //#include "img2helioVector.c"
 //#include "vecErrProp.c"      // new version of errorprop
@@ -115,9 +114,10 @@ ModuleArgs_t module_args[] =
 {
     {ARG_STRING, "in", kNotSpecified, "Input B series."},
     {ARG_STRING, "out", kNotSpecified, "Input Bptr series."},
+    {ARG_STRING, "requestid", kNotSpecified, "Request ID."},
     {ARG_INT, "ambweak", "2", "Disambiguation method. 0: potential acute, 1: random, 2: radial acute"},
-    {ARG_FLAG, "l", "", "Flag for lat/lon output."},
-    {ARG_FLAG, "e", "", "Flag for error output."},
+    {ARG_FLAG, "l", "0", "Flag for lat/lon output."},
+    {ARG_FLAG, "e", "0", "Flag for error output."},
     {ARG_END}
 };
 
@@ -130,6 +130,7 @@ int DoIt(void)
     
     char *inQuery = (char *) params_get_str(&cmdparams, "in");
     char *outQuery = (char *) params_get_str(&cmdparams, "out");
+    char *requestid = (char *) params_get_str(&cmdparams, "requestid");
     int ambweak = params_get_int(&cmdparams, "ambweak");
     int do_lonlat = params_isflagset(&cmdparams, "l");
     int do_error = params_isflagset(&cmdparams, "e");
@@ -393,6 +394,15 @@ int DoIt(void)
         tnow += UNIX_epoch;
         drms_setkey_time(outRec, "DATE", tnow);
         drms_setkey_int(outRec, "AMBWEAK", ambweak);
+        drms_setkey_string(outRec, "RequestID", requestid);
+        drms_setkey_string(outRec, "BUNIT_000", "Mx/cm^2");
+        drms_setkey_string(outRec, "BUNIT_001", "Mx/cm^2");
+        drms_setkey_string(outRec, "BUNIT_002", "Mx/cm^2");
+        drms_setkey_string(outRec, "BUNIT_003", "Mx/cm^2");
+        drms_setkey_string(outRec, "BUNIT_004", "Mx/cm^2");
+        drms_setkey_string(outRec, "BUNIT_005", "Mx/cm^2");
+        drms_setkey_string(outRec, "BUNIT_006", "degree");
+        drms_setkey_string(outRec, "BUNIT_007", "degree");
         
     } // irec
     
