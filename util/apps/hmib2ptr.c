@@ -342,7 +342,7 @@ int DoIt(void)
                 DRMS_FREE_ARR(outArray_err_bp); DRMS_FREE_ARR(outArray_err_bt); DRMS_FREE_ARR(outArray_err_br);
                 continue;
             }
-            outArray_err_bp->israw = outArray_err_bp->israw = outArray_err_bp->israw = 0;		// always compressed
+            outArray_err_bp->israw = outArray_err_bt->israw = outArray_err_br->israw = 0;		// always compressed, fixed Dec 23 2015
             outArray_err_bp->bzero = outSeg_err_bp->bzero; outArray_err_bp->bscale = outSeg_err_bp->bscale;
             outArray_err_bt->bzero = outSeg_err_bt->bzero; outArray_err_bt->bscale = outSeg_err_bt->bscale;
             outArray_err_br->bzero = outSeg_err_br->bzero; outArray_err_br->bscale = outSeg_err_br->bscale;
@@ -507,7 +507,7 @@ void get_bptr_err(struct ephemeris *ephem, int *dims, float *fld, float *inc, fl
     int ncols = dims[0], nrows = dims[1];
     int npix = ncols * nrows;
     
-    double lonc = ephem->disk_lonc, latc = ephem->disk_latc, pa = ephem->pa;
+    double lonc = 0., latc = ephem->disk_latc, pa = ephem->pa;		// Dec 23 2015, changed lonc from disc_lonc to 0.
     
     float var_fld, var_inc, var_azi;            // variance
     float cov_fi, cov_fa, cov_ia;               // covariance
