@@ -104,6 +104,7 @@ mdi.hr_v_12s
 mdi.hr_v_bin2x2
 mdi.ice
 mdi.limb_figure
+mdi.meanpf_96m
 mdi.mtarp
 mdi.rdvfitsc_dp
 mdi.rdvfitsf_dp
