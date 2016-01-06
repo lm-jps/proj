@@ -81,7 +81,6 @@
 #include "fstats.h"  // XXXX PHS
 #include "/home/jsoc/cvs/Development/JSOC/proj/rings/apps/cartography.c" // XXX PHS path change
 #include "/home/jsoc/cvs/Development/JSOC/proj/rings/apps/imginfo.c" // XXX PHS path change
-#include "/home/jsoc/cvs/Development/JSOC/proj/rings/apps/keystuff.c" // XXX PHS path change
 #include "/home/jsoc/cvs/Development/JSOC/proj/rings/apps/mdistuff.c" // XXX PHS path change
 
 #define RECTANGULAR	(0)
@@ -126,6 +125,7 @@ ModuleArgs_t module_args[] = {
   {ARG_STRING,	"apsd_key", "RSUN_OBS", "keyname for apparent solar semi-diameter (arcsec)"}, 
   {ARG_STRING,	"dsun_key", "DSUN_OBS", "keyname for observer distance"}, 
   {ARG_STRING,	"requestid", "none", "RequestID for jsoc export management"},  // XXX PHS
+  {ARG_FLAG, "A", NULL, "Generate output for all input segments"},
   {ARG_FLAG,	"c",	"", "center map at center of image"}, 
   {ARG_FLAG,	"s",	"", "clon is Stonyhurst longitude"}, 
   {ARG_FLAG,	"v",	"", "verbose mode"}, 
@@ -335,12 +335,172 @@ int near_grid_line (double lon, double lat, double grid, double near) {
   return 0;
 }
 
+/* These were copied from keystuff.c. I made a number of changes - the functions 
+ * used to return success if the key did not exist (not sure why). They also 
+ * used to follow links and attempt to set linked keywords, which was not correct. 
+ * And they did not check the return value of the lower-level DRMS set-key functions. */
+static int check_and_set_key_str(DRMS_Record_t *outRec, const char *key, const char *val) 
+{
+    DRMS_Keyword_t *keywd = NULL;
+    char *vreq;
+    int status;
+    int errOut;
+
+    errOut = 0;
+
+    if (!(keywd = drms_keyword_lookup(outRec, key, 1))) return 1;
+
+    if (!drms_keyword_isconstant(keywd)) 
+    {
+                   /*  it's not a constant, so don't worry, just set it  */
+        return (drms_setkey_string(outRec, key, val) != DRMS_SUCCESS);
+    }
+
+    vreq = drms_getkey_string(outRec, key, &status);
+    if (status || !vreq) 
+    {
+        fprintf (stderr, "Error retrieving value for constant keyword %s\n", key);
+        errOut = 1;
+    }
+    
+    if (strcmp(vreq, val)) 
+    {
+        char format[256];
+        
+        snprintf (format, sizeof(format), "Error:  new value \"%s\" for constant keyword %%s\n differs from the existing value \"%s\"\n", keywd->info->format, keywd->info->format);
+        fprintf(stderr, format, val, key, vreq);
+        errOut = 1;
+    }
+    
+    if (vreq)
+    {
+        /* drms_getkey_string() allocates mem. */
+        free(vreq);
+        vreq = NULL;
+    }
+    
+    if (errOut)
+    {
+        return 1;
+    }
+    
+    return 0;
+}
+
+static int check_and_set_key_time(DRMS_Record_t *outRec, const char *key, TIME tval) 
+{
+    DRMS_Keyword_t *keywd = NULL;
+    TIME treq;
+    int status;
+    char sreq[64], sval[64];
+
+    if (!(keywd = drms_keyword_lookup(outRec, key, 1))) return 1;
+
+    if (!drms_keyword_isconstant(keywd)) 
+    {
+                   /*  it's not a constant, so don't worry, just set it  */
+        return (drms_setkey_time(outRec, key, tval) != DRMS_SUCCESS);
+    }
+    
+    treq = drms_getkey_time(outRec, key, &status);
+    if (status) 
+    {
+        fprintf(stderr, "Error retrieving value for constant keyword %s\n", key);
+        return 1;
+    }
+    
+    sprint_time(sreq, treq, keywd->info->unit, atoi(keywd->info->format));
+    sprint_time(sval, tval, keywd->info->unit, atoi(keywd->info->format));
+    
+    if (strcmp(sval, sreq)) 
+    {
+        fprintf (stderr, "Error:  value %s for constant keyword %s\n", sval, key);
+        fprintf (stderr, "  differs from existing value %s\n", sreq);
+        return 1;
+    }
+
+    return 0;
+}
+
+static int check_and_set_key_int(DRMS_Record_t *outRec, const char *key, int val) 
+{
+    DRMS_Keyword_t *keywd = NULL;
+    int vreq;
+    int status;
+
+    if (!(keywd = drms_keyword_lookup(outRec, key, 1))) return 1;
+
+    if (!drms_keyword_isconstant(keywd))
+    {
+                   /*  it's not a constant, so don't worry, just set it  */
+        return (drms_setkey_int(outRec, key, val) != DRMS_SUCCESS);
+    }
+
+    vreq = drms_getkey_int(outRec, key, &status);
+    if (status) 
+    {
+        fprintf (stderr, "Error retrieving value for constant keyword %s\n", key);
+        return 1;
+    }
+    
+    if (vreq != val) 
+    {
+        char format[256];
+        
+        snprintf (format, sizeof(format), "Error:  new value \"%s\" for constant keyword %%s\n differs from the existing value \"%s\"\n", keywd->info->format, keywd->info->format);
+        fprintf(stderr, format, val, key, vreq);
+        return 1;
+    }
+    
+    return 0;
+}
+
+static int check_and_set_key_float(DRMS_Record_t *outRec, const char *key, float val) 
+{
+    DRMS_Keyword_t *keywd = NULL;
+    float vreq;
+    int status;
+    char sreq[128], sval[128];
+
+    if (!(keywd = drms_keyword_lookup(outRec, key, 1))) return 1;
+
+    if (!drms_keyword_isconstant(keywd)) 
+    {
+               /*  it's not a constant, so don't worry, just set it  */
+        return (drms_setkey_float(outRec, key, val) != DRMS_SUCCESS);
+    }
+    
+    vreq = drms_getkey_float(outRec, key, &status);
+    
+    if (status) 
+    {
+        fprintf (stderr, "Error retrieving value for constant keyword %s\n", key);
+        return 1;
+    }
+    
+    sprintf(sreq, keywd->info->format, vreq);
+    sprintf(sval, keywd->info->format, val);
+    
+    if (strcmp(sreq, sval)) 
+    {
+        char format[256];
+        
+        snprintf(format, sizeof(format), "Error:  parameter value %s for keyword %%s\n  differs from required value %s\n", keywd->info->format, keywd->info->format);
+        fprintf(stderr, format, val, key, vreq);
+        return 1;
+    }
+
+    return 0;
+}
+
 int DoIt (void) {
   CmdParams_t *params = &cmdparams;
   DRMS_RecordSet_t *ids, *ods;
-  DRMS_Record_t *irec, *orec;
-  DRMS_Segment_t *iseg, *oseg;
+  DRMS_Record_t *inrec, *orec;
+  DRMS_Segment_t *inseg = NULL;
+  DRMS_Segment_t *oseg = NULL;
   DRMS_Array_t *image = NULL, *map = NULL;
+  int irec;
   double *maplat, *maplon, *map_coslat, *map_sinlat;
   double x, y, x0, y0, xstp, ystp, xrot, yrot;
   double lat, lon, cos_phi, sin_phi;
@@ -350,15 +510,15 @@ int DoIt (void) {
   double ellipse_e, ellipse_pa;
   float *data;
   int axes[2];
-  int img, imgct, pixct, segct;
-  int isegnum, osegnum;
+  int img, pixct, segct;
+  int recCount;
   int found, kstat, status;
   int need_ephem;
   int x_invrt, y_invrt;
   int n, col, row;
   int MDI_correct, MDI_correct_distort;
   unsigned char *offsun, *ongrid;
-  char *input, *isegname, *osegname;
+  char *input;
   char source[DRMS_MAXQUERYLEN], recid[DRMS_MAXQUERYLEN];
   char module_ident[64], key[64], tbuf[64];
 
@@ -375,14 +535,14 @@ int DoIt (void) {
   float bblank = -1.0 / 0.0;
   float wblank = 1.0 / 0.0;
 						  /*  process command params  */
-  char *inset = strdup (params_get_str (params, "in"));
+  const char *inset = params_get_str (params, "in");
   char *outser = strdup (params_get_str (params, "out"));
   double clat = params_get_double (params, "clat") * raddeg;
   double clon = params_get_double (params, "clon") * raddeg;
   double map_scale = params_get_double (params, "scale");
   double map_pa = params_get_double (params, "map_pa") * raddeg;
-  float bscale = params_get_float (params, "bscale");
-  float bzero = params_get_float (params, "bzero");
+  float bscaleIn = params_get_float (params, "bscale");
+  float bzeroIn = params_get_float (params, "bzero");
   float grid_spacing = params_get_float (params, "grid");
   int map_cols = params_get_int (params, "cols");
   int map_rows = params_get_int (params, "rows");
@@ -401,8 +561,13 @@ int DoIt (void) {
   int want_headers = params_isflagset (params, "x");
   int overlay = (isfinite (grid_spacing));
   int MDI_proc = params_isflagset (params, "M");
+  
+    int hasSegList = 0;
+    int doingAllSegs = params_isflagset(params, "A");
+    float bscale;
+    float bzero;
 
-  snprintf (module_ident, 64, "%s v %s", module_name, version_id);
+  snprintf (module_ident, sizeof(module_ident), "%s v %s", module_name, version_id);
   if (verbose) printf ("%s: JSOC version %s\n", module_ident, jsoc_version);
 						/*  check calling parameters  */
   if (map_cols < 1) map_cols = map_rows;
@@ -424,62 +589,49 @@ int DoIt (void) {
   x0 = 0.5 * (1.0 - map_cols) * xstp;
   y0 = 0.5 * (1.0 - map_rows) * ystp;
   grid_width = 0.01 * grid_spacing;
+  
+    char *testSegList = NULL;
+    char *pCh = NULL;
+
+    testSegList = rindex(inset, '}');
+    if (testSegList)
+    {
+        for (pCh = testSegList + 1, hasSegList = 1; *pCh; pCh++)
+        {
+            if (!isspace(*pCh))
+            {
+                /* There is a non-ws char after '}' - this is not a valid seglist. drms_open_records() will fail below. */
+                hasSegList = 0;
+                break;
+            }
+        }
+    }
+
 							     /*  check input  */
-  if (!(ids = drms_open_records (drms_env, inset, &status))) {
-    fprintf (stderr, "Error: (%s) unable to open input data set \"%s\"\n",
-        module_ident, inset);
-    fprintf (stderr, "       status = %d\n", status);
-    return 1;
-  }
-  if ((imgct = ids->n) < 1) {
-    fprintf (stderr, "Error: (%s) no records in selected input set\n",
-	module_ident);
-    fprintf (stderr, "       %s\n", inset);
-    drms_close_records (ids, DRMS_FREE_RECORD);
-    return 1;
-  }
-  input = strdup (inset);
-	   /*  determine appropriate input record segment (if more than one)  */
-  irec = ids->records[0];
-  segct = drms_record_numsegments (irec);
-  isegnum = 0;
-  if (segct) {
-    found = 0;
-    for (n = 0; n < segct; n++) {
-      iseg = drms_segment_lookupnum (irec, n);
-      if (iseg->info->naxis != 2) continue;
-      if (!found) {
-        isegname = strdup (iseg->info->name);
-        isegnum = n;
-      }
-      found++;
+    if (!(ids = drms_open_records(drms_env, inset, &status))) 
+    {
+        fprintf (stderr, "Error: (%s) unable to open input data set \"%s\"\n", module_ident, inset);
+        fprintf (stderr, "       status = %d\n", status);
+        return 1;
     }
-    if (found > 1) {
-      fprintf (stderr,
-	  "Warning: multiple data segments of dimension 2 in input series %s\n",
-	  input);
-      fprintf (stderr, "       using \"%s\"\n", isegname);
+  
+    recCount = ids->n;
+
+    if (recCount < 1) 
+    {
+        fprintf(stderr, "Error: (%s) no records in selected input set\n", module_ident);
+        fprintf(stderr, "       %s\n", inset);
+        drms_close_records(ids, DRMS_FREE_RECORD);
+        return 1;
     }
-    iseg = drms_segment_lookupnum (irec, isegnum);
-  } else {
-    fprintf (stderr, "Error: no data segments in input series %s\n", input);
-    drms_close_records (ids, DRMS_FREE_RECORD);
-    return 1;
-  }
-  if (found < 1 || iseg->info->naxis != 2) {
-    fprintf (stderr,
-	"Error: no data segment of dimension 2 in input series %s\n", input);
-    drms_close_records (ids, DRMS_FREE_RECORD);
-    return 1;
-  }
+
 						  /*  open output record set  */
-  if (verbose) printf ("creating %d records in series %s\n", imgct, outser);
-  if (!(ods = drms_create_records (drms_env, imgct, outser, DRMS_PERMANENT,
-      &status))) {
-    fprintf (stderr, "Error: unable to create %d records in series %s\n",
-	imgct, outser);
-    fprintf (stderr, "       drms_create_records() returned status %d\n",
-	status); 
+  if (verbose) printf ("creating %d records in series %s\n", recCount, outser);
+  ods = drms_create_records(drms_env, recCount, outser, DRMS_PERMANENT, &status);
+  if (!ods || status != DRMS_SUCCESS) 
+  {
+    fprintf (stderr, "Error: unable to create %d records in series %s\n", recCount, outser);
+    fprintf (stderr, "       drms_create_records() returned status %d\n", status); 
     return 1;
   }
 
@@ -488,36 +640,6 @@ int DoIt (void) {
   char *runderscore = rindex(outser, '_');
   int running_as_export = (runderscore && strcmp(runderscore, "_mod")==0);
 
-	  /*  determine appropriate output record segment (if more than one)  */
-  orec = ods->records[0];
-  segct = drms_record_numsegments (orec);
-  found = 0;
-  for (n = 0; n < segct; n++) {
-    oseg = drms_segment_lookupnum (orec, n);
-    if (oseg->info->naxis != 2) continue;
-    if (oseg->info->scope == DRMS_CONSTANT) continue;
-    if (oseg->info->scope == DRMS_VARIABLE) {
-      if (oseg->axis[0] != map_cols ||
-	  oseg->axis[1] != map_rows) continue;
-    }
-    if (!found) {
-      osegname = strdup (oseg->info->name);
-      osegnum = n;
-    }
-    found++;
-  }
-  if (found < 1) {
-    fprintf (stderr,
-	"Error: no data segment of dimension 2 and appropriate size in output series %s\n", outser);
-    drms_close_records (ods, DRMS_FREE_RECORD);
-    return 1;
-  }
-  if (found > 1) {
-    fprintf (stderr,
-	"Warning: multiple data segments of dimension 2 and appropriate size in output series %s\n",
-	outser);
-    fprintf (stderr, "       using \"%s\"\n", osegname);
-  }
 						 /*  create output map array  */
   axes[0] = map_cols;
   axes[1] = map_rows;
@@ -534,208 +656,318 @@ int DoIt (void) {
   offsun = (unsigned char *)malloc (pixct * sizeof (char));
   if (overlay) ongrid = (unsigned char *)malloc (pixct * sizeof (char));
 	     /*  use output series default segment scaling if not overridden  */
-  scaling_override = 0;
-  if (bscale == 0.0) {
-    bscale = oseg->bscale;
-    if (verbose) printf ("bscale set to output default: %g\n", bscale);
-  }
-  else
-    scaling_override = 1;
-  if (isnan (bzero)) {
-    bzero = oseg->bzero;
-    if (verbose) printf ("bzero set to output default: %g\n", bzero);
-  }
-  else
-    scaling_override = 1;
-  map->bscale = bscale;
-  map->bzero = bzero;
+	     
+
      /*  Calculate heliographic coordinates corresponding to map location(s)  */
-  for (n=0, row=0, y=y0; row < map_rows; row++, y += ystp) {
-    for (col=0, x=x0; col < map_cols; col++, x += xstp, n++) {
-      xrot = x * cos_phi - y * sin_phi;
-      yrot = y * cos_phi + x * sin_phi;
-      offsun[n] = plane2sphere (xrot, yrot, clat, clon, &lat, &lon, proj);
-      maplat[n] = lat;
-      maplon[n] = lon;
-      map_coslat[n] = cos (lat);
-      map_sinlat[n] = sin (lat);
-      if (overlay) ongrid[n] =
-	  near_grid_line (maplon[n], maplat[n], grid_spacing, grid_width);
+    for (n=0, row=0, y=y0; row < map_rows; row++, y += ystp) 
+    {
+        for (col=0, x=x0; col < map_cols; col++, x += xstp, n++) 
+        {
+            xrot = x * cos_phi - y * sin_phi;
+            yrot = y * cos_phi + x * sin_phi;
+            offsun[n] = plane2sphere (xrot, yrot, clat, clon, &lat, &lon, proj);
+            maplat[n] = lat;
+            maplon[n] = lon;
+            map_coslat[n] = cos (lat);
+            map_sinlat[n] = sin (lat);
+            if (overlay) ongrid[n] = near_grid_line (maplon[n], maplat[n], grid_spacing, grid_width);
+        }
     }
-  }
 
-  data = (float *)map->data;
+    data = (float *)map->data;
+
+
+
+
 					  /*  process individual input mages  */
-  for (img = 0; img < imgct; img++) {
+					  
+    /* This is really a loop over records (wherein it is assumed that there is a single image 
+     * per record). */
+  for (irec = 0; irec < recCount; irec++) 
+  {
 							 /*  get input image  */
-    irec = ids->records[img];
-    drms_sprint_rec_query (source, irec);
-    iseg = drms_segment_lookupnum (irec, isegnum);
-fprintf(stderr,"Maproj reading rec %d\n",img);
-    image = drms_segment_read (iseg, DRMS_TYPE_FLOAT, &status);
-			   /*  get needed info from record keys for mapping  */
-			     /*  replace with call to solar_ephemeris_info?  */
-    img_lon = drms_getkey_double (irec, clon_key, &status);
-    img_lat = drms_getkey_double (irec, clat_key, &status);
-
-    status = solar_image_info (irec, &img_xscl, &img_yscl, &img_xc, &img_yc,
-	&img_radius, rsun_key, apsd_key, &img_pa, &ellipse_e, &ellipse_pa,
-	&x_invrt, &y_invrt, &need_ephem, 0);
-    if (status & NO_SEMIDIAMETER) {
-      int keystat = 0;
-      double dsun_obs = drms_getkey_double (irec, dsun_key, &keystat);
-      if (keystat) {
-	fprintf (stderr, "Error: one or more essential keywords or values missing, needed %s; skipped\n",dsun_key);
-	fprintf (stderr, "solar_image_info() returned %08x\n", status);
-	continue;
-      }
-			       /*  set image radius from scale and distance  */
-      img_radius = asin (RSUNM / dsun_obs);
-      img_radius *= 3600.0 * degrad;
-      img_radius /= (img_xscl <= img_yscl) ? img_xscl : img_yscl;
-      status &= ~NO_SEMIDIAMETER;
-    }
-    if (status == KEYSCOPE_VARIABLE) {
-      fprintf (stderr, "Warning: one or more keywords expected constant are variable\n");
-    } else if (status) {
-      fprintf (stderr, "Error: one or more essential keywords or values missing, 2nd message; skipped\n");
-      fprintf (stderr, "solar_image_info() returned %08x\n", status);
-      continue;
-    }
-    if (MDI_correct) {
-      mtrack_MDI_correct_imgctr (&img_xc, &img_yc, img_radius);
-      mtrack_MDI_correct_pa (&img_pa);
-    }
-    img_xc -= 0.5 * (image->axis[0] - 1);
-    img_yc -= 0.5 * (image->axis[1] - 1);
-		 	/*  should be taken care of in solar_ephemeris_info  */
-img_lon *= raddeg;
-img_lat *= raddeg;
-						    /*  set up output record  */
-    orec = ods->records[img];
-    oseg = drms_segment_lookup (orec, osegname);
- 						     /*  perform the mapping  */
-    perform_mapping (image, data, maplat, maplon, map_coslat, map_sinlat,
-        pixct, offsun, img_lat, img_lon, img_xc, img_yc, img_radius, img_pa,
-	ellipse_e, ellipse_pa, x_invrt, y_invrt, intrpopt, MDI_correct_distort);
+    inrec = ids->records[irec];
+    drms_sprint_rec_query(source, inrec);
     
-    drms_free_array (image); // PHS
-
-    if (overlay) {
-        for (n = 0; n < pixct; n++) 
-            if (ongrid[n]) data[n] = (isfinite (data[n])) ? bblank : wblank;
+    if (drms_record_numsegments(inrec) < 1)
+    {
+        fprintf(stderr, "Error: no data segments in input record-set %s\n", inset);
+        drms_close_records(ids, DRMS_FREE_RECORD);
+        return 1;
     }
+    
+    /* Segment loop */
+    DRMS_Segment_t *firstSeg = NULL;
+    HIterator_t *segIter = NULL;
+    DRMS_Segment_t *orig = NULL;
+    int validSegsCount;
 
-// XXX PHS moved segment write to end to allow writing with headers.
+    validSegsCount = 0;
+    while ((inseg = drms_record_nextseg2(inrec, &segIter, 1, &orig)) != NULL)
+    {
+        if (!firstSeg)
+        {
+            firstSeg = inseg;
+        }
+        else
+        {
+            if (!hasSegList && !doingAllSegs)
+            {
+                /* We are processing only the first segment of each record. */
+                break;
+            }
+        }
 
-					    /*  set output record key values  */
-// XXX PHS different copykeys flag, do statistics after copykeys.
-    drms_copykeys (orec, irec, 0, kDRMS_KeyClass_Explicit); // XXX PHS
-    drms_setkey_string(orec, "requestid", RequestID); // XXX PHS
-    set_statistics(oseg, map, 1); // XXX PHS
+        /* Exclude segments that do not meet the requirements of this program. */
+        if (drms_segment_getnaxis(inseg) == 2)
+        {
+            ++validSegsCount;
+        }
+        else
+        {
+            continue;
+        }    
+    
+        if (validSegsCount == 0)
+        {
+            fprintf (stderr, "Error: no data segment of dimension 2 in input series %s\n", inset);
+            drms_close_records(ids, DRMS_FREE_RECORD);
+            drms_close_records(ods, DRMS_FREE_RECORD);
+            return 1;    
+        }
 
-    kstat = 0;
-    kstat += check_and_set_key_str   (orec, "WCSNAME", "Carrington Heliographic");
-    kstat += check_and_set_key_int   (orec, "WCSAXES", 2);
-    snprintf (key, 64, "CRLN-%s", wcscode[proj]);
-    kstat += check_and_set_key_str   (orec, "CTYPE1", key);
-    snprintf (key, 64, "CRLT-%s", wcscode[proj]);
-    kstat += check_and_set_key_str   (orec, "CTYPE2", key);
-    kstat += check_and_set_key_str   (orec, "CUNIT1", "deg");
-    kstat += check_and_set_key_str   (orec, "CUNIT2", "deg");
-    kstat += check_and_set_key_float (orec, "CRPIX1", 0.5 * map_cols + 0.5);
-    kstat += check_and_set_key_float (orec, "CRPIX2", 0.5 * map_rows + 0.5);
-    kstat += check_and_set_key_float (orec, "CRVAL1", clon * degrad);
-    kstat += check_and_set_key_float (orec, "CRVAL2", clat * degrad);
-    kstat += check_and_set_key_float (orec, "CDELT1", map_scale);
-    kstat += check_and_set_key_float (orec, "CDELT2", map_scale);
-// XXX PHS, CROTA2 will be different after projection.
-    kstat += check_and_set_key_float (orec, "CROTA2", map_pa * degrad);
-    if (map_pa != 0.0) {
-      kstat += check_and_set_key_float (orec, "PC1_1", cos (map_pa));
-/*  PC1_2 should be multiplied by CDELT2 / CDELT1  */
-      kstat += check_and_set_key_float (orec, "PC1_2", sin (map_pa));
-/*  PC2_1 should be multiplied by CDELT1 / CDELT2  */
-      kstat += check_and_set_key_float (orec, "PC2_1", sin (map_pa));
-      kstat += check_and_set_key_float (orec, "PC2_2", cos (map_pa));
+        fprintf(stderr, "Maproj reading rec %d\n", irec);
+        image = drms_segment_read(inseg, DRMS_TYPE_FLOAT, &status);
+                   /*  get needed info from record keys for mapping  */
+                     /*  replace with call to solar_ephemeris_info?  */
+                 
+        if (!image || status != DRMS_SUCCESS)
+        {
+            fprintf(stderr, "Unable to read input segment (%s).\n", inseg->info->name);
+            drms_close_records(ids, DRMS_FREE_RECORD);
+            drms_close_records(ods, DRMS_FREE_RECORD);
+            return 1; 
+        }
+	
+        img_lon = drms_getkey_double(inrec, clon_key, &status);
+        img_lat = drms_getkey_double(inrec, clat_key, &status);
+
+        status = solar_image_info(inrec, &img_xscl, &img_yscl, &img_xc, &img_yc, &img_radius, rsun_key, apsd_key, &img_pa, &ellipse_e, &ellipse_pa, &x_invrt, &y_invrt, &need_ephem, 0);
+        if (status & NO_SEMIDIAMETER)
+        {
+            int keystat = 0;
+            double dsun_obs = drms_getkey_double(inrec, dsun_key, &keystat);
+
+            if (keystat) 
+            {
+                fprintf (stderr, "Error: one or more essential keywords or values missing, needed %s; skipped\n",dsun_key);
+                fprintf (stderr, "solar_image_info() returned %08x\n", status);
+                continue;
+            }
+                       /*  set image radius from scale and distance  */
+            img_radius = asin (RSUNM / dsun_obs);
+            img_radius *= 3600.0 * degrad;
+            img_radius /= (img_xscl <= img_yscl) ? img_xscl : img_yscl;
+            status &= ~NO_SEMIDIAMETER;
+        }
+        
+        if (status == KEYSCOPE_VARIABLE) 
+        {
+            fprintf(stderr, "Warning: one or more keywords expected constant are variable\n");
+        } 
+        else if (status) 
+        {
+            fprintf(stderr, "Warning: one or more essential keywords or values missing, 2nd message; skipped\n");
+            fprintf(stderr, "solar_image_info() returned %08x\n", status);
+            continue;
+        }
+    
+        if (MDI_correct) 
+        {
+            mtrack_MDI_correct_imgctr(&img_xc, &img_yc, img_radius);
+            mtrack_MDI_correct_pa(&img_pa);
+        }
+        
+        img_xc -= 0.5 * (image->axis[0] - 1);
+        img_yc -= 0.5 * (image->axis[1] - 1);
+                /*  should be taken care of in solar_ephemeris_info  */
+        img_lon *= raddeg;
+        img_lat *= raddeg;
+    
+						    /*  set up output record  */
+        orec = ods->records[irec];
+        oseg = drms_segment_lookupnum(orec, orig->info->segnum);
+        
+        
+        /* All of this code is segment-dependent. It used to reside outside any loop
+         * (before the record loop). It was moved here, inside the segment loop. The
+         * map array was allocated outside any loop, and freed outside any loop. */
+        scaling_override = 0;
+        bscale = bscaleIn;
+        if (bscaleIn == 0.0) 
+        {
+            bscale = oseg->bscale;
+            if (verbose) printf ("bscale set to output default: %g\n", bscale);
+        }
+        else
+        {
+            scaling_override = 1;
+        }
+    
+        bzero = bzeroIn;
+        if (isnan (bzero)) 
+        {
+            bzero = oseg->bzero;
+            if (verbose) printf ("bzero set to output default: %g\n", bzero);
+        }
+        else
+        {
+            scaling_override = 1;
+        }
+    
+        map->bscale = bscale;
+        map->bzero = bzero;    
+        /* End moved scaling code. */
+        
+                                 /*  perform the mapping  */
+        perform_mapping(image, data, maplat, maplon, map_coslat, map_sinlat, pixct, offsun, img_lat, img_lon, img_xc, img_yc, img_radius, img_pa, ellipse_e, ellipse_pa, x_invrt, y_invrt, intrpopt, MDI_correct_distort);
+    
+        /* We are guaranteed that image is not NULL at this point. */
+        drms_free_array(image); // PHS
+
+        if (overlay) 
+        {
+            for (n = 0; n < pixct; n++) 
+            {
+                if (ongrid[n]) data[n] = (isfinite(data[n])) ? bblank : wblank;
+            }
+        }
+
+        // XXX PHS moved segment write to end to allow writing with headers.
+
+                            /*  set output record key values  */
+        // XXX PHS different copykeys flag, do statistics after copykeys.
+        drms_copykeys(orec, inrec, 0, kDRMS_KeyClass_Explicit); // XXX PHS
+        drms_setkey_string(orec, "requestid", RequestID); // XXX PHS
+        set_statistics(oseg, map, 1); // XXX PHS
+
+        kstat = 0;
+        kstat += check_and_set_key_str   (orec, "WCSNAME", "Carrington Heliographic");
+        kstat += check_and_set_key_int   (orec, "WCSAXES", 2);
+        snprintf (key, sizeof(key), "CRLN-%s", wcscode[proj]);
+        kstat += check_and_set_key_str   (orec, "CTYPE1", key);
+        snprintf (key, sizeof(key), "CRLT-%s", wcscode[proj]);
+        kstat += check_and_set_key_str   (orec, "CTYPE2", key);
+        kstat += check_and_set_key_str   (orec, "CUNIT1", "deg");
+        kstat += check_and_set_key_str   (orec, "CUNIT2", "deg");
+        kstat += check_and_set_key_float (orec, "CRPIX1", 0.5 * map_cols + 0.5);
+        kstat += check_and_set_key_float (orec, "CRPIX2", 0.5 * map_rows + 0.5);
+        kstat += check_and_set_key_float (orec, "CRVAL1", clon * degrad);
+        kstat += check_and_set_key_float (orec, "CRVAL2", clat * degrad);
+        kstat += check_and_set_key_float (orec, "CDELT1", map_scale);
+        kstat += check_and_set_key_float (orec, "CDELT2", map_scale);
+        // XXX PHS, CROTA2 will be different after projection.
+        kstat += check_and_set_key_float (orec, "CROTA2", map_pa * degrad);
+        if (map_pa != 0.0) {
+          kstat += check_and_set_key_float (orec, "PC1_1", cos (map_pa));
+        /*  PC1_2 should be multiplied by CDELT2 / CDELT1  */
+          kstat += check_and_set_key_float (orec, "PC1_2", sin (map_pa));
+        /*  PC2_1 should be multiplied by CDELT1 / CDELT2  */
+          kstat += check_and_set_key_float (orec, "PC2_1", sin (map_pa));
+          kstat += check_and_set_key_float (orec, "PC2_2", cos (map_pa));
+        }
+
+        kstat += check_and_set_key_float (orec, "LonHG", clon * degrad);
+        kstat += check_and_set_key_float (orec, "LatHG", clat * degrad);
+        kstat += check_and_set_key_str   (orec, "MapProj", mapname[proj]);
+        kstat += check_and_set_key_float (orec, "MapScale", map_scale);
+        kstat += check_and_set_key_float (orec, "Width", map_cols * map_scale);
+        kstat += check_and_set_key_float (orec, "Height", map_rows * map_scale);
+        kstat += check_and_set_key_float (orec, "Size", sqrt (map_rows * map_cols) * map_scale);
+        kstat += check_and_set_key_float (orec, "Map_PA", map_pa / raddeg);
+        kstat += check_and_set_key_float (orec, "RSunRef", 1.0e-6 * RSUNM);
+        kstat += check_and_set_key_str   (orec, "Interp", interpname[intrpopt]);
+
+        kstat += check_and_set_key_str   (orec, "Module", module_ident);
+        kstat += check_and_set_key_str   (orec, "BLD_VERS", jsoc_version);
+        kstat += check_and_set_key_time  (orec, "Created", CURRENT_SYSTEM_TIME);
+        kstat += check_and_set_key_str   (orec, "Source", source);
+        kstat += check_and_set_key_str   (orec, "Input", inset);
+
+        // XXX PHS if running_as_export ignore setkey failures and add HISTORY for mapping params since
+        // input_series"_mod" will not have the maproj specific keywords.
+        if (running_as_export) 
+        { 
+            char buf[1024];
+        
+            drms_appendhistory(orec, "MapProj=", 1); drms_appendhistory(orec, mapname[proj], 0);
+            sprintf(buf, "LonHG=%f, LatHG=%f", clon * degrad, clat * degrad);
+            drms_appendhistory(orec, buf, 1); 
+            drms_appendhistory(orec, "Interp=", 1); drms_appendhistory(orec, interpname[intrpopt], 0);
+            if (overlay) 
+            {
+                sprintf(buf, "%f", grid_spacing);
+                drms_appendhistory(orec, "GridSpacing=", 1); drms_appendhistory(orec, buf, 0);
+            }
+            drms_setkey_time(orec, "DATE", CURRENT_SYSTEM_TIME);
+            drms_appendhistory(orec, "Source=", 1); drms_appendhistory(orec, source, 0);
+        } 
+        else if (kstat)
+        {
+            fprintf (stderr, "Error writing key value(s) to record %d in series %s\n", irec, outser);
+            fprintf (stderr, "      series may not have appropriate structure\n");
+            drms_close_records(ids, DRMS_FREE_RECORD);
+            drms_close_records(ods, DRMS_FREE_RECORD);
+            return 1;
+        }
+
+        // XXX PHS if scaling not given use input segment for bscale and bzero.
+        if (!scaling_override) 
+        {
+            map->bscale = inseg->bscale;
+            if (verbose) printf("bscale set to input record value: %g\n", bscale);
+            map->bzero = inseg->bzero;
+            if (verbose) printf("bzero set to input record value: %g\n", bzero);
+        }
+
+        // XXX PHS moved segment write to here to allow writing with headers.
+                    /*  write map array to output record segment  */
+        if (want_headers)
+        {
+            status = drms_segment_writewithkeys(oseg, map, 0);
+        }
+        else
+        {
+            status = drms_segment_write(oseg, map, 0);
+        }
+
+        if (status) 
+        {
+            drms_sprint_rec_query (recid, orec);
+            fprintf (stderr, "Error writing data to record %s\n", recid);
+            fprintf (stderr, "      series may not have appropriate structure\n");
+            drms_close_records(ids, DRMS_FREE_RECORD);
+            drms_close_records(ods, DRMS_FREE_RECORD);
+            return 1;
+        }
+    } /* End segment loop */
+    
+    if (segIter)
+    {
+        hiter_destroy(&segIter);
     }
-
-    kstat += check_and_set_key_float (orec, "LonHG", clon * degrad);
-    kstat += check_and_set_key_float (orec, "LatHG", clat * degrad);
-    kstat += check_and_set_key_str   (orec, "MapProj", mapname[proj]);
-    kstat += check_and_set_key_float (orec, "MapScale", map_scale);
-    kstat += check_and_set_key_float (orec, "Width", map_cols * map_scale);
-    kstat += check_and_set_key_float (orec, "Height", map_rows * map_scale);
-    kstat += check_and_set_key_float (orec, "Size", sqrt (map_rows * map_cols) * map_scale);
-    kstat += check_and_set_key_float (orec, "Map_PA", map_pa / raddeg);
-    kstat += check_and_set_key_float (orec, "RSunRef", 1.0e-6 * RSUNM);
-    kstat += check_and_set_key_str   (orec, "Interp", interpname[intrpopt]);
-
-    kstat += check_and_set_key_str   (orec, "Module", module_ident);
-    kstat += check_and_set_key_str   (orec, "BLD_VERS", jsoc_version);
-    kstat += check_and_set_key_time  (orec, "Created", CURRENT_SYSTEM_TIME);
-    kstat += check_and_set_key_str   (orec, "Source", source);
-    kstat += check_and_set_key_str   (orec, "Input", input);
-
-    // XXX PHS if running_as_export ignore setkey failures and add HISTORY for mapping params since
-    // input_series"_mod" will not have the maproj specific keywords.
-    if (running_as_export) { 
-      char buf[1024];
-      drms_appendhistory(orec, "MapProj=", 1); drms_appendhistory(orec, mapname[proj], 0);
-      sprintf(buf, "LonHG=%f, LatHG=%f", clon * degrad, clat * degrad);
-      drms_appendhistory(orec, buf, 1); 
-      drms_appendhistory(orec, "Interp=", 1); drms_appendhistory(orec, interpname[intrpopt], 0);
-      if (overlay) {
-        sprintf(buf, "%f", grid_spacing);
-        drms_appendhistory(orec, "GridSpacing=", 1); drms_appendhistory(orec, buf, 0);
-      }
-      drms_setkey_time(orec, "DATE", CURRENT_SYSTEM_TIME);
-      drms_appendhistory(orec, "Source=", 1); drms_appendhistory(orec, source, 0);
-    } else if (kstat) {
-      fprintf (stderr, "Error writing key value(s) to record %d in series %s\n",
-	  img, outser);
-      fprintf (stderr, "      series may not have appropriate structure\n");
-      drms_close_records (ods, DRMS_FREE_RECORD);
-      return 1;
+    
+    if (!firstSeg)
+    {
+        /* Never found a segment for this record.*/
+        fprintf(stderr, "Error: no data segment of dimension 2 in input record-set %s\n", inset);
+        drms_close_records(ids, DRMS_FREE_RECORD);
+        drms_close_records(ods, DRMS_FREE_RECORD);
+        return 1;
     }
-
-// XXX PHS if scaling not given use input segment for bscale and bzero.
-  if (!scaling_override) {
-    map->bscale = iseg->bscale;
-    if (verbose) printf ("bscale set to input record value: %g\n", bscale);
-    map->bzero = iseg->bzero;
-    if (verbose) printf ("bzero set to input record value: %g\n", bzero);
-  }
-
-// XXX PHS moved segment write to here to allow writing with headers.
-				/*  write map array to output record segment  */
-    if (want_headers)
-      status = drms_segment_writewithkeys (oseg, map, 0);
-    else
-      status = drms_segment_write (oseg, map, 0);
-
-    if (status) {
-      drms_sprint_rec_query (recid, orec);
-      fprintf (stderr, "Error writing data to record %s\n", recid);
-      fprintf (stderr, "      series may not have appropriate structure\n");
-      return 1;
-    }
-  }
-  drms_close_records (ods, DRMS_INSERT_RECORD);
-  drms_free_array (map);
+  } /* End record loop. */
+  
+  drms_close_records(ods, DRMS_INSERT_RECORD);
+  drms_free_array(map);
   return 0;
 }
-
-/*
- *  Revision History (all mods by Rick Bogart unless otherwise noted)
- *
- *  08.04.22 	created this file, based on fastrack
- *  10.10.04	updated output keyword set and fleshed out arguments, commented
- *		added setting of WCS PC matrix elements as necessary; added
- *		input data processing, mapping with interpolation options
- *  v 0.8	frozen 2010.10.05
- *  11.05.02	added option for grid overlay; removed inappropriate defaults
- *  12.01.17	added option for removal of MDI distortion
- *  12.03.07	added promiscuous copy to target keys before careful setting
- *
- */
