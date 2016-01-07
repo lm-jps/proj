@@ -79,9 +79,6 @@
 
 #include <jsoc_main.h>
 #include "fstats.h"  // XXXX PHS
-#include "/home/jsoc/cvs/Development/JSOC/proj/rings/apps/cartography.c" // XXX PHS path change
-#include "/home/jsoc/cvs/Development/JSOC/proj/rings/apps/imginfo.c" // XXX PHS path change
-#include "/home/jsoc/cvs/Development/JSOC/proj/rings/apps/mdistuff.c" // XXX PHS path change
 
 #define RECTANGULAR	(0)
 #define CASSINI		(1)
@@ -135,6 +132,561 @@ ModuleArgs_t module_args[] = {
 
 		 /*  global declaration of missing to be initialized as NaN  */
 float missing_val;
+
+/* From cartography.c. */
+static double arc_distance (double lat, double lon, double latc, double lonc) 
+{
+  double cosa = sin (lat) * sin (latc) + cos (lat) * cos (latc) * cos (lon - lonc);
+  return acos (cosa);
+}
+
+static int plane2sphere (double x, double y, double latc, double lonc, double *lat, double *lon, int projection) 
+{
+/*
+ *  Perform the inverse mapping from rectangular coordinates x, y on a map
+ *    in a particular projection to heliographic (or geographic) coordinates
+ *    latitude and longitude (in radians).
+ *  The map coordinates are first transformed into arc and azimuth coordinates
+ *    relative to the center of the map according to the appropriate inverse
+ *    transformation for the projection, and thence to latitude and longitude
+ *    from the known heliographic coordinates of the map center (in radians).
+ *  The scale of the map coordinates is assumed to be in units of radians at
+ *    the map center (or other appropriate location of minimum distortion).
+ *
+ *  Arguments:
+ *      x }         Map coordinates, in units of radians at the scale
+ *      y }           appropriate to the map center
+ *      latc        Latitude of the map center (in radians)
+ *      lonc        Longitude of the map center (in radians)
+ *      *lat        Returned latitude (in radians)
+ *      *lon        Returned longitude (in radians)
+ *      projection  A code specifying the map projection to be used: see below
+ *
+ *  The following projections are supported:
+ *      RECTANGULAR     A "rectangular" mapping of x and y directly to
+ *                      longitude and latitude, respectively; it is the
+ *			normal cylindrical equidistant projection (plate
+ *			carrÈe) tangent at the equator and equidistant
+ *			along meridians. Central latitudes off the equator
+ *			merely result in displacement of the map in y
+ *			Also known as CYLEQD
+ *	CASSINI		The transverse cylindrical equidistant projection
+ *			(Cassini-Soldner) equidistant along great circles
+ *			perpendicular to the central meridian
+ *      MERCATOR        Mercator's conformal projection, in which paths of
+ *                      constant bearing are straight lines
+ *      CYLEQA          Lambert's normal equal cylindrical (equal-area)
+ *                      projection, in which evenly-spaced meridians are
+ *                      evenly spaced in x and evenly-spaced parallels are
+ *                      separated by the cosine of the latitude
+ *      SINEQA          The Sanson-Flamsteed sinusoidal equal-area projection,
+ *                      in which evenly-spaced parallels are evenly spaced in
+ *                      y and meridians are sinusoidal curves
+ *      GNOMONIC        The gnomonic, or central, projection, in which all
+ *                      straight lines correspond to geodesics; projection
+ *                      from the center of the sphere onto a tangent plane
+ *      POSTEL          Postel's azimuthal equidistant projection, in which
+ *                      straight lines through the center of the map are
+ *                      geodesics with a uniform scale
+ *      STEREOGRAPHIC   The stereographic projection, mapping from the
+ *                      antipode of the map center onto a tangent plane
+ *      ORTHOGRAPHIC    The orthographic projection, mapping from infinity
+ *                      onto a tangent plane
+ *      LAMBERT         Lambert's azimuthal equivalent projection
+ *
+ *  The function returns -1 if the requested point on the map does not project
+ *    back to the sphere or is not a principal value, 1 if it projects to a
+ *    point on a hidden hemisphere (if that makes sense), 0 otherwise
+ */
+  static double latc0 = 0.0, sinlatc = 0.0, coslatc = 1.0 ;
+  double r, rm, test;
+  double cosr, sinr, cosp, sinp, coslat, sinlat, sinlon;
+  double sinphi, cosphi, phicom;
+  int status = 0;
+
+  if (latc != latc0) {
+    coslatc = cos (latc);
+    sinlatc = sin (latc);
+  }
+  latc0 = latc;
+
+  switch (projection) {
+    case (RECTANGULAR):
+      *lon = lonc + x;
+      *lat = latc + y;
+      if (arc_distance (*lat, *lon, latc, lonc) > M_PI_2) status = 1;
+      if (fabs (x) > M_PI || fabs (y) > M_PI_2) status = -1;
+      return status;
+    case (CASSINI): {
+      double sinx = sin (x);
+      double cosy = cos (y + latc);
+      double siny = sin (y + latc);
+      *lat = acos (sqrt (cosy * cosy + siny * siny * sinx * sinx));
+      if (y < -latc) *lat *= -1;
+      *lon = (fabs (*lat) < M_PI_2) ? lonc + asin (sinx / cos (*lat)) : lonc;
+      if (y > (M_PI_2 - latc) || y < (-M_PI_2 - latc)) 
+        *lon = 2 * lonc + M_PI - *lon;
+      if (*lon < -M_PI) *lon += 2* M_PI;
+      if (*lon > M_PI) *lon -= 2 * M_PI;
+      if (arc_distance (*lat, *lon, latc, lonc) > M_PI_2) status = 1;
+      if (fabs (x) > M_PI || fabs (y) > M_PI_2) status = -1;
+      return status;
+      }
+    case (CYLEQA):
+      if (fabs (y) > 1.0) {
+        y = copysign (1.0, y);
+	status = -1;
+      }
+      cosphi = sqrt (1.0 - y*y);
+      *lat = asin ((y * coslatc) + (cosphi * cos (x) * sinlatc));
+      test = (cos (*lat) == 0.0) ? 0.0 : cosphi * sin (x) / cos (*lat);
+      *lon = asin (test) + lonc;
+      if (fabs (x) > M_PI_2) {
+        status = 1;
+        while (x > M_PI_2) {
+          *lon = M_PI - *lon;
+	  x -= M_PI;
+        }
+        while (x < -M_PI_2) {
+          *lon = -M_PI - *lon;
+	  x += M_PI;
+        }
+      }
+      if (arc_distance (*lat, *lon, latc, lonc) > M_PI_2) status = 1;
+      return status;
+    case (SINEQA):
+      cosphi = cos (y);
+      if (cosphi <= 0.0) {
+        *lat = y;
+        *lon = lonc;
+	if (cosphi < 0.0) status = -1;
+        return status;
+      }
+      *lat = asin ((sin (y) * coslatc) + (cosphi * cos (x/cosphi) * sinlatc));
+      coslat = cos (*lat);
+      if (coslat <= 0.0) {
+        *lon = lonc;
+	if (coslat < 0.0) status = 1;
+        return status;
+      }
+      test = cosphi * sin (x/cosphi) / coslat;
+      *lon = asin (test) + lonc;
+      if (fabs (x) > M_PI * cosphi) return (-1);
+/*
+      if (fabs (x) > M_PI_2) {
+        status = 1;
+        while (x > M_PI_2) {
+          *lon = M_PI - *lon;
+	  x -= M_PI;
+        }
+        while (x < -M_PI_2) {
+          *lon = -M_PI - *lon;
+	  x += M_PI;
+        }
+*/
+      if (fabs (x) > M_PI_2 * cosphi) {
+        status = 1;
+        while (x > M_PI_2 * cosphi) {
+          *lon = M_PI - *lon;
+	  x -= M_PI * cosphi;
+        }
+        while (x < -M_PI_2 * cosphi) {
+          *lon = -M_PI - *lon;
+	  x += M_PI * cosphi;
+        }
+      }
+/*
+      if (arc_distance (*lat, *lon, latc, lonc) > M_PI_2) status = 1;
+*/
+      return status;
+    case (MERCATOR):
+      phicom = 2.0 * atan (exp (y));
+      sinphi = -cos (phicom);
+      cosphi = sin (phicom);
+      *lat = asin ((sinphi  * coslatc) + (cosphi * cos (x) * sinlatc));
+      *lon = asin (cosphi * sin (x) / cos (*lat)) + lonc;
+      if (arc_distance (*lat, *lon, latc, lonc) > M_PI_2) status = 1;
+      if (fabs (x) > M_PI_2) status = -1;
+      return status;
+  }
+                                          /*  Convert to polar coordinates  */
+  r = hypot (x, y);
+  cosp = (r == 0.0) ? 1.0 : x / r;
+  sinp = (r == 0.0) ? 0.0 : y / r;
+                                                        /*  Convert to arc  */
+  switch (projection) {
+    case (POSTEL):
+      rm = r;
+      if (rm > M_PI_2) status = 1;
+      break;
+    case (GNOMONIC):
+      rm = atan (r);
+      break;
+    case (STEREOGRAPHIC):
+      rm = 2 * atan (0.5 * r);
+      if (rm > M_PI_2) status = 1;
+      break;
+    case (ORTHOGRAPHIC):
+      if ( r > 1.0 ) {
+	r = 1.0;
+        status = -1;
+      }
+      rm = asin (r);
+      break;
+    case (LAMBERT):
+      if ( r > 2.0 ) {
+        r = 2.0;
+        status = -1;
+      }
+      rm = 2 * asin (0.5 * r);
+      if (rm > M_PI_2 && status == 0) status = 1;
+      break;
+  }
+  cosr = cos (rm);
+  sinr = sin (rm);
+                                          /*  Convert to latitude-longitude  */
+  sinlat = sinlatc * cosr + coslatc * sinr * sinp;
+  *lat = asin (sinlat);
+  coslat = cos (*lat);
+  sinlon = (coslat == 0.0) ? 0.0 : sinr * cosp / coslat;
+/*  This should never happen except for roundoff errors, but just in case:   */
+/*
+  if (sinlon + 1.0 <= 0.0) *lon = -M_PI_2;
+  else if (sinlon - 1.0 >= 0.0) *lon = M_PI_2;
+  else
+*/
+  *lon = asin (sinlon);
+                                     /*  Correction suggested by Dick Shine  */
+  if (cosr < (sinlat * sinlatc)) *lon = M_PI - *lon;
+  *lon += lonc;
+  return status;
+}
+
+/* From imginfo.c. */
+#define NO_SEMIDIAMETER	(0x0002)
+#define NO_XSCALE	(0x0004)
+#define NO_YSCALE	(0x0008)
+#define NO_XCENTERLOC	(0x0010)
+#define NO_YCENTERLOC	(0x0020)
+#define NO_HELIO_LATC	(0x0040)
+#define NO_HELIO_LONC	(0x0080)
+#define NO_HELIO_PA	(0x0100)
+#define NO_XUNITS	(0x0200)
+#define NO_YUNITS	(0x0400)
+#define NO_OBSERVER_LAT	(0x0002)
+#define NO_OBSERVER_LON	(0x0004)
+
+#define KEYSCOPE_VARIABLE	(0x80000000)
+
+typedef struct paramdef {
+  double scale;
+  double offset;
+  double defval;
+  unsigned int statusbit;
+  char name[32];
+} ParamDef;
+
+
+static double lookup (DRMS_Record_t *rec, ParamDef key, int *status) {
+  double value = key.defval;
+  int lookupstat = 0;
+
+  value = drms_getkey_double (rec, key.name, &lookupstat);
+  value = value * key.scale + key.offset;
+  if (lookupstat) *status |= key.statusbit;
+  if (isnan (value)) *status |= key.statusbit;
+  return value;
+}
+
+static char *lookup_str (DRMS_Record_t *rec, ParamDef key, int *status) {
+  DRMS_Keyword_t *keywd;
+  int lstat;
+  char *value;
+
+  value = drms_getkey_string (rec, key.name, &lstat);
+  if (lstat) *status |= key.statusbit;
+					     /*  cadence should be constant  */
+  if ((keywd = drms_keyword_lookup (rec, key.name, 1))) {
+    if (keywd->info->recscope != 1) *status |= KEYSCOPE_VARIABLE;
+  } else *status |= key.statusbit;
+  return value;
+}
+
+static int solar_image_info (DRMS_Record_t *img, double *xscl, double *yscl,
+    double *ctrx, double *ctry, double *apsd, const char *rsun_key,
+    const char *apsd_key, double *pang, double *ellipse_e, double *ellipse_pa,
+    int *x_invrt, int *y_invrt, int *need_ephem, int AIPS_convention) {
+/*
+ *  Provides the following values from the DRMS record:
+ *    xscl  scale in the image column direction (arc-sec/pixel)
+ *    yscl  scale in the image row direction (arc-sec/pixel)
+ *    ctrx  (virtual) fractional pixel column of the center of the
+ *	solar disc
+ *    ctry  (virtual) fractional pixel row of the center of the
+ *	solar disc
+ *    apsd  apparent semi-diameter (semimajor-axis) of the solar disc, in
+ *	pixel units
+ *    pang  position angle of solar north relative to image vertical (y-axis,
+ *	[0,0] -> [0,1]), measured westward (clockwise), in radians
+ *    eecc  eccentricity of best-fit ellipse describing limb
+ *    eang  position angle of best-fit ellipse describing limb, relative
+ *	to direction of solar north, measured westward (clockwise), in radians
+ *    xinv  0 if image is direct, 1 if flipped by columns
+ *    yinv  0 if image is direct, 1 if flipped by rows
+ *  If AIPS_convention is true (!=0), it is assumed that the input keywords
+ *    representing position and ellipse angles are measured westward
+ *    (clockwise) relative to their nominal axes; otherwise they are measured
+ *    eastward (counter-clockwise) relative to their nominal axes.
+ *  NO!
+ *  The following data types are supported: SOHO-MDI, GONG+, Mt. Wilson MOF,
+ *    SOHO-EIT, TRACE, BBSO Ha
+ *  NO!
+ *  If the data are not recognizably of one of these types, the function
+ *    returns NO_DATA_DICT; if one or more required keywords are missing
+ *    the function returns a status mask indicating which values could not
+ *    be filled.  No flag is set if the image ellipse parameters are not
+ *    available (unless they are required for other parameters), but the
+ *    eccentricity and pericenter angle are quietly set to 0.
+ */
+  enum param {
+    XSCL, YSCL, XUNI, YUNI, LATC, LONC, CTRX, CTRY, PANG, APSD, RSUN,
+    ESMA, ESMI, EECC, EANG, XASP, YASP, PCT
+  };
+  enum known_plat {
+    UNKNOWN
+  };
+  static ParamDef param[PCT];
+  static double raddeg =  M_PI / 180.0;
+  static double degrad = 180.0 / M_PI;
+  double ella, ellb;
+  int n, status = 0;
+  static int scale_avail, xinv_type, yinv_type;
+  static int hdrtype = UNKNOWN, lasthdr = UNKNOWN - 1;
+  char *strval;
+/*
+ *  Set up the appropriate dictionary for interpretation of keywords
+ */
+  if (lasthdr != hdrtype) {
+    if (lasthdr >= UNKNOWN)
+      fprintf (stderr,
+	  "Warning from solar_image_info(): record keywords may change\n");
+    for (n = 0; n < PCT; n++) {
+      sprintf (param[n].name, "No Keyword");
+      param[n].scale = 1.0;
+      param[n].offset = 0.0;
+      param[n].defval = NAN;
+      param[n].statusbit = 0;
+    }
+    param[RSUN].statusbit = NO_SEMIDIAMETER;
+    param[APSD].statusbit = NO_SEMIDIAMETER;
+    param[XSCL].statusbit = NO_XSCALE;
+    param[YSCL].statusbit = NO_YSCALE;
+    param[XUNI].statusbit = NO_XUNITS;
+    param[YUNI].statusbit = NO_YUNITS;
+    param[CTRX].statusbit = NO_XCENTERLOC;
+    param[CTRY].statusbit = NO_YCENTERLOC;
+    param[CTRX].statusbit = NO_XCENTERLOC;
+    param[CTRY].statusbit = NO_YCENTERLOC;
+    param[LATC].statusbit = NO_HELIO_LATC;
+    param[LONC].statusbit = NO_HELIO_LONC;
+    param[PANG].statusbit = NO_HELIO_PA;
+    param[EECC].defval = 0.0;
+    param[EANG].defval = 0.0;
+    param[XASP].defval = 1.0;
+    param[YASP].defval = 1.0;
+
+    switch (hdrtype) {
+      default:					      /*  Assume WCS HPLN/T  */
+					 /*  WITH CERTAIN MDI SPECIFIC ONES  */
+	scale_avail = 1;
+	xinv_type = yinv_type = 0;
+	sprintf (param[XUNI].name, "CUNIT1");
+	sprintf (param[YUNI].name, "CUNIT2");
+	sprintf (param[XSCL].name, "CDELT1");
+	sprintf (param[YSCL].name, "CDELT2");
+	sprintf (param[CTRX].name, "CRPIX1");
+	param[CTRX].offset = -1.0;
+	sprintf (param[CTRY].name, "CRPIX2");
+	param[CTRY].offset = -1.0;
+	*need_ephem = 0;
+	strval = lookup_str (img, param[XUNI], &status);
+	if (!(status & NO_XUNITS)) {
+	  if (!strcmp (strval, "arcsec")) param[XSCL].scale = 1.0;
+	  else if (!strcmp (strval, "arcmin")) param[XSCL].scale = 1.0 / 60.0;
+	  else if (!strcmp (strval, "deg")) param[XSCL].scale = 1.0 / 3600.0;
+	  else if (!strcmp (strval, "mas")) param[XSCL].scale = 1000.0;
+	  else if (!strcmp (strval, "rad")) param[XSCL].scale = degrad * 3600.0;
+/*
+	  need_units = status & KEYSCOPE_VARIABLE;
+*/
+	}
+	if (strval) free (strval);
+	strval = lookup_str (img, param[YUNI], &status);
+	if (!(status & NO_YUNITS)) {
+	  if (!strcmp (strval, "arcsec")) param[YSCL].scale = 1.0;
+	  else if (!strcmp (strval, "arcmin")) param[YSCL].scale = 1.0 / 60.0;
+	  else if (!strcmp (strval, "deg")) param[YSCL].scale = 1.0 / 3600.0;
+	  else if (!strcmp (strval, "mas")) param[YSCL].scale = 1000.0;
+	  else if (!strcmp (strval, "rad")) param[YSCL].scale = degrad * 3600.0;
+/*
+	  need_units = status & KEYSCOPE_VARIABLE;
+*/
+	}
+	if (strval) free (strval);
+   /*  the following are appropriate for MDI, but not strictly based on WCS  */
+/*
+	sprintf (param[RSUN].name, "R_SUN");
+	sprintf (param[APSD].name, "OBS_ASD");
+*/
+	strncpy (param[RSUN].name, rsun_key, 31);
+	strncpy (param[APSD].name, apsd_key, 31);
+	sprintf (param[PANG].name, "CROTA2");
+	param[PANG].scale = -raddeg;
+	if (AIPS_convention) param[PANG].scale *= -1;
+	sprintf (param[ESMA].name, "S_MAJOR");
+	sprintf (param[ESMI].name, "S_MINOR");
+	sprintf (param[EANG].name, "S_ANGLE");
+	param[EANG].scale = -raddeg;
+	if (AIPS_convention) param[EANG].scale *= -1;
+    }
+  }
+  lasthdr = hdrtype;
+				    /*  Plate info: image scale, distortion  */
+  *apsd = lookup (img, param[RSUN], &status);
+  if (scale_avail) {
+    *xscl = lookup (img, param[XSCL], &status);
+    *yscl = lookup (img, param[YSCL], &status);
+    if (status & NO_SEMIDIAMETER) {
+      status &= ~NO_SEMIDIAMETER;
+      *apsd = lookup (img, param[APSD], &status);
+      if (status & NO_SEMIDIAMETER) {
+        *need_ephem = 1;
+      } else {
+	if (!(status & (NO_XSCALE | NO_YSCALE))) {
+	  *apsd /= (*xscl <= *yscl) ? *xscl : *yscl;
+	  status &= ~NO_SEMIDIAMETER;
+	}
+      }
+    }
+  }
+  ella = lookup (img, param[ESMA], &status);
+  ellb = lookup (img, param[ESMI], &status);
+  *ellipse_e = sqrt ((ella - ellb) * (ella + ellb)) / ella;
+  *ellipse_pa = lookup (img, param[EANG], &status);
+				    /*  Pointing (attitude: image location)  */
+  *ctrx = lookup (img, param[CTRX], &status);
+  *ctry = lookup (img, param[CTRY], &status);
+					  /*  Position angle of solar north  */
+  *pang = lookup (img, param[PANG], &status);
+                                                      /*  Image orientation  */
+  *x_invrt = xinv_type;
+  *y_invrt = yinv_type;
+
+  return status;
+}
+
+/* From mdistuff.c. */
+#define MDI_IMG_ACPA	(1.01e-3)
+#define MDI_IMG_ASPA	(-1.49e-3)
+
+static void mtrack_MDI_correct_imgctr (double *xc, double *yc, double rsun) {
+  double rs2;
+
+  rs2 = rsun * rsun / 512.0;
+  *xc -= MDI_IMG_ASPA * rs2;
+  *yc -= MDI_IMG_ACPA * rs2;
+}
+
+/*
+ *  mtrack_MDI_image_tip
+ *
+ *  Correct for ellipticity of image due to plate tipping
+ *  The constants are:
+ *    TIP = 2.61 deg = 0.04555
+ *    EFL = 25.3 (effective focal length in units of plate half-width)
+ *    PA = -56 deg
+ *    SPA = sin (PA),  CPA = cos (PA)
+ *    AEP = TIP / EFL
+ *    BEP = TIP^2 / 4 = 5.187e-4
+ *    BCPA = BEP * CPA,  BSPA = BEP * SPA
+ *
+ *  Bugs:
+ *    There is no check that |direct| = 1; it can actually be changed as a
+ *	scale factor (useful for testing)
+ *    
+ */
+
+#define MDI_IMG_SPA	(-0.8290)
+#define MDI_IMG_CPA	(0.5592)
+#define MDI_IMG_AEP	(1.80e-3)
+#define MDI_IMG_BCPA	(2.90e-4)
+#define MDI_IMG_BSPA	(-4.30e-4)
+
+static void mtrack_MDI_image_tip (double *x, double *y, int n, int direct) {
+  double x0, y0, s, t;
+
+  while (n--) {
+    x0 = *x;
+    y0 = *y;
+    t = direct * (MDI_IMG_SPA * x0 + MDI_IMG_CPA * y0);
+    s = direct * (MDI_IMG_CPA * x0 - MDI_IMG_SPA * y0);
+    *x += MDI_IMG_BSPA * t;
+    *y += MDI_IMG_BCPA * t;
+    *x -= MDI_IMG_BCPA * s;
+    *y += MDI_IMG_BSPA * s;
+    t *= MDI_IMG_AEP;
+    *x++ += t * x0;
+    *y++ += t * y0;
+  }
+}
+
+/*
+ *  mtrack_MDI_image_stretch
+ *
+ *  Modify "plate" coordinates to account for known optical distortions
+ *    in the MDI instrument
+ *  It is assumed that the coordinates *x and *y are in terms of half the
+ *    full plate width, i.e. that they are in the range [-1.0, 1.0] and
+ *    relative to its center; this of course requires an external correction
+ *    to be applied in the cases of extracted rasters and binned data.
+ *    For MDI the half-plate-width is 512 * 21 um.  The 2nd-order radial
+ *    correction constant is given in Kuhn et al. (Ap.J. 613, 1241; 2004)
+ *    as 1.58e-3 where the radial unit is in cm. The constant used here is thus
+ *    1.58e-3  * (.0021 * 512)^2
+ *
+ *  By ignoring the 4th-order term the function can be used for inverse
+ *    as well as direct stretching.
+ *
+ *  The value of the integer direct specifies the direction of the
+ *    transformation: +1 for a correction from "perfect" to plate coordinates, 
+ *    -1 for transformation from plate to perfect
+ *
+ *  Bugs:
+ *    There is no check that |direct| = 1; it can actually be changed as a
+ *	scale factor (useful for testing)
+ *
+ */
+
+#define MDI_IMG_STRETCH	(1.83e-3)
+
+static void mtrack_MDI_image_stretch (double *x, double *y, int n, int direct) {
+  double f, r2, s;
+
+  s = direct * MDI_IMG_STRETCH;
+  while (n--) {
+    r2 = *x * *x + *y * *y;
+    f = 1.0 + s * r2;
+    *x++ *= f;
+    *y++ *= f;
+  }
+}
+
+#define MDI_IMG_SOHO_PA	(-0.2)
+
+static void mtrack_MDI_correct_pa (double *pa) {
+  *pa += MDI_IMG_SOHO_PA * M_PI / 180.0;
+}
+
 
 	/*  Calculate the interpolation kernel.  */
 	/* Robert G. Keys, "Cubic Convolution Interpolation for digital Image Processing", IEEE
@@ -248,7 +800,7 @@ float array_imaginterp (DRMS_Array_t *img, double x, double y,
   else return ccint2 (img->data, cols, rows, xs, ys);
 }
 
-void perform_mapping (DRMS_Array_t *img, float *map,
+static void perform_mapping (DRMS_Array_t *img, float *map,
     double *maplat, double *maplon, double *map_coslat, double *map_sinlat,
     int pixct, unsigned char *offsun, double latc, double lonc,
     double xc, double yc, double radius, double pa, double ellipse_e,
@@ -335,9 +887,10 @@ int near_grid_line (double lon, double lat, double grid, double near) {
   return 0;
 }
 
-/* These were copied from keystuff.c. I made a number of changes - the functions 
- * used to return success if the key did not exist (not sure why). They also 
- * used to follow links and attempt to set linked keywords, which was not correct. 
+/* These check_and_set_key_* functions were copied from keystuff.c. I made a number of changes - 
+ * the functions used to return success if the key did not exist. They also 
+ * used to follow links and attempt to set linked keywords, but linked keywords
+ * are generally in read-only records, so I think this was incorrect.
  * And they did not check the return value of the lower-level DRMS set-key functions. */
 static int check_and_set_key_str(DRMS_Record_t *outRec, const char *key, const char *val) 
 {
@@ -348,7 +901,7 @@ static int check_and_set_key_str(DRMS_Record_t *outRec, const char *key, const c
 
     errOut = 0;
 
-    if (!(keywd = drms_keyword_lookup(outRec, key, 1))) return 1;
+    if (!(keywd = drms_keyword_lookup(outRec, key, 0))) return 1;
 
     if (!drms_keyword_isconstant(keywd)) 
     {
@@ -394,7 +947,7 @@ static int check_and_set_key_time(DRMS_Record_t *outRec, const char *key, TIME t
     int status;
     char sreq[64], sval[64];
 
-    if (!(keywd = drms_keyword_lookup(outRec, key, 1))) return 1;
+    if (!(keywd = drms_keyword_lookup(outRec, key, 0))) return 1;
 
     if (!drms_keyword_isconstant(keywd)) 
     {
@@ -428,7 +981,7 @@ static int check_and_set_key_int(DRMS_Record_t *outRec, const char *key, int val
     int vreq;
     int status;
 
-    if (!(keywd = drms_keyword_lookup(outRec, key, 1))) return 1;
+    if (!(keywd = drms_keyword_lookup(outRec, key, 0))) return 1;
 
     if (!drms_keyword_isconstant(keywd))
     {
@@ -462,7 +1015,7 @@ static int check_and_set_key_float(DRMS_Record_t *outRec, const char *key, float
     int status;
     char sreq[128], sval[128];
 
-    if (!(keywd = drms_keyword_lookup(outRec, key, 1))) return 1;
+    if (!(keywd = drms_keyword_lookup(outRec, key, 0))) return 1;
 
     if (!drms_keyword_isconstant(keywd)) 
     {
@@ -510,17 +1063,16 @@ int DoIt (void) {
   double ellipse_e, ellipse_pa;
   float *data;
   int axes[2];
-  int img, pixct, segct;
+  int pixct;
   int recCount;
-  int found, kstat, status;
+  int kstat, status;
   int need_ephem;
   int x_invrt, y_invrt;
   int n, col, row;
   int MDI_correct, MDI_correct_distort;
   unsigned char *offsun, *ongrid;
-  char *input;
   char source[DRMS_MAXQUERYLEN], recid[DRMS_MAXQUERYLEN];
-  char module_ident[64], key[64], tbuf[64];
+  char module_ident[64], key[64];
 
   double raddeg = M_PI / 180.0;
   double degrad = 1.0 / raddeg;
@@ -696,6 +1248,8 @@ int DoIt (void) {
         return 1;
     }
     
+    fprintf(stderr, "Maproj reading rec %d\n", irec);
+    
     /* Segment loop */
     DRMS_Segment_t *firstSeg = NULL;
     HIterator_t *segIter = NULL;
@@ -736,7 +1290,6 @@ int DoIt (void) {
             return 1;    
         }
 
-        fprintf(stderr, "Maproj reading rec %d\n", irec);
         image = drms_segment_read(inseg, DRMS_TYPE_FLOAT, &status);
                    /*  get needed info from record keys for mapping  */
                      /*  replace with call to solar_ephemeris_info?  */
