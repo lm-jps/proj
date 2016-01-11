@@ -62,9 +62,9 @@ char *module_name    = "phasemaps_test_voigt";   //name of the module
 #define KEY_PHASE_NBMICHELSON "PHASENBM"
 #define KEY_PHASE_WBMICHELSON "PHASEWBM"
 #define KEY_PHASE_LYOT "PHASELYO"
-#define KEY_PHASE_LINEWIDTH "PHASELWI"
-#define KEY_PHASE_LINEDEPTH "PHASELDE"
-#define KEY_PHASE_LINECONTINUUM "PHASECON"
+#define KEY_PHASE_LINEWIDTH "LW_MEAN"
+#define KEY_PHASE_LINEDEPTH "LD_MEAN"
+#define KEY_PHASE_LINECONTINUUM "CON_MEAN"
 
 //arguments of the module
 ModuleArgs_t module_args[] =        
@@ -556,8 +556,8 @@ int DoIt(void) {
   int errbufstat       = setvbuf(stderr, NULL, _IONBF, BUFSIZ);           //for debugging purpose when running on the cluster
   int outbufstat       = setvbuf(stdout, NULL, _IONBF, BUFSIZ);
 
-  char *inRecQuery     = cmdparams_get_str(&cmdparams  , kRecSetIn,NULL); //cmdparams is defined in jsoc_main.h
-  char *dsout          = cmdparams_get_str(&cmdparams  , kDSOut   ,NULL);    //series name of the output phase maps series
+  const char *inRecQuery     = cmdparams_get_str(&cmdparams  , kRecSetIn,NULL); //cmdparams is defined in jsoc_main.h
+  const char *dsout          = cmdparams_get_str(&cmdparams  , kDSOut   ,NULL);    //series name of the output phase maps series
   int   camera         = cmdparams_get_int(&cmdparams  , khcamid  ,NULL);   //front (1) or side (0) camera?
   int reduced          = cmdparams_get_int(&cmdparams  , kreduced ,NULL);  //if reduced=1 then we only compute 64x64 maps (nx2=64), =2 it's 32x32, =3 128x128, instead of the usual 256x256 (reduced =0)
   FSR[0]               = cmdparams_get_double(&cmdparams,"FSRNB" , NULL);
