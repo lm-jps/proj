@@ -302,7 +302,9 @@ flatfield=avg(flatfield, 2)
 endif
 
 print, 'write out flatfield'
-filename_flatfield='flat_'+camerastr[cam-1]+'_'+focstr+'_'+string(fsn_list[0],format='(i8.8)')+'.bin'
+if year < 2016 then fsn_format='(i8.8)' else fsn_format='(i9.9)'
+filename_flatfield='flat_'+camerastr[cam-1]+'_'+focstr+'_'+string(fsn_list[0],format=fsn_format)+'.bin'
+;filename_flatfield='flat_'+camerastr[cam-1]+'_'+focstr+'_'+string(fsn_list[0],format='(i8.8)')+'.bin'
 openw, 1, filename_flatfield
 writeu,1,flatfield
 close,1
@@ -320,7 +322,8 @@ endif
 ingest_string='write_offpoint instrument="HMI" file_offpoint="'+filename_flatfield+'" series_offpoint="hmi.inspect_offpoint_ff" camera='+string(cam, format='(i1.1)')+' pztflag=0 focus='+string(focus, format='(i2.2)')+' t_obs="'+time_stamp+'" fsn_list_offpoint='+strcompress(string(min(fsn_list)),/rem)+','+strcompress(string(max(fsn_list)),/rem)
 print, ingest_string
 
-openw,1,'ingest_command_'+camerastr[cam-1]+'_'+focstr+'_'+string(fsn_list[0],format='(i8.8)')+'.csh'
+openw,1,'ingest_command_'+camerastr[cam-1]+'_'+focstr+'_'+string(fsn_list[0],format=fsn_format)+'.csh'
+;openw,1,'ingest_command_'+camerastr[cam-1]+'_'+focstr+'_'+string(fsn_list[0],format='(i8.8)')+'.csh'
 printf,1,ingest_string
 close,1
 
