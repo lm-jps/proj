@@ -259,6 +259,7 @@ int DoIt(void)
   double crln, crlt;
   char outseries[DRMS_MAXSERIESNAMELEN];
   char inseries[DRMS_MAXSERIESNAMELEN];
+  char extractedSeries[DRMS_MAXSERIESNAMELEN];
   int is_mod;
   char testseries[DRMS_MAXSERIESNAMELEN];
   char inQuery[DRMS_MAXQUERYLEN];
@@ -367,6 +368,8 @@ int DoIt(void)
     where = strdup(wherework);
     }
 
+    /* We need to extract the series name from the input record-set specification. There */
+
     /* Determine if there is a segment list specifier. I believe this is true if the last non-ws char of the specification is a '}'. 
      * Of course, the specification could be invalid, but in that event the drms_open_records() call will fail and catch the error and
      * the module run will abort. */
@@ -389,39 +392,94 @@ int DoIt(void)
 
   inparam = strdup(ingiven);
   if (strcasecmp(inparam, "NOTSPECIFIED") == 0) DIE("Input series must be specified.");
-  // WARNING - there should be a check here to make sure the first prime key is a time and that the first bracket
-  // is a normal time spec.
-  lbracket = index(inparam, '[');
-  // first, get input series names.
-  if (lbracket)
+  
+  /* This program works only if the series' first prime-key constituent is a time keyword. Then, we want to
+   * ignore the first prime key and use the t_start/t_stop argument to select records instead. 
+   * I believe the program will not work with record-set specifications that contain more than one
+   * subset either. So...
+   * 1. Extract the series from the record-set specification. 
+   * 2. Bail if there is more than one record-set subset.
+   * 3. Obtain the first keyword from the prime-key set. 
+   * 4. Bail if the first keyword is not a time keyword.
+   * 5. Remove the time filter provided by the user in the record-set specification.
+   */
+   
+   /* Use drms_record_parserecsetspec() to extract the series and filter strings. The previous 
+    * code wasn't quite working 100% . */
+    char *allvers = NULL;
+    char **sets = NULL;
+    DRMS_RecordSetType_t *settypes = NULL; /* a maximum doesn't make sense */
+    char **snames = NULL;
+    char **filts = NULL;
+    int nsets = 0;
+    DRMS_RecQueryInfo_t rsinfo; /* Filled in by parser as it encounters elements. */
+    DRMS_Keyword_t *firstPKey = NULL;
+
+    if (drms_record_parserecsetspec(inparam, &allvers, &sets, &settypes, &snames, &filts, &nsets, &rsinfo) == DRMS_SUCCESS)
     {
-    int n = lbracket - inparam;
-    strncpy(inseries, inparam, n);
-    inseries[n] = '\0';
-    if (strncmp(lbracket, "[$]", 3) == 0) // Special case, discard the explicit last-record spec to allow exports via jsoc_fetch.
-      {
-      moreQuery = lbracket + 3;
-      *lbracket = '\0';
-      lbracket = NULL;
-      if (t_start == tNotSpecified || t_stop == tNotSpecified)
-          times_source = TIMES_IMPLICIT;
-      else
-          times_source = TIMES_GIVEN;
-      }
-    else
-      {
-      rbracket = index(lbracket, ']');
-      moreQuery = rbracket ? rbracket+1 : lbracket;
-      }
+        if (nsets > 1)
+        {
+            status = DRMS_ERROR_INVALIDDATA;
+            DIE("im_patch supports single-set record-set specifications only.");
+        }
     }
-  else
+    else
     {
-    strcpy(inseries, inparam); // Not quite right - there could be a segment list after the series name.
-    if (t_start == tNotSpecified || t_stop == tNotSpecified)
-        times_source = TIMES_IMPLICIT;
-    else
-        times_source = TIMES_GIVEN;
+        status = DRMS_ERROR_INVALIDDATA;
+        DIE("Invalid record-set specification provided.");
     }
+
+    snprintf(inseries, sizeof(inseries), "%s", snames[0]);
+    lbracket = index(inparam, '[');
+    
+    inTemplate = drms_template_record(drms_env, inseries, &status);
+    if (status || !inTemplate) DIE2("Input series can not be found: ", inseries);
+    
+    if (drms_keyword_isindex(inTemplate->seriesinfo->pidx_keywords[0]))
+    {
+        firstPKey = drms_keyword_slotfromindex(inTemplate->seriesinfo->pidx_keywords[0]);
+    }
+    else
+    {
+        firstPKey = inTemplate->seriesinfo->pidx_keywords[0];
+    }
+
+    if (firstPKey->info->type != DRMS_TYPE_TIME)
+    {
+        status = DRMS_ERROR_INVALIDDATA;
+        DIE("The first prime-key constituent keyword must be of type TIME.");
+    }
+    
+    if (filts && filts[0])
+    {
+        if (strlen(filts[0]) == 3 && filts[0][1] == '$')
+        {
+            /* The user specified the last (according to time) record. Remove that filter. */
+            moreQuery = lbracket + 3;
+            *lbracket = '\0';
+            lbracket = NULL;
+            
+            if (t_start == tNotSpecified || t_stop == tNotSpecified)
+                times_source = TIMES_IMPLICIT;
+            else
+                times_source = TIMES_GIVEN;
+        }
+        else
+        {
+            rbracket = index(lbracket, ']');
+            moreQuery = rbracket ? rbracket + 1 : lbracket;
+        }
+    }
+    else
+    {
+        /* No filter provided at all. */
+        if (t_start == tNotSpecified || t_stop == tNotSpecified)
+            times_source = TIMES_IMPLICIT;
+        else
+            times_source = TIMES_GIVEN;
+    }
+    
+    drms_record_freerecsetspecarr(&allvers, &sets, &settypes, &snames, &filts, nsets);
     
 // XXXXX Get box location in Carrington Coords for all location types, also initial center_X, center_y in NoTrack case  XXXXX
   if (do_reftime) // Arc-sec, pixel, or Stonyhurst specification, get ref image information
@@ -581,10 +639,6 @@ fprintf(stderr,"at do reftime, center_x=%f\n", center_x);
 
 // XXXXXXXXXXXXXXXX get input seriesname and output seriesname
 // first, get input and output series names.
-
-  inTemplate = drms_template_record(drms_env, inseries, &status);
-  if (status || !inTemplate) DIE2("Input series can not be found: ", inseries);
-
   is_mod = 0;
   if (strcasecmp(outparam, "NOTSPECIFIED") == 0)
     {
