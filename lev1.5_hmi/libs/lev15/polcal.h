@@ -7,10 +7,7 @@ struct polcal_struct {
   double *ret1_0,*ret1_1,*ret2_0,*ret2_1,*ret3_0,*ret3_1,*phi1_0,*phi2_0,*phi3_0;
 };
 
-int init_polcal(
-  struct polcal_struct *pars,
-  int method
-);
+int init_polcal(struct polcal_struct *pars, int method, const char *paramFile);
 
 int free_polcal(
   struct polcal_struct *pars

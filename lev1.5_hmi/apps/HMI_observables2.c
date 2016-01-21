@@ -1067,7 +1067,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables2.c,v 1.8 2011/03/04 21:12:59 couvidat Exp $");
+  return strdup("$Id: HMI_observables2.c,v 1.9 2016/01/21 20:30:48 arta Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -1683,14 +1683,16 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
       //CODEVERSION1=const_param.code_version;
       //CODEVERSION2=CODEVERSION1; //same version number actually because they are both in interpol_code.c
     }
-  if(Lev1pWanted || (Lev15Wanted && TestLevIn[2]==0))
+    if(Lev1pWanted || (Lev15Wanted && TestLevIn[2]==0))
     {
-      status = init_polcal(&pars,method);
-      if(status != 0)
-	{
-	  printf("Error: could not initialize the polarization calibration routine\n");
-	  return 1;//exit(EXIT_FAILURE);
-	}
+        /* Use a configuration file to obtain the path to the parameter file used by polcal. There is a Stanford-specific 
+         * version of this configuration file, as well as a NetDRMs version, so we will leave this parameter out of the latter. */
+        status = init_polcal(&pars, method, POLCAL_PARAMS);
+        if(status != 0)
+        {
+            printf("Error: could not initialize the polarization calibration routine\n");
+            return 1;//exit(EXIT_FAILURE);
+        }
     }
 
   //initialization of Level 1 data series names

@@ -100,16 +100,13 @@ static void retarder(
   
 }
 
-int init_polcal(
-  struct polcal_struct *pars,
-  int method
-)
+int init_polcal(struct polcal_struct *pars, int method, const char *paramFile)
 {
   int nin=32;
   int malign=32;
   int i,j;
   double d;
-  FILE *fileptr;
+  FILE *fileptr = NULL;
 
   if (method!=1) {
     printf("Unimplemented method in init_polcal\n");
@@ -142,8 +139,12 @@ int init_polcal(
   pars->phi3_0=(double *)(MKL_malloc(nin*nin*sizeof(double),malign));
 
   
-//fileptr = fopen ("/scr21/schou/pars_100611/fit.bin", "r");
-  fileptr = fopen ("/home/schou/hmi/anapol/pars_131222/fit.bin", "r");
+  /* Remove hard-coding: fileptr = fopen ("/home/schou/hmi/anapol/pars_131222/fit.bin", "r"); */
+  if (paramFile)
+  {
+    fileptr = fopen(paramFile, "r");
+  }
+  
   if (fileptr==NULL) {
     printf("File not found in init_polcal.\n");
     return 1;
@@ -709,6 +710,6 @@ shared(nlead,output,helpq,helpu,nx,ny)
 
 char *polcal_version() // Returns CVS version of polcal.c
 {
-  return strdup("$Id: polcal.c,v 1.5 2013/12/22 22:54:08 couvidat Exp $");
+  return strdup("$Id: polcal.c,v 1.6 2016/01/21 20:30:48 arta Exp $");
 }
 
