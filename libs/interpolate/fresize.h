@@ -1,3 +1,5 @@
+#ifndef __FRESIZE_H
+#define __FRESIZE_H
 #include <complex.h>
 #include <fftw3.h>
 
@@ -197,3 +199,4 @@ int fbin(
   float fillval
 );
 
+#endif

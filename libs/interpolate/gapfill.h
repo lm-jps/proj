@@ -1,3 +1,6 @@
+#ifndef __GAPFILL_H
+#define __GAPFILL_H
+
 #include <omp.h>
 
 struct fill_hash_struct {
@@ -59,3 +62,4 @@ int fgap_fill(
 
 char *gapfill_version(); // Returns CVS version of gapfill.c
 
+#endif

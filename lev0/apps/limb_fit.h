@@ -20,54 +20,44 @@ struct mempointer
   float *imcp;
 };
 
-#define nanval -2147483648
+/* not used anywhere #define nanval -2147483648 */
 
-const double rad_corr_fac=1.00130;
-const double foc_corr=-1.08490;
-  const double high=1.03;
-  const double low=0.97;
+/* Moved all these definition to limb_fit_functions.c - should not define
+ * any global variables in a header file. */
+extern const double rad_corr_fac;
+extern const double foc_corr;
+extern const double high;
+extern const double low;
 
-  const double limit_var=1.8;
-  const double limit_cc=15.0;
+extern const double limit_var;
+extern const double limit_cc;
 
-// work-around for compiler problem below
-#define kLimbFit_lim 8
-//const int lim=8;
-const int lim=kLimbFit_lim;
+extern const int lim;
 
-// this is not legal - can't initialize global vars with variables.
-// for now, replace lim with its value to fix the build.
-//const int parsize=2*lim+1;
-const int parsize=2*kLimbFit_lim+1;
+extern const int parsize;
 //gapfill constants
 
-// work-around for compiler problem below
-#define kLimbFit_gapfill_order 11
-//const int gapfill_order=11;
-const int gapfill_order=kLimbFit_gapfill_order;
-const int gapfill_method=11;
-const float gapfill_regular=0.0025;
-// this is not legal - can't initialize global vars with variables.
-// for now, replace lim with its value to fix the build.
-//const int gapfill_order2=gapfill_order/2;
-const int gapfill_order2=kLimbFit_gapfill_order/2;
+extern const int gapfill_order;
+extern const int gapfill_method;
+extern const float gapfill_regular;
+extern const int gapfill_order2;
 
-const int min_imcnf=80;
-const int max_imcnf=1024;
+extern const int min_imcnf;
+extern const int max_imcnf;
 
-char *X0_MP_key="X0_MP";
-char *Y0_MP_key="Y0_MP";
-char *RSUN_OBS_key="RSUN_OBS";
-char *IMSCL_MP_key="IMSCL_MP";
+extern char *X0_MP_key;
+extern char *Y0_MP_key;
+extern char *RSUN_OBS_key;
+extern char *IMSCL_MP_key;
 
-char *HCAMID_key="HCAMID";
-char *HCFTID_key="HCFTID";
-char *MISSVAL_key="MISSVALS";
+extern char *HCAMID_key;
+extern char *HCFTID_key;
+extern char *MISSVAL_key;
 
-int light_val1=2;
-int light_val2=3;
+extern int light_val1;
+extern int light_val2;
 
-const double percent_good=0.75;
+extern const double percent_good;
 
 
 
