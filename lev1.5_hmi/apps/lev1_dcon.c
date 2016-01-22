@@ -72,38 +72,42 @@ int DoIt() {
 
     drms_series_exists(drms_env, out, &status);
     if (DRMS_SUCCESS != status)
-	die("Output series %s does not exit\n", out);
+	    die("Output series %s does not exit\n", out);
 
     // open and stage input records
     DRMS_RecordSet_t *rsin = drms_open_records(drms_env, in, &status);
     if (status || !rsin)
-	die("Can't do drms_open_records(%s)\n", in);
+	    die("Can't do drms_open_records(%s)\n", in);
     else
-	warn("DRMS recordset %s opened\n", in);
-    drms_stage_records(rsin, 1, 0);
+	    warn("DRMS recordset %s opened\n", in);
+    if (drms_stage_records(rsin, 1, 0) != DRMS_SUCCESS)
+    {
+        drms_close_records(rsin, DRMS_FREE_RECORD);
+        die("Failure staging DRMS records (%s).\n", in);
+    }
 
     int nrecs = rsin->n;
     if (!nrecs)
-	die("No records matching %s in found\n", in);
+	    die("No records matching %s in found\n", in);
     else
-	warn("%d records found\n", nrecs);
+	    warn("%d records found\n", nrecs);
 
     // read PSF
     DRMS_Array_t *arrpsf = drms_fitsrw_read(drms_env, psf, 0, NULL, &status);
     if (status || !arrpsf)
-	die("Can't read PSF file %s\n", psf);
+	    die("Can't read PSF file %s\n", psf);
     else if (arrpsf->naxis != 2 || arrpsf->axis[0] != 4096 || arrpsf->axis[1] != 4096 || arrpsf->type != DRMS_TYPE_DOUBLE)
-	die("PSF file %s does not contain 4096x4096 double precision array\n", psf);
+	    die("PSF file %s does not contain 4096x4096 double precision array\n", psf);
     else
-	warn("PSF file %s read\n", psf);
+	    warn("PSF file %s read\n", psf);
 
     // pad PSF data array for FFT
     float *P = MKL_malloc(sizeof(float)*4096*4098, 64);
     if (!P)
-	die("Can't allocate memory for array P\n");
+	    die("Can't allocate memory for array P\n");
     for (int j=0; j<4096; ++j)
-	for (int i=0; i<4096; ++i)
-	    P[4098*j+i] = ((double *)arrpsf->data)[4096*j+i];
+	    for (int i=0; i<4096; ++i)
+	        P[4098*j+i] = ((double *)arrpsf->data)[4096*j+i];
     drms_free_array(arrpsf);
 
     // set up MKL DFTI stuff
@@ -142,92 +146,114 @@ int DoIt() {
     float *B = R;
     float *C = R;
     if (!O || !E || !Esav || !R)
-	die("Can't allocate memory for array O, E, Esav, or R\n");
+        die("Can't allocate memory for array O, E, Esav, or R\n");
 
     // create all output records (will fail for large nrecs)
     DRMS_RecordSet_t *rsout = drms_create_records(drms_env, nrecs, out, DRMS_PERMANENT, &status);
     if (status || !rsout)
-	die("Can't create %d records in output series %s", nrecs, out);
+        die("Can't create %d records in output series %s", nrecs, out);
 
     //
     // MAIN LOOP
     //
     for (int n=0; n<nrecs; ++n) {
-	warn("Processing record #%d...\n", n);
+        warn("Processing record #%d...\n", n);
 
-	DRMS_Record_t *recin = rsin->records[n];
-	DRMS_Record_t *recout = rsout->records[n];
-	drms_copykeys(recout, recin, 1, kDRMS_KeyClass_Explicit);
+        DRMS_Record_t *recin = rsin->records[n];
+        DRMS_Record_t *recout = rsout->records[n];
+        drms_copykeys(recout, recin, 1, kDRMS_KeyClass_Explicit);
 
-	// copy segment 1 (bad_pixel_list)
-	DRMS_Segment_t *seg1in = drms_segment_lookupnum(recin, 1);
-	DRMS_Array_t *arr1in = drms_segment_read(seg1in, DRMS_TYPE_INT, &status);
-	if (status || !arr1in)
-	    die("Can't read bad_pixel_list\n");
-	DRMS_Segment_t *seg1out = drms_segment_lookupnum(recout, 1);
-	drms_segment_write(seg1out, arr1in, 0);
- 	drms_free_array(arr1in);
+        // copy segment 1 (bad_pixel_list)
+        DRMS_Segment_t *seg1in = drms_segment_lookupnum(recin, 1);
+        if (!seg1in)
+        {
+            die("Can't open bad_pixel_list input segment.\n");
+        }
+        DRMS_Array_t *arr1in = drms_segment_read(seg1in, DRMS_TYPE_INT, &status);
+        if (status || !arr1in)
+            die("Can't read bad_pixel_list\n");
+        DRMS_Segment_t *seg1out = drms_segment_lookupnum(recout, 1);
+        if (!seg1out)
+        {
+            die("Can't open bad_pixel_list output segment.\n");
+        }
+        if (DRMS_SUCCESS != drms_segment_write(seg1out, arr1in, 0))
+        {
+            die("Can't write bad_pixel_list output segment.\n");
+        }
+        drms_free_array(arr1in);
 
-	// read segment 0 (image_lev1)
-	DRMS_Segment_t *seg0in = drms_segment_lookupnum(recin, 0);
-	DRMS_Array_t *arr0in = drms_segment_read(seg0in, DRMS_TYPE_INT, &status);
-	if (status || !arr0in)
-	    die("Can't read image_lev1\n");
+        // read segment 0 (image_lev1)
+        DRMS_Segment_t *seg0in = drms_segment_lookupnum(recin, 0);
+        if (!seg0in)
+        {
+            die("Can't open image_lev1 input segment.\n");
+        }
+        DRMS_Array_t *arr0in = drms_segment_read(seg0in, DRMS_TYPE_INT, &status);
+        if (status || !arr0in)
+            die("Can't read image_lev1\n");
 
-	// pad image data array for FFT
-	for (int j=0; j<4096; ++j)
-	    for (int i=0; i<4096; ++i) {
-		int tmp = ((int *)arr0in->data)[4096*j+i];
-		E[4098*j+i] = O[4098*j+i] = (tmp > 0) ? tmp : 0;
-	    }
+        // pad image data array for FFT
+        for (int j=0; j<4096; ++j)
+            for (int i=0; i<4096; ++i) {
+                int tmp = ((int *)arr0in->data)[4096*j+i];
+                E[4098*j+i] = O[4098*j+i] = (tmp > 0) ? tmp : 0;
+            }
 
-	// do Richardson-Lucy iterations
-	for (int k=0; k<iter; ++k) {
-	    memcpy(Esav, E, sizeof(float)*4096*4098);
-	    // B = conv(E,P)
-	    ck(DftiComputeForward(p, E));
-	    vcMul(2049*4096, E, P, B);
-	    ck(DftiComputeBackward(q, B));
-	    // R = O/B
-	    vsDiv(2*2049*4096, O, B, R);
-	    // C = corr(R,P) (or conv(R,P*))
-	    ck(DftiComputeForward(p, R));
-	    vcMulByConj(2049*4096, R, P, C);
-	    ck(DftiComputeBackward(q, C));
-	    // apply correction to get new estimate
-	    vsMul(2*2049*4096, Esav, C, E);
-	}
+        // do Richardson-Lucy iterations
+        for (int k=0; k<iter; ++k) {
+            memcpy(Esav, E, sizeof(float)*4096*4098);
+            // B = conv(E,P)
+            ck(DftiComputeForward(p, E));
+            vcMul(2049*4096, E, P, B);
+            ck(DftiComputeBackward(q, B));
+            // R = O/B
+            vsDiv(2*2049*4096, O, B, R);
+            // C = corr(R,P) (or conv(R,P*))
+            ck(DftiComputeForward(p, R));
+            vcMulByConj(2049*4096, R, P, C);
+            ck(DftiComputeBackward(q, C));
+            // apply correction to get new estimate
+            vsMul(2*2049*4096, Esav, C, E);
+        }
 
-	// copy final result, write segment
-	int *imgout = malloc(sizeof(int)*4096*4096);
-	if (!imgout)
-	    die("Can't allocate memory for output image\n");
-	for (int j=0; j<4096; ++j)
-	    for (int i=0; i<4096; ++i) {
-		int tmp = ((int *)arr0in->data)[4096*j+i];
-		Esav[4096*j+i] = imgout[4096*j+i] = (tmp > 0) ? roundf(E[4098*j+i]) : tmp;
-	    }
-	DRMS_Segment_t *seg0out = drms_segment_lookupnum(recout, 0);
-	if (arr0in->data) free(arr0in->data);
-	arr0in->data = imgout;
-	drms_segment_write(seg0out, arr0in, 0);
-	drms_free_array(arr0in);
+        // copy final result, write segment
+        int *imgout = malloc(sizeof(int)*4096*4096);
+        if (!imgout)
+            die("Can't allocate memory for output image\n");
+        for (int j=0; j<4096; ++j)
+            for (int i=0; i<4096; ++i) {
+                int tmp = ((int *)arr0in->data)[4096*j+i];
+                Esav[4096*j+i] = imgout[4096*j+i] = (tmp > 0) ? roundf(E[4098*j+i]) : tmp;
+            }
+        DRMS_Segment_t *seg0out = drms_segment_lookupnum(recout, 0);
+        if (!seg0out)
+        {
+            die("Can't open image_lev1 output segment.\n");
+        }
+        if (arr0in->data) free(arr0in->data);
+        arr0in->data = imgout;
+        if (DRMS_SUCCESS != drms_segment_write(seg0out, arr0in, 0))
+        {
+            die("Can't write image_lev1 output segment.\n");
+        }
+        drms_free_array(arr0in);
 
-	// do limb fit and height formation correction
-	int FID = drms_getkey_int(recin, "FID", &status);
-	float CROTA2 = drms_getkey_float(recin, "CROTA2", &status);
-	float CDELT1 = drms_getkey_float(recin, "CDELT1", &status);
-	double OBSVR = drms_getkey_double(recin, "OBS_VR", &status);
-	double tmpX0, tmpY0, tmpRSUN;
-	status = limb_fit(recin, Esav, &tmpRSUN, &tmpX0, &tmpY0, 4096, 4096, 0);
-	float RSUN_LF = tmpRSUN;
-	float X0_LF = tmpX0;
-	float Y0_LF = tmpY0;
-	status = heightformation(FID,OBSVR,&CDELT1,&RSUN_LF,&X0_LF,&Y0_LF,-CROTA2);
-	drms_setkey_float(recout, "CRPIX1", X0_LF+1);
-	drms_setkey_float(recout, "CRPIX2", Y0_LF+1);
-	drms_setkey_float(recout, "R_SUN", RSUN_LF);
-	drms_setkey_float(recout, "CDELT1", CDELT1);
+        // do limb fit and height formation correction
+        int FID = drms_getkey_int(recin, "FID", &status);
+        float CROTA2 = drms_getkey_float(recin, "CROTA2", &status);
+        float CDELT1 = drms_getkey_float(recin, "CDELT1", &status);
+        double OBSVR = drms_getkey_double(recin, "OBS_VR", &status);
+        double tmpX0, tmpY0, tmpRSUN;
+        status = limb_fit(recin, Esav, &tmpRSUN, &tmpX0, &tmpY0, 4096, 4096, 0);
+        float RSUN_LF = tmpRSUN;
+        float X0_LF = tmpX0;
+        float Y0_LF = tmpY0;
+        status = heightformation(FID,OBSVR,&CDELT1,&RSUN_LF,&X0_LF,&Y0_LF,-CROTA2);
+        drms_setkey_float(recout, "CRPIX1", X0_LF+1);
+        drms_setkey_float(recout, "CRPIX2", Y0_LF+1);
+        drms_setkey_float(recout, "R_SUN", RSUN_LF);
+        drms_setkey_float(recout, "CDELT1", CDELT1);
     }
 
     MKL_free(P);
