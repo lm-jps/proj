@@ -163,31 +163,33 @@ int DoIt() {
         DRMS_Record_t *recout = rsout->records[n];
         drms_copykeys(recout, recin, 1, kDRMS_KeyClass_Explicit);
 
-        // copy segment 1 (bad_pixel_list)
-        DRMS_Segment_t *seg1in = drms_segment_lookupnum(recin, 1);
+        // copy segment bad_pixel_list
+        DRMS_Segment_t *seg1in = drms_segment_lookup(recin, "bad_pixel_list");
         if (!seg1in)
         {
-            die("Can't open bad_pixel_list input segment.\n");
-        }
-        DRMS_Array_t *arr1in = drms_segment_read(seg1in, DRMS_TYPE_INT, &status);
-        if (status || !arr1in)
-            die("Can't read bad_pixel_list\n");
-        DRMS_Segment_t *seg1out = drms_segment_lookupnum(recout, 1);
-        if (!seg1out)
-        {
-            die("Can't open bad_pixel_list output segment.\n");
-        }
-        if (DRMS_SUCCESS != drms_segment_write(seg1out, arr1in, 0))
-        {
-            die("Can't write bad_pixel_list output segment.\n");
-        }
-        drms_free_array(arr1in);
+            warn("No bad_pixel_list input segment found.\n");
+        } else {
+	    DRMS_Array_t *arr1in = drms_segment_read(seg1in, DRMS_TYPE_INT, &status);
+	    if (status || !arr1in)
+		die("Can't read bad_pixel_list\n");
+	    DRMS_Segment_t *seg1out = drms_segment_lookupnum(recout, 1);
+	    if (!seg1out)
+	    {
+		die("Can't open bad_pixel_list output segment.\n");
+	    }
+	    if (DRMS_SUCCESS != drms_segment_write(seg1out, arr1in, 0))
+	    {
+		die("Can't write bad_pixel_list output segment.\n");
+	    }
+	    drms_free_array(arr1in);
+	}
 
-        // read segment 0 (image_lev1)
-        DRMS_Segment_t *seg0in = drms_segment_lookupnum(recin, 0);
+        // read segment image_lev1
+        DRMS_Segment_t *seg0in = drms_segment_lookup(recin, "image_lev1");
         if (!seg0in)
         {
-            die("Can't open image_lev1 input segment.\n");
+            warn("No image_lev1 input segment found.\n");
+	    continue;
         }
         DRMS_Array_t *arr0in = drms_segment_read(seg0in, DRMS_TYPE_INT, &status);
         if (status || !arr0in)
@@ -254,6 +256,11 @@ int DoIt() {
         drms_setkey_float(recout, "CRPIX2", Y0_LF+1);
         drms_setkey_float(recout, "R_SUN", RSUN_LF);
         drms_setkey_float(recout, "CDELT1", CDELT1);
+
+	// set CALVER32 bit
+	long long calver32 = drms_getkey_longlong(recin, "CALVER32", &status);
+	calver32 += 0x200000;
+	drms_setkey_longlong(recout, "CALVER32", calver32);
     }
 
     MKL_free(P);
