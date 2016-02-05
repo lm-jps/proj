@@ -261,6 +261,8 @@ int DoIt() {
 	long long calver32 = drms_getkey_longlong(recin, "CALVER32", &status);
 	calver32 += 0x200000;
 	drms_setkey_longlong(recout, "CALVER32", calver32);
+
+	drms_setkey_double(recout, "DATE", CURRENT_SYSTEM_TIME);
     }
 
     MKL_free(P);
