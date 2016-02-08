@@ -9,7 +9,7 @@ d		:= $(dir)
 EXTRADEPS_$(d)		:= $(addprefix $(d)/, )
 
 # NOTE: Add the base of the module's filename below (next to mymod)
-MODEXE_$(d)	:= $(addprefix $(d)/, maproj3comperror dailysynframe dailysynframe_nrt hmisynoptic mdidailysynframe mdisynop brblossynoptic brblosdailysynframe brblosdailysynframe_nrt maprojbrfromblos mrmlossynoptic mrmlosdailysynframe mrmlosdailysynframe_nrt)
+MODEXE_$(d)	:= $(addprefix $(d)/, resizeb3compwitherror maproj3comperror dailysynframe dailysynframe_nrt hmisynoptic mdidailysynframe mdisynop brblossynoptic brblosdailysynframe brblosdailysynframe_nrt maprojbrfromblos mrmlossynoptic mrmlosdailysynframe mrmlosdailysynframe_nrt)
 MODEXE		:= $(MODEXE) $(MODEXE_$(d))
 
 MODEXE_SOCK_$(d):= $(MODEXE_$(d):%=%_sock)
