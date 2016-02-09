@@ -67,6 +67,7 @@ int DoIt() {
     const char *in = cmdparams_get_str(&cmdparams, "in", NULL);
     const char *out = cmdparams_get_str(&cmdparams, "out", NULL);
     const char *psf = cmdparams_get_str(&cmdparams, "psf", NULL);
+    char source[100];
     int iter = cmdparams_get_int(&cmdparams, "iter", NULL);
     int status;
 
@@ -263,6 +264,10 @@ int DoIt() {
 	drms_setkey_longlong(recout, "CALVER32", calver32);
 
 	drms_setkey_double(recout, "DATE", CURRENT_SYSTEM_TIME);
+	drms_setkey_int(recout, "ITER", iter);
+	drms_setkey_string(recout, "PSF", psf);
+	snprintf(source, sizeof source, "%s[:#%lld]", recin->seriesinfo->seriesname, recin->recnum);
+	drms_setkey_string(recout, "SOURCE", source);
     }
 
     MKL_free(P);
