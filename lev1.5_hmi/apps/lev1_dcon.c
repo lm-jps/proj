@@ -4,6 +4,7 @@
 #include <gapfill.h>
 #include "limb_fit.h"
 
+
 void warn(const char *fmt, ...)
 {
     va_list ap;
@@ -227,7 +228,8 @@ int DoIt() {
         for (int j=0; j<4096; ++j)
             for (int i=0; i<4096; ++i) {
                 int tmp = ((int *)arr0in->data)[4096*j+i];
-                Esav[4096*j+i] = imgout[4096*j+i] = (tmp > 0) ? roundf(E[4098*j+i]) : tmp;
+                imgout[4096*j+i] = (tmp > 0) ? roundf(E[4098*j+i]) : tmp;
+                Esav[4096*j+i] = E[4098*j+i]; // for limb_fit()
             }
         DRMS_Segment_t *seg0out = drms_segment_lookupnum(recout, 0);
         if (!seg0out)
