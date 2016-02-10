@@ -255,6 +255,7 @@ int DoIt(void)
   int colors;
   int scaletype;
   int srcNx = 0, srcNy = 0;
+  char *inSegName, *segnamep;
 
   if (strcasecmp(palette, "grey") == 0 || strcasecmp(palette, "gray") == 0)
     {
@@ -310,6 +311,17 @@ int DoIt(void)
   drms_stage_records(inRS, 1, 1);
   nrecs = inRS->n;
 fprintf(stderr,"nrecs=%d\n",nrecs);
+  segnamep = index(inQuery, '{');
+  if (segnamep) // found a segment list in the input query, use that segment.
+    {
+    segnamep++;
+    inSegName = strdup(strtok(segnamep, ",}"));
+    }
+  else // use segment number 0
+    { 
+    DRMS_Segment_t *seg0 = drms_segment_lookupnum(inRS->records[0],0);
+    inSegName = strdup(seg0->info->name);
+    }
 
   if (!outQuery[0])
        DIE("No valid output place specified");
@@ -347,7 +359,7 @@ fprintf(stderr,"nrecs=%d\n",nrecs);
       }
     else
       {
-      srcSeg = drms_segment_lookupnum(inRec, 0);
+      srcSeg = drms_segment_lookup(inRec, inSegName);
       srcArray = drms_segment_read(srcSeg, DRMS_TYPE_FLOAT, &status);
       if (!srcArray || status)
         {
@@ -360,8 +372,11 @@ fprintf(stderr,"nrecs=%d\n",nrecs);
          continue;
         }
       ObsLoc = GetObsInfo(srcSeg, NULL, &status);
-      if (!asis) upNcenter(srcArray, ObsLoc);
-      if (crop) crop_image(srcArray, ObsLoc);
+      if (ObsLoc)
+        {
+        if (!asis) upNcenter(srcArray, ObsLoc);
+        if (crop) crop_image(srcArray, ObsLoc);
+        }
       srcNx = srcArray->axis[0];
       srcNy = srcArray->axis[1];
       }
@@ -1223,7 +1238,7 @@ ObsInfo_t *GetObsInfo(DRMS_Segment_t *seg, ObsInfo_t *pObsLoc, int *rstatus)
     ObsLoc->crval1 = drms_getkey_double(rec, "CRVAL1", &status); CHECK("CRVAL1");
     ObsLoc->crval2 = drms_getkey_double(rec, "CRVAL2", &status); CHECK("CRVAL2");
     ObsLoc->cdelt1 = drms_getkey_double(rec, "CDELT1", &status); CHECK("CDELT1");
-    ObsLoc->cdelt2 = drms_getkey_double(rec, "CDELT2", &status); CHECK("CDELT1");
+    ObsLoc->cdelt2 = drms_getkey_double(rec, "CDELT2", &status); CHECK("CDELT2");
     ObsLoc->crota2 = drms_getkey_double(rec, "CROTA2", &status); if (status) ObsLoc->crota2 = 0.0; // WCS default
     ObsLoc->sina = sin(ObsLoc->crota2*Deg2Rad);
     ObsLoc->cosa = sqrt (1.0 - ObsLoc->sina*ObsLoc->sina);
