@@ -48,7 +48,8 @@
        enddo
        do j = 0, jeof-1
        do i = 0, ieof-1
-         aa = float(i) + float(slongi) * float(ieof) / 360.0
+!         aa = float(i) + float(slongi) * float(ieof) / 360.0
+         aa = float(i) + llongi * float(ieof) / 360.0
          i2 = int(aa)
          if (i2 .LT.    0) i2 = i2 + ieof
          if (i2 .GE. ieof) i2 = i2 - ieof
