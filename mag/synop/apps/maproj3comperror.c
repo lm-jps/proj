@@ -79,13 +79,16 @@
 
 #include <jsoc_main.h>
 #include "fstats.c"
-#include "cartography.c"
-#include "imginfo.c"
-#include "keystuff.c"
-#include "mdistuff.c"
-#include "img2helioVector.c"
-#include "noisemaskimag4twindow.c"
-#include "obstime2maskid.c"
+//#include "cartography.c"
+//#include "imginfo.c"
+//#include "keystuff.c"
+//#include "mdistuff.c"
+//#include "img2helioVector.c"
+//#include "noisemaskimag4twindow.c"
+//#include "obstime2maskid.c"
+#include "cartography.h"
+#include "magutils.h"
+
 
 #define RECTANGULAR	(0)
 #define CASSINI		(1)
