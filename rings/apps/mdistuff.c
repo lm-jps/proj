@@ -8,6 +8,8 @@
 /*
  *  Assumed error in SOHO position angle w.r.t solar north (deg.)
  */
+#include "math.h"
+ 
 #define MDI_IMG_SOHO_PA	(-0.2)
 
 void mtrack_MDI_correct_pa (double *pa) {

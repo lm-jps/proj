@@ -30,6 +30,12 @@
  *
  *  Revision history is at end of file
  */
+ 
+#include "drms.h"
+#include "math.h"
+ 
+extern ModuleArgs_t *gModArgs; 
+extern CmdParams_t cmdparams;
 
 int check_and_set_key_short (DRMS_Record_t *new, const char *key, short val) {
   DRMS_Keyword_t *keywd;
