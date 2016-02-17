@@ -8,6 +8,8 @@ d               := $(dir)
 # mag team probably isn't going to use apps dir
 # dir     := $(d)/apps
 # -include                $(SRCDIR)/$(dir)/Rules.mk
+dir     := $(d)/libs
+-include                $(SRCDIR)/$(dir)/Rules.mk
 dir     := $(d)/pfss
 -include                $(SRCDIR)/$(dir)/Rules.mk
 dir     := $(d)/ambig
