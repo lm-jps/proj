@@ -19,6 +19,9 @@ dir     := $(d)/egsehmicomp
 -include                $(SRCDIR)/$(dir)/Rules.mk
 dir     := $(d)/imrotate
 -include                $(SRCDIR)/$(dir)/Rules.mk
+dir     := $(d)/projection
+-include                $(SRCDIR)/$(dir)/Rules.mk
+
 
 ifeq ($(COMPILER), icc)
 ifneq ($(JSOC_MACHINE), linux_ia32) 
