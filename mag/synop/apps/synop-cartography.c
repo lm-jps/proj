@@ -284,15 +284,29 @@ int synop_plane2sphere (double x, double y, double latc, double lonc,
       test = cosphi * sin (x/cosphi) / coslat;
       *lon = asin (test) + lonc;
       if (fabs (x) > M_PI * cosphi) return (-1);
+      
+/*
       if (fabs (x) > M_PI_2) {
         status = 1;
         while (x > M_PI_2) {
           *lon = M_PI - *lon;
-	  x -= M_PI;
+          x -= M_PI;
         }
         while (x < -M_PI_2) {
           *lon = -M_PI - *lon;
-	  x += M_PI;
+          x += M_PI;
+        }
+*/
+      
+      if (fabs (x) > M_PI_2 * cosphi) {
+        status = 1;
+        while (x > M_PI_2 * cosphi) {
+          *lon = M_PI - *lon;
+          x -= M_PI * cosphi;
+        }
+        while (x < -M_PI_2 * cosphi) {
+          *lon = -M_PI - *lon;
+          x += M_PI * cosphi;
         }
       }
 /*
