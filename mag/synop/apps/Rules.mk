@@ -24,8 +24,10 @@ MODEXE_USEF		:= $(MODEXE_USEF) $(MODEXE_USEF_$(d))
 MODEXE_USEF_SOCK_$(d)	:= $(MODEXE_USEF_$(d):%=%_sock)
 MODEXE_USEF_SOCK	:= $(MODEXE_USEF_SOCK) $(MODEXE_USEF_SOCK_$(d))
 
+CUSTOM_CARTOGRAPHY_$(d) := $(addprefix $(d)/, synop-imginfo.o synop-cartography.o)
+
 EXE_$(d)	:= $(MODEXE_$(d)) $(MODEXE_USEF_$(d))
-OBJ_$(d)	:= $(EXE_$(d):%=%.o) 
+OBJ_$(d)	:= $(EXE_$(d):%=%.o) $(CUSTOM_CARTOGRAPHY_$(d)) 
 DEP_$(d)	:= $(OBJ_$(d):%=%.d)
 CLEAN		:= $(CLEAN) \
 		   $(OBJ_$(d)) \
@@ -46,7 +48,7 @@ $(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\""
 $(EXTRADEPS_$(d)):	CF_TGT := $(CF_TGT) -I$(SRCDIR)/$(d)
 
 ALL_$(d)	:= $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)) $(MODEXE_USEF_$(d)) $(MODEXE_USEF_SOCK_$(d))
-$(ALL_$(d)) : $(EXTRADEPS_$(d))
+$(ALL_$(d)) : $(EXTRADEPS_$(d)) $(CUSTOM_CARTOGRAPHY_$(d))
 $(ALL_$(d)) : $(LIBASTRO) $(LIBCARTOGRAPHY) $(LIBMAGUTILS) $(LIBSTATS)
 $(ALL_$(d)) : LF_TGT := $(LF_TGT) $(MKL)
 $(ALL_$(d)) : LL_TGT := $(LL_TGT) $(FFTW3LIBS) $(CFITSIOLIBS) -lmkl_em64t

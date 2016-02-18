@@ -108,6 +108,16 @@
 #define RSUNM		(6.96e8)
 #define INTERP_NEAREST_NEIGHBOR	(1)
 #define INTERP_BILINEAR	(2)
+
+// Defined in synop-imginfo.c:
+extern int synop_solar_image_info(DRMS_Record_t *img, double *xscl, double *yscl, double *ctrx, double *ctry, double *apsd, const char *rsun_key, const char *apsd_key, double *pang, double *ellipse_e, double *ellipse_pa, int *x_invrt, int *y_invrt, int *need_ephem, int AIPS_convention);
+
+// Defined in synop-cartography.c:
+extern int synop_plane2sphere (double x, double y, double latc, double lonc, double *lat, double *lon, int projection);
+extern int synop_img2sphere(double x, double y, double ang_r, double latc, double lonc, double pa, double *rho, double *lat, double *lon, double *sinlat, double *coslat, double *sig, double *mu, double *chi);
+extern int synop_sphere2img(double lat, double lon, double latc, double lonc, double *x, double *y, double xcenter, double ycenter, double rsun, double peff, double ecc, double chi, int xinvrt, int yinvrt);
+extern int synop_sphere2plane(double lat, double lon, double latc, double lonc, double *x, double *y, int projection);
+
 						       /*  module identifier  */
 char *module_name = "maproj3comperror";
 char *module_desc = "mapping from solar images";
@@ -646,7 +656,7 @@ int DoIt (void) {
     img_lon = drms_getkey_double (irec, clon_key, &status);
     img_lat = drms_getkey_double (irec, clat_key, &status);
 
-    status = solar_image_info (irec, &img_xscl, &img_yscl, &img_xc, &img_yc,
+    status = synop_solar_image_info (irec, &img_xscl, &img_yscl, &img_xc, &img_yc,
 	&img_radius, rsun_key, apsd_key, &img_pa, &ellipse_e, &ellipse_pa,
 	&x_invrt, &y_invrt, &need_ephem, 0);
     if (status & NO_SEMIDIAMETER) {
@@ -707,7 +717,7 @@ int DoIt (void) {
     for (col=0, x=x0; col < map_cols; col++, x += xstp, n++) {
       xrot = x * cos_phi - y * sin_phi;
       yrot = y * cos_phi + x * sin_phi;
-      offsun[n] = plane2sphere (xrot, yrot, clat, clon, &lat, &lon, proj);
+      offsun[n] = synop_plane2sphere (xrot, yrot, clat, clon, &lat, &lon, proj);
       maplat[n] = lat;
       maplon[n] = lon;
       map_coslat[n] = cos (lat);
@@ -784,7 +794,7 @@ printf("vrcenter=%f, rSun=%f, xcen=%f, ycen=%f, INVPHMAP=%s\n", vrcenter, rSun, 
                     continue;
                   }
 
-                img2sphere (vxx, vyy, asin(S), b0 * RADSINDEG, obsl0 * RADSINDEG, p * RADSINDEG, &vrho, &vlat, &vlon,
+                synop_img2sphere (vxx, vyy, asin(S), b0 * RADSINDEG, obsl0 * RADSINDEG, p * RADSINDEG, &vrho, &vlat, &vlon,
                     &vsinlat, &vcoslat, &vsig, &vmu, &vchi);
 /*
                 if (img2sphere (vxx, vyy, asin(S), b0 * RADSINDEG, obsl0 * RADSINDEG, p * RADSINDEG, &vrho, &vlat, &vlon,
