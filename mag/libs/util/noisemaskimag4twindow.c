@@ -12,12 +12,7 @@
 
 #define DIE(msg) {fflush(stdout); fprintf(stderr,"%s, status=%d\n", msg, status); return(status);}
 
-int noisemaskimag4twindow(xDim, yDim, xcen, ycen, rsun, vrcenter, maskid, image) 
-    float *image;
-    int xDim, yDim, maskid;
-    float xcen, ycen, rsun;
-    float vrcenter;
-
+int noisemaskimag4twindow(int xDim, int yDim, float xcen, float ycen, float rsun, float vrcenter, int maskid, float *image) 
  {
     CmdParams_t *params = &cmdparams;
     int valid, status = 0;

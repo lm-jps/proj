@@ -11,8 +11,7 @@
 
 #include "drms.h"
 
-int obstime2maskid(tobs)
-    TIME tobs;
+int obstime2maskid(TIME tobs)
 {
     char ttemp[64];
     TIME ChangeTime1, ChangeTime2, ChangeTime3, ChangeTime4, ChangeTime5, ChangeTime6, ChangeTime7, ChangeTime8, ChangeTime9;
