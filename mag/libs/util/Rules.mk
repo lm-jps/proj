@@ -6,7 +6,7 @@ d		:= $(dir)
 # Local variables
 LIBMAGUTILS	:= $(d)/libmagutils.a
 
-OBJ_$(d)	:= $(addprefix $(d)/, img2helioVector.o noisemaskimag4twindow.o obstime2maskid.o)
+OBJ_$(d)	:= $(addprefix $(d)/, img2helioVector.o noisemaskimag4twindow_old.o obstime2maskid.o)
 
 DEP_$(d)	:= $(OBJ_$(d):%=%.d)
 

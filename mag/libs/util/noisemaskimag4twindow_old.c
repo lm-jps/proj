@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include "jsoc_main.h"
-#include "imagefromchebyshev.c"
+#include "imagefromchebyshev_old.c"
 
 #define DIE(msg) {fflush(stdout); fprintf(stderr,"%s, status=%d\n", msg, status); return(status);}
 
