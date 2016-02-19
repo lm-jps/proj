@@ -46,8 +46,6 @@ var keyNoaaLat = 1;
 var keyNoaaLon = 2;
 var keyNoaaLonX = 3;
 
-var processingMap = new Object();
-
 // Support functions for multiple processing options
 
 function processingGetRecInfo(DoCheck, n)
@@ -102,47 +100,6 @@ function processingGetRecInfo(DoCheck, n)
 // Processing Options Code
 
 //
-// Processing details for HmiB2ptr --> HMI B to phi,theta,r
-//
-
-var HmiB2ptrOption;
-
-function HmiB2ptrSet()
-  {
-  }
-
-function HmiB2ptrInit(isActive)
-  {
-  if (!isActive)
-    {
-    $("ProcessHmiB2ptr").style.display="none";
-    }
-  }
-
-function HmiB2ptrCheck()
-  {
-  var HmiB2ptrSizeRatio = 1.0;
-  var isok = 1;
-  var args = "HmiB2ptr,l=1";
-  if (SeriesName === 'hmi.B_720s')
-    {
-    // $("ExportFilenameFmt").value = $("ExportFilenameFmt").value.replace('T_REC','T_OBS');
-    }
-  else
-    {
-    isok = 0;
-    alert("Error - HmiB2ptr can only be used for series hmi.B_720s");
-    }
-
-  ExportProcessingOptions[HmiB2ptrOption].Size = HmiB2ptrSizeRatio;
-  ExportProcessingOK = isok;
-  CheckRediness();
-  return (isok ? args : "");
-  }
-
-// End HmiB2ptr
-
-//
 // Processing details for AIA normalized Scaling
 //
 
@@ -195,7 +152,6 @@ function RebinInit(isActive)
     {
     // Clear out any old settings.
     $("RebinMethod").selectedIndex=0;
-    $("RebinSegments").checked = false;
     $("RebinCrop").checked = false;
     $("RebinRotate").checked = false;
     $("RebinScale").value = "1.0";
@@ -256,11 +212,6 @@ function RebinCheck()
   var RebinSizeRatio = 1.0;
   var rv = "rebin";
   var isok = 1;
-    
-  if ($("RebinSegments").checked)
-    {
-    rv = rv + ",A=1";
-    }
     
   if ($("RebinCrop").checked)
     {
@@ -745,10 +696,6 @@ function ImPatchCheck()
     newDimY = $("ImHigh").value * 1;
     }
 
-  // Special check to set the All Segments flag if the HmiB2ptr processing is selected
-  if ($("OptionHmiB2ptr").checked)
-    args += ",A=1";
-
   if (isok)
     {
     $("ImVerify").innerHTML = "OK to submit";
@@ -1013,10 +960,6 @@ function MaprojCheck()
     newDimY = $("MaprojHigh").value * 1;
     }
 
-  // Special check to set the All Segments flag if the HmiB2ptr processing is selected
-  if ($("OptionHmiB2ptr").checked)
-    args += ",A=1";
-
   if (isok)
     {
     $("MaprojVerify").innerHTML = "OK to submit";
@@ -1072,59 +1015,6 @@ function MaprojInit(isActive)
 
 // End of MapProj code
 
-// MagToPtr
-var MagToPtrOption;
-
-function MagToPtrInit(isActive)
-{
-    if (!isActive)
-    {
-        // Clear out any old settings.
-        $("MagToPtrDisambiguation").selectedIndex = 2;
-        $("MagToPtrLocationSegments").checked = false;
-        $("MagToPtrErrorSegments").checked = false;
-    }
-}
-
-function MagToPtrCheck()
-{
-    var args;
-    var opt = processingMap.OptionMagToPtr;
-    
-    args = 'MagToPtr';
-    
-    for (var prop in opt)
-    {
-        args = args + ',' + prop + '=' + opt.prop;
-    }
-    
-    return args;
-}
-
-function MagToPtrSet(attribute)
-{
-    var opt = processingMap.OptionMagToPtr;
-    
-    if (attribute == 'disambiguation')
-    {
-        opt.args.ambweak = $('MagToPtrDisambiguation').selectedIndex.toString();
-    }
-    else if (attribute == 'locationSegments')
-    {
-        opt.args.l = $('MagToPtrLocationSegments').checked ? '1' : '0';
-    }
-    else if (attribute == 'errorSegments')
-    {
-        opt.args.e = $('MagToPtrErrorSegments').checked ? '1' : '0';
-    }
-    else
-    {
-        alert('Invalid attribute - ' + attribute + '.');
-    }
-}
-// End MagToPtr
-
-
 //
 // Processing details for all options
 //
@@ -1161,20 +1051,6 @@ function ProcessingInit()
   ExpOpt.Size = 1.0;
   ExportProcessingOptions[iOpt] = ExpOpt;
   AiaScaleOption = iOpt;
-
-  iOpt++;
-  ProcessingOptionsHTML +=
-    '<input type="checkbox" checked="false" value="HmiB2ptr" id="OptionHmiB2ptr" onChange="SetProcessing('+iOpt+');" /> ' +
-    'HmiB2ptr - Convert HMI B_720s to Phi,Theta,R coordinates<br>'
-  ExpOpt = new Object();
-  ExpOpt.id = "OptionHmiB2ptr";
-  ExpOpt.rowid = "ProcessHmiB2ptr";
-  ExpOpt.Init = HmiB2ptrInit;
-  ExpOpt.Check = HmiB2ptrCheck;
-  ExpOpt.Set = HmiB2ptrSet;
-  ExpOpt.Size = 1.0;
-  ExportProcessingOptions[iOpt] = ExpOpt;
-  HmiB2ptrOption = iOpt;
 
   iOpt++;
   ProcessingOptionsHTML += 
@@ -1231,24 +1107,6 @@ function ProcessingInit()
   ExpOpt.Size = 1.0;
   ExportProcessingOptions[iOpt] = ExpOpt;
   RebinOption = iOpt;
-
-  ProcessingOptionsHTML += 
-    '<input type="checkbox" checked="false" value="magToPtr" id="OptionMagToPtr" onChange="SetProcessing('+iOpt+');" /> ' +
-    'magToPtr - Convert hmi.B_720s to Bp, Bt, and Br components<br>';
-  ExpOpt = new Object();
-  ExpOpt.id = "OptionMagToPtr";
-  ExpOpt.rowid = "ProcessMagToPtr";
-  ExpOpt.Init = MagToPtrInit;
-  ExpOpt.Check = MagToPtrCheck;
-  ExpOpt.Set = MagToPtrSet;
-  ExpOpt.Size = 1.0;
-  ExpOpt.args = new Object(); // Arguments defined by hmib2ptr.
-  ExpOpt.args.ambweak = 2; // radial acute
-  ExpOpt.args.l = 0; // No location segments
-  ExpOpt.args.e = 0; // No error segments
-  processingMap.OptionMagToPtr = ExpOpt;
-  ExportProcessingOptions[iOpt] = ExpOpt;
-  MagToPtrOption = iOpt;
 
   $("ExportProcessing").innerHTML = ProcessingOptionsHTML;
 
