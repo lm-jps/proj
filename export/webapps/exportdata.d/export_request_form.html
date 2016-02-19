@@ -505,6 +505,42 @@
       </td>
     </tr>
     <!-- END REBIN -->
+    
+    <!-- BEGIN MAGTOPTR -->
+    <tr id="ProcessMagToPtr" style="display:none">
+        <td>&nbsp;&nbsp;&nbsp;&nbsp;MagToPtr</td>
+        <td><span id="MagToPtrHelp" class="tip">?</span></td>
+        <td colspan="2">
+            <table style="border-style:solid">
+                <tr>
+                    <td>Please specify MagToPtr options:</td>
+                </tr>
+                <tr>
+                    <td>
+                        <select id="MagToPtrDisambiguation" size=1 name="MagToPtrDisambiguation" style="width:12em;background-color:#FFFFFF" onChange="MagToPtrSet('disambiguation')">
+                            <option value="potentialAcute">potential acute</option>
+                            <option value="random">random</option>
+                            <option value="radialAcute">radial acute</option>
+                        </select>
+                        Disambiguation Method
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <input id="MagToPtrLocationSegments" type="checkbox" name="MagToPtrLocationSegments" onChange="MagToPtrSet('locationSegments')" />
+                        Generate location segments
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                      <input id="MagToPtrErrorSegments" type="checkbox" name="MagToPtrErrorSegments" onChange="MagToPtrSet('errorSegments')" />
+                      Generate error segments
+                    </td>
+                </tr>         
+            </table>
+        </td>
+    </tr>
+    <!-- END MAGTOPTR -->
 
 <tr><td colspan="4"><span id="ProcArgsDisplay"></span></td></tr>
     <!-- End of processing  special code -->

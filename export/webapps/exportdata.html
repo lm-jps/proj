@@ -1095,6 +1095,10 @@ function SetProcessing(ichecked)
     {
     for (iProc=1; iProc<nProcs; iProc++)
       {
+      // ExportProcessingOptions is a list of all processing options. The command to perform
+      // any given option is sent to jsoc_fetch only if ExportProcessingOptions[iProc].id.checked is true.
+      // So, the order of the processing steps is the order they appear in ExportProcessingOptions, 
+      // which is determined in ProcessingInit() in processing.js.
       var ExpOpt = ExportProcessingOptions[iProc];
       if ($(ExpOpt.id).checked)
         {
@@ -1113,6 +1117,7 @@ function SetProcessing(ichecked)
           var args = ExpOpt.Check();
           if (args.length > 0)
             {
+            // args contains all the processing args. 
             ExportProcessingArgs += "|"+args;
             SizeRatio *= ExpOpt.Size;
             }

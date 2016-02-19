@@ -46,6 +46,8 @@ var keyNoaaLat = 1;
 var keyNoaaLon = 2;
 var keyNoaaLonX = 3;
 
+var processingMap = new Object();
+
 // Support functions for multiple processing options
 
 function processingGetRecInfo(DoCheck, n)
@@ -1070,6 +1072,59 @@ function MaprojInit(isActive)
 
 // End of MapProj code
 
+// MagToPtr
+var MagToPtrOption;
+
+function MagToPtrInit(isActive)
+{
+    if (!isActive)
+    {
+        // Clear out any old settings.
+        $("MagToPtrDisambiguation").selectedIndex = 2;
+        $("MagToPtrLocationSegments").checked = false;
+        $("MagToPtrErrorSegments").checked = false;
+    }
+}
+
+function MagToPtrCheck()
+{
+    var args;
+    var opt = processingMap.OptionMagToPtr;
+    
+    args = 'MagToPtr';
+    
+    for (var prop in opt)
+    {
+        args = args + ',' + prop + '=' + opt.prop;
+    }
+    
+    return args;
+}
+
+function MagToPtrSet(attribute)
+{
+    var opt = processingMap.OptionMagToPtr;
+    
+    if (attribute == 'disambiguation')
+    {
+        opt.args.ambweak = $('MagToPtrDisambiguation').selectedIndex.toString();
+    }
+    else if (attribute == 'locationSegments')
+    {
+        opt.args.l = $('MagToPtrLocationSegments').checked ? '1' : '0';
+    }
+    else if (attribute == 'errorSegments')
+    {
+        opt.args.e = $('MagToPtrErrorSegments').checked ? '1' : '0';
+    }
+    else
+    {
+        alert('Invalid attribute - ' + attribute + '.');
+    }
+}
+// End MagToPtr
+
+
 //
 // Processing details for all options
 //
@@ -1176,6 +1231,24 @@ function ProcessingInit()
   ExpOpt.Size = 1.0;
   ExportProcessingOptions[iOpt] = ExpOpt;
   RebinOption = iOpt;
+
+  ProcessingOptionsHTML += 
+    '<input type="checkbox" checked="false" value="magToPtr" id="OptionMagToPtr" onChange="SetProcessing('+iOpt+');" /> ' +
+    'magToPtr - Convert hmi.B_720s to Bp, Bt, and Br components<br>';
+  ExpOpt = new Object();
+  ExpOpt.id = "OptionMagToPtr";
+  ExpOpt.rowid = "ProcessMagToPtr";
+  ExpOpt.Init = MagToPtrInit;
+  ExpOpt.Check = MagToPtrCheck;
+  ExpOpt.Set = MagToPtrSet;
+  ExpOpt.Size = 1.0;
+  ExpOpt.args = new Object(); // Arguments defined by hmib2ptr.
+  ExpOpt.args.ambweak = 2; // radial acute
+  ExpOpt.args.l = 0; // No location segments
+  ExpOpt.args.e = 0; // No error segments
+  processingMap.OptionMagToPtr = ExpOpt;
+  ExportProcessingOptions[iOpt] = ExpOpt;
+  MagToPtrOption = iOpt;
 
   $("ExportProcessing").innerHTML = ProcessingOptionsHTML;
 
