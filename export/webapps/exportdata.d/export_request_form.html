@@ -88,6 +88,19 @@
 
     <!-- Processing HTML -->
 
+    <!-- BEGIN HMI B to ptr -->
+    <tr id="ProcessHmiB2ptr">
+      <td>&nbsp;&nbsp;&nbsp;&nbsp;HmiB2ptr</td> 
+      <td><span id="HmiB2ptrHelp" class="tip">?</span></td> 
+      <td colspan="2">
+        <table style="border-style:solid" >
+        <tr>
+        <td>reproject HMI B to spherical coordinates, a valid processing option only for hmi.B_720s</b></td>
+        </tr>
+        </table>
+      </td>
+    </tr>
+    <!-- END HMI B to ptr -->
 
     <!-- BEGIN AIA_SCALE -->
     <tr id="ProcessAiaScale">
@@ -468,6 +481,12 @@
               <input id="RebinNvector" type="text" name="RebinNvector" style="width:12em;background-color:#D88080" value="-1.0"
                 onChange="RebinSet('nvector')" />
               Length in pixels of smoothing Gaussian function.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <input id="RebinSegments" type="checkbox" name="RebinSegments" onChange="RebinSet('segs')" />
+              Process all segments if no {...} list is given.
             </td>
           </tr>
           <tr>

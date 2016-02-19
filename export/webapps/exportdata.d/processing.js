@@ -100,6 +100,47 @@ function processingGetRecInfo(DoCheck, n)
 // Processing Options Code
 
 //
+// Processing details for HmiB2ptr --> HMI B to phi,theta,r
+//
+
+var HmiB2ptrOption;
+
+function HmiB2ptrSet()
+  {
+  }
+
+function HmiB2ptrInit(isActive)
+  {
+  if (!isActive)
+    {
+    $("ProcessHmiB2ptr").style.display="none";
+    }
+  }
+
+function HmiB2ptrCheck()
+  {
+  var HmiB2ptrSizeRatio = 1.0;
+  var isok = 1;
+  var args = "HmiB2ptr,l=1";
+  if (SeriesName === 'hmi.B_720s')
+    {
+    // $("ExportFilenameFmt").value = $("ExportFilenameFmt").value.replace('T_REC','T_OBS');
+    }
+  else
+    {
+    isok = 0;
+    alert("Error - HmiB2ptr can only be used for series hmi.B_720s");
+    }
+
+  ExportProcessingOptions[HmiB2ptrOption].Size = HmiB2ptrSizeRatio;
+  ExportProcessingOK = isok;
+  CheckRediness();
+  return (isok ? args : "");
+  }
+
+// End HmiB2ptr
+
+//
 // Processing details for AIA normalized Scaling
 //
 
@@ -152,6 +193,7 @@ function RebinInit(isActive)
     {
     // Clear out any old settings.
     $("RebinMethod").selectedIndex=0;
+    $("RebinSegments").checked = false;
     $("RebinCrop").checked = false;
     $("RebinRotate").checked = false;
     $("RebinScale").value = "1.0";
@@ -212,6 +254,11 @@ function RebinCheck()
   var RebinSizeRatio = 1.0;
   var rv = "rebin";
   var isok = 1;
+    
+  if ($("RebinSegments").checked)
+    {
+    rv = rv + ",A=1";
+    }
     
   if ($("RebinCrop").checked)
     {
@@ -696,6 +743,10 @@ function ImPatchCheck()
     newDimY = $("ImHigh").value * 1;
     }
 
+  // Special check to set the All Segments flag if the HmiB2ptr processing is selected
+  if ($("OptionHmiB2ptr").checked)
+    args += ",A=1";
+
   if (isok)
     {
     $("ImVerify").innerHTML = "OK to submit";
@@ -960,6 +1011,10 @@ function MaprojCheck()
     newDimY = $("MaprojHigh").value * 1;
     }
 
+  // Special check to set the All Segments flag if the HmiB2ptr processing is selected
+  if ($("OptionHmiB2ptr").checked)
+    args += ",A=1";
+
   if (isok)
     {
     $("MaprojVerify").innerHTML = "OK to submit";
@@ -1051,6 +1106,20 @@ function ProcessingInit()
   ExpOpt.Size = 1.0;
   ExportProcessingOptions[iOpt] = ExpOpt;
   AiaScaleOption = iOpt;
+
+  iOpt++;
+  ProcessingOptionsHTML +=
+    '<input type="checkbox" checked="false" value="HmiB2ptr" id="OptionHmiB2ptr" onChange="SetProcessing('+iOpt+');" /> ' +
+    'HmiB2ptr - Convert HMI B_720s to Phi,Theta,R coordinates<br>'
+  ExpOpt = new Object();
+  ExpOpt.id = "OptionHmiB2ptr";
+  ExpOpt.rowid = "ProcessHmiB2ptr";
+  ExpOpt.Init = HmiB2ptrInit;
+  ExpOpt.Check = HmiB2ptrCheck;
+  ExpOpt.Set = HmiB2ptrSet;
+  ExpOpt.Size = 1.0;
+  ExportProcessingOptions[iOpt] = ExpOpt;
+  HmiB2ptrOption = iOpt;
 
   iOpt++;
   ProcessingOptionsHTML += 
