@@ -10,11 +10,11 @@
 #include <soi_version.h>
 #endif
 
-#include "dsds.h"
+#include "dsds.h" // This is bad - it redefines a bunch of stuff that is defined differenty in DRMS. But it also defines stuff needed by PE that is not defined in DRMS.
 
 #define PE_VERSION_NUM    (0.9)
 
-#define SUMSERVER "d02.Stanford.EDU"
+// BAD - #define SUMSERVER "d02.Stanford.EDU"
 
 #define PELOGFILE "/tmp/pe.%s.%d.log"
 #define PEMAILFILE "/tmp/pe.%s.%d.mail"
@@ -249,14 +249,17 @@ extern char *prod_host_second();
 #endif
 
 /*
-$Id: pe.h,v 1.2 2009/04/24 21:51:59 production Exp $
+$Id: pe.h,v 1.3 2016/02/25 20:53:51 arta Exp $
 $Source: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/jpe/apps/pe.h,v $
-$Author: production $
+$Author: arta $
 */
 /* $Log: pe.h,v $
- * Revision 1.2  2009/04/24 21:51:59  production
- * change SERVER to PSERVER
+ * Revision 1.3  2016/02/25 20:53:51  arta
+ * Changes to jpe so that it works with sha.dsds dataseries.
  *
+/* Revision 1.2  2009/04/24 21:51:59  production
+/* change SERVER to PSERVER
+/*
 /* Revision 1.1  2009/02/23 22:44:22  production
 /* initial
 /*

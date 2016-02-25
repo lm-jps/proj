@@ -17,7 +17,7 @@
 
 #define DSDSMASTER "sonar.Stanford.EDU"	/* location of global dsds/ampex_svc */
 
-#define MAX_PART 64	/* max # +1 of dedicated DSDS partitions */
+// #define MAX_PART 64	/* max # +1 of dedicated DSDS partitions */
 
 #define NUM_GROUPS 256
 
@@ -200,14 +200,17 @@ extern void reqreqstat(int offflg, int (*log)(char *fmt, ...));
 */
 
 /*
-$Id: dsds.h,v 1.1 2009/04/24 21:50:28 production Exp $
+$Id: dsds.h,v 1.2 2016/02/25 20:53:51 arta Exp $
 $Source: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/jpe/apps/dsds.h,v $
-$Author: production $
+$Author: arta $
 */
 /* $Log: dsds.h,v $
- * Revision 1.1  2009/04/24 21:50:28  production
- * *** empty log message ***
+ * Revision 1.2  2016/02/25 20:53:51  arta
+ * Changes to jpe so that it works with sha.dsds dataseries.
  *
+/* Revision 1.1  2009/04/24 21:50:28  production
+/* *** empty log message ***
+/*
  * Revision 1.34  2003/05/15  17:14:50  jim
  * change DSDSMASTER from tarax to sonar. Tarax has gone away. This may
  * not be entirely necessary as it's just used for spawning ampex in
