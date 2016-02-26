@@ -778,9 +778,9 @@ printf("vrcenter=%f, rSun=%f, xcen=%f, ycen=%f, INVPHMAP=%s\n", vrcenter, rSun, 
             for (ix = 0; ix < xDim; ix++)
               {
                 iData = yOff + ix;
-                vxx = (double)ix - ycrpix1;
+                vxx = (double)ix - xcrpix1;
                 vxx /= img_radius;
-                if (isnan(bTotal[iData]))
+                if (isnan(bTotal[iData]) || isnan(bAzim[iData]) || isnan(bIncl[iData]))
                   {
                     bRadial[iData] = DRMS_MISSING_FLOAT;
                     bTheta[iData] = DRMS_MISSING_FLOAT;
@@ -790,16 +790,7 @@ printf("vrcenter=%f, rSun=%f, xcen=%f, ycen=%f, INVPHMAP=%s\n", vrcenter, rSun, 
 
                 synop_img2sphere (vxx, vyy, asin(S), b0 * RADSINDEG, obsl0 * RADSINDEG, p * RADSINDEG, &vrho, &vlat, &vlon,
                     &vsinlat, &vcoslat, &vsig, &vmu, &vchi);
-/*
-                if (img2sphere (vxx, vyy, asin(S), b0 * RADSINDEG, obsl0 * RADSINDEG, p * RADSINDEG, &vrho, &vlat, &vlon,
-                    &vsinlat, &vcoslat, &vsig, &vmu, &vchi))
-                  {
-                    bRadial[iData] = DRMS_MISSING_FLOAT;
-                    bTheta[iData] = DRMS_MISSING_FLOAT;
-                    bPhi[iData] = DRMS_MISSING_FLOAT;
-                    continue;
-                  }
-*/
+
                 double bx = 0.0, by = 0.0, bz = 0.0;
 //                if (disamb[iData] >= 4.0) bAzim[iData] += 180.0; //-- radial acute 
                 if ((int)(disamb[iData]/2)%2 == 1) bAzim[iData] += 180.0; //-- random assumption
