@@ -777,7 +777,7 @@ printf("vrcenter=%f, rSun=%f, xcen=%f, ycen=%f, INVPHMAP=%s\n", vrcenter, rSun, 
             for (ix = 0; ix < xDim; ix++)
               {
                 iData = yOff + ix;
-                vxx = (double)ix - ycrpix1;
+                vxx = (double)ix - xcrpix1;
                 vxx /= img_radius;
                 if (isnan(bTotal[iData]))
                   {
