@@ -7,6 +7,7 @@ cgem.lorentz
 hmi.b_720s_e15w1332_cea
 hmi.b_720s_e15w1332_cutout
 hmi.bharp_720s_nrt
+hmi.bmap_lowres_latlon_720s
 hmi.c_avg120
 hmi.flatfield
 hmi.fsi_phase_lon_lat
