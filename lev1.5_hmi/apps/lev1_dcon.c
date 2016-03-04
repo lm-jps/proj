@@ -59,7 +59,7 @@ char *module_name = "lev1_dcon";
 ModuleArgs_t module_args[] = {
     {ARG_STRING, "in", "", "input query"},
     {ARG_STRING, "out", "", "output series"},
-    {ARG_STRING, "psf", "", "PSF FITS file path"},
+    {ARG_STRING, "psf", "", "PSF query"},
     {ARG_INT, "iter", "25", "number of R-L iterations"},
     {ARG_END}
 };
@@ -95,13 +95,18 @@ int DoIt() {
 	    warn("%d records found\n", nrecs);
 
     // read PSF
-    DRMS_Array_t *arrpsf = drms_fitsrw_read(drms_env, psf, 0, NULL, &status);
+    DRMS_RecordSet_t *rpsf = drms_open_records(drms_env, psf, &status);
+    if (status || !rpsf)
+	die("Can't do drms_open_records(%s)\n", psf);
+    DRMS_Segment_t *segpsf = drms_segment_lookup(rpsf->records[0], "psf");
+    if (!segpsf)
+	die("No psf segment found.\n");
+    DRMS_Array_t *arrpsf = drms_segment_read(segpsf, DRMS_TYPE_DOUBLE, &status);
     if (status || !arrpsf)
-	    die("Can't read PSF file %s\n", psf);
+	die("Can't read psf record %s\n", psf);
     else if (arrpsf->naxis != 2 || arrpsf->axis[0] != 4096 || arrpsf->axis[1] != 4096 || arrpsf->type != DRMS_TYPE_DOUBLE)
-	    die("PSF file %s does not contain 4096x4096 double precision array\n", psf);
-    else
-	    warn("PSF file %s read\n", psf);
+	die("PSF record %s does not contain 4096x4096 double precision array\n", psf);
+    warn("PSF record %s read\n", psf);
 
     // pad PSF data array for FFT
     float *P = MKL_malloc(sizeof(float)*4096*4098, 64);
@@ -111,6 +116,7 @@ int DoIt() {
 	    for (int i=0; i<4096; ++i)
 	        P[4098*j+i] = ((double *)arrpsf->data)[4096*j+i];
     drms_free_array(arrpsf);
+    drms_close_records(rpsf, DRMS_FREE_RECORD);
 
     // set up MKL DFTI stuff
     MKL_LONG lengths[2], strdfor[3], strdbak[3];
