@@ -255,7 +255,7 @@ int DoIt(void)
   int colors;
   int scaletype;
   int srcNx = 0, srcNy = 0;
-  char *inSegName, *segnamep;
+  char *inSegName = NULL, *segnamep;
 
   if (strcasecmp(palette, "grey") == 0 || strcasecmp(palette, "gray") == 0)
     {
@@ -319,8 +319,16 @@ fprintf(stderr,"nrecs=%d\n",nrecs);
     }
   else // use segment number 0
     { 
-    DRMS_Segment_t *seg0 = drms_segment_lookupnum(inRS->records[0],0);
-    inSegName = strdup(seg0->info->name);
+        DRMS_Segment_t *seg0 = drms_segment_lookupindex(inRS->records[0], 0, 0);
+    
+        if (seg0)
+        {
+            inSegName = strdup(seg0->info->name);
+        }
+        else
+        {
+            DIE("Series has no segments.");
+        }
     }
 
   if (!outQuery[0])
@@ -359,8 +367,24 @@ fprintf(stderr,"nrecs=%d\n",nrecs);
       }
     else
       {
-      srcSeg = drms_segment_lookup(inRec, inSegName);
-      srcArray = drms_segment_read(srcSeg, DRMS_TYPE_FLOAT, &status);
+        if (inSegName)
+        {
+            srcSeg = drms_segment_lookup(inRec, inSegName);
+            
+            if (srcSeg)
+            {
+                srcArray = drms_segment_read(srcSeg, DRMS_TYPE_FLOAT, &status);
+            }
+            else
+            {
+                DIE("Failure looking up segment by name.")
+            }
+        }
+        else
+        {
+            DIE("Could not obtain segment name.");
+        }
+        
       if (!srcArray || status)
         {
          fprintf(stderr," No data file found rec %d, status=%d\n", irec,status);
