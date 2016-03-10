@@ -37,8 +37,8 @@ hmi.mrdailysynframe_720s
 hmi.mrdailysynframe_720s_nrt
 hmi.mrdailysynframe_small_720s
 hmi.mrdailysynframe_small_720s_nrt
-hmi.Mrmap_latlon_720s
-hmi.Mrmap_latlon_900x900_720s
+# hmi.Mrmap_latlon_720s
+# hmi.Mrmap_latlon_900x900_720s
 hmi.Mrmap_latlon_900x900_720s_nrt
 hmi.mrsynop_small_720s
 hmi.offpoint_flatfield
