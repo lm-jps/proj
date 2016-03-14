@@ -387,8 +387,8 @@ int do_interpolate(float **images, char **ierrors, float *image_out, struct keyw
 
   float p0min=pp0[0],p0max=pp0[0],b0min=bb0[0],b0max=bb0[0],rsmin=rrsun[0],rsmax=rrsun[0],x0min=xx0[0],x0max=xx0[0],y0min=yy0[0],y0max=yy0[0];
 
-  float limp0=0.1;
-  float limb0=0.05;
+  float limp0=0.0028*M_PI/180;
+  float limb0=0.05*M_PI/180;
   float limrsun=0.1;
   float limx0=1.0;
   float limy0=1.0;
@@ -1132,7 +1132,7 @@ float intsincos(unsigned int n, unsigned int m)
 
 char *interpol_version() // Returns CVS version
 {
-  return strdup("$Id: interpol_code.c,v 1.4 2015/01/31 18:01:02 kehcheng Exp $");
+  return strdup("$Id: interpol_code.c,v 1.5 2016/03/14 21:46:52 arta Exp $");
 }
 
 
