@@ -1104,7 +1104,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables_dcon.c,v 1.3 2016/01/21 20:30:48 arta Exp $");
+  return strdup("$Id: HMI_observables_dcon.c,v 1.4 2016/03/23 23:56:33 phil Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -1828,51 +1828,51 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
     {			
       if(DataCadence == 45.0)
 	{
-	  strcpy(HMISeriesLev15a,"hmi.V_45s_nrt"  );              
-	  strcpy(HMISeriesLev15b,"hmi.M_45s_nrt" );              
-	  strcpy(HMISeriesLev15c,"hmi.Ld_45s_nrt" );              
-	  strcpy(HMISeriesLev15d,"hmi.Lw_45s_nrt" );              
-	  strcpy(HMISeriesLev15e,"hmi.Ic_45s_nrt" );
+	  strcpy(HMISeriesLev15a,"hmi.V_45s_dcon_nrt"  );              
+	  strcpy(HMISeriesLev15b,"hmi.M_45s_dcon_nrt" );              
+	  strcpy(HMISeriesLev15c,"hmi.Ld_45s_dcon_nrt" );              
+	  strcpy(HMISeriesLev15d,"hmi.Lw_45s_dcon_nrt" );              
+	  strcpy(HMISeriesLev15e,"hmi.Ic_45s_dcon_nrt" );
 	}
       if(DataCadence == 22.5)
 	{
-	  strcpy(HMISeriesLev15a,"hmi_test.V_22s_nrt"  );              
-	  strcpy(HMISeriesLev15b,"hmi_test.M_22s_nrt" );              
-	  strcpy(HMISeriesLev15c,"hmi_test.Ld_22s_nrt" );              
-	  strcpy(HMISeriesLev15d,"hmi_test.Lw_22s_nrt" );              
-	  strcpy(HMISeriesLev15e,"hmi_test.Ic_22s_nrt" );        
+	  strcpy(HMISeriesLev15a,"hmi_test.V_22s_dcon_nrt"  );              
+	  strcpy(HMISeriesLev15b,"hmi_test.M_22s_dcon_nrt" );              
+	  strcpy(HMISeriesLev15c,"hmi_test.Ld_22s_dcon_nrt" );              
+	  strcpy(HMISeriesLev15d,"hmi_test.Lw_22s_dcon_nrt" );              
+	  strcpy(HMISeriesLev15e,"hmi_test.Ic_22s_dcon_nrt" );        
 	}
       if(DataCadence == 60.0)
 	{						             
-	  strcpy(HMISeriesLev15a,"hmi.V_60s_nrt");              
-	  strcpy(HMISeriesLev15b,"hmi.M_60s_nrt");              
-	  strcpy(HMISeriesLev15c,"hmi.Ld_60s_nrt");              
-	  strcpy(HMISeriesLev15d,"hmi.Lw_60s_nrt");              
-	  strcpy(HMISeriesLev15e,"hmi.Ic_60s_nrt");
+	  strcpy(HMISeriesLev15a,"hmi.V_60s_dcon_nrt");              
+	  strcpy(HMISeriesLev15b,"hmi.M_60s_dcon_nrt");              
+	  strcpy(HMISeriesLev15c,"hmi.Ld_60s_dcon_nrt");              
+	  strcpy(HMISeriesLev15d,"hmi.Lw_60s_dcon_nrt");              
+	  strcpy(HMISeriesLev15e,"hmi.Ic_60s_dcon_nrt");
 	}
       if(DataCadence == 75.0)
 	{
-	  strcpy(HMISeriesLev15a,"hmi_test.V_75s_nrt"  );              
-	  strcpy(HMISeriesLev15b,"hmi_test.M_75s_nrt" );              
-	  strcpy(HMISeriesLev15c,"hmi_test.Ld_75s_nrt" );              
-	  strcpy(HMISeriesLev15d,"hmi_test.Lw_75s_nrt" );              
-	  strcpy(HMISeriesLev15e,"hmi_test.Ic_75s_nrt" );
+	  strcpy(HMISeriesLev15a,"hmi_test.V_75s_dcon_nrt"  );              
+	  strcpy(HMISeriesLev15b,"hmi_test.M_75s_dcon_nrt" );              
+	  strcpy(HMISeriesLev15c,"hmi_test.Ld_75s_dcon_nrt" );              
+	  strcpy(HMISeriesLev15d,"hmi_test.Lw_75s_dcon_nrt" );              
+	  strcpy(HMISeriesLev15e,"hmi_test.Ic_75s_dcon_nrt" );
 	}
       if(DataCadence == 720.0 && unusual == 0) //observables sequence with 6 wavelength
 	{						             
-	  strcpy(HMISeriesLev15a,"hmi.V_720s_nrt");              
-	  strcpy(HMISeriesLev15b,"hmi.M_720s_nrt");              
-	  strcpy(HMISeriesLev15c,"hmi.Ld_720s_nrt");              
-	  strcpy(HMISeriesLev15d,"hmi.Lw_720s_nrt");              
-	  strcpy(HMISeriesLev15e,"hmi.Ic_720s_nrt");
+	  strcpy(HMISeriesLev15a,"hmi.V_720s_dcon_nrt");              
+	  strcpy(HMISeriesLev15b,"hmi.M_720s_dcon_nrt");              
+	  strcpy(HMISeriesLev15c,"hmi.Ld_720s_dcon_nrt");              
+	  strcpy(HMISeriesLev15d,"hmi.Lw_720s_dcon_nrt");              
+	  strcpy(HMISeriesLev15e,"hmi.Ic_720s_dcon_nrt");
 	}
       if(DataCadence == 720.0 && unusual == 1)//special sequence with more than 6 wavelengths
 	{						             
-	  strcpy(HMISeriesLev15a,"hmi.V2_720s_nrt");              
-	  strcpy(HMISeriesLev15b,"hmi.M2_720s_nrt");              
-	  strcpy(HMISeriesLev15c,"hmi.Ld2_720s_nrt");              
-	  strcpy(HMISeriesLev15d,"hmi.Lw2_720s_nrt");              
-	  strcpy(HMISeriesLev15e,"hmi.Ic2_720s_nrt");
+	  strcpy(HMISeriesLev15a,"hmi.V2_720s_dcon_nrt");              
+	  strcpy(HMISeriesLev15b,"hmi.M2_720s_dcon_nrt");              
+	  strcpy(HMISeriesLev15c,"hmi.Ld2_720s_dcon_nrt");              
+	  strcpy(HMISeriesLev15d,"hmi.Lw2_720s_dcon_nrt");              
+	  strcpy(HMISeriesLev15e,"hmi.Ic2_720s_dcon_nrt");
 	}
     }							             
   else                                                              //Final data
@@ -1964,8 +1964,8 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
       if( DataCadence == 120.0) strcpy(HMISeriesLev1pa,"su_couvidat.HMISeriesLev1pa120Q");
       if( DataCadence == 135.0) strcpy(HMISeriesLev1pa,"hmi.HMISeriesLev1pa135Q");
       if( DataCadence == 150.0) strcpy(HMISeriesLev1pa,"su_couvidat.HMISeriesLev1pa150Q");
-      if( DataCadence == 720.0 && unusual == 0) strcpy(HMISeriesLev1pa,"hmi.S_720s_nrt");
-      if( DataCadence == 720.0 && unusual == 1) strcpy(HMISeriesLev1pa,"hmi.S2_720s_nrt");
+      if( DataCadence == 720.0 && unusual == 0) strcpy(HMISeriesLev1pa,"hmi.S_720s_dcon_nrt");
+      if( DataCadence == 720.0 && unusual == 1) strcpy(HMISeriesLev1pa,"hmi.S2_720s_dcon_nrt");
     }
   else                                                              //Final data
     {
