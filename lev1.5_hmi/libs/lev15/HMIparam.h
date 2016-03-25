@@ -45,6 +45,9 @@ int  referencenlam=7000;                                                        
 //char referencewavelength[]="/home/jsoc/cvs/Development/JSOC/proj/lev1.5_hmi/apps/ReferenceWavelength4.bin" ;    //wavelength grid for the solar line, binary file, single precision (float)
 //int  referencenlam=16001;
 
+// Polarization calibration 
+char polcalParamFile[] = "/home/jsoc/hmi/tables/lev15/polcal-param-fit.bin";        // Used by init_polcal
+
 
 
 
