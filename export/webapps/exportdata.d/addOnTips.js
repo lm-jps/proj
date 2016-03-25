@@ -8,6 +8,15 @@ function AddOnTips(tipstyle, Tip)
   {
   new Tip("MaprojHelp","Extract patch in heliographic coordinates, trac across the disk, " +
       "provide Carrington location and size of patch in degrees or ref time and location.",tipstyle);
+  new Tip("MaprojXHelp","Enter the Carrington longitude (degrees) for the center of the desired patch cutout.  If the disk center " +
+      "box is checked, the longitude at disk center at the time of the first image processed will be used.",tipstyle);
+  new Tip("MaprojYHelp","Enter the Carrington latitude (degrees) for the center of the desired patch cutout.",tipstyle);
+  new Tip("MaprojProjHelp","Select desired projection from the drop-down list.",tipstyle);
+  new Tip("MaprojScaleHelp","Select target plate scale in degrees per pixel. Note should be <= given limit or undersampling may occur. " +
+      "This can be pushed up a factor of 1.5 or 2 if you are not planning on making time a sequence of images.",tipstyle);
+  new Tip("MaprojWideHelp","Select target image width in pixels of width defined by scale above.",tipstyle);
+  new Tip("MaprojHighHelp","Select target image height in pixels of height defined by scale above.",tipstyle);
+  new Tip("MaprojVerifyHelp","Click to run internal consistency check on selections above.",tipstyle);
   new Tip("MaprojNoaaTip","Enter 4- or 5-digit NOAA AR number to preload location type, reference time, " +
       "and location for the NOAA AR region.  Will find entry in NOAA region table that is closest to CM.",tipstyle);
   new Tip("ImPatchHelp","Extract patch in heliographic coordinates, trac across the disk, " +
