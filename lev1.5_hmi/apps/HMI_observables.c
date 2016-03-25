@@ -139,7 +139,10 @@ on May 15, 2015: increased RSUNerr from 0.5 to 5.0 pixels, to match changes in H
 #include <omp.h>                      //OpenMP header
 #include "interpol_code.h"            //from Richard's code
 #include "polcal.h"                   //from Jesper's codes
-#include "HMIparam.h"                 //header with basic HMI parameters and definitions
+// XXXXXXX Phil for testing
+// #include "HMIparam.h"                 //header with basic HMI parameters and definitions
+#include "HMIparam_phil.h"                 //header with basic HMI parameters and definitions
+// End of phil testing
 #include "fstats.h"                   //header for the statistics function of Keh-Cheng
 #include "drms_defs.h"
 
@@ -1104,7 +1107,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.51 2016/01/21 20:30:48 arta Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.52 2016/03/25 02:14:51 phil Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -1130,18 +1133,18 @@ int DoIt(void)
   //Reading the command line parameters
   //*****************************************************************************************************************
 
-  char *inRecQuery         = cmdparams_get_str(&cmdparams, kRecSetIn,      NULL);      //beginning time
-  char *inRecQuery2        = cmdparams_get_str(&cmdparams, kRecSetIn2,     NULL);      //end time
-  char *inLev              = cmdparams_get_str(&cmdparams, kTypeSetIn,     NULL);      //level of input series
-  char *outLev             = cmdparams_get_str(&cmdparams, kTypeSetOut,    NULL);      //level of output series
+  char *inRecQuery         = (char *)cmdparams_get_str(&cmdparams, kRecSetIn, NULL);   //beginning time
+  char *inRecQuery2        = (char *)cmdparams_get_str(&cmdparams, kRecSetIn2, NULL);  //end time
+  char *inLev              = (char *)cmdparams_get_str(&cmdparams, kTypeSetIn, NULL);  //level of input series
+  char *outLev             = (char *)cmdparams_get_str(&cmdparams, kTypeSetOut, NULL); //level of output series
   int   WavelengthID       = cmdparams_get_int(&cmdparams,WaveLengthIn ,   NULL);      //wavelength of the target filtergram
   int   QuickLook          = cmdparams_get_int(&cmdparams,QuickLookIn,     NULL);      //Quick look data or no? yes=1, no=0
   int   CamId              = cmdparams_get_int(&cmdparams,CamIDIn,         NULL);      //front (1) or side (0) camera?
   TIME  DataCadence        = cmdparams_get_double(&cmdparams,DataCadenceIn,NULL);      //cadence of the observable sequence
-  char *inLev1Series       = cmdparams_get_str(&cmdparams,SeriesIn,        NULL);      //name of the lev1 series
+  char *inLev1Series       = (char *)cmdparams_get_str(&cmdparams,SeriesIn, NULL);     //name of the lev1 series
   int   inSmoothTables     = cmdparams_get_int(&cmdparams,SmoothTables,    NULL);      //Use smooth look-up tables? yes=1, no=0 (default)
   int   inRotationalFlat   = cmdparams_get_int(&cmdparams,RotationalFlat,  NULL);      //Use rotational flat fields? yes=1, no=0 (default)
-  char *dpath              = cmdparams_get_str(&cmdparams,"dpath",         NULL);      //directory where the source code is located
+  char *dpath              = (char *)cmdparams_get_str(&cmdparams,"dpath",  NULL);     //directory where the source code is located
   int   inLinearity        = cmdparams_get_int(&cmdparams,Linearity,       NULL);      //Correct for non-linearity of cameras? yes=1, no=0 (default)
   int   unusual            = cmdparams_get_int(&cmdparams,Unusual,         NULL);      //unusual sequences? yes=1, no=0. Use only when trying to produce side camera observables
 
@@ -1780,9 +1783,7 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
     }
     if(Lev1pWanted || (Lev15Wanted && TestLevIn[2]==0))
     {
-        /* Use a configuration file to obtain the path to the parameter file used by polcal. There is a Stanford-specific 
-         * version of this configuration file, as well as a NetDRMs version, so we will leave this parameter out of the latter. */
-        status = init_polcal(&pars, method, POLCAL_PARAMS);
+        status = init_polcal(&pars, method, polcalParamFile);
         if(status != 0)
         {
             printf("Error: could not initialize the polarization calibration routine\n");
@@ -3078,7 +3079,12 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 	      DSUNOBSint=(DSUNOBS[j]-DSUNOBS[i])/(internTOBS[j]-internTOBS[i])*(tobs-internTOBS[i])+DSUNOBS[i];
 	      DSUNOBSint=DSUNOBSint/(double)AstroUnit;   //do_interpolate() expects distance in AU (AstroUnit should be equal to keyword DSUN_REF of level 1 data)
 	      CRLTOBSint=(CRLTOBS[j]-CRLTOBS[i])/(internTOBS[j]-internTOBS[i])*(tobs-internTOBS[i])+CRLTOBS[i];
-	      CROTA2int =(CROTA2[j]-CROTA2[i])/(internTOBS[j]-internTOBS[i])*(tobs-internTOBS[i])+CROTA2[i];
+
+	      // BAD: CROTA2int =(CROTA2[j]-CROTA2[i])/(internTOBS[j]-internTOBS[i])*(tobs-internTOBS[i])+CROTA2[i];
+	      CROTA2int = atan2(sin((CROTA2[j]-CROTA2[i])/180.0*M_PI), cos((CROTA2[j]-CROTA2[i])/180.0*M_PI)) /
+                              (internTOBS[j]-internTOBS[i])*(tobs-internTOBS[i])*180.0/M_PI+CROTA2[i];
+              CROTA2int = fmod(CROTA2int, 360.0); 
+
 	      OBSVRint  =(OBSVR[j]-OBSVR[i])/(internTOBS[j]-internTOBS[i])*(tobs-internTOBS[i])+OBSVR[i];
 	      OBSVWint  =(OBSVW[j]-OBSVW[i])/(internTOBS[j]-internTOBS[i])*(tobs-internTOBS[i])+OBSVW[i];
 	      OBSVNint  =(OBSVN[j]-OBSVN[i])/(internTOBS[j]-internTOBS[i])*(tobs-internTOBS[i])+OBSVN[i];

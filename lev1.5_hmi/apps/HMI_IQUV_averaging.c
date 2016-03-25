@@ -1027,7 +1027,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.43 2016/01/21 20:30:48 arta Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.44 2016/03/25 02:14:51 phil Exp $");
 }
 
 
@@ -1057,19 +1057,19 @@ int DoIt(void)
   //Reading the command line parameters
   //*****************************************************************************************************************
 
-  char *inRecQuery         = cmdparams_get_str(&cmdparams, kRecSetIn,     NULL);      //beginning time
-  char *inRecQuery2        = cmdparams_get_str(&cmdparams, kRecSetIn2,    NULL);      //end time
-  int   WavelengthID       = cmdparams_get_int(&cmdparams,WaveLengthIn ,  NULL);      //wavelength of the target filtergram
-  int   CamId              = cmdparams_get_int(&cmdparams,CamIDIn,        NULL);      //front (1) or side (0) camera?
-  TIME  DataCadence        = cmdparams_get_double(&cmdparams,DataCadenceIn,NULL);     //cadence of the observable sequence (45, 48, 90, 96, or 135 seconds)
-  int   Npolin             = cmdparams_get_int(&cmdparams,NpolIn,         NULL);      //number of polarizations in the framelist
-  int   Framelistsizein    = cmdparams_get_int(&cmdparams,FramelistSizeIn,NULL);      //size of framelist
-  char *inLev1Series       = cmdparams_get_str(&cmdparams,SeriesIn,       NULL);      //name of the lev1 series
-  int   QuickLook          = cmdparams_get_int(&cmdparams,QuickLookIn,    NULL);      //Quick look data or no? yes=1, no=0
-  int   Averaging          = cmdparams_get_int(&cmdparams,Average,        NULL);      //Average over 12 or 96 minutes? (12 by default)
-  int   inRotationalFlat   = cmdparams_get_int(&cmdparams,RotationalFlat, NULL);      //Use rotational flat fields? yes=1, no=0 (default)
-  char *dpath              = cmdparams_get_str(&cmdparams,"dpath",         NULL);      //directory where the source code is located
-  int   inLinearity        = cmdparams_get_int(&cmdparams,Linearity,       NULL);      //Correct for non-linearity of cameras? yes=1, no=0 (default)
+  char *inRecQuery         = (char *)cmdparams_get_str(&cmdparams, kRecSetIn,  NULL);      //beginning time
+  char *inRecQuery2        = (char *)cmdparams_get_str(&cmdparams, kRecSetIn2, NULL);      //end time
+  int   WavelengthID       = cmdparams_get_int(&cmdparams,WaveLengthIn,        NULL);      //wavelength of the target filtergram
+  int   CamId              = cmdparams_get_int(&cmdparams,CamIDIn,             NULL);      //front (1) or side (0) camera?
+  TIME  DataCadence        = cmdparams_get_double(&cmdparams,DataCadenceIn,    NULL);      //cadence of the observable sequence (45, 48, 90, 96, or 135 seconds)
+  int   Npolin             = cmdparams_get_int(&cmdparams,NpolIn,              NULL);      //number of polarizations in the framelist
+  int   Framelistsizein    = cmdparams_get_int(&cmdparams,FramelistSizeIn,     NULL);      //size of framelist
+  char *inLev1Series       = (char *)cmdparams_get_str(&cmdparams,SeriesIn,    NULL);      //name of the lev1 series
+  int   QuickLook          = cmdparams_get_int(&cmdparams,QuickLookIn,         NULL);      //Quick look data or no? yes=1, no=0
+  int   Averaging          = cmdparams_get_int(&cmdparams,Average,             NULL);      //Average over 12 or 96 minutes? (12 by default)
+  int   inRotationalFlat   = cmdparams_get_int(&cmdparams,RotationalFlat,      NULL);      //Use rotational flat fields? yes=1, no=0 (default)
+  char *dpath              = (char *)cmdparams_get_str(&cmdparams,"dpath",     NULL);      //directory where the source code is located
+  int   inLinearity        = cmdparams_get_int(&cmdparams,Linearity,           NULL);      //Correct for non-linearity of cameras? yes=1, no=0 (default)
 
   //THE FOLLOWING VARIABLES SHOULD BE SET AUTOMATICALLY BY OTHER PROGRAMS. FOR NOW SOME ARE SET MANUALLY
   char *CODEVERSION =NULL;                                                             //version of the IQUV averaging code
@@ -1568,7 +1568,7 @@ int DoIt(void)
     }      
   //CODEVERSION1=const_param.code_version;
   //CODEVERSION2=CODEVERSION1; //same version number actually because they are both in interpol_code.c
-  status = init_polcal(&pars, method, POLCAL_PARAMS);
+  status = init_polcal(&pars, method, polcalParamFile);
   if(status != 0)
     {
       printf("Error: could not initialize the polarization calibration routine\n");
@@ -3471,7 +3471,12 @@ int DoIt(void)
 		      DSUNOBSint[timeindex]=(DSUNOBS[j]-DSUNOBS[i])/(internTOBS[j]-internTOBS[i])*(tobs-internTOBS[i])+DSUNOBS[i];
 		      DSUNOBSint[timeindex]=DSUNOBSint[timeindex]/(double)AstroUnit;   //do_interpolate() expects distance in AU (AstroUnit should be equal to keyword DSUN_REF of level 1 data)
 		      CRLTOBSint[timeindex]=(CRLTOBS[j]-CRLTOBS[i])/(internTOBS[j]-internTOBS[i])*(tobs-internTOBS[i])+CRLTOBS[i];
-		      CROTA2int[timeindex] =(CROTA2[j]-CROTA2[i])/(internTOBS[j]-internTOBS[i])*(tobs-internTOBS[i])+CROTA2[i];
+
+		      // BAD CROTA2int[timeindex] =(CROTA2[j]-CROTA2[i])/(internTOBS[j]-internTOBS[i])*(tobs-internTOBS[i])+CROTA2[i];
+		      CROTA2int[timeindex] = atan2(sin((CROTA2[j]-CROTA2[i])/180.0*M_PI), cos((CROTA2[j]-CROTA2[i])/180.0*M_PI)) / 
+                              (internTOBS[j]-internTOBS[i])*(tobs-internTOBS[i])*180.0/M_PI+CROTA2[i];
+                      CROTA2int[timeindex] = fmod(CROTA2int[timeindex], 360.0);
+
 		      OBSVRint[timeindex]  =(OBSVR[j]-OBSVR[i])/(internTOBS[j]-internTOBS[i])*(tobs-internTOBS[i])+OBSVR[i];
 		      OBSVWint[timeindex]  =(OBSVW[j]-OBSVW[i])/(internTOBS[j]-internTOBS[i])*(tobs-internTOBS[i])+OBSVW[i];
 		      OBSVNint[timeindex]  =(OBSVN[j]-OBSVN[i])/(internTOBS[j]-internTOBS[i])*(tobs-internTOBS[i])+OBSVN[i];
