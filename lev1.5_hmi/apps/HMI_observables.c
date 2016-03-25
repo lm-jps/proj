@@ -139,10 +139,7 @@ on May 15, 2015: increased RSUNerr from 0.5 to 5.0 pixels, to match changes in H
 #include <omp.h>                      //OpenMP header
 #include "interpol_code.h"            //from Richard's code
 #include "polcal.h"                   //from Jesper's codes
-// XXXXXXX Phil for testing
-// #include "HMIparam.h"                 //header with basic HMI parameters and definitions
-#include "HMIparam_phil.h"                 //header with basic HMI parameters and definitions
-// End of phil testing
+#include "HMIparam.h"                 //header with basic HMI parameters and definitions
 #include "fstats.h"                   //header for the statistics function of Keh-Cheng
 #include "drms_defs.h"
 
@@ -1107,7 +1104,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.52 2016/03/25 02:14:51 phil Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.53 2016/03/25 15:03:30 arta Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
