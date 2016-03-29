@@ -5,14 +5,15 @@ use POSIX;
 use Time::Local;
 use Getopt::Long;
 
-my ($xband_log_nam, $vcdu_nam, $cmd, $mm, $aos_dt, $frstdt, $lastdt);
+my ($xband_log_nam, $vcdu_nam, $cmd, $cmd2, $mm, $aos_dt, $frstdt, $lastdt);
 my ($pass, @passes, $yr, $mo, $da, $hr, $mn, $sc, $wd, $yd, $dst, $aos);
-my ( $tlm, $sums, $full, $numd);
+my ( $tlm, $sums, $full, $numd, @words);
 my ($orb, $sta, $md, $hms, $nd, $ntx, $nrx, $nmis, $pctmis, $fnam, $miss);
 my ($t_beg, $t_end, $fsn_b, $fsn_e, $npkts, $seq_b, $seq_e);
 
 my $set_info = '/home/jsoc/cvs/Development/JSOC/bin/linux_x86_64/set_info -c';
-my $series = 'lm_jps.iris_dl';
+my $series = 'lm_jps.iris_dl'; my $series2 = 'lm_jps.iris_dl_ids_test';
+my $verbose = 1;
 GetOptions(
             "xband_log_nam=s"  => \$xband_log_nam,
             "series=s" => \$series,
@@ -35,7 +36,8 @@ foreach my $pass (@passes) {
   $hr = substr($hms, 0 , 2); $mn = substr($hms, 3, 2);
   $sc = substr($hms, 6, 2); $yr = substr $fnam, 5, 4 if $fnam;
   $aos = timegm($sc, $mn, $hr, $da, $mo, $yr);
-  $aos_dt = "AOS=$yr.$mm.${da}_$hr:$mn:${sc}_UTC";
+  $aos_dt = "$yr.$mm.${da}_$hr:$mn:${sc}_UTC";
+  my $aos_dtkw = "AOS=$yr.$mm.${da}_$hr:$mn:${sc}_UTC";
   $miss = "NUM_MISS=\'$nmis $pctmis\'";
   my $orbit = sprintf "ORBIT=%d", $orb;
   my $station = "STA=$sta";
@@ -45,11 +47,20 @@ foreach my $pass (@passes) {
     my $file="FILE=$fnam";
     $tlm = substr $fnam, 0, 22;
     my $name = "NAME=$tlm";
+    next if `show_info -q -c \"$series\[$orb\]\[$aos_dt\]\[?NAME=\'$tlm\'?\]\"` > 0;
     $sums = `show_info -q -P iris.tlm[$tlm]`; chomp $sums;
     if ($sums) {
       my ($s0, $s1, $s2, $s3);
       $full = "$sums/$fnam";
       my $mtime = (stat $full)[9];
+      my @rows = `vcdu_time_range -c < $full`;
+      $cmd2 = "$set_info ds=$series2 $orbit $aos_dtkw $name";
+      for (my $i=0; $i<20; $i++) {
+         if ($i<=$#rows) { @words = split /\s+/, $rows[$i]; }
+         else { $words[0]=0; $words[1]=0; }
+        $cmd2 = join (' ',  $cmd2, "ID_$i=$words[0] NUM_$i=$words[1]");
+      }
+      system join (' ', $cmd2 , $dt);
       my $line = `vcdu_time_range < $full`;
       ($t_beg,$t_end,$fsn_b,$fsn_e,$npkts,$seq_b,$seq_e,$s0,$s1,$s2,$s3) =
          split /\s+/, $line;
@@ -65,17 +76,19 @@ foreach my $pass (@passes) {
       my $isysns = "ISYSN0=$s0 ISYSN1=$s1 ISYSN2=$s2 ISYSN3=$s3";
       my $fsnb_age = sprintf "FSNB_AGE=%d", $aos - $t_beg;
       my $fsne_age = sprintf "FSNE_AGE=%d", $aos - $t_end;
-      $cmd = join (' ',  $set_info, $ds, $orbit, $station, $aos_dt, $frstdt,
+      $cmd = join (' ',  $set_info, $ds, $orbit, $station, $aos_dtkw, $frstdt,
            $lastdt, $numd, $tx, $rx, $miss, $npckts, $frst_fsn, $last_fsn,
            $isysns, $name, $file, $fsnb_age, $fsne_age, $dt);
     } else {
-    $cmd = join (' ',  $set_info, $ds, $orbit,  $station, $aos_dt, $numd,
+    $cmd = join (' ',  $set_info, $ds, $orbit,  $station, $aos_dtkw, $numd,
          $tx, $rx, $miss, $name, $file,  $dt);
     }
   } else {
-    $cmd = join (' ',  $set_info, $ds, $orbit,  $station, $aos_dt, $numd,
+    next if `show_info -q -c $series\[$orb\]\[$aos_dt\]` > 0;
+    $cmd = join (' ',  $set_info, $ds, $orbit,  $station, $aos_dtkw, $numd,
          $tx, $rx, $miss, $dt,  "NAME=none");
   }
   system $cmd;
-  printf "%s\n", substr $cmd, 30, 72;
+  if ($verbose > 0) { print "$orb "; }
+  elsif ($verbose > 1) { printf "%s\n", substr $cmd, 30, 78; }
 }
