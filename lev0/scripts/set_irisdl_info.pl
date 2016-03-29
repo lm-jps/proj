@@ -47,10 +47,11 @@ foreach my $pass (@passes) {
     my $name = "NAME=$tlm";
     $sums = `show_info -q -P iris.tlm[$tlm]`; chomp $sums;
     if ($sums) {
+      my ($s0, $s1, $s2, $s3);
       $full = "$sums/$fnam";
       my $mtime = (stat $full)[9];
       my $line = `vcdu_time_range < $full`;
-      ($t_beg, $t_end, $fsn_b, $fsn_e, $npkts, $seq_b, $seq_e) =
+      ($t_beg,$t_end,$fsn_b,$fsn_e,$npkts,$seq_b,$seq_e,$s0,$s1,$s2,$s3) =
          split /\s+/, $line;
       ($sc, $mn, $hr, $da, $mo, $yr, $wd, $yd, $dst) = gmtime($t_beg);
       $yr += 1900; $mo += 1;
@@ -61,11 +62,12 @@ foreach my $pass (@passes) {
       my $npckts = "NPCKTS=$npkts";
       my $frst_fsn = "FRST_FSN=$fsn_b";
       my $last_fsn = "LAST_FSN=$fsn_e";
+      my $isysns = "ISYSN0=$s0 ISYSN1=$s1 ISYSN2=$s2 ISYSN3=$s3";
       my $fsnb_age = sprintf "FSNB_AGE=%d", $aos - $t_beg;
       my $fsne_age = sprintf "FSNE_AGE=%d", $aos - $t_end;
       $cmd = join (' ',  $set_info, $ds, $orbit, $station, $aos_dt, $frstdt,
            $lastdt, $numd, $tx, $rx, $miss, $npckts, $frst_fsn, $last_fsn,
-           $name, $file, $fsnb_age, $fsne_age, $dt);
+           $isysns, $name, $file, $fsnb_age, $fsne_age, $dt);
     } else {
     $cmd = join (' ',  $set_info, $ds, $orbit,  $station, $aos_dt, $numd,
          $tx, $rx, $miss, $name, $file,  $dt);
