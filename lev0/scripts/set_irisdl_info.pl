@@ -86,7 +86,7 @@ foreach my $pass (@passes) {
   } else {
     next if `show_info -q -c $series\[$orb\]\[$aos_dt\]` > 0;
     $cmd = join (' ',  $set_info, $ds, $orbit,  $station, $aos_dtkw, $numd,
-         $tx, $rx, $miss, $dt,  "NAME=none");
+         $tx, $rx, $miss, $dt,  "NAME=NONE");
   }
   system $cmd;
   if ($verbose > 0) { print "$orb "; }
