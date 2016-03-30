@@ -26,10 +26,13 @@ my $ds = "ds=" . $series;
 my $dt = "DATE=$yr.$mo.${da}_$hr:$mn:${sc}_UTC";
 `wget -q -N http://iris.lmsal.com/health-safety/stationfiles/xband_instrument_frames.log`;
 if ($xband_log_nam) { open STDIN, "<$xband_log_nam" or die "Can't dup: $!"; }
-(<>);(<>);(<>);
+my $numdash = 0;
+while ($numdash<2) { my $line =(<>); $numdash++ if $line =~ /^Orbit/; }
+(<>);
+print "Finished header\n";
 while (<>) {
   chomp;
-  unshift @passes, $_;
+  unshift @passes, $_ unless $_ =~ /Pending/;
 }
 foreach my $pass (@passes) {
   ($orb, $sta, $md, $hms, $nd, $ntx, $nrx, $nmis, $pctmis, $fnam) =
@@ -50,7 +53,7 @@ foreach my $pass (@passes) {
     my $file="FILE=$fnam";
     $tlm = substr $fnam, 0, 22;
     my $name = "NAME=$tlm";
-    next if `$showinfo -q -c \"$series\[$orb\]\[$aos_dt\]\[?NAME=\'$tlm\'?\]\"` > 0;
+    next if `$showinfo -q -c \"$series\[$orb\]\[$aos_dt\]\[?NAME=\'$tlm\'?\]\[?T_BEG>0?\]\"` > 0;
     $sums = `$showinfo -q -P iris.tlm[$tlm]`; chomp $sums;
     if ($sums) {
       my ($s0, $s1, $s2, $s3);
