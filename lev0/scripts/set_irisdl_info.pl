@@ -13,7 +13,7 @@ my ($t_beg, $t_end, $fsn_b, $fsn_e, $npkts, $seq_b, $seq_e);
 
 my $set_info = '/home/jsoc/cvs/Development/JSOC/bin/linux_x86_64/set_info -c';
 my $showinfo = '/home/jsoc/cvs/Development/JSOC/bin/linux_x86_64/show_info';
-my $series = 'lm_jps.iris_dl'; my $series2 = 'lm_jps.iris_dl_ids_test';
+my $series = 'lm_jps.iris_dl'; my $series2 = 'lm_jps.iris_dl_ids';
 my $verbose = 1;
 GetOptions(
             "xband_log_nam=s"  => \$xband_log_nam,
@@ -24,7 +24,7 @@ my $ds = "ds=" . $series;
 ($sc, $mn, $hr, $da, $mo, $yr) = gmtime(time); $yr += 1900; $mo += 1;
 my $dt = "DATE=$yr.$mo.${da}_$hr:$mn:${sc}_UTC";
 `wget -nv -N http://iris.lmsal.com/health-safety/stationfiles/xband_instrument_frames.log`;
-if ($xband_log_nam) { open STDIN, "<<$xband_log_nam" or die "Can't dup: $!"; }
+if ($xband_log_nam) { open STDIN, "<$xband_log_nam" or die "Can't dup: $!"; }
 (<>);(<>);(<>);
 while (<>) {
   chomp;
@@ -76,8 +76,8 @@ foreach my $pass (@passes) {
       my $frst_fsn = "FRST_FSN=$fsn_b";
       my $last_fsn = "LAST_FSN=$fsn_e";
       my $isysns = "ISYSN0=$s0 ISYSN1=$s1 ISYSN2=$s2 ISYSN3=$s3";
-      my $fsnb_age = sprintf "FSNB_AGE=%d", $aos - $t_beg;
-      my $fsne_age = sprintf "FSNE_AGE=%d", $aos - $t_end;
+      my $fsnb_age = sprintf "FSNB_AGE=%f", ($aos - $t_beg)/3600.0;
+      my $fsne_age = sprintf "FSNE_AGE=%f", ($aos - $t_end)/3600.0;
       $cmd = join (' ',  $set_info, $ds, $orbit, $station, $aos_dtkw, $frstdt,
            $lastdt, $numd, $tx, $rx, $miss, $npckts, $frst_fsn, $last_fsn,
            $isysns, $name, $file, $fsnb_age, $fsne_age, $dt);
