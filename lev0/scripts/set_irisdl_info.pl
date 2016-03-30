@@ -12,6 +12,7 @@ my ($orb, $sta, $md, $hms, $nd, $ntx, $nrx, $nmis, $pctmis, $fnam, $miss);
 my ($t_beg, $t_end, $fsn_b, $fsn_e, $npkts, $seq_b, $seq_e);
 
 my $set_info = '/home/jsoc/cvs/Development/JSOC/bin/linux_x86_64/set_info -c';
+my $showinfo = '/home/jsoc/cvs/Development/JSOC/bin/linux_x86_64/show_info';
 my $series = 'lm_jps.iris_dl'; my $series2 = 'lm_jps.iris_dl_ids_test';
 my $verbose = 1;
 GetOptions(
@@ -22,6 +23,7 @@ GetOptions(
 my $ds = "ds=" . $series;
 ($sc, $mn, $hr, $da, $mo, $yr) = gmtime(time); $yr += 1900; $mo += 1;
 my $dt = "DATE=$yr.$mo.${da}_$hr:$mn:${sc}_UTC";
+`wget -nv -N http://iris.lmsal.com/health-safety/stationfiles/xband_instrument_frames.log`;
 if ($xband_log_nam) { open STDIN, "<<$xband_log_nam" or die "Can't dup: $!"; }
 (<>);(<>);(<>);
 while (<>) {
@@ -47,13 +49,13 @@ foreach my $pass (@passes) {
     my $file="FILE=$fnam";
     $tlm = substr $fnam, 0, 22;
     my $name = "NAME=$tlm";
-    next if `show_info -q -c \"$series\[$orb\]\[$aos_dt\]\[?NAME=\'$tlm\'?\]\"` > 0;
-    $sums = `show_info -q -P iris.tlm[$tlm]`; chomp $sums;
+    next if `$showinfo -q -c \"$series\[$orb\]\[$aos_dt\]\[?NAME=\'$tlm\'?\]\"` > 0;
+    $sums = `$showinfo -q -P iris.tlm[$tlm]`; chomp $sums;
     if ($sums) {
       my ($s0, $s1, $s2, $s3);
       $full = "$sums/$fnam";
       my $mtime = (stat $full)[9];
-      my @rows = `vcdu_time_range -c < $full`;
+      my @rows = `/home/jps/bin/vcdu_time_range -c < $full`;
       $cmd2 = "$set_info ds=$series2 $orbit $aos_dtkw $name";
       for (my $i=0; $i<20; $i++) {
          if ($i<=$#rows) { @words = split /\s+/, $rows[$i]; }
@@ -61,7 +63,7 @@ foreach my $pass (@passes) {
         $cmd2 = join (' ',  $cmd2, "ID_$i=$words[0] NUM_$i=$words[1]");
       }
       system join (' ', $cmd2 , $dt);
-      my $line = `vcdu_time_range < $full`;
+      my $line = `/home/jps/bin/vcdu_time_range < $full`;
       ($t_beg,$t_end,$fsn_b,$fsn_e,$npkts,$seq_b,$seq_e,$s0,$s1,$s2,$s3) =
          split /\s+/, $line;
       ($sc, $mn, $hr, $da, $mo, $yr, $wd, $yd, $dst) = gmtime($t_beg);
@@ -84,7 +86,7 @@ foreach my $pass (@passes) {
          $tx, $rx, $miss, $name, $file,  $dt);
     }
   } else {
-    next if `show_info -q -c $series\[$orb\]\[$aos_dt\]` > 0;
+    next if `$showinfo -q -c $series\[$orb\]\[$aos_dt\]` > 0;
     $cmd = join (' ',  $set_info, $ds, $orbit,  $station, $aos_dtkw, $numd,
          $tx, $rx, $miss, $dt,  "NAME=NONE");
   }
