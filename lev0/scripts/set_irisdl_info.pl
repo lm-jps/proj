@@ -4,16 +4,17 @@ use warnings;
 use POSIX;
 use Time::Local;
 use Getopt::Long;
-
+$ENV{SUMSERVER} = "k1";
 my ($xband_log_nam, $vcdu_nam, $cmd, $cmd2, $mm, $aos_dt, $frstdt, $lastdt);
 my ($pass, @passes, $yr, $mo, $da, $hr, $mn, $sc, $wd, $yd, $dst, $aos);
-my ( $tlm, $sums, $full, $numd, @words);
+my ( $tlm, $sums, $full, $numd, @words, @l0sys);
 my ($orb, $sta, $md, $hms, $nd, $ntx, $nrx, $nmis, $pctmis, $fnam, $miss);
 my ($t_beg, $t_end, $fsn_b, $fsn_e, $npkts, $seq_b, $seq_e);
 
 my $set_info = '/home/jsoc/cvs/Development/JSOC/bin/linux_x86_64/set_info -c';
 my $showinfo = '/home/jsoc/cvs/Development/JSOC/bin/linux_x86_64/show_info';
-my $series = 'lm_jps.iris_dl'; my $series2 = 'lm_jps.iris_dl_ids';
+#my $series = 'lm_jps.iris_dl'; my $series2 = 'lm_jps.iris_dl_ids';
+my $series = 'lm_jps.iris_tlm_stats'; my $series2 = 'lm_jps.iris_dl_ids';
 my $verbose = 1;
 GetOptions(
             "xband_log_nam=s"  => \$xband_log_nam,
@@ -23,7 +24,7 @@ GetOptions(
 my $ds = "ds=" . $series;
 ($sc, $mn, $hr, $da, $mo, $yr) = gmtime(time); $yr += 1900; $mo += 1;
 my $dt = "DATE=$yr.$mo.${da}_$hr:$mn:${sc}_UTC";
-`wget -nv -N http://iris.lmsal.com/health-safety/stationfiles/xband_instrument_frames.log`;
+`wget -q -N http://iris.lmsal.com/health-safety/stationfiles/xband_instrument_frames.log`;
 if ($xband_log_nam) { open STDIN, "<$xband_log_nam" or die "Can't dup: $!"; }
 (<>);(<>);(<>);
 while (<>) {
@@ -81,6 +82,11 @@ foreach my $pass (@passes) {
       $cmd = join (' ',  $set_info, $ds, $orbit, $station, $aos_dtkw, $frstdt,
            $lastdt, $numd, $tx, $rx, $miss, $npckts, $frst_fsn, $last_fsn,
            $isysns, $name, $file, $fsnb_age, $fsne_age, $dt);
+      my $lev0 = "iris.lev0[$fsn_b-$fsn_e][?TLMDSNAM=\'iris.tlm[$tlm]\'?]";
+      for (my $i=0; $i<4; $i++) {
+        $l0sys[$i] = `$showinfo -q -c "${lev0}[?ISYSN=$i?]"` + 0;
+        $cmd = join (' ',  $cmd, "L0SYS$i=$l0sys[$i] ");
+      }
     } else {
     $cmd = join (' ',  $set_info, $ds, $orbit,  $station, $aos_dtkw, $numd,
          $tx, $rx, $miss, $name, $file,  $dt);
