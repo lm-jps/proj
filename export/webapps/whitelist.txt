@@ -66,6 +66,7 @@ hmi.v_sht_secs_72d
 hmi.vw_v_45s
 iris.hk_dayfile_mag
 iris.lev1
+iris.lev1_nrt
 iris.orbit_vectors
 iris.pointing_data
 iris.saa_hlz
