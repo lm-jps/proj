@@ -433,10 +433,10 @@ int DoIt (void)
   const double LAMBDA_Bc               = params_get_double(params, "Lambda_B");
   const double DELTA_LAMBDAc           = params_get_double(params, "Delta_Lambda");
 #if NLEVPIXL == 1
-  const double NOISE_LEVELFIc          = params_get_double(params, "Noise_LEVELFI");
-  const double NOISE_LEVELFQc          = params_get_double(params, "Noise_LEVELFQ");
-  const double NOISE_LEVELFUc          = params_get_double(params, "Noise_LEVELFU");
-  const double NOISE_LEVELFVc          = params_get_double(params, "Noise_LEVELFV");
+  double NOISE_LEVELFIc          = params_get_double(params, "Noise_LEVELFI");
+  double NOISE_LEVELFQc          = params_get_double(params, "Noise_LEVELFQ");
+  double NOISE_LEVELFUc          = params_get_double(params, "Noise_LEVELFU");
+  double NOISE_LEVELFVc          = params_get_double(params, "Noise_LEVELFV");
 #else
   const double NOISE_LEVELc            = params_get_double(params, "Noise_LEVEL");
 #endif
@@ -448,6 +448,36 @@ int DoIt (void)
 
   const int    NUM_LAMBDA_synthc = params_get_int(params, "num_lambda_synth");
   const double LAMBDA_MIN_synthc = params_get_double(params, "Lambda_Min_synth");
+
+  int cameraID; // -- YL
+  int rn, rec_ct, sn, seg_ct; // move from below -- YL
+  int status; // move from below -- YL
+
+
+// -- start reading file -- YL
+
+      inRS = drms_open_records (drms_env, indsdescc, &status); /*  open input record_set  */
+      if (status) {DIE("drms_open_records failed.\n");}
+      if ((rec_ct = inRS->n) == 0){DIE("No records in selected dataset.\n");}
+      if ((rec_ct = inRS->n) >  1){fprintf (stderr, "Warning: only first record in selected set processed\n");}
+      inRec = inRS->records[0]; // This wrapper assume only the first Stokes be taken care of.
+      cameraID = drms_getkey_int(inRec,"CAMERA",&status);
+      drms_close_records(inRS, DRMS_FREE_RECORD); // once close the input Stokes record.
+
+// -- Noise level adjustment for  mod-L mode -- YL
+#if NLEVPIXL == 1
+        if (cameraID == 3)
+           {
+            NOISE_LEVELFIc = 0.118;
+            NOISE_LEVELFQc = 0.167;
+            NOISE_LEVELFUc = 0.167;
+            NOISE_LEVELFVc = 0.118;
+           }
+#endif
+
+// -- end of mod-L adjustment -- YL
+
+// -- end of reading file and mod-L adjustment -- YL
 
 #if TAKEPREV == 1
   const char   *indsdesc2c= params_get_str(params, "in2");
@@ -4353,33 +4383,8 @@ int vfisv_filter(int Num_lambda_filter,int Num_lambda,double filters[Num_lambda_
 
 /* ----------------------------- by Sebastien (2), CVS version info. ----------------------------- */
 
-char *meinversion_version(){return strdup("$Id: vfisv_harp.c,v 1.19 2013/04/30 20:25:12 keiji Exp $");}
+char *meinversion_version(){return strdup("$Id: vfisv_harp.c,v 1.20 2016/04/18 17:26:59 yliu Exp $");}
 
 /* Maybe some other Fortran version be included, here OR at bottom of this file. Maybe at bottom. */
 
 /* ----------------------------- end of this file ----------------------------- */
-/* --------------------------------------------
-: voigt.f,v 1.6 2012/04/10 22:16:09 keiji Exp 
-: change_var.f90,v 1.3 2012/04/10 22:16:14 keiji Exp 
-: cons_param.f90,v 1.5 2012/04/10 22:16:19 keiji Exp 
-: filt_init.f90,v 1.6 2012/04/10 22:16:24 keiji Exp 
-: filt_param.f90,v 1.6 2012/04/10 22:16:29 keiji Exp 
-: forward.f90,v 1.6 2012/04/10 22:16:34 keiji Exp 
-: free_init.f90,v 1.5 2012/04/10 22:16:39 keiji Exp 
-: free_memory.f90,v 1.5 2012/04/10 22:16:44 keiji Exp 
-: invert.f90,v 1.8 2012/04/10 22:16:49 keiji Exp 
-: inv_init.f90,v 1.5 2012/04/10 22:16:54 keiji Exp 
-: inv_param.f90,v 1.5 2012/04/10 22:16:59 keiji Exp 
-: inv_utils.f90,v 1.6 2012/04/10 22:17:03 keiji Exp 
-: lim_init.f90,v 1.1 2012/04/10 22:17:08 keiji Exp 
-: line_init.f90,v 1.5 2012/04/10 22:17:12 keiji Exp 
-: line_param.f90,v 1.5 2012/04/10 22:17:18 keiji Exp 
-: ran_mod.f90,v 1.5 2012/04/10 22:17:23 keiji Exp 
-: svbksb.f90,v 1.5 2012/04/10 22:17:28 keiji Exp 
-: svdcmp.f90,v 1.5 2012/04/10 22:17:33 keiji Exp 
-: voigt_data.f90,v 1.5 2012/04/10 22:17:39 keiji Exp 
-: voigt_init.f90,v 1.5 2012/04/10 22:17:46 keiji Exp 
-: voigt_taylor.f90,v 1.6 2012/04/10 22:17:51 keiji Exp 
-: wave_init.f90,v 1.5 2012/04/10 22:17:56 keiji Exp 
-: wfa_guess.f90,v 1.5 2012/04/10 22:18:01 keiji Exp 
- -------------------------------------------- */
