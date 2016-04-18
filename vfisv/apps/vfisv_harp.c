@@ -637,11 +637,11 @@ int DoIt (void)
   double *weights;
   float  *data, *data0;
   int *nan_map;
-  int rn, rec_ct, sn, seg_ct;
+//  int rn, rec_ct, sn, seg_ct;  -- YLiu
   int cols, rows, imgpix, imgbytes;
   int sp, wl, nvar;
   int j,m,i,k,n;
-  int status;
+//  int status; -- YLiu
   int iquality;
   int nharp = 0; // zero for full-disk
 #if RECTANGL == 1 || HARPATCH == 1
@@ -4383,7 +4383,7 @@ int vfisv_filter(int Num_lambda_filter,int Num_lambda,double filters[Num_lambda_
 
 /* ----------------------------- by Sebastien (2), CVS version info. ----------------------------- */
 
-char *meinversion_version(){return strdup("$Id: vfisv_harp.c,v 1.20 2016/04/18 17:26:59 yliu Exp $");}
+char *meinversion_version(){return strdup("$Id: vfisv_harp.c,v 1.21 2016/04/18 18:19:15 yliu Exp $");}
 
 /* Maybe some other Fortran version be included, here OR at bottom of this file. Maybe at bottom. */
 
