@@ -70,8 +70,8 @@ const float rsun_max=1940.0;
       const double dsun_obs_min=149597870691.0*0.9;
       const double dsun_obs_max=149597870691.0*1.1;
 
-      const float p0_min=0;
-      const float p0_max=360.0;
+      const float p0_min=-1;
+      const float p0_max=361.0;
 
       const float b0_min=-7.4;
       const float b0_max=7.4;
