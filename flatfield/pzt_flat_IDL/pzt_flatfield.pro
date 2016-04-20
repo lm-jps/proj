@@ -1,7 +1,7 @@
 pro pzt_flatfield, year, month, day, flatfield_front, flatfield_side, ff_front, ff_side, x0, y0, offpoint_front, offpoint_side, msk_front, msk_side, nowrite=nowrite, plots=plots
 
 
-ftsstring=['3001', '3021']
+ftsstring=['3001', '3021', '3041']
 
 print, systime()
 
