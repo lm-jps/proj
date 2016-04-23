@@ -101,11 +101,13 @@
 #include "atoinc.h"
 //#include "img2sphere.c"
 #include "img2helioVector.c"
+#include "cartography.h"
+//#include "magutils.h"
 
 // include a couple of subroutines
-//#include "/homee/yliu/cvs/JSOC/proj/globalhs/libs/projection/obs2helio.c"
-//#include "/homee/yliu/cvs/JSOC/proj/globalhs/libs/projection/setplm2.c"
-//#include "/homee/yliu/cvs/JSOC/proj/globalhs/libs/projection/apodize.c"
+#include "/homee/yliu/cvs/JSOC/proj/globalhs/libs/projection/obs2helio.c"
+#include "/homee/yliu/cvs/JSOC/proj/globalhs/libs/projection/setplm2.c"
+#include "/homee/yliu/cvs/JSOC/proj/globalhs/libs/projection/apodize.c"
 // end
 
 #define ARRLENGTH(ARR)  (sizeof(ARR)/sizeof(ARR[0]))
@@ -135,7 +137,7 @@
 #define kNOTSPECIFIED  "not specified"
 
 char *module_name = "vectmag2helio3comp";
-char *cvsinfo_jv2ts = "cvsinfo: $Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/mag/synop/apps/Attic/vectmag2helio3comp.c,v 1.1 2016/04/22 23:01:57 yliu Exp $";
+char *cvsinfo_jv2ts = "cvsinfo: $Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/mag/synop/apps/Attic/vectmag2helio3comp.c,v 1.2 2016/04/23 00:58:51 yliu Exp $";
 
 ModuleArgs_t module_args[] = 
 {
@@ -645,7 +647,7 @@ int DoIt(void)
 // cvsinfo used to be passed in the call to set_history. now this information is encoded in CVSTAG, which is defined by a compiler flag in the make.
   char *cvsinfo;
   cvsinfo = (char *)malloc(1024);
-  strcpy(cvsinfo,"$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/mag/synop/apps/Attic/vectmag2helio3comp.c,v 1.1 2016/04/22 23:01:57 yliu Exp $");
+  strcpy(cvsinfo,"$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/mag/synop/apps/Attic/vectmag2helio3comp.c,v 1.2 2016/04/23 00:58:51 yliu Exp $");
   strcat(cvsinfo,"\n");
   strcat(cvsinfo,getshtversion());
 */
