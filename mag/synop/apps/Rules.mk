@@ -42,7 +42,7 @@ S_$(d)		:= $(notdir $(EXE_$(d)) $(MODEXE_SOCK_$(d)))
 
 # Local rules
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
-$(OBJ_$(d)):		CF_TGT := -I$(SRCDIR)/$(d) -I$(SRCDIR)/$(d)/../../../libs/astro -I$(SRCDIR)/$(d)/../../../libs/stats -I$(SRCDIR)/$(d)/../../../libs/projection -I$(SRCDIR)/$(d)/../../libs/util -I$(SRCDIR)/$(d)/src/ $(FFTWH) 
+$(OBJ_$(d)):		CF_TGT := -I$(SRCDIR)/$(d) -I$(SRCDIR)/$(d)/../../../libs/astro -I$(SRCDIR)/$(d)/../../../libs/stats -I$(SRCDIR)/$(d)/../../../globalhs/libs/projection -I$(SRCDIR)/$(d)/../../../libs/projection -I$(SRCDIR)/$(d)/../../libs/util -I$(SRCDIR)/$(d)/src/ $(FFTWH) -I$(SRCDIR)/$(d)/../../../globalhs/libs/pkbgn -I$(SRCDIR)/$(d)/../../../libs/interpolate
 $(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\""
 
 $(EXTRADEPS_$(d)):	CF_TGT := $(CF_TGT) -I$(SRCDIR)/$(d)
