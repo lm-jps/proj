@@ -1,21 +1,20 @@
 /**
-   @defgroup jsoc_getimages jsoc_getimages get paths of existing jp2000 images
+   @defgroup jsoc_getJP2images jsoc_getJP2images get paths of existing jp2000 images
    @ingroup su_util
 
    @brief process a DRMS query for AIA data and return paths wrt JSOC /web/jsoc/htdocs/data/aia/images
 
    @par Synopsis:
    @code
-   jsoc_getimages {-j} in=aia lev1 query
-   The output is on stdout in web acceptable format.  json if -j flag, else utf8 (ascii).
+   jsoc_getJP2images {t=0} {j=0} in=aia lev1 query
    @endcode
 
    This is a special purpose module that takes an aia lev1 query and return the paths
    to existing jpeg2000 images that match the query.  It uses the export module method
    to enable the "@cadence" style query for aia.lev1 data.
 
-   The json output is 3 objects, "images", "count", and "status".
-   the "images" object is an array of individual image objects eahc of which
+   The json output (j=1) is 3 objects, "images", "count", and "status".
+   the "images" object is an array of individual image objects each of which
    contains 3 or 4 strings: "time", "wave", "url", and optionally "HMItag".
    "time" is of the form yyyymmdd_hhmmss
    and wave is the AIA wavelength.  "url" is a complete url to fetch the image.
@@ -31,7 +30,7 @@
    Ubiquitous flags present in every module.
    @ref jsoc_main
 
-   @param in  The input data series.
+   @param in  The AIA lev1 record-set spec.
 
    @par Exit_Status:
    If json output is requested "count" and "status" keys will be provided.
@@ -40,9 +39,22 @@
    @par Example:
    get AIA data on 15m ticks.
    @code
-   jsoc_getimages in='aia.lev1[2013.10.20/1d@15m]' -j 
+   jsoc_getJP2images in='aia.lev1[2013.10.20/1d@15m]' -j 
    @endcode
 
+   @par Example:
+   Get timetag, wavelength, URL, nearest HMI timetag for some EUV data near 0 UT on one day, via cgi-bin.
+   @code
+   http://jsoc.stanford.edu/cgi-bin/ajax/jsoc_getJP2images?in=aia.lev1_euv_12s[2015.08.27/40s][171,335,211]&j=1&t=1
+   @endcode
+   Response is:
+   @code
+   {"images":[
+ {"time":"20150826_235958","wave":"211","url":"http://jsoc.stanford.edu/data/aia/images/2015/08/26/211/2015_08_26__23_59_58_62__SDO_AIA_AIA_211.jp2","HMItag":"20150827_000000"}
+,{"time":"20150827_000013","wave":"335","url":"http://jsoc.stanford.edu/data/aia/images/2015/08/27/335/2015_08_27__00_00_13_63__SDO_AIA_AIA_335.jp2","HMItag":"20150827_000000"}
+,{"time":"20150827_000034","wave":"171","url":"http://jsoc.stanford.edu/data/aia/images/2015/08/27/171/2015_08_27__00_00_34_34__SDO_AIA_AIA_171.jp2","HMItag":"20150827_000000"}
+], "count":3, "status":0}
+   @endcode
    @bug
    None known so far.
 
@@ -75,7 +87,7 @@ static void CGI_unescape_url (char *url)
   url[x] = '\0';
   }
 
-char *module_name = "jsoc_getimages";
+char *module_name = "jsoc_getJP2images";
 
 #define DIE(msg) {printf("%s\n",(json ? "{\"status\":-1}" : ""));\
                   fflush(stdout);\
@@ -84,14 +96,14 @@ char *module_name = "jsoc_getimages";
 
 ModuleArgs_t module_args[] =
 {
-     {ARG_STRING, "in", "NOT SPECIFIED",  "Input data series."},
+     {ARG_STRING, "times", "NOT SPECIFIED",  "AIA times desired."},
+     {ARG_INT, "wave", "0",  "AIA wavelength in Angstroms"},
+     {ARG_STRING, "cadence", "0",  "AIA cadence spec, e.g. '15m' or '60s' style"},
      {ARG_STRING, "QUERY_STRING", "NOT SPECIFIED",  "Params from web GET"},
      {ARG_FLAG, "j", "0", "Generate json formatted output, plain ascii otherwise"},
      {ARG_FLAG, "t", "0", "Generate HMI timetag nearest to each aia image found"},
      {ARG_END}
 };
-
-const char *get_input_recset(DRMS_Env_t *drms_env, const char *in);
 
 int DoIt(void)
   {
@@ -110,13 +122,18 @@ int DoIt(void)
   int irec, nrecs, ngood;
   int from_web;
   char *web_query;
-  char *inStr;
+  char *cadence, *p;
   char *in_filename = NULL;
   int json, wantHMItime;
   const char *inQuery;
+  char Query[1024];
+  int iwave;
+  int step;
+  int mul;
+  int rec_step;
 
   web_query = strdup (cmdparams_get_str (&cmdparams, "QUERY_STRING", NULL));
-  from_web = strcmp (web_query, "Not Specified") != 0;
+  from_web = strcmp (web_query, "NOT SPECIFIED") != 0;
 
   if (from_web)
     {
@@ -138,74 +155,115 @@ int DoIt(void)
     free(getstring);
     }
 
+  iwave = params_get_int(&cmdparams, "wave");
   json = params_get_int(&cmdparams, "j");
   wantHMItime = params_get_int(&cmdparams, "t");
-  inQuery = params_get_str(&cmdparams, "in");
+  inQuery = (char *)params_get_str(&cmdparams, "times");
+  cadence = (char *)params_get_str(&cmdparams, "cadence");
+  int n = strtol(cadence, &p, 10); // get digits only
+  if (*p == 's') mul = 1;
+  else if (*p == 'm') mul = 5;
+  else if (*p == 'h') mul = 300;
+  else if (*p == 'd') mul = 7200;
+  n *= mul;
+  // n is number of 12s slots wanted for cadence.
 
-  inStr = strdup(get_input_recset(drms_env, (char *)inQuery));
-  if (!inStr || *inStr=='\0')
-    DIE("Cant make special cadence recordset list file");
-  inRS = drms_open_records(drms_env, inStr, &status);
-  if (strcmp(inStr, inQuery) && *inStr == '@')
-    unlink(inStr+1);
-  if (status || inRS->n == 0)
-    DIE("No input data found");
+  // cadence of UV is 24s, of VIS is 1 hour, of EUV is 12s
+  // but jp2 images made for every second UV, every 3rd EUV, and every VIS image.
+  // step is the cadence of images of the given wavelength that are available as jpeg2000 images 
+  step = (iwave == 1600 || iwave == 1700 ? 2 : (iwave == 4500 ? 1 : 3));
+  rec_step = n;
 
-  nrecs = inRS->n;
-  if (nrecs == 0)
-    DIE("No records found");
 
   if (json)
     {
     printf("Content-type: application/json\n\n");
-    printf("{\"images\":[\n");
     }
   else
     {
     printf("Content-type: text/plain\n\n");
     }
 
-  for (ngood = irec = 0; irec < nrecs; irec++)
+  char *at = index(inQuery, '@');
+  if (at)
+    DIE("Use cadence param instead of @ syntax");
+  sprintf(Query,"aia.lev1_nrt2[%s][?WAVELNTH=%d?]", inQuery, iwave);
+fprintf(stderr,"query=%s\n",Query);
+  inRS = drms_open_records(drms_env, Query, &status);
+  if (status || inRS->n == 0)
+    DIE("No input data found");
+
+  nrecs = inRS->n;
+
+  if (wave == 0)
+    DIE("The wave parameter must be provided");
+
+  if (json)
     {
-    inRec = inRS->records[irec];
-    if (wantHMItime)
-      { // get nearest HMI 15m time slot.
-      TIME t_rec = drms_getkey_time(inRec, "T_REC", NULL);
-      t_rec = (t_rec + 450.0) / 900.0;
-      int slot = floor(t_rec);
-      t_rec = 900.0 * slot;
-      char HMIt_rec[MAXSTR];
-      sprint_time(HMIt_rec, t_rec, "TAI", 0);
-      int y,m,d,h,M,s;
-      sscanf(HMIt_rec, "%4d.%02d.%02d_%02d:%02d:%02d",&y,&m,&d,&h,&M,&s);
-      sprintf(HMItag, "%4d%02d%02d_%02d%02d%02d",y,m,d,h,M,s);
-      }
-    strncpy(date__obs, drms_getkey_string(inRec, "DATE__OBS", NULL), MAXSTR);
-    strncpy(wave, drms_getkey_string(inRec, "WAVELNTH", NULL), MAXSTR);
-    sscanf(date__obs, "%4d-%2d-%2dT%2d:%2d:%2d.%2d", &year,&month,&day,&hour,&minute,&sec,&fsec);
-    sprintf(fname, "%4d_%02d_%02d__%02d_%02d_%02d_%02d__SDO_AIA_AIA_%s.jp2",
-	year,month,day,hour,minute,sec,fsec,wave);
-    sprintf(timetag, "%4d%02d%02d_%02d%02d%02d", year,month,day,hour,minute,sec);
-    sprintf(path, "data/aia/images/%4d/%02d/%02d/%s/%s", year, month, day, wave, fname);
-    sprintf(testpath, "/web/jsoc/htdocs/%s", path);
-    sprintf(showpath, "http://jsoc.stanford.edu/%s", path);
-    if (access(testpath, R_OK) == 0)
+    printf("{\"images\":[\n");
+    }
+
+  ngood = 0;
+  irec = 0;
+
+  int trysteps[] = {0, -1, 2, -3, 4};
+  int try;
+  int found = 0;
+  while (irec < nrecs)
+    {
+    for (try=0; try<5; try++)
       {
+      irec += trysteps[try];
+      if (irec < 0) irec = 0;
+      if (irec >= nrecs) irec = nrecs - 1;
+      inRec = inRS->records[irec];
+      TIME date_obs_t = drms_getkey_time(inRec, "DATE__OBS", NULL);
+      sprint_time(date__obs, date_obs_t,"UTC",2);
+      // strncpy(date__obs, drms_getkey_string(inRec, "DATE__OBS", NULL), MAXSTR);
+      strncpy(wave, drms_getkey_string(inRec, "WAVELNTH", NULL), MAXSTR);
+      sscanf(date__obs, "%4d-%2d-%2dT%2d:%2d:%2d.%2d", &year,&month,&day,&hour,&minute,&sec,&fsec);
+      sprintf(fname, "%4d_%02d_%02d__%02d_%02d_%02d_%02d__SDO_AIA_AIA_%s.jp2",
+	  year,month,day,hour,minute,sec,fsec,wave);
+      sprintf(path, "data/aia/images/%4d/%02d/%02d/%s/%s", year, month, day, wave, fname);
+      sprintf(testpath, "/web/jsoc/htdocs/%s", path);
+      if (access(testpath, R_OK) == 0)
+        {
+        found = 1;
+        break;
+        }
+      }
+    if (found)
+      {
+      if (wantHMItime)
+        { // get nearest HMI 15m time slot.
+        TIME t_rec = drms_getkey_time(inRec, "T_REC", NULL);
+        t_rec = (t_rec + 450.0) / 900.0;
+        int slot = floor(t_rec);
+        t_rec = 900.0 * slot;
+        char HMIt_rec[MAXSTR];
+        sprint_time(HMIt_rec, t_rec, "TAI", 0);
+        int y,m,d,h,M,s;
+        sscanf(HMIt_rec, "%4d.%02d.%02d_%02d:%02d:%02d",&y,&m,&d,&h,&M,&s);
+        sprintf(HMItag, "%4d%02d%02d_%02d%02d%02d",y,m,d,h,M,s);
+        }
+      sprintf(timetag, "%4d%02d%02d_%02d%02d%02d", year,month,day,hour,minute,sec);
+      sprintf(showpath, "http://jsoc.stanford.edu/%s", path);
       if (json)
         {
         if (wantHMItime)
             printf("%s{\"time\":\"%s\",\"wave\":\"%s\",\"url\":\"%s\",\"HMItag\":\"%s\"}\n",
-		(ngood ? "," : " "), timetag, wave, showpath, HMItag);
+		  (ngood ? "," : " "), timetag, wave, showpath, HMItag);
         else
             printf("%s{\"time\":\"%s\",\"wave\":\"%s\",\"url\":\"%s\"}\n",
-		(ngood ? "," : " "), timetag, wave, showpath);
+		  (ngood ? "," : " "), timetag, wave, showpath);
         }
       else
         {
-        printf("%s\n",showpath);
+        printf("%s\n",testpath);
         }
       ngood++;
       }
+    irec += rec_step; // there are 8 images per 12s slot
     }
 
   if (json)
@@ -219,177 +277,3 @@ int DoIt(void)
   return (DRMS_SUCCESS);
   } // end of DoIt
 
-// ----------------------------------------------------------------------
-
-const char *get_input_recset(DRMS_Env_t *drms_env, const char *inQuery)
-  {
-  static char newInQuery[102];
-  TIME epoch = (cmdparams_exists(&cmdparams, "epoch")) ? params_get_time(&cmdparams, "epoch") : 0;
-  DRMS_Array_t *data;
-  TIME t_start, t_stop, t_now, t_want, t_diff, this_t_diff;
-  int status = 1;
-  int nrecs, irec;
-  int nslots, islot;
-  long long *recnums;
-  TIME *t_this, half;
-  TIME cadence;
-  double *drecnum, *dquality;
-  int quality;
-  long long recnum;
-  char keylist[DRMS_MAXQUERYLEN];
-  static char filename[100];
-  char *tmpdir;
-  FILE *tmpfile;
-  char newIn[DRMS_MAXQUERYLEN];
-  char seriesname[DRMS_MAXQUERYLEN];
-  char *lbracket;
-  char *at = index(inQuery, '@');
-      
-  if (at && *at && (strncmp(inQuery,"aia.lev1[", 9)==0 ||
-                    strncmp(inQuery,"hmi.lev1[", 9)==0 ||
-                    strncmp(inQuery,"aia.lev1_nrt2[",14)==0 ||
-                    strncmp(inQuery,"hmi.lev1_nrt[", 13)==0 ))
-    {
-    char *ip=(char *)inQuery, *op=newIn, *p;
-    long n, mul;
-        
-    char *segSpec = NULL;
-    const char *psl = NULL;
-    char *pbracket = NULL;
-        
-    psl = strchr(inQuery, '{');
-    if (psl)
-    {
-        segSpec = strdup(psl + 1);
-        
-        if (!segSpec)
-        {
-            fprintf(stderr, "No memory.\n");
-            return NULL;
-        }
-        
-        pbracket = strchr(segSpec, '}');
-        
-        if (!pbracket)
-        {
-            fprintf(stderr, "Invalid segment specification.\n");
-            return NULL;
-        }
-        
-        *pbracket = '\0';
-        
-        if (!*segSpec)
-        {
-            fprintf(stderr, "Invalid segment specification.\n");
-            return NULL;
-        }
-    }
-        
-    while ( *ip && ip<at )
-      *op++ = *ip++;
-    ip++; // skip the '@'
-    n = strtol(ip, &p, 10); // get digits only
-    if (*p == 's') mul = 1;
-    else if (*p == 'm') mul = 60;
-    else if (*p == 'h') mul = 3600;
-    else if (*p == 'd') mul = 86400;
-    else 
-      {
-      fprintf(stderr,"cant make sense of @xx cadence spec for aia or hmi lev1 data");
-      return(NULL);
-      }
-    cadence = n * mul;
-    ip = ++p;  // skip cadence multiplier
-    while ( *ip )
-      *op++ = *ip++;
-    *op = '\0';
-    half = cadence/2.0;
-    sprintf(keylist, "T_OBS,QUALITY,recnum");
-    data = drms_record_getvector(drms_env, newIn, keylist, DRMS_TYPE_DOUBLE, 0, &status);
-    if (!data || status)
-      {
-      fprintf(stderr,"getkey_vector failed status=%d\n", status);
-      return(NULL);
-      }
-    nrecs = data->axis[1];
-    irec = 0;
-    t_this = (TIME *)data->data;
-    dquality = (double *)data->data + 1*nrecs;
-    drecnum = (double *)data->data + 2*nrecs;
-    if (epoch > 0.0)
-      {
-      int s0 = (t_this[0] - epoch)/cadence;
-      TIME t0 = s0*cadence + epoch;
-      t_start = (t0 < t_this[0] ? t0 + cadence : t0);
-      }
-    else
-      t_start = t_this[0];
-    t_stop = t_this[nrecs-1];
-    nslots = (t_stop - t_start + cadence/2)/cadence;
-    recnums = (long long *)malloc(nslots*sizeof(long long));
-    for (islot=0; islot<nslots; islot++)
-      recnums[islot] = 0;
-    islot = 0;
-    t_want = t_start;
-    t_diff = 1.0e9;
-    for (irec = 0; irec<nrecs; irec++)
-        {
-        t_now = t_this[irec];
-        quality = (int)dquality[irec] & 0xFFFFFFFF;
-        recnum = (long long)drecnum[irec];
-        this_t_diff = fabs(t_now - t_want);
-        if (quality < 0)
-          continue;
-        if (t_now <= (t_want-half))
-          continue;
-        while (t_now > (t_want+half))
-          {
-          islot++;
-          if (islot >= nslots)
-             break;
-          t_want = t_start + cadence * islot;
-          this_t_diff = fabs(t_now - t_want);
-          t_diff = 1.0e8;
-          }
-        if (this_t_diff <= t_diff)
-          recnums[islot] = recnum;
-        t_diff = fabs(t_now - t_want);
-        }
-    if (islot+1 < nslots)
-      nslots = islot+1;  // take what we got.
-    strcpy(seriesname, inQuery);
-    lbracket = index(seriesname,'[');
-    if (lbracket) *lbracket = '\0';
-    
-    tmpdir = getenv("TMPDIR");
-    if (!tmpdir) tmpdir = "/tmp";
-    sprintf(filename, "%s/hg_patchXXXXXX", tmpdir);
-    mkstemp(filename);
-    tmpfile = fopen(filename,"w");
-    for (islot=0; islot<nslots; islot++)
-      if (recnums[islot])
-      {
-          if (!segSpec)
-          {
-              fprintf(tmpfile, "%s[:#%lld]\n", seriesname, recnums[islot]);
-          }
-          else
-          {
-              fprintf(tmpfile, "%s[:#%lld]{%s}\n", seriesname, recnums[islot], segSpec);
-          }
-      }
-        
-    if (segSpec)
-        {
-        free(segSpec);
-        }
-        
-    fclose(tmpfile);
-    free(recnums);
-    drms_free_array(data);
-    sprintf(newInQuery,"@%s", filename);
-    return(newInQuery);
-    }
-  else
-    return(inQuery);
-  }
