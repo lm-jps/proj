@@ -128,7 +128,7 @@ int DoIt(void)
   const char *inQuery;
   char Query[1024];
   int iwave;
-  int step;
+  int step, jp2step;
   int mul;
   int rec_step;
 
@@ -162,17 +162,18 @@ int DoIt(void)
   cadence = (char *)params_get_str(&cmdparams, "cadence");
   int n = strtol(cadence, &p, 10); // get digits only
   if (*p == 's') mul = 1;
-  else if (*p == 'm') mul = 5;
-  else if (*p == 'h') mul = 300;
-  else if (*p == 'd') mul = 7200;
-  n *= mul;
-  // n is number of 12s slots wanted for cadence.
+  else if (*p == 'm') mul = 60;
+  else if (*p == 'h') mul = 3600;
+  else if (*p == 'd') mul = 86400;
+  n *= mul;  // number of seconds per cadence
 
   // cadence of UV is 24s, of VIS is 1 hour, of EUV is 12s
   // but jp2 images made for every second UV, every 3rd EUV, and every VIS image.
-  // step is the cadence of images of the given wavelength that are available as jpeg2000 images 
-  step = (iwave == 1600 || iwave == 1700 ? 2 : (iwave == 4500 ? 1 : 3));
-  rec_step = n;
+  // step is the seconds per possible image for desired wavelength
+  step = (iwave == 1600 || iwave == 1700 ? 24: (iwave == 4500 ? 3600 : 12));
+  // jp2step is number of possible images skipped for jp2000 image cadence
+  jp2step = (iwave == 1600 || iwave == 1700 ? 2: (iwave == 4500 ? 1 : 3));
+  rec_step = n/(step); // rec_step is number of records to skip for the desired cadence
 
 
   if (json)
@@ -206,20 +207,19 @@ fprintf(stderr,"query=%s\n",Query);
   ngood = 0;
   irec = 0;
 
-  int trysteps[] = {0, -1, 2, -3, 4};
+  int trysteps[] = {0, -1, 1, -2, 2, -3, 3};
   int try;
   int found = 0;
   while (irec < nrecs)
     {
-    for (try=0; try<5; try++)
+    for (try=0; try<7; try++)
       {
-      irec += trysteps[try];
-      if (irec < 0) irec = 0;
-      if (irec >= nrecs) irec = nrecs - 1;
-      inRec = inRS->records[irec];
-      TIME date_obs_t = drms_getkey_time(inRec, "DATE__OBS", NULL);
-      sprint_time(date__obs, date_obs_t,"UTC",2);
-      // strncpy(date__obs, drms_getkey_string(inRec, "DATE__OBS", NULL), MAXSTR);
+      int tryrec;
+      tryrec = irec + trysteps[try];
+      if (tryrec < 0) tryrec = 0;
+      if (tryrec >= nrecs) tryrec = nrecs - 1;
+      inRec = inRS->records[tryrec];
+      strncpy(date__obs, drms_getkey_string(inRec, "DATE__OBS", NULL), MAXSTR);
       strncpy(wave, drms_getkey_string(inRec, "WAVELNTH", NULL), MAXSTR);
       sscanf(date__obs, "%4d-%2d-%2dT%2d:%2d:%2d.%2d", &year,&month,&day,&hour,&minute,&sec,&fsec);
       sprintf(fname, "%4d_%02d_%02d__%02d_%02d_%02d_%02d__SDO_AIA_AIA_%s.jp2",
@@ -263,7 +263,7 @@ fprintf(stderr,"query=%s\n",Query);
         }
       ngood++;
       }
-    irec += rec_step; // there are 8 images per 12s slot
+    irec += rec_step; 
     }
 
   if (json)
