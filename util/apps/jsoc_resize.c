@@ -729,7 +729,7 @@ const char *get_input_recset(DRMS_Env_t *drms_env, const char *inQuery, DRMS_Rec
           this_t_diff = fabs(t_now - t_want);
           t_diff = 1.0e8;
           }
-        if (this_t_diff <= t_diff)
+        if (islot < nslots && this_t_diff <= t_diff)
           recnums[islot] = recnum;
         t_diff = fabs(t_now - t_want);
         }

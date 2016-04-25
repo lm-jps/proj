@@ -29,6 +29,7 @@
 
    @par Flags:
    @c
+   -A  Process all segments
    -c  Crop before scaling.  Use rsun_obs/cdelt1 for limb radius.
    -h  Write full FITS headers.
    -u  Leave unchanged, do NOT rotate by 180 degrees if CROTA2 is near 180.  default is to do flip-flip method so
@@ -76,6 +77,7 @@ ModuleArgs_t module_args[] =
 {
      {ARG_STRING, "in", "NOT SPECIFIED",  "Input data series."},
      {ARG_STRING, "out", "NOT SPECIFIED",  "Output data series."},
+     {ARG_FLAG, "A", "0", "Process all segments in the input series"},
      {ARG_FLAG, "c", "0", "Crop at rsun_obs."},
      {ARG_FLAG, "h", "0", "Include full FITS header in output segment."},
      {ARG_FLAG, "u", "0", "do not rotate by 180 if needed."},
@@ -142,11 +144,14 @@ int DoIt(void)
   float fwhm = params_get_float(&cmdparams, "FWHM");
   int crop = params_get_int(&cmdparams, "c");
   int as_is = params_get_int(&cmdparams, "u");
+  int wantAllSegs =  params_get_int(&cmdparams, "A");
   int inseg = params_get_int(&cmdparams, "inseg");
   int outseg = params_get_int(&cmdparams, "outseg");
   int full_header = params_get_int(&cmdparams, "h") || strcmp(requestid, "NA");
   char *in_filename = NULL;
   DRMS_Record_t *template = NULL;
+  int firstNx = 0, firstNy = 0, firstNaxis = 0;
+  int wantSeg = 1;
 
   int iscale, ivec, vec_half;
   double *vector;
@@ -201,6 +206,8 @@ int DoIt(void)
   else
     DIE("invalid conversion method");
 
+  printf(history);
+
   inStr = strdup(get_input_recset(drms_env, (char *)inQuery));
   if (!inStr || *inStr=='\0') DIE("Cant make special cadence recordset list file");
   inRS = drms_open_records(drms_env, inStr, &status);
@@ -225,7 +232,7 @@ int DoIt(void)
   /* We need the record-set specfication for each record, so loop by recordset subset. */
   for (iSet = 0, irec = 0; iSet < inRS->ss_n; iSet++)
   {
-      int hasSeglist = 0;
+      int hasSeglist = wantAllSegs ? 1 : 0;
       
       /* For each record, we need to know if the segments it contains came from a record-set specification that had a segment list.
        * To do that, we have to search for '{' in the specification that resolved to this record. So we need the spec for this record,
@@ -258,10 +265,9 @@ int DoIt(void)
               
               while ((inSeg = drms_record_nextseg2(inRec, &segIter, 1, &orig)) != NULL)
               {
-                  /* CAVEAT: There is no check to see if the segment on which this code is operating is a suitable
-                   * segment for this module to process. For example, there is the assumption that the segment
-                   * being processed has two dimensions. Rejecting incompatible segments is something to implement
-                   * in the future. */
+                  /* A segment can only be processed if it is dimension 2 and if not first segment has same dimension
+                   * as first segment.
+                   */
                   if (inseg >= 0)
                   {
                       /* This module was called with the inseg argument (which is the input series' segment number).
@@ -275,36 +281,56 @@ int DoIt(void)
                           continue;
                       }
                   }
+		  wantSeg = 1; // start by assuming OK
                   
                   inArray = drms_segment_read(inSeg, DRMS_TYPE_FLOAT, &status);
                   if (status)
-                  {
+                      {
                       printf(" No data file found but QUALITY not bad, status=%d\n", status);
                       drms_free_array(inArray);
                       continue;
-                  }
-                  if (crop || !as_is)
-                  {
-                      ObsLoc = GetObsInfo(inSeg, NULL, &status);
-                      if (!as_is) upNcenter(inArray, ObsLoc);
-                      if (crop) crop_image(inArray, ObsLoc);
-                  }
-                  else
-                  {
-                      ObsLoc = GetMinObsInfo(inSeg, NULL, &status);
-                  }
-                  
+                      }
                   int inx, iny, outx, outy, i, j;
                   int in_nx = inArray->axis[0];
                   int in_ny = inArray->axis[1];
                   int out_nx = in_nx * fscale + 0.5;
                   int out_ny = in_ny * fscale + 0.5;
                   int outDims[2] = {out_nx, out_ny};
-                  inData = (float *)inArray->data;
-                  outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, NULL, &status);
-                  outData = (float *)outArray->data;
+		  if (firstNaxis == 0)
+		      {
+                      if (inArray->naxis != 2)
+                          wantSeg = 0; // Skip segment if not 2 axes. mark for skip below
+                      else
+                          {
+		          firstNaxis = inArray->naxis;
+                          firstNx = in_nx;
+                          firstNy = in_ny;
+                          }
+                      }
+                  if (inArray->naxis != firstNaxis || in_nx != firstNx || in_ny != firstNy)
+                      {  // this segment now wanted, if no segment list provided, copy this segment as-is
+                      wantSeg = 0;
+                      }
+ 
+                  if (wantSeg && (crop || !as_is))
+                      {
+                      ObsLoc = GetObsInfo(inSeg, NULL, &status);
+                      if (!as_is) upNcenter(inArray, ObsLoc);
+                      if (crop) crop_image(inArray, ObsLoc);
+                      }
+                  else if (wantSeg)
+                      {
+                      ObsLoc = GetMinObsInfo(inSeg, NULL, &status);
+                      }
                   
-                  if (fscale > 1.0)
+                  if (wantSeg)
+                      {
+                      inData = (float *)inArray->data;
+                      outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, NULL, &status);
+                      outData = (float *)outArray->data;
+                      }
+                  
+                  if (wantSeg && fscale > 1.0)
                   {
                       int out_go = (iscale-1)/2.0 + 0.5;
                       for (iny = 0; iny < in_ny; iny += 1)
@@ -323,7 +349,7 @@ int DoIt(void)
                               }
                           }
                   }
-                  else
+                  else if (wantSeg)
                   {
                       int in_go = (iscale-1)/2.0 + 0.5;
                       for (outy = 0; outy < out_ny; outy += 1)
@@ -355,11 +381,6 @@ int DoIt(void)
                           }
                   }
                   
-                  // Use the input array as the best guess for scale and zero
-                  outArray->bzero = inArray->bzero;
-                  outArray->bscale = inArray->bscale;
-                  
-                  drms_free_array(inArray);
                   
                   // write data file
                   outRec = outRS->records[irec];
@@ -397,19 +418,39 @@ int DoIt(void)
                   if (strcmp(requestid, "NA") != 0)
                       drms_setkey_string(outRec, "RequestID", requestid);
                   
-                  // get info for array from input segment
-                  outArray->parent_segment = outSeg;
-                  
-                  drms_setkey_int(outRec, "TOTVALS", out_nx*out_ny);
-                  set_statistics(outSeg, outArray, 1);
-                  
-                  if (full_header)
-                      status = drms_segment_writewithkeys(outSeg, outArray, 0);
+
+                  if (!wantSeg)
+                      {
+                      drms_free_array(inArray);
+                      inArray = drms_segment_read(inSeg,DRMS_TYPE_RAW,&status);
+                      if (!inArray || status)
+                          DIE("Problem reading ancillary array");
+                      status = drms_segment_write(outSeg, inArray, 0);
+                      if (status)
+                          DIE("Problem writing ancillary array");
+                      drms_free_array(inArray);
+                      }
                   else
-                      status = drms_segment_write(outSeg, outArray, 0);
-                  if (status)
-                      DIE("problem writing file");
-                  drms_free_array(outArray);
+                      {
+                      // get info for array from input segment
+                      outArray->parent_segment = outSeg;
+                      
+                      drms_setkey_int(outRec, "TOTVALS", out_nx*out_ny);
+                      set_statistics(outSeg, outArray, 1);
+                      
+                      // Use the input array as the best guess for scale and zero
+                      outArray->bzero = inArray->bzero;
+                      outArray->bscale = inArray->bscale;
+
+                      drms_free_array(inArray);
+                      if (full_header)
+                          status = drms_segment_writewithkeys(outSeg, outArray, 0);
+                      else
+                          status = drms_segment_write(outSeg, outArray, 0);
+                      if (status)
+                          DIE("problem writing file");
+                      drms_free_array(outArray);
+                      }
                   
                   if (inseg >= 0)
                   {
@@ -814,7 +855,7 @@ const char *get_input_recset(DRMS_Env_t *drms_env, const char *inQuery)
           this_t_diff = fabs(t_now - t_want);
           t_diff = 1.0e8;
           }
-        if (this_t_diff <= t_diff)
+        if (islot < nslots && this_t_diff <= t_diff)
           recnums[islot] = recnum;
         t_diff = fabs(t_now - t_want);
         }
