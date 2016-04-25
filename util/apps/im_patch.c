@@ -494,13 +494,13 @@ fprintf(stderr,"doing reftime\n");
       sprint_at(t_ref_pre, t_ref-search_width);
       sprint_at(t_ref_post, t_ref+search_width);
       sprintf(in, "%s[%s-%s][? QUALITY >= 0 ?]%s%s", inseries, t_ref_pre, t_ref_post, moreQuery, where);
-fprintf(stderr,"t_ref query is: %s\n",in);
+fprintf(stderr,"searchwidth=%f, t_ref query is: %s\n",search_width,in);
       inRS = drms_open_records(drms_env, in, &status);
       if (!status && inRS->n > 0)
         {
         int irec, nrecs = inRS->n;
         TIME tdiff = 100000;
-        for (irec=0, okrec=0; irec<nrecs; irec++) // find record close to t_ref
+        for (irec=0, okrec=-1; irec<nrecs; irec++) // find record close to t_ref
           {
           TIME newdiff;
           inRec = inRS->records[irec];
@@ -510,10 +510,11 @@ fprintf(stderr,"irec=%d, tdiff=%lf\n",irec,tdiff);
           okrec = irec;
           tdiff = newdiff;
           }
-        break;
         }
-      drms_close_records(inRS, DRMS_FREE_RECORD);
+      if (okrec >= 0)
+        break;
       search_width *= 2;
+      drms_close_records(inRS, DRMS_FREE_RECORD);
       }
     if (search_width >= 10000)
       DIE2("No input data found within 2-hours of t_ref",in);
@@ -537,30 +538,32 @@ fprintf(stderr,"irec=%d, tdiff=%lf\n",irec,tdiff);
     tmpstr = drms_getkey_string(inRec, "CTYPE1", &status);
     ctype1 = strdup(tmpstr); TEST_PARAM("CTYPE1");
     if (tmpstr)
-    {
-       free(tmpstr);
-    }
-      if (strcmp(ctype1, "HPLN-TAN") != 0) DIE2("CTYPE1 not HPLN-TAN as required, is: ", ctype1);
-      if (ctype1)
       {
-         free(ctype1);
-         ctype1 = NULL;
+      free(tmpstr);
       }
-      tmpstr = drms_getkey_string(inRec, "CTYPE2", &status);
+    if (strcmp(ctype1, "HPLN-TAN") != 0)
+      DIE2("CTYPE1 not HPLN-TAN as required, is: ", ctype1);
+    if (ctype1)
+      {
+      free(ctype1);
+      ctype1 = NULL;
+      }
+    tmpstr = drms_getkey_string(inRec, "CTYPE2", &status);
     ctype2 = strdup(tmpstr); TEST_PARAM("CTYPE2");
     if (tmpstr)
-    {
-       free(tmpstr);
-    }
-
-      if (strcmp(ctype2, "HPLT-TAN") != 0) DIE2("CTYPE2 not HPLT-TAN as required, is: ", ctype2);
-      if (ctype2)
       {
-         free(ctype2);
-         ctype2 = NULL;
+      free(tmpstr);
+      }
+    if (strcmp(ctype2, "HPLT-TAN") != 0)
+      DIE2("CTYPE2 not HPLT-TAN as required, is: ", ctype2);
+    if (ctype2)
+      {
+      free(ctype2);
+      ctype2 = NULL;
       }
     rsun_ref = drms_getkey_double(inRec, "RSUN_REF", &status);
-      if (status) rsun_ref = 6.96e8;
+    if (status)
+      rsun_ref = 6.96e8;
     dsun_obs = drms_getkey_double(inRec, "DSUN_OBS", &status); TEST_PARAM("DSUN_OBS");
     rsun_rad = asin(rsun_ref/dsun_obs); 
     rsun = rsun_rad*Rad2arcsec; 
@@ -750,12 +753,15 @@ fprintf(stderr,"at do reftime, center_x=%f\n", center_x);
 
   inRS = drms_open_records(drms_env, in, &status);
   if (status || inRS->n == 0)
-           DIE("No input data found");
+     {
+     fprintf(stderr,"Query is: %s\n",in);
+     DIE("No input data found");
+     }
   nrecs = inRS->n;
 
-    // extract patches from each record
-    int nextRec = 0;
-    for (irec = 0; irec < nrecs; irec ++)
+  // extract patches from each record
+  int nextRec = 0;
+  for (irec = 0; irec < nrecs; irec ++)
     {
     double use_bzero, use_bscale;
     char history[4096];
@@ -1470,24 +1476,24 @@ fprintf(stderr,"$$$$$$$ outArray bzero, bscale are %f, %f\n", outArray->bzero, o
         set_statistics(outSeg, outArray, 1);
         
         if (export_keys)
-        {
-            status = drms_segment_writewithkeys(outSeg, outArray, 0);
-        }
+          {
+          status = drms_segment_writewithkeys(outSeg, outArray, 0);
+          }
         else
-        {
-            status = drms_segment_write(outSeg, outArray, 0);
-        }
+          {
+          status = drms_segment_write(outSeg, outArray, 0);
+          }
         
         if (status)
-        {
-            DIE("problem writing file");
-        }
+          {
+          DIE("problem writing file");
+          }
         
         if (outArray)
-        {
-            drms_free_array(outArray);
-            outArray = NULL;
-        }
+          {
+          drms_free_array(outArray);
+          outArray = NULL;
+          }
 
         iSeg++;
     } /* end segment loop */
@@ -1495,12 +1501,11 @@ fprintf(stderr,"$$$$$$$ outArray bzero, bscale are %f, %f\n", outArray->bzero, o
     /* These could be modified by the segment loop. */    
     drms_setkey_double(outRec, "CRPIX1", crpix1);
     drms_setkey_double(outRec, "CRPIX2", crpix2);
-
     
     if (segIter)
-    {
-        hiter_destroy(&segIter);
-    }
+      {
+      hiter_destroy(&segIter);
+      }
 
     if (log)
       {
@@ -1512,15 +1517,15 @@ fprintf(stderr,"$$$$$$$ outArray bzero, bscale are %f, %f\n", outArray->bzero, o
       drms_appendhistory(outRec, history, 1);
       
     if (nextRec)
-    {    
-        drms_close_records(outRS, DRMS_FREE_RECORD);
-        continue;
-    }
+      {    
+      drms_close_records(outRS, DRMS_FREE_RECORD);
+      continue;
+      }
     else
-    {      
-        drms_close_records(outRS, DRMS_INSERT_RECORD);
-        drms_free_array(outArray);
-    }
+      {      
+      drms_close_records(outRS, DRMS_INSERT_RECORD);
+      drms_free_array(outArray);
+      }
     
     OK_recs += 1;
     } /* end record loop */
@@ -1897,7 +1902,7 @@ char *get_input_recset(DRMS_Env_t *drms_env, char *inQuery)
           this_t_diff = fabs(t_now - t_want);
           t_diff = 1.0e8;
           }
-        if (this_t_diff <= t_diff)
+        if (islot < nslots && this_t_diff <= t_diff)
           recnums[islot] = recnum;
         t_diff = fabs(t_now - t_want);
         }
@@ -1918,7 +1923,7 @@ char *get_input_recset(DRMS_Env_t *drms_env, char *inQuery)
     return(newInQuery);
     }
   else
-    return(inQuery);
+	  return(inQuery);
   }
 
 // FDS file is in format of SDO FDS "transit" files.
@@ -1949,8 +1954,9 @@ int get_tracking_xy(char *FDSfile, TIME want, double *xp, double *yp, double *ra
     TIME now;
     // fix doordinate system to match HMI view
 // not for ISON
-//    x = -x;
-//    y = -y;
+    x = -x;
+    y = -y;
+    obj_radius *= 3600;
     // extract time
     sscanf(now_txt,"%4d%3d.%2d%2d%2d", &yyyy, &doy, &hh, &mm, &ss);
     if (yyyy % 4 == 0) dim[1] = 29; else dim[1] = 28;
@@ -1971,7 +1977,7 @@ int get_tracking_xy(char *FDSfile, TIME want, double *xp, double *yp, double *ra
       now0 = now;
       x0 = x;
       y0 = y;
-      obj_radius0 = obj_radius * 3600;
+      obj_radius0 = obj_radius;
       }
     else
       {
@@ -1994,6 +2000,7 @@ int get_tracking_xy(char *FDSfile, TIME want, double *xp, double *yp, double *ra
       }
     }
   fclose(data);
+  fprintf(stderr,"Found %s, x=%f, y=%f, radius=%f (all arcsecs)\n",now_txt,x,y,obj_radius);
   *xp = x;
   *yp = y;
   *radius = obj_radius;
