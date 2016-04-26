@@ -1,6 +1,6 @@
-#! $Id: std_flight.w,v 1.6 2015/04/08 18:17:20 arta Exp $
+#! $Id: std_flight.w,v 1.7 2016/04/26 22:34:16 baldner Exp $
 #! $Name:  $
-#! Description: Standard Wavelength tuning table Apr 2015
+#! Description: Standard Wavelength tuning table Apr 2016
 
 ####################
 ## IMPORTANT NOTE ##
@@ -633,3 +633,23 @@
 717   58    68     0    56      # Cotune_150408
 718   61    62     0   104      # Cotune_150408
 719   64    56     0    92      # Cotune_150408
+720    7    50     0    79      # Cotune_160427
+721   10    44     0    67      # Cotune_160427
+722   13    38     0    55      # Cotune_160427
+723   16    32     0   103      # Cotune_160427
+724   19    26     0    91      # Cotune_160427
+725   22    20     0    79      # Cotune_160427
+726   25    74     0    67      # Cotune_160427
+727   28    68     0    55      # Cotune_160427
+728   31    62     0   103      # Cotune_160427
+729   34    56     0    91      # Cotune_160427
+730   37    50     0    79      # Cotune_160427
+731   40    44     0    67      # Cotune_160427
+732   43    38     0    55      # Cotune_160427
+733   46    32     0   103      # Cotune_160427
+734   49    26     0    91      # Cotune_160427
+735   52    20     0    79      # Cotune_160427
+736   55    74     0    67      # Cotune_160427
+737   58    68     0    55      # Cotune_160427
+738   61    62     0   103      # Cotune_160427
+739   64    56     0    91      # Cotune_160427
