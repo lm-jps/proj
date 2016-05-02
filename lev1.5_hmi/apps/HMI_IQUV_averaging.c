@@ -1089,7 +1089,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.47 2016/05/02 23:23:45 yliu Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.48 2016/05/02 23:26:53 yliu Exp $");
 }
 
 
@@ -4095,7 +4095,7 @@ printf("combineornot=%d, combine=%d\n", combineornot, combineYesNo);
 
 // -- DOing interpolation for each polarization, each wavelength -- YL
 
-		      status=do_interpolate_yliu(imagesi,ierrors,arrLev1d[it2]->data,KeyInterp,&KeyInterpOut,&const_param,ActualTempIntNum,axisin[0],axisin[1],AverageTime,dpath2);
+		      status=do_interpolate(imagesi,ierrors,arrLev1d[it2]->data,KeyInterp,&KeyInterpOut,&const_param,ActualTempIntNum,axisin[0],axisin[1],AverageTime,dpath2);
 		      //float *richard;
 		      //richard=arrLev1d[it2]->data;
 		      //printf("JESPER !!! %f\n",richard[40970]);
