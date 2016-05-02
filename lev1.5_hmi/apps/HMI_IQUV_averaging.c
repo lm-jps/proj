@@ -141,7 +141,7 @@ on May 14, 2015: RSUNerr changed from 1.0 to 5.0 pixels (I'M TIRED OF INCREASING
 
 #undef I                              //I is the complex number (0,1) in complex.h. We un-define it to avoid confusion with the loop iterative variable i
 
-char *module_name    = "HMI_IQUV_averaging_modL"; //name of the module
+char *module_name    = "HMI_IQUV_averaging"; //name of the module
 
 #define kRecSetIn      "begin"        //beginning time for which an output is wanted. MANDATORY PARAMETER.
 #define kRecSetIn2     "end"          //end time for which an output is wanted. MANDATORY PARAMETER.
@@ -337,6 +337,67 @@ int WhichWavelength(int FID)
 
     return result; //contains the filter name corresponding to the input FID
 
+}
+
+/* ------------------------------------------------------------
+
+FUNCTION framelistCombine only provides information on whether or not camera need to combine.
+-------------------YLiu
+
+*/
+
+int framelistCombine(int HFLID, int CamIdIn,int *Pcombine, char *dpath)
+{
+  int HFLIDread,FIDread,i,j,compteur;
+  FILE *sequencefile;
+
+  char *filename=NULL;
+  char *filename2=NULL;
+  char *filename3=NULL;
+
+  char dpath2[256];
+  strcpy(dpath2,dpath);
+  filename =strdup(strcat(dpath2,"/../Sequences3.txt"));
+  strcpy(dpath2,dpath);
+  filename2=strdup(strcat(dpath2,"/../../tables/hmi_mech/std_flight.w"));
+  strcpy(dpath2,dpath);
+  filename3=strdup(strcat(dpath2,"/../../tables/hmi_mech/std_flight.p"));
+
+
+  char line[256];
+  int  found=0; //found=0 means that there is a problem and the info for a specific framelist cannot be found
+
+  int  combinef,combines,npolf,npols,framelistSizef,framelistSizes,PolarizationTypef,PolarizationTypes,CAMERA;
+  float DataCadencef,DataCadences;
+  //READ THE FILE CONTAINING THE SEQUENCE DESCRIPTION
+
+  printf("HFLID OF FRAMELIST = %d\n",HFLID);
+  sequencefile = fopen(filename,"r");
+  if(sequencefile == NULL)
+    {
+      printf("The file %s does not exist or cannot be read\n",filename);
+      free(filename);
+      free(filename2);
+      free(filename3);
+      filename=NULL;
+      filename2=NULL;
+      filename3=NULL;
+      return 1;//exit(EXIT_FAILURE);
+    }
+
+  while (fgets(line,256,sequencefile) != NULL)
+    {
+      sscanf(line,"%d %d %d %f %f %d %d %d %d %d %d %d %d",&HFLIDread,&PolarizationTypef,&PolarizationTypes,&DataCadencef,&DataCadences,&npolf,&npols,&combinef,&combines,&framelistSizef,&framelistSizes,&j,&CAMERA);
+     if(HFLIDread == HFLID) 
+        {
+          if(CamIdIn == LIGHT_FRONT) *Pcombine=combinef; //front camera
+          if(CamIdIn == LIGHT_SIDE) *Pcombine=combines; //side camera
+          found=1;
+        }
+    }
+  fclose(sequencefile);
+
+  return found;
 }
 
 /*------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -1028,7 +1089,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.46 2016/03/29 19:53:48 phil Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.47 2016/05/02 23:23:45 yliu Exp $");
 }
 
 
@@ -1058,19 +1119,19 @@ int DoIt(void)
   //Reading the command line parameters
   //*****************************************************************************************************************
 
-  char *inRecQuery         = (char *)cmdparams_get_str(&cmdparams, kRecSetIn,  NULL);      //beginning time
-  char *inRecQuery2        = (char *)cmdparams_get_str(&cmdparams, kRecSetIn2, NULL);      //end time
-  int   WavelengthID       = cmdparams_get_int(&cmdparams,WaveLengthIn,        NULL);      //wavelength of the target filtergram
-  int   CamId              = cmdparams_get_int(&cmdparams,CamIDIn,             NULL);      //front (1) or side (0) camera?
-  TIME  DataCadence        = cmdparams_get_double(&cmdparams,DataCadenceIn,    NULL);      //cadence of the observable sequence (45, 48, 90, 96, or 135 seconds)
-  int   Npolin             = cmdparams_get_int(&cmdparams,NpolIn,              NULL);      //number of polarizations in the framelist
-  int   Framelistsizein    = cmdparams_get_int(&cmdparams,FramelistSizeIn,     NULL);      //size of framelist
-  char *inLev1Series       = (char *)cmdparams_get_str(&cmdparams,SeriesIn,    NULL);      //name of the lev1 series
-  int   QuickLook          = cmdparams_get_int(&cmdparams,QuickLookIn,         NULL);      //Quick look data or no? yes=1, no=0
-  int   Averaging          = cmdparams_get_int(&cmdparams,Average,             NULL);      //Average over 12 or 96 minutes? (12 by default)
-  int   inRotationalFlat   = cmdparams_get_int(&cmdparams,RotationalFlat,      NULL);      //Use rotational flat fields? yes=1, no=0 (default)
-  char *dpath              = (char *)cmdparams_get_str(&cmdparams,"dpath",     NULL);      //directory where the source code is located
-  int   inLinearity        = cmdparams_get_int(&cmdparams,Linearity,           NULL);      //Correct for non-linearity of cameras? yes=1, no=0 (default)
+  char *inRecQuery         = cmdparams_get_str(&cmdparams, kRecSetIn,     NULL);      //beginning time
+  char *inRecQuery2        = cmdparams_get_str(&cmdparams, kRecSetIn2,    NULL);      //end time
+  int   WavelengthID       = cmdparams_get_int(&cmdparams,WaveLengthIn ,  NULL);      //wavelength of the target filtergram
+  int   CamId              = cmdparams_get_int(&cmdparams,CamIDIn,        NULL);      //front (1) or side (0) camera?
+  TIME  DataCadence        = cmdparams_get_double(&cmdparams,DataCadenceIn,NULL);     //cadence of the observable sequence (45, 48, 90, 96, or 135 seconds)
+  int   Npolin             = cmdparams_get_int(&cmdparams,NpolIn,         NULL);      //number of polarizations in the framelist
+  int   Framelistsizein    = cmdparams_get_int(&cmdparams,FramelistSizeIn,NULL);      //size of framelist
+  char *inLev1Series       = cmdparams_get_str(&cmdparams,SeriesIn,       NULL);      //name of the lev1 series
+  int   QuickLook          = cmdparams_get_int(&cmdparams,QuickLookIn,    NULL);      //Quick look data or no? yes=1, no=0
+  int   Averaging          = cmdparams_get_int(&cmdparams,Average,        NULL);      //Average over 12 or 96 minutes? (12 by default)
+  int   inRotationalFlat   = cmdparams_get_int(&cmdparams,RotationalFlat, NULL);      //Use rotational flat fields? yes=1, no=0 (default)
+  char *dpath              = cmdparams_get_str(&cmdparams,"dpath",         NULL);      //directory where the source code is located
+  int   inLinearity        = cmdparams_get_int(&cmdparams,Linearity,       NULL);      //Correct for non-linearity of cameras? yes=1, no=0 (default)
 
   //THE FOLLOWING VARIABLES SHOULD BE SET AUTOMATICALLY BY OTHER PROGRAMS. FOR NOW SOME ARE SET MANUALLY
   char *CODEVERSION =NULL;                                                             //version of the IQUV averaging code
@@ -1217,6 +1278,7 @@ int DoIt(void)
   TIME  tobs;					                     
 
   int combine;                                                       //do we need to combine the front and side camera to produce the desired output? 
+  int combineornot, combineYesNo;                                    // combine or not. only for empty record -- YLiu
   int ThresholdPol=TempIntNum-2;                                     //minimum number of filtergrams to use to perform the temporal averaging (!!!!!WARNING!!!! NEED TO BE SET MORE CAREFULLY)
   int npol=Npolin;
   int npolout=4;                                                     //4 polarizations produced (I,Q,U, and V)
@@ -1569,7 +1631,7 @@ int DoIt(void)
     }      
   //CODEVERSION1=const_param.code_version;
   //CODEVERSION2=CODEVERSION1; //same version number actually because they are both in interpol_code.c
-  status = init_polcal(&pars, method, polcalParamFile);
+  status = init_polcal(&pars,method,POLCAL_PARAMS);
   if(status != 0)
     {
       printf("Error: could not initialize the polarization calibration routine\n");
@@ -1588,10 +1650,10 @@ int DoIt(void)
 
    if(QuickLook == 1)                                                //Quick-look data
      { 
-       if(AverageTime == 720.0 && (DataCadence == 90.0 || DataCadence == 135.0)) strcpy(HMISeriesLev1p,"hmi.S_720s_nrt");
+       if(AverageTime == 720.0 && (DataCadence == 90.0 || DataCadence == 135.0)) strcpy(HMISeriesLev1p,"su_yang.S_Iscale_final_720s_nrt");
        else
 	 { 
-	   if(AverageTime == 720.0 && (DataCadence == 120.0 || DataCadence == 150.0)) strcpy(HMISeriesLev1p,"hmi.S2_720s_nrt");
+	   if(AverageTime == 720.0 && (DataCadence == 120.0 || DataCadence == 150.0)) strcpy(HMISeriesLev1p,"su_yang.S2_Iscale_final_720s_nrt");
 	   else
 	     {
 	       printf("No output series exists for your command-line parameters %f %f %s\n",AverageTime,DataCadence,HMISeriesLev1p);
@@ -1603,12 +1665,12 @@ int DoIt(void)
      }
    else                                                               //Definitive Data
      {
-       if(AverageTime == 720.0 && DataCadence == 90.0)  strcpy(HMISeriesLev1p,"hmi.S_720s"); //6 wavelengths (mod A)
-       if(AverageTime == 720.0 && DataCadence == 135.0) strcpy(HMISeriesLev1p,"hmi.S_720s"); //6 wavelengths (mod C)
-       if(AverageTime == 720.0 && DataCadence == 120.0) strcpy(HMISeriesLev1p,"hmi.S2_720s"); //8 wavelengths
-       if(AverageTime == 720.0 && DataCadence == 150.0) strcpy(HMISeriesLev1p,"hmi.S2_720s"); //10 wavelengths
+       if(AverageTime == 720.0 && DataCadence == 90.0)  strcpy(HMISeriesLev1p,"su_yang.S_modL_Iscale_F2S_Interp_720s"); //6 wavelengths (mod A)
+       if(AverageTime == 720.0 && DataCadence == 135.0) strcpy(HMISeriesLev1p,"su_yang.S_Iscale_720s"); //6 wavelengths (mod C)
+       if(AverageTime == 720.0 && DataCadence == 120.0) strcpy(HMISeriesLev1p,"su_yang.S2_Iscale_720s"); //8 wavelengths
+       if(AverageTime == 720.0 && DataCadence == 150.0) strcpy(HMISeriesLev1p,"su_yang.S2_Iscale_720s"); //10 wavelengths
      //if(AverageTime == 360.0) strcpy(HMISeriesLev1p,"hmi.S_360s");
-       if(AverageTime == 5760.0)strcpy(HMISeriesLev1p,"hmi.S_5760s");
+       if(AverageTime == 5760.0)strcpy(HMISeriesLev1p,"su_yang.S_orig_5760s");
        if(AverageTime != 5760.0 && AverageTime != 720.0)
 	 {
 	   printf("No output series exists for your command-line parameters\n");
@@ -2888,6 +2950,9 @@ int DoIt(void)
 	      if((QUALITYin[temp] & Q_ACS_LUNARTRANSIT) == Q_ACS_LUNARTRANSIT) QUALITY[timeindex] = QUALITY[timeindex] | QUAL_POORQUALITY;
 	      if((QUALITYin[temp] & Q_ACS_THERMALRECOVERY) == Q_ACS_THERMALRECOVERY) QUALITY[timeindex] = QUALITY[timeindex] | QUAL_POORQUALITY;
 	      if((QUALITYin[temp] & Q_CAMERA_ANOMALY) == Q_CAMERA_ANOMALY) QUALITY[timeindex] = QUALITY[timeindex] | QUAL_POORQUALITY;
+
+/* -- move those lines to below --YLiu
+
  	      if(isnan(X0[temp]) || isnan(Y0[temp])) //X0_LF=NAN and Y0_LF=NAN during eclipses
 		{
 		  printf("Error: target filtergram FSN[%d] does not have valid X0_LF and/or Y0_LF keywords\n",FSN[temp]);
@@ -2895,6 +2960,7 @@ int DoIt(void)
 		  QUALITY[timeindex] = QUALITY[timeindex] | QUAL_TARGETFILTERGRAMMISSING;
 		  CreateEmptyRecord=1; goto NextTargetTime;
 		}
+*/
 
 	      TargetHFLID     =   HFLID[temp];      //some keyword values for the current target wavelength
 	      if(TargetHFLID >= 4000) QUALITY[timeindex] = QUALITY[timeindex] | QUAL_LARGEFTSID;
@@ -2908,10 +2974,26 @@ int DoIt(void)
 	      TargetHWLTID    = HWLTID[temp];
 	      TargetHPLTID    = HPLTID[temp];
 	      TargetCFINDEX   = CFINDEX[temp];
+
+// -- to get infomation of combine or not. for empty record purpose only  -- YLiu
+              combineornot  = framelistCombine(TargetHFLID, CamId, &combineYesNo, dpath);
+printf("combineornot=%d, combine=%d\n", combineornot, combineYesNo);
+
+//              framelistSize   = framelistInfo(TargetHFLID,TargetHPLTID,TargetHWLTID,WavelengthID,PHWPLPOS,WavelengthIndex,WavelengthLocation,&PolarizationType,CamId,&combine,&npol,MaxNumFiltergrams,&CadenceRead,CameraValues,FIDValues,dpath);
+
+              if(isnan(X0[temp]) || isnan(Y0[temp])) //X0_LF=NAN and Y0_LF=NAN during eclipses
+                {
+                  printf("Error: target filtergram FSN[%d] does not have valid X0_LF and/or Y0_LF keywords\n",FSN[temp]);
+                  QUALITY[timeindex] = QUALITY[timeindex] | QUAL_LIMBFITISSUE; 
+                  QUALITY[timeindex] = QUALITY[timeindex] | QUAL_TARGETFILTERGRAMMISSING;
+                  CreateEmptyRecord=1; goto NextTargetTime;
+                }
+
+// -- end of empty -- YLiu
+
 	      strcpy(TargetISS,HWLTNSET[temp]);
 	      if(!strcmp(TargetISS,"OPEN")) QUALITY[timeindex] = QUALITY[timeindex] | QUAL_ISSTARGET;
 	
-
 	      //***************************************************************************
 	      //read the pzt and rotational flat fields of the target filtergram, if needed
 	      //***************************************************************************
@@ -3047,9 +3129,6 @@ int DoIt(void)
 		}//if(inRotationalFlat == 1)
 	      
 	      //*************************************************************************************
-
-
-
 
 	      framelistSize   = framelistInfo(TargetHFLID,TargetHPLTID,TargetHWLTID,WavelengthID,PHWPLPOS,WavelengthIndex,WavelengthLocation,&PolarizationType,CamId,&combine,&npol,MaxNumFiltergrams,&CadenceRead,CameraValues,FIDValues,dpath);
 	      if(framelistSize == 1) return 1;
@@ -3473,12 +3552,7 @@ int DoIt(void)
 		      DSUNOBSint[timeindex]=(DSUNOBS[j]-DSUNOBS[i])/(internTOBS[j]-internTOBS[i])*(tobs-internTOBS[i])+DSUNOBS[i];
 		      DSUNOBSint[timeindex]=DSUNOBSint[timeindex]/(double)AstroUnit;   //do_interpolate() expects distance in AU (AstroUnit should be equal to keyword DSUN_REF of level 1 data)
 		      CRLTOBSint[timeindex]=(CRLTOBS[j]-CRLTOBS[i])/(internTOBS[j]-internTOBS[i])*(tobs-internTOBS[i])+CRLTOBS[i];
-
-                      // BAD CROTA2int[timeindex] =(CROTA2[j]-CROTA2[i])/(internTOBS[j]-internTOBS[i])*(tobs-internTOBS[i])+CROTA2[i];
-                      CROTA2int[timeindex] = atan2(sin((CROTA2[j]-CROTA2[i])/180.0*M_PI), cos((CROTA2[j]-CROTA2[i])/180.0*M_PI)) /
-                              (internTOBS[j]-internTOBS[i])*(tobs-internTOBS[i])*180.0/M_PI+CROTA2[i];
-                      CROTA2int[timeindex] = fmod(CROTA2int[timeindex], 360.0);
-
+		      CROTA2int[timeindex] =(CROTA2[j]-CROTA2[i])/(internTOBS[j]-internTOBS[i])*(tobs-internTOBS[i])+CROTA2[i];
 		      OBSVRint[timeindex]  =(OBSVR[j]-OBSVR[i])/(internTOBS[j]-internTOBS[i])*(tobs-internTOBS[i])+OBSVR[i];
 		      OBSVWint[timeindex]  =(OBSVW[j]-OBSVW[i])/(internTOBS[j]-internTOBS[i])*(tobs-internTOBS[i])+OBSVW[i];
 		      OBSVNint[timeindex]  =(OBSVN[j]-OBSVN[i])/(internTOBS[j]-internTOBS[i])*(tobs-internTOBS[i])+OBSVN[i];
@@ -3949,16 +4023,12 @@ int DoIt(void)
                       CamID_tmp = HCAMID[temp];
 
 /*
-// -- Sebastien's original version for modL intensity scaling. Scaling factor is constant -- YL
-
 		      if( (combine == 1) && (HCAMID[temp] == LIGHT_FRONT)){ //we need to combine both cameras
 			//IF NEED TO COMBINE BOTH CAMERAS, WE NEED TO CORRECT FOR THE FRONT vs SIDE CAMERA INTENSITY DIFFERENCE
 			for(iii=0;iii<axisin[0]*axisin[1];++iii) image[iii]= image[iii]/iratio;
 			printf("MOD L intensity correction applied to FSN=%d \n",FSN[temp]);
 		      }
-// -- End of Sebastien's I-scaling -- YL
 */
-
 		      ierrors[ii]=arrerrors[i]->data;
 		      printf("FSN filtergram used: %d %d %f %f %f %f %f %f %f\n",FSN[temp],HCAMID[temp],RSUN[temp],X0[temp],Y0[temp],DSUNOBS[temp]/AstroUnit,CRLTOBS[temp],CROTA2[temp],internTOBS[temp]);
 		      if(HCAMID[temp] == LIGHT_FRONT) KeyInterp[ii].camera=0; //WARNING: the convention of Richard's subroutine is that 0=front camera, 1=side camera
@@ -4025,7 +4095,7 @@ int DoIt(void)
 
 // -- DOing interpolation for each polarization, each wavelength -- YL
 
-		      status=do_interpolate(imagesi,ierrors,arrLev1d[it2]->data,KeyInterp,&KeyInterpOut,&const_param,ActualTempIntNum,axisin[0],axisin[1],AverageTime,dpath2);
+		      status=do_interpolate_yliu(imagesi,ierrors,arrLev1d[it2]->data,KeyInterp,&KeyInterpOut,&const_param,ActualTempIntNum,axisin[0],axisin[1],AverageTime,dpath2);
 		      //float *richard;
 		      //richard=arrLev1d[it2]->data;
 		      //printf("JESPER !!! %f\n",richard[40970]);
@@ -4167,7 +4237,7 @@ int DoIt(void)
 	    {
 	      images[it2]=arrLev1d[it2]->data;
 
-// -- start rescale I-filtergrams from Front Camera  by dividing Iratio (keep Side camera data unchanged, like modC data) -- YL
+// -- start rescale I-filtergrams from Front Camera  by dividing Iratio (keep Q U untarched as previous we use Side camera data: keep data consistent) -- YL
 
               if (combine == 1 && CameraID[it2] == LIGHT_FRONT)
               {
@@ -4184,6 +4254,23 @@ int DoIt(void)
 
 // -- end of I-scaling side camera images -- YL
 
+// -- start rescale I-filtergrams from Camera_side by multiplying Iratio -- YL
+/*
+              if (combine == 1 && CameraID[it2] == LIGHT_SIDE)
+              {
+                  image = arrLev1d[it2]->data;
+                  for (jy=0;jy<Iydim;jy++)
+                  {
+                    for (ix=0;ix<Ixdim;ix++)
+                    {
+                       ijxy = jy*Ixdim+ix;
+                       if (!isnan(image[ijxy])) image[ijxy] *= Iratio_F2S[ijxy];
+                    }
+                  }
+               }
+*/
+// -- end of I-scaling side camera images -- YL
+            
 	      ps1[it2]=PolarizationArray[0][it2];
 	      ps2[it2]=PolarizationArray[1][it2];
 	      ps3[it2]=PolarizationArray[2][it2];
@@ -4191,9 +4278,8 @@ int DoIt(void)
 	    }
 
 // -- Free array --YL
-//          printf("I-ratio at [2048, 2048] = %f\n", Iratio_F2S[2048*4096 + 2048]);
+          printf("I-ratio at [2048, 2048] = %f\n", Iratio_F2S[2048*4096 + 2048]);
           free(Iratio_F2S);
-          free(CameraID);
 	  
 	  printf("Setting keywords for level 1p\n");
 	  KeyInterpOut.rsun=RSUNint[timeindex];
@@ -4449,8 +4535,15 @@ int DoIt(void)
 	    {
 	      printf("Warning: creating/updating empty lev1p record\n");
 	      QUALITY[timeindex]= QUALITY[timeindex] | QUAL_NODATA; 
-	      if(CamId  == LIGHT_SIDE)  camera=1; //side camera
-	      if(CamId  == LIGHT_FRONT) camera=2; //front camera
+//	      if(CamId  == LIGHT_SIDE)  camera=1; //side camera  // -- YLiu
+//	      if(CamId  == LIGHT_FRONT) camera=2; //front camera // -- YLiu
+
+// -- add to create empty record for modL
+              if(CamId  == LIGHT_SIDE)  camera=1; //side camera
+              if(CamId  == LIGHT_FRONT) camera=2; //front camera
+              if(combineYesNo == 1) camera=3;                           //front+side cameras
+// -- add for modL empty record -- YLiu
+
 	      statusA[0] = drms_setkey_time(recLev1p->records[timeindex],TRECS,TargetTime);         //TREC is the slot time (1st prime key)
 	      //statusA[1] = drms_setkey_time(recLev1p->records[timeindex],TOBSS,TargetTime);         //TOBS is the observation time
 	      statusA[2] = drms_setkey_int(recLev1p->records[timeindex],CAMERAS,camera);            //second prime key
