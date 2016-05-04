@@ -1089,7 +1089,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.48 2016/05/02 23:26:53 yliu Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.49 2016/05/04 17:19:35 yliu Exp $");
 }
 
 
@@ -1650,10 +1650,10 @@ int DoIt(void)
 
    if(QuickLook == 1)                                                //Quick-look data
      { 
-       if(AverageTime == 720.0 && (DataCadence == 90.0 || DataCadence == 135.0)) strcpy(HMISeriesLev1p,"su_yang.S_Iscale_final_720s_nrt");
+       if(AverageTime == 720.0 && (DataCadence == 90.0 || DataCadence == 135.0)) strcpy(HMISeriesLev1p,"hmi.S_720s_nrt");
        else
 	 { 
-	   if(AverageTime == 720.0 && (DataCadence == 120.0 || DataCadence == 150.0)) strcpy(HMISeriesLev1p,"su_yang.S2_Iscale_final_720s_nrt");
+	   if(AverageTime == 720.0 && (DataCadence == 120.0 || DataCadence == 150.0)) strcpy(HMISeriesLev1p,"hmi.S2_720s_nrt");
 	   else
 	     {
 	       printf("No output series exists for your command-line parameters %f %f %s\n",AverageTime,DataCadence,HMISeriesLev1p);
@@ -1665,12 +1665,12 @@ int DoIt(void)
      }
    else                                                               //Definitive Data
      {
-       if(AverageTime == 720.0 && DataCadence == 90.0)  strcpy(HMISeriesLev1p,"su_yang.S_modL_Iscale_F2S_Interp_720s"); //6 wavelengths (mod A)
-       if(AverageTime == 720.0 && DataCadence == 135.0) strcpy(HMISeriesLev1p,"su_yang.S_Iscale_720s"); //6 wavelengths (mod C)
-       if(AverageTime == 720.0 && DataCadence == 120.0) strcpy(HMISeriesLev1p,"su_yang.S2_Iscale_720s"); //8 wavelengths
-       if(AverageTime == 720.0 && DataCadence == 150.0) strcpy(HMISeriesLev1p,"su_yang.S2_Iscale_720s"); //10 wavelengths
+       if(AverageTime == 720.0 && DataCadence == 90.0)  strcpy(HMISeriesLev1p,"hmi.S_720s"); //6 wavelengths (mod A)
+       if(AverageTime == 720.0 && DataCadence == 135.0) strcpy(HMISeriesLev1p,"hmi.S_720s"); //6 wavelengths (mod C)
+       if(AverageTime == 720.0 && DataCadence == 120.0) strcpy(HMISeriesLev1p,"hmi.S2_720s"); //8 wavelengths
+       if(AverageTime == 720.0 && DataCadence == 150.0) strcpy(HMISeriesLev1p,"hmi.S2_720s"); //10 wavelengths
      //if(AverageTime == 360.0) strcpy(HMISeriesLev1p,"hmi.S_360s");
-       if(AverageTime == 5760.0)strcpy(HMISeriesLev1p,"su_yang.S_orig_5760s");
+       if(AverageTime == 5760.0)strcpy(HMISeriesLev1p,"hmi.S_5760s");
        if(AverageTime != 5760.0 && AverageTime != 720.0)
 	 {
 	   printf("No output series exists for your command-line parameters\n");
