@@ -1133,7 +1133,7 @@ fprintf(stderr,"after flip x1=%d, target_x=%lf, y1=%d, target_y=%lf\n",x1,target
     drms_setkey_time(outRec, "HGTSTOP", t_stop);
     drms_setkey_time(outRec, "DATE", time(0) + UNIX_EPOCH);
     drms_setkey_string(outRec, "HGQUERY", in);
-fprintf(stderr,"DATA_MIN=%f, DATA_MAX=%f\n",drms_getkey_float(outRec,"DATA_MIN",NULL),drms_getkey_float(outRec,"DATA_MAX",NULL));
+fprintf(stderr,"DATAMIN=%f, DATAMAX=%f\n",drms_getkey_float(outRec,"DATAMIN",NULL),drms_getkey_float(outRec,"DATAMAX",NULL));
 
 /*
  *               writing the extracted region data file
@@ -1473,6 +1473,12 @@ fprintf(stderr,"$$$$$$$ outArray bzero, bscale are %f, %f\n", outArray->bzero, o
             }
         }
 
+        if (iSeg == 0)
+            {
+            drms_setkey_double(outRec, "CRPIX1", crpix1);
+            drms_setkey_double(outRec, "CRPIX2", crpix2);
+            }
+    
         set_statistics(outSeg, outArray, 1);
         
         if (export_keys)
@@ -1498,10 +1504,6 @@ fprintf(stderr,"$$$$$$$ outArray bzero, bscale are %f, %f\n", outArray->bzero, o
         iSeg++;
     } /* end segment loop */
 
-    /* These could be modified by the segment loop. */    
-    drms_setkey_double(outRec, "CRPIX1", crpix1);
-    drms_setkey_double(outRec, "CRPIX2", crpix2);
-    
     if (segIter)
       {
       hiter_destroy(&segIter);
