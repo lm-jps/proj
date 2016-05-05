@@ -7,7 +7,7 @@ d		:= $(dir)
 
 
 # Common utilities
-EXTRADEPS_$(d)		:= $(addprefix $(d)/, )
+EXTRADEPS_$(d)		:= $(addprefix $(d)/, synop-saveparm.o synop-timing.o synop-set_history.o synop-calversfunctions.o)
 
 # NOTE: Add the base of the module's filename below (next to mymod)
 MODEXE_$(d)	:= $(addprefix $(d)/, hmib3compsynoptic resizeb3comp vectmag2helio3comp maprojlonat02deg maproj3comperrorlonat02deg resizeb3compwitherror maproj3comperror dailysynframe dailysynframe_nrt hmisynoptic mdidailysynframe mdisynop brblossynoptic brblosdailysynframe brblosdailysynframe_nrt maprojbrfromblos mrmlossynoptic mrmlosdailysynframe mrmlosdailysynframe_nrt)
@@ -26,7 +26,7 @@ MODEXE_USEF_SOCK	:= $(MODEXE_USEF_SOCK) $(MODEXE_USEF_SOCK_$(d))
 CUSTOM_CARTOGRAPHY_$(d) := $(addprefix $(d)/, synop-imginfo.o synop-cartography.o)
 
 EXE_$(d)	:= $(MODEXE_$(d)) $(MODEXE_USEF_$(d))
-OBJ_$(d)	:= $(EXE_$(d):%=%.o) $(CUSTOM_CARTOGRAPHY_$(d)) 
+OBJ_$(d)	:= $(EXE_$(d):%=%.o) $(CUSTOM_CARTOGRAPHY_$(d)) $(EXTRADEPS_$(d))
 DEP_$(d)	:= $(OBJ_$(d):%=%.d)
 CLEAN		:= $(CLEAN) \
 		   $(OBJ_$(d)) \

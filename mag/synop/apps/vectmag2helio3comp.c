@@ -137,7 +137,7 @@
 #define kNOTSPECIFIED  "not specified"
 
 char *module_name = "vectmag2helio3comp";
-char *cvsinfo_jv2ts = "cvsinfo: $Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/mag/synop/apps/Attic/vectmag2helio3comp.c,v 1.3 2016/04/23 01:02:11 yliu Exp $";
+char *cvsinfo_jv2ts = "cvsinfo: $Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/mag/synop/apps/Attic/vectmag2helio3comp.c,v 1.4 2016/05/05 19:49:28 arta Exp $";
 
 ModuleArgs_t module_args[] = 
 {
@@ -217,10 +217,30 @@ ModuleArgs_t module_args[] =
    {ARG_END}
 };
 
-#include "saveparm.c"
-#include "timing.c"
-#include "set_history.c"
-#include "calversfunctions.c"
+// Defined in synop-saveparm.c
+extern char *savestr;
+extern int savestrlen;
+extern int savestrmax;
+extern const char *cmdparams_save_str(CmdParams_t *parms, char *name, int *status);
+extern float cmdparams_save_float (CmdParams_t *parms, char *name, int *status);
+extern double cmdparams_save_double (CmdParams_t *parms, char *name, int *status);
+extern int cmdparams_save_int (CmdParams_t *parms, char *name, int *status);
+extern double cmdparams_save_time (CmdParams_t *parms, char *name, int *status);
+extern int cmdparams_save_flag (CmdParams_t *parms, char *name, int *status);
+extern const char *cmdparams_save_arg (CmdParams_t *parms, int num, int *status);
+extern void cpsave_decode_error(int status);
+
+// Defined in synop-timing.c
+extern double getwalltime(void);
+extern double getcputime(double *utime, double *stime);
+
+// Defined in synop-set_history.c
+extern long long set_history(DRMS_Link_t *histlink);
+
+// Defined in synop-calversfunctions.c
+extern unsigned long long getbits(unsigned long long x, int p, int n);
+extern unsigned long long setbits(unsigned long long x, int p, int n, unsigned long long y);
+unsigned long long fixcalver64(unsigned long long x);
 
 int SetDistort(int dist, double cubic, double alpha, double beta, double feff, LIBPROJECTION_Dist_t *dOut);
 
@@ -235,7 +255,7 @@ int obs2helio(float *V, float *U, int xpixels, int ypixels, double x0, double y0
 int apodize(float *data, double b0, int cols, int rows, double Lmin, double Ldelta, double sinBdelta, 
             int apodlevel, double apinner, double apwidth, int apel, double apx, double apy);
 
-void setplm2(int lmin,int lmax,int m,long nx,int *indx,double *x,long nplm,double *plm,double *dplm);
+int setplm2(int lmin,int lmax,int m,long nx,int *indx,double *x,long nplm,double *plm,double *dplm);
 
 //char *getshtversion(void);
 
@@ -647,7 +667,7 @@ int DoIt(void)
 // cvsinfo used to be passed in the call to set_history. now this information is encoded in CVSTAG, which is defined by a compiler flag in the make.
   char *cvsinfo;
   cvsinfo = (char *)malloc(1024);
-  strcpy(cvsinfo,"$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/mag/synop/apps/Attic/vectmag2helio3comp.c,v 1.3 2016/04/23 01:02:11 yliu Exp $");
+  strcpy(cvsinfo,"$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/mag/synop/apps/Attic/vectmag2helio3comp.c,v 1.4 2016/05/05 19:49:28 arta Exp $");
   strcat(cvsinfo,"\n");
   strcat(cvsinfo,getshtversion());
 */
