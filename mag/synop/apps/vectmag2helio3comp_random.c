@@ -103,11 +103,6 @@
 //#include "cartography.h"
 //#include "img2helioVector.c"
 
-// include a couple of subroutines
-//#include "obs2helio.c"
-//#include "setplm2.c"
-//#include "apodize.c"
-// end
 
 #define ARRLENGTH(ARR)  (sizeof(ARR)/sizeof(ARR[0]))
 #define PI              (M_PI)
@@ -137,10 +132,8 @@
 
 #define DIE(msg) {fflush(stdout); fprintf(stderr,"%s, status=%d\n", msg, status); return(status);}
 
-// define remap-img2helioVector
-extern int remap_img2helioVector (double bxImg, double byImg, double bzImg, double *bxHelio,
-                     double *byHelio, double *bzHelio, double lon, double lat,
-                     double lonc, double latc, double pAng); 
+// Defined in LIBMAGUTILS (which is missing a header file)
+extern int img2helioVector (double bxImg, double byImg, double bzImg, double *bxHelio, double *byHelio, double *bzHelio, double lon, double lat, double lonc, double latc, double pAng); 
 
 // Defined in synop-cartography.c:
 extern int synop_plane2sphere (double x, double y, double latc, double lonc, double *lat, double *lon, int projection);
@@ -148,8 +141,33 @@ extern int synop_img2sphere(double x, double y, double ang_r, double latc, doubl
 extern int synop_sphere2img(double lat, double lon, double latc, double lonc, double *x, double *y, double xcenter, double ycenter, double rsun, double peff, double ecc, double chi, int xinvrt, int yinvrt);
 extern int synop_sphere2plane(double lat, double lon, double latc, double lonc, double *x, double *y, int projection);
 
+// Defined in synop-timing.c
+extern double getwalltime(void);
+extern double getcputime(double *utime, double *stime);
+
+// Defined in synop-set_history.c
+extern long long set_history(DRMS_Link_t *histlink);
+
+// Defined in synop-calversfunctions.c
+extern unsigned long long getbits(unsigned long long x, int p, int n);
+extern unsigned long long setbits(unsigned long long x, int p, int n, unsigned long long y);
+unsigned long long fixcalver64(unsigned long long x);
+
+// Defined in synop-saveparm.c
+extern char *savestr;
+extern int savestrlen;
+extern int savestrmax;
+extern const char *cmdparams_save_str(CmdParams_t *parms, char *name, int *status);
+extern float cmdparams_save_float (CmdParams_t *parms, char *name, int *status);
+extern double cmdparams_save_double (CmdParams_t *parms, char *name, int *status);
+extern int cmdparams_save_int (CmdParams_t *parms, char *name, int *status);
+extern double cmdparams_save_time (CmdParams_t *parms, char *name, int *status);
+extern int cmdparams_save_flag (CmdParams_t *parms, char *name, int *status);
+extern const char *cmdparams_save_arg (CmdParams_t *parms, int num, int *status);
+extern void cpsave_decode_error(int status);
+
 char *module_name = "vectmag2helio3comp_random";
-//char *cvsinfo_jv2ts = "cvsinfo: $Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/mag/synop/apps/vectmag2helio3comp_random.c,v 1.2 2016/05/17 16:31:31 yliu Exp $";
+//char *cvsinfo_jv2ts = "cvsinfo: $Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/mag/synop/apps/vectmag2helio3comp_random.c,v 1.3 2016/05/17 17:47:28 arta Exp $";
 
 ModuleArgs_t module_args[] = 
 {
@@ -230,15 +248,11 @@ ModuleArgs_t module_args[] =
    {ARG_END}
 };
 
-#include "saveparm.c"
-#include "timing.c"
-#include "set_history.c"
-#include "calversfunctions.c"
+/* These are already declared in projection.h, which is included in this file already
+// 
+extern int SetDistort(int dist, double cubic, double alpha, double beta, double feff, LIBPROJECTION_Dist_t *dOut);
 
-// define remap-obs2helio
-extern int remap_SetDistort(int dist, double cubic, double alpha, double beta, double feff, LIBPROJECTION_Dist_t *dOut);
-
-extern int remap_obs2helio(float *V, float *U, int xpixels, int ypixels, double x0, double y0, double BZero, double P,
+extern int obs2helio(float *V, float *U, int xpixels, int ypixels, double x0, double y0, double BZero, double P,
               double   S, double rsun, double Rmax, int	interpolation, int cols, int rows, double Lmin,
               double Ldelta, double Ladjust, double sinBdelta, double smajor, double sminor, double sangle,
               double xscale, double yscale, const char *orientation, int mag_correction, int velocity_correction,
@@ -246,13 +260,14 @@ extern int remap_obs2helio(float *V, float *U, int xpixels, int ypixels, double 
               const LIBPROJECTION_Dist_t *distpars, float diffrotA, float diffrotB, float diffrotC, 
               LIBPROJECTION_RotRate_t *rRates, int size);
 // define remap-apodize
-extern int remap_apodize(float *data, double b0, int cols, int rows, double Lmin, double Ldelta, double sinBdelta, 
-            int apodlevel, double apinner, double apwidth, int apel, double apx, double apy);
+extern int apodize(float *data, double b0, int cols, int rows, double Lmin, double Ldelta, double sinBdelta, int apodlevel, double apinner, double apwidth, int apel, double apx, double apy);
 
-// define remap-setplm2
-extern void remap_setplm2(int lmin,int lmax,int m,long nx,int *indx,double *x,long nplm,double *plm,double *dplm);
+
+This is defined in LIBPROJECTION. There was no declaration, but it was added to projection.h.
+extern int setplm2(int lmin,int lmax,int m,long nx,int *indx,double *x,long nplm,double *plm,double *dplm);
 
 //char *getshtversion(void);
+*/
 
 /* forward decls for fortran functions */
 void scopy_(int *, float *, int *, float *, int *);
@@ -596,7 +611,7 @@ int DoIt(void)
   ierr = cmdparams_save_double(&cmdparams, "IERR", &newstat);
   trefb0 = cmdparams_save_time(&cmdparams, "REF_TB0", &newstat);
 
-  remap_SetDistort(distsave, cubsave, tiltasave, tiltbsave, tiltfsave, &distP);
+  SetDistort(distsave, cubsave, tiltasave, tiltbsave, tiltfsave, &distP);
 
   tref = cmdparams_save_time(&cmdparams, "REF_T0", &newstat);
 
@@ -665,7 +680,7 @@ int DoIt(void)
 // cvsinfo used to be passed in the call to set_history. now this information is encoded in CVSTAG, which is defined by a compiler flag in the make.
   char *cvsinfo;
   cvsinfo = (char *)malloc(1024);
-  strcpy(cvsinfo,"$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/mag/synop/apps/vectmag2helio3comp_random.c,v 1.2 2016/05/17 16:31:31 yliu Exp $");
+  strcpy(cvsinfo,"$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/mag/synop/apps/vectmag2helio3comp_random.c,v 1.3 2016/05/17 17:47:28 arta Exp $");
   strcat(cvsinfo,"\n");
   strcat(cvsinfo,getshtversion());
 */
@@ -1602,7 +1617,7 @@ int DoIt(void)
                      // Azimuth angle is defined here to increase counter-clockwisely. The zero angle points 
                      // to the right. 
                      // transform the magnetic vector from image coordinates to the heliographic coordinates.
-                remap_img2helioVector (bx, by, bz, &bxHel, &byHel, &bzHel, lon, lat, obsl0 * RADSINDEG, b0 * RADSINDEG, p * RADSINDEG);
+                img2helioVector (bx, by, bz, &bxHel, &byHel, &bzHel, lon, lat, obsl0 * RADSINDEG, b0 * RADSINDEG, p * RADSINDEG);
                 bPhi[iData] = bxHel;
                 bTheta[iData] = -byHel;
                 bRadial[iData] = bzHel;
@@ -1610,7 +1625,7 @@ int DoIt(void)
             } 
 
 //      if (status =       obs2helio((float *)inarr->data, 
-        if (status =       remap_obs2helio(bRadial,
+        if (status =       obs2helio(bRadial,
 	  			   v2hbr,
 				   xpixels, 
 				   ypixels, 
@@ -1660,7 +1675,7 @@ int DoIt(void)
         goto continue_outer_loop;
       }
 
-      if (status =      remap_apodize(v2hbr,
+      if (status =      apodize(v2hbr,
 				 b0 * RADSINDEG, 
 				 mapcols, 
 				 maprows,
@@ -1680,7 +1695,7 @@ int DoIt(void)
       }
 
 
-        if (status =       remap_obs2helio(bTheta,
+        if (status =       obs2helio(bTheta,
                                    v2hbt,
                                    xpixels,
                                    ypixels,
@@ -1730,7 +1745,7 @@ int DoIt(void)
         goto continue_outer_loop;
       }
 
-      if (status =      remap_apodize(v2hbt,
+      if (status =      apodize(v2hbt,
                                  b0 * RADSINDEG,
                                  mapcols,
                                  maprows,
@@ -1749,7 +1764,7 @@ int DoIt(void)
         goto continue_outer_loop;
       }
 
-        if (status =       remap_obs2helio(bPhi,
+        if (status =       obs2helio(bPhi,
                                    v2hbp,
                                    xpixels,
                                    ypixels,
@@ -1806,7 +1821,7 @@ int DoIt(void)
       free(bPhi); free(bTheta); free(bRadial);
       free(orientation);
 
-      if (status =      remap_apodize(v2hbp,
+      if (status =      apodize(v2hbp,
                                  b0 * RADSINDEG,
                                  mapcols,
                                  maprows,
@@ -2344,14 +2359,14 @@ int DoIt(void)
   
            /* then set up the current chunk */
 //          setplm_ (&lstart, &llast, &m, &nlat, indx, latgrid, &nlat, plm); 
-          remap_setplm2(lstart, llast, m, nlat, indx, latgrid, nlat, plm, NULL); 
+          setplm2(lstart, llast, m, nlat, indx, latgrid, nlat, plm, NULL); 
 
         }
         else
         {
          /* This fixes the lmin != 0 problem */
 //          setplm_ (&m, &llast, &m, &nlat, indx, latgrid, &nlat, plm);
-          remap_setplm2(m, llast, m, nlat, indx, latgrid, nlat, plm, NULL);
+          setplm2(m, llast, m, nlat, indx, latgrid, nlat, plm, NULL);
         }
 
          /* save plm's for next chunk */
