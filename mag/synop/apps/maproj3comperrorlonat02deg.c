@@ -73,7 +73,7 @@
  *
  *  Future Updates
  *    Transformation from one mapping to another
- *
+ *    T
  *  Revision history is at end of file
  */
 
@@ -110,6 +110,8 @@ extern int synop_img2sphere(double x, double y, double ang_r, double latc, doubl
 extern int synop_sphere2img(double lat, double lon, double latc, double lonc, double *x, double *y, double xcenter, double ycenter, double rsun, double peff, double ecc, double chi, int xinvrt, int yinvrt);
 extern int synop_sphere2plane(double lat, double lon, double latc, double lonc, double *x, double *y, int projection);
 
+void do_boxcar(float *image_in, float *image_out, int in_nx, int in_ny, float fscale, int power);
+
 						       /*  module identifier  */
 char *module_name = "maproj3comperrorlonat02deg";
 char *module_desc = "mapping from solar images rounded at 0.2 degree at longitude";
@@ -132,6 +134,7 @@ ModuleArgs_t module_args[] = {
   {ARG_FLOAT,	"map_pa", "0.0", "position angle of north on output map [deg]"},
   {ARG_FLOAT,	"bscale", "0.0", "output scaling factor"},
   {ARG_FLOAT,	"bzero", "Default", "output offset"},
+  {ARG_FLOAT,   "RESCALE",     "0.1",  "Scale factor."}, // YLiu
   {ARG_STRING,	"clon_key", "CRLN_OBS", "keyname for image central longitude"}, 
   {ARG_STRING,	"clat_key", "CRLT_OBS", "keyname for image central latitude"}, 
   {ARG_STRING,	"rsun_key", "R_SUN", "keyname for image semi-diameter (pixel)"}, 
@@ -489,6 +492,56 @@ int near_grid_line (double lon, double lat, double grid, double near) {
   return 0;
 }
 
+// -- YLiu
+
+void do_boxcar(float *image_in, float *image_out, int in_nx, int in_ny, float fscale, int power)
+{
+  int iscale, nvector, vec_half;
+  int inx, iny, outx, outy, i, j;
+  float val;
+
+      iscale = 1.0/fscale + 0.5;
+      nvector = iscale;
+      vec_half = nvector/2;
+
+      int in_go = (iscale-1)/2.0 + 0.5;
+      int out_nx = in_nx * fscale + 0.5;
+      int out_ny = in_ny * fscale + 0.5;
+
+        for (outy = 0; outy < out_ny; outy += 1)
+          for (outx = 0; outx < out_nx; outx += 1)
+            {
+            double total = 0.0;
+            double weight = 0.0;
+            int nn = 0;
+            for (j = 0; j < nvector; j += 1)
+              {
+              iny = outy*iscale + in_go + j - vec_half;
+              for (i = 0; i < nvector; i += 1)
+                {
+                inx = outx*iscale + in_go + i - vec_half;
+                if (inx >= 0 && inx < in_nx && iny >=0 && iny < in_ny)
+                  {
+                  val = image_in[in_nx*(iny) + inx];
+                  if (!drms_ismissing_float(val))
+                    {
+                    double w = 1.0;
+                    total += pow(w*val, power); // -- YLiu
+                    weight += w;
+                    nn++;
+                    }
+                  }
+                }
+              }
+            if (power == 2) total = sqrt(total); //-- YL
+            image_out[out_nx*outy + outx] = (nn > 0 ? total/weight : DRMS_MISSING_FLOAT);
+            }
+
+}
+
+
+// -- YLiu
+
 int DoIt (void) {
   CmdParams_t *params = &cmdparams;
   DRMS_RecordSet_t *ids, *ods;
@@ -499,7 +552,7 @@ int DoIt (void) {
   double img_xscl, img_yscl, img_xc, img_yc, img_radius, img_pa;
   double grid_width;
   double ellipse_e, ellipse_pa;
-  int axes[2];
+  int axes[2], outaxes[2];
   int img, imgct, pixct, segct;
   int isegnum, osegnum;
   int found, kstat, status;
@@ -534,6 +587,7 @@ int DoIt (void) {
   float bscale = params_get_float (params, "bscale");
   float bzero = params_get_float (params, "bzero");
   float grid_spacing = params_get_float (params, "grid");
+  float rescale = params_get_float (params, "RESCALE"); // YLiu
   int map_cols = params_get_int (params, "cols");
   int map_rows = params_get_int (params, "rows");
   int proj = params_get_int (params, "map");
@@ -611,6 +665,9 @@ int DoIt (void) {
 						 /*  create output map array  */
   axes[0] = map_cols;
   axes[1] = map_rows;
+  outaxes[0] = map_cols * rescale + 0.5;
+  outaxes[1] = map_rows * rescale + 0.5;
+
   pixct = map_cols * map_rows;
   maplat = (double *)malloc (pixct * sizeof (double));
   maplon = (double *)malloc (pixct * sizeof (double));
@@ -625,12 +682,12 @@ int DoIt (void) {
 							 /*  get input image  */
     DRMS_Record_t *irec, *orec;
     DRMS_Segment_t *iseg, *oseg;
-    DRMS_Array_t *image = NULL, *outimage = NULL, *map = NULL;
+    DRMS_Array_t *image = NULL, *outimage = NULL, *map = NULL, *outmap = NULL;
     float *bTotal, *bIncl, *bAzim, *disamb;
     int length[2], outDim[2];
     double xcrpix1, ycrpix1, b0, obsl0, p, S, rsunobs, imagescale, rsun, dsunobs;
     int xDim, yDim, iData, ix, jy, yOff;
-    float *data;
+    float *data, *outdata;
 
 // additional variables
     double dSun, rSun_ref, asd, rSun;
@@ -818,6 +875,9 @@ printf("vrcenter=%f, rSun=%f, xcen=%f, ycen=%f, INVPHMAP=%s\n", vrcenter, rSun, 
     map = drms_array_create (DRMS_TYPE_FLOAT, 2, axes, NULL, &status);
     data = (float *)map->data;
 
+    outmap = drms_array_create (DRMS_TYPE_FLOAT, 2, outaxes, NULL, &status);
+    outdata = (float *)outmap->data;
+
     oseg = drms_segment_lookup(orec, "Br");
     length[0] = xDim; length[1] = yDim;
     outimage = drms_array_create(DRMS_TYPE_FLOAT, 2, length, NULL, &status);
@@ -831,8 +891,14 @@ printf("vrcenter=%f, rSun=%f, xcen=%f, ycen=%f, INVPHMAP=%s\n", vrcenter, rSun, 
       for (n = 0; n < pixct; n++) 
         if (ongrid[n]) data[n] = (isfinite (data[n])) ? bblank : wblank;
     }
+
+    do_boxcar(data, outdata, axes[0], axes[1], rescale, 1); // YLiu
 				/*  write map array to output record segment  */
-    status = drms_segment_write (oseg, map, 0);
+    outmap->israw = 0;            // always compressed
+    outmap->bzero = oseg->bzero;
+    outmap->bscale = oseg->bscale;
+
+    status = drms_segment_write (oseg, outmap, 0);
     if (status) {
       drms_sprint_rec_query (recid, orec);
       fprintf (stderr, "Error writing data to record %s\n", recid);
@@ -842,13 +908,13 @@ printf("vrcenter=%f, rSun=%f, xcen=%f, ycen=%f, INVPHMAP=%s\n", vrcenter, rSun, 
 
     double statMin, statMax, statMedn, statMean, statSig, statSkew, statKurt;
     int statNgood, ipixels;
-    if (fstats(axes[0] * axes[1], data, &statMin, &statMax, &statMedn, &statMean, &statSig,
+    if (fstats(outaxes[0] * outaxes[1], outdata, &statMin, &statMax, &statMedn, &statMean, &statSig,
         &statSkew, &statKurt, &statNgood)) printf("\n Statistics computation failed\n");
 // image statistics
-    ipixels = axes[0] * axes[1];
+    ipixels = outaxes[0] * outaxes[1];
     drms_setkey_int(orec, "TOTVALS_1", ipixels);
     drms_setkey_int(orec, "DATAVALS_1", statNgood);
-    ipixels = axes[0] * axes[1]-statNgood;
+    ipixels = outaxes[0] * outaxes[1]-statNgood;
     drms_setkey_int(orec, "MISSVALS_1", ipixels);
     drms_setkey_double(orec, "DATAMIN_1", statMin);
     drms_setkey_double(orec, "DATAMAX_1", statMax);
@@ -870,8 +936,14 @@ printf("vrcenter=%f, rSun=%f, xcen=%f, ycen=%f, INVPHMAP=%s\n", vrcenter, rSun, 
       for (n = 0; n < pixct; n++) 
         if (ongrid[n]) data[n] = (isfinite (data[n])) ? bblank : wblank;
     }
+
+    do_boxcar(data, outdata, axes[0], axes[1], rescale, 1); // YLiu
                                 /*  write map array to output record segment  */
-    status = drms_segment_write (oseg, map, 0);
+    outmap->israw = 0;            // always compressed
+    outmap->bzero = oseg->bzero;
+    outmap->bscale = oseg->bscale;
+
+    status = drms_segment_write (oseg, outmap, 0);
     if (status) {
       drms_sprint_rec_query (recid, orec);
       fprintf (stderr, "Error writing data to record %s\n", recid);
@@ -879,13 +951,13 @@ printf("vrcenter=%f, rSun=%f, xcen=%f, ycen=%f, INVPHMAP=%s\n", vrcenter, rSun, 
       return 1;
     }
 
-    if (fstats(axes[0] * axes[1], data, &statMin, &statMax, &statMedn, &statMean, &statSig,
+    if (fstats(outaxes[0] * outaxes[1], outdata, &statMin, &statMax, &statMedn, &statMean, &statSig,
         &statSkew, &statKurt, &statNgood)) printf("\n Statistics computation failed\n");
 // image statistics 
-    ipixels = axes[0] * axes[1];
+    ipixels = outaxes[0] * outaxes[1];
     drms_setkey_int(orec, "TOTVALS_2", ipixels);
     drms_setkey_int(orec, "DATAVALS_2", statNgood);
-    ipixels = axes[0] * axes[1]-statNgood;
+    ipixels = outaxes[0] * outaxes[1]-statNgood;
     drms_setkey_int(orec, "MISSVALS_2", ipixels);
     drms_setkey_double(orec, "DATAMIN_2", statMin);
     drms_setkey_double(orec, "DATAMAX_2", statMax);
@@ -906,8 +978,14 @@ printf("vrcenter=%f, rSun=%f, xcen=%f, ycen=%f, INVPHMAP=%s\n", vrcenter, rSun, 
       for (n = 0; n < pixct; n++) 
         if (ongrid[n]) data[n] = (isfinite (data[n])) ? bblank : wblank;
     }
+
+    do_boxcar(data, outdata, axes[0], axes[1], rescale, 1); // YLiu
                                 /*  write map array to output record segment  */
-    status = drms_segment_write (oseg, map, 0);
+    outmap->israw = 0;            // always compressed
+    outmap->bzero = oseg->bzero;
+    outmap->bscale = oseg->bscale;
+
+    status = drms_segment_write (oseg, outmap, 0);
     if (status) {
       drms_sprint_rec_query (recid, orec);
       fprintf (stderr, "Error writing data to record %s\n", recid);
@@ -915,13 +993,13 @@ printf("vrcenter=%f, rSun=%f, xcen=%f, ycen=%f, INVPHMAP=%s\n", vrcenter, rSun, 
       return 1;
     }
 
-    if (fstats(axes[0] * axes[1], data, &statMin, &statMax, &statMedn, &statMean, &statSig,
+    if (fstats(outaxes[0] * outaxes[1], outdata, &statMin, &statMax, &statMedn, &statMean, &statSig,
         &statSkew, &statKurt, &statNgood)) printf("\n Statistics computation failed\n");
 // image statistics 
-    ipixels = axes[0] * axes[1];
+    ipixels = outaxes[0] * outaxes[1];
     drms_setkey_int(orec, "TOTVALS_3", ipixels);
     drms_setkey_int(orec, "DATAVALS_3", statNgood);
-    ipixels = axes[0] * axes[1]-statNgood;
+    ipixels = outaxes[0] * outaxes[1]-statNgood;
     drms_setkey_int(orec, "MISSVALS_3", ipixels);
     drms_setkey_double(orec, "DATAMIN_3", statMin);
     drms_setkey_double(orec, "DATAMAX_3", statMax);
@@ -944,8 +1022,14 @@ printf("vrcenter=%f, rSun=%f, xcen=%f, ycen=%f, INVPHMAP=%s\n", vrcenter, rSun, 
       for (n = 0; n < pixct; n++)
         if (ongrid[n]) data[n] = (isfinite (data[n])) ? bblank : wblank;
     }
+
+    do_boxcar(data, outdata, axes[0], axes[1], rescale, 2); // YLiu
                                 /*  write map array to output record segment  */
-    status = drms_segment_write (oseg, map, 0);
+    outmap->israw = 0;            // always compressed
+    outmap->bzero = oseg->bzero;
+    outmap->bscale = oseg->bscale;
+
+    status = drms_segment_write (oseg, outmap, 0);
     if (status) {
       drms_sprint_rec_query (recid, orec);
       fprintf (stderr, "Error writing data to record %s\n", recid);
@@ -953,13 +1037,13 @@ printf("vrcenter=%f, rSun=%f, xcen=%f, ycen=%f, INVPHMAP=%s\n", vrcenter, rSun, 
       return 1;
     }
 
-    if (fstats(axes[0] * axes[1], data, &statMin, &statMax, &statMedn, &statMean, &statSig,
+    if (fstats(outaxes[0] * outaxes[1], outdata, &statMin, &statMax, &statMedn, &statMean, &statSig,
         &statSkew, &statKurt, &statNgood)) printf("\n Statistics computation failed\n");
 // image statistics 
-    ipixels = axes[0] * axes[1];
+    ipixels = outaxes[0] * outaxes[1];
     drms_setkey_int(orec, "TOTVALS_4", ipixels);
     drms_setkey_int(orec, "DATAVALS_4", statNgood);
-    ipixels = axes[0] * axes[1]-statNgood;
+    ipixels = outaxes[0] * outaxes[1]-statNgood;
     drms_setkey_int(orec, "MISSVALS_4", ipixels);
     drms_setkey_double(orec, "DATAMIN_4", statMin);
     drms_setkey_double(orec, "DATAMAX_4", statMax);
@@ -996,12 +1080,12 @@ printf("vrcenter=%f, rSun=%f, xcen=%f, ycen=%f, INVPHMAP=%s\n", vrcenter, rSun, 
     kstat += check_and_set_key_str   (orec, "CTYPE2", key);
     kstat += check_and_set_key_str   (orec, "CUNIT1", "deg");
     kstat += check_and_set_key_str   (orec, "CUNIT2", "deg");
-    kstat += check_and_set_key_float (orec, "CRPIX1", 0.5 * map_cols + 0.5);
-    kstat += check_and_set_key_float (orec, "CRPIX2", 0.5 * map_rows + 0.5);
+    kstat += check_and_set_key_float (orec, "CRPIX1", 0.5 * map_cols * rescale + 0.5);
+    kstat += check_and_set_key_float (orec, "CRPIX2", 0.5 * map_rows * rescale + 0.5);
     kstat += check_and_set_key_float (orec, "CRVAL1", clon * degrad);
     kstat += check_and_set_key_float (orec, "CRVAL2", clat * degrad);
-    kstat += check_and_set_key_float (orec, "CDELT1", map_scale);
-    kstat += check_and_set_key_float (orec, "CDELT2", map_scale);
+    kstat += check_and_set_key_float (orec, "CDELT1", map_scale/rescale);
+    kstat += check_and_set_key_float (orec, "CDELT2", map_scale/rescale);
     if (map_pa != 0.0) {
       kstat += check_and_set_key_float (orec, "PC1_1", cos (map_pa));
 /*  PC1_2 should be multiplied by CDELT2 / CDELT1  */
@@ -1015,9 +1099,9 @@ printf("vrcenter=%f, rSun=%f, xcen=%f, ycen=%f, INVPHMAP=%s\n", vrcenter, rSun, 
 //    kstat += check_and_set_key_float (orec, "LatHG", img_lat * degrad);
     kstat += check_and_set_key_str   (orec, "MapProj", mapname[proj]);
     kstat += check_and_set_key_float (orec, "MapScale", map_scale);
-    kstat += check_and_set_key_float (orec, "Width", map_cols * map_scale);
-    kstat += check_and_set_key_float (orec, "Height", map_rows * map_scale);
-    kstat += check_and_set_key_float (orec, "Size", sqrt (map_rows * map_cols) * map_scale);
+    kstat += check_and_set_key_float (orec, "Width", map_cols * rescale * map_scale);
+    kstat += check_and_set_key_float (orec, "Height", map_rows * rescale * map_scale);
+    kstat += check_and_set_key_float (orec, "Size", sqrt (map_rows * map_cols) * rescale * map_scale);
     kstat += check_and_set_key_float (orec, "Map_PA", map_pa / raddeg);
     kstat += check_and_set_key_float (orec, "RSunRef", 1.0e-6 * RSUNM);
     kstat += check_and_set_key_str   (orec, "Interp", interpname[intrpopt]);
@@ -1041,6 +1125,7 @@ printf("vrcenter=%f, rSun=%f, xcen=%f, ycen=%f, INVPHMAP=%s\n", vrcenter, rSun, 
        free(bIncl); free(bTotal); free(bAzim);
        drms_free_array(image);
        drms_free_array (map);
+       drms_free_array (outmap);
   }
   drms_close_records(ids, DRMS_FREE_RECORD);
   drms_close_records (ods, DRMS_INSERT_RECORD);
