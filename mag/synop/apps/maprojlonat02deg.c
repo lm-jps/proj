@@ -114,6 +114,8 @@ extern int synop_img2sphere(double x, double y, double ang_r, double latc, doubl
 extern int synop_sphere2img(double lat, double lon, double latc, double lonc, double *x, double *y, double xcenter, double ycenter, double rsun, double peff, double ecc, double chi, int xinvrt, int yinvrt);
 extern int synop_sphere2plane(double lat, double lon, double latc, double lonc, double *x, double *y, int projection);
 
+void do_boxcar(float *image_in, float *image_out, int in_nx, int in_ny, float fscale, int power);
+
 // -- add YL
 						       /*  module identifier  */
 char *module_name = "maprojlonat02deg";
@@ -137,6 +139,7 @@ ModuleArgs_t module_args[] = {
   {ARG_FLOAT,	"map_pa", "0.0", "position angle of north on output map [deg]"},
   {ARG_FLOAT,	"bscale", "0.0", "output scaling factor"},
   {ARG_FLOAT,	"bzero", "Default", "output offset"},
+  {ARG_FLOAT,   "RESCALE",     "0.1",  "Scale factor."}, // YLiu
   {ARG_STRING,	"clon_key", "CRLN_OBS", "keyname for image central longitude"}, 
   {ARG_STRING,	"clat_key", "CRLT_OBS", "keyname for image central latitude"}, 
   {ARG_STRING,	"rsun_key", "R_SUN", "keyname for image semi-diameter (pixel)"}, 
@@ -154,6 +157,56 @@ ModuleArgs_t module_args[] = {
 
 		 /*  global declaration of missing to be initialized as NaN  */
 float missing_val;
+
+// -- YLiu
+
+void do_boxcar(float *image_in, float *image_out, int in_nx, int in_ny, float fscale, int power)
+{
+  int iscale, nvector, vec_half;
+  int inx, iny, outx, outy, i, j;
+  float val;
+
+      iscale = 1.0/fscale + 0.5;
+      nvector = iscale;
+      vec_half = nvector/2;
+
+      int in_go = (iscale-1)/2.0 + 0.5;
+      int out_nx = in_nx * fscale + 0.5;
+      int out_ny = in_ny * fscale + 0.5;
+
+        for (outy = 0; outy < out_ny; outy += 1)
+          for (outx = 0; outx < out_nx; outx += 1)
+            {
+            double total = 0.0;
+            double weight = 0.0;
+            int nn = 0;
+            for (j = 0; j < nvector; j += 1)
+              {
+              iny = outy*iscale + in_go + j - vec_half;
+              for (i = 0; i < nvector; i += 1)
+                {
+                inx = outx*iscale + in_go + i - vec_half;
+                if (inx >= 0 && inx < in_nx && iny >=0 && iny < in_ny)
+                  {
+                  val = image_in[in_nx*(iny) + inx];
+                  if (!drms_ismissing_float(val))
+                    {
+                    double w = 1.0;
+                    total += pow(w*val, power); // -- YLiu
+                    weight += w;
+                    nn++;
+                    }
+                  }
+                }
+              }
+            if (power == 2) total = sqrt(total); //-- YL
+            image_out[out_nx*outy + outx] = (nn > 0 ? total/weight : DRMS_MISSING_FLOAT);
+            }
+
+}
+
+// -- YLiu
+
 
 				/*  Calculate the interpolation kernel.  */
 void ccker (double *u, double s) {
@@ -354,7 +407,7 @@ int DoIt (void) {
   DRMS_RecordSet_t *ids, *ods;
   DRMS_Record_t *irec, *orec;
   DRMS_Segment_t *iseg, *oseg;
-  DRMS_Array_t *image = NULL, *map = NULL;
+  DRMS_Array_t *image = NULL, *map = NULL, *outmap = NULL;
   double *maplat, *maplon, *map_coslat, *map_sinlat;
   double x, y, x0, y0, xstp, ystp, xrot, yrot;
   double lat, lon, cos_phi, sin_phi;
@@ -362,8 +415,8 @@ int DoIt (void) {
   double img_xscl, img_yscl, img_xc, img_yc, img_radius, img_pa;
   double grid_width;
   double ellipse_e, ellipse_pa;
-  float *data;
-  int axes[2];
+  float *data, *outdata;
+  int axes[2], outaxes[2];
   int img, imgct, pixct, segct;
   int isegnum, osegnum;
   int found, kstat, status;
@@ -397,6 +450,7 @@ int DoIt (void) {
   float bscale = params_get_float (params, "bscale");
   float bzero = params_get_float (params, "bzero");
   float grid_spacing = params_get_float (params, "grid");
+  float rescale = params_get_float (params, "RESCALE"); // YLiu
   int map_cols = params_get_int (params, "cols");
   int map_rows = params_get_int (params, "rows");
   int proj = params_get_int (params, "map");
@@ -529,11 +583,18 @@ int DoIt (void) {
 						 /*  create output map array  */
   axes[0] = map_cols;
   axes[1] = map_rows;
+  outaxes[0] = map_cols * rescale + 0.5; // YLiu
+  outaxes[1] = map_rows * rescale + 0.5; // YLiu
+
   map = drms_array_create (DRMS_TYPE_FLOAT, 2, axes, NULL, &status);
   if (status) {
     fprintf (stderr, "Error: couldn't create output array\n");
     return 1;
   }
+
+  outmap = drms_array_create (DRMS_TYPE_FLOAT, 2, outaxes, NULL, &status); // YLiu
+  
+
   pixct = map_cols * map_rows;
   maplat = (double *)malloc (pixct * sizeof (double));
   maplon = (double *)malloc (pixct * sizeof (double));
@@ -694,8 +755,15 @@ printf("lon=%f\n", img_lon);
       for (n = 0; n < pixct; n++) 
         if (ongrid[n]) data[n] = (isfinite (data[n])) ? bblank : wblank;
     }
+
+    outdata = (float *)outmap->data;
+    do_boxcar(data, outdata, axes[0], axes[1], rescale, 1); // YLiu
+    outmap->israw = 0;            // always compressed
+    outmap->bzero = oseg->bzero;
+    outmap->bscale = oseg->bscale;
+
 				/*  write map array to output record segment  */
-    status = drms_segment_write (oseg, map, 0);
+    status = drms_segment_write (oseg, outmap, 0);
     if (status) {
       drms_sprint_rec_query (recid, orec);
       fprintf (stderr, "Error writing data to record %s\n", recid);
@@ -707,13 +775,13 @@ printf("lon=%f\n", img_lon);
 // -- include statistics -- YL
     double statMin, statMax, statMedn, statMean, statSig, statSkew, statKurt;
     int statNgood, ipixels;
-    if (fstats(axes[0] * axes[1], data, &statMin, &statMax, &statMedn, &statMean, &statSig,
+    if (fstats2(outaxes[0] * outaxes[1], outdata, &statMin, &statMax, &statMedn, &statMean, &statSig,
         &statSkew, &statKurt, &statNgood)) printf("\n Statistics computation failed\n");
 // image statistics
-    ipixels = axes[0] * axes[1];
+    ipixels = outaxes[0] * outaxes[1];
     drms_setkey_int(orec, "TOTVALS", ipixels);
     drms_setkey_int(orec, "DATAVALS", statNgood);
-    ipixels = axes[0] * axes[1]-statNgood;
+    ipixels = outaxes[0] * outaxes[1]-statNgood;
     drms_setkey_int(orec, "MISSVALS", ipixels);
     drms_setkey_double(orec, "DATAMIN", statMin);
     drms_setkey_double(orec, "DATAMAX", statMax);
@@ -734,12 +802,12 @@ printf("lon=%f\n", img_lon);
     kstat += check_and_set_key_str   (orec, "CTYPE2", key);
     kstat += check_and_set_key_str   (orec, "CUNIT1", "deg");
     kstat += check_and_set_key_str   (orec, "CUNIT2", "deg");
-    kstat += check_and_set_key_float (orec, "CRPIX1", 0.5 * map_cols + 0.5);
-    kstat += check_and_set_key_float (orec, "CRPIX2", 0.5 * map_rows + 0.5);
+    kstat += check_and_set_key_float (orec, "CRPIX1", 0.5 * map_cols * rescale + 0.5);
+    kstat += check_and_set_key_float (orec, "CRPIX2", 0.5 * map_rows * rescale + 0.5);
     kstat += check_and_set_key_float (orec, "CRVAL1", clon * degrad);
     kstat += check_and_set_key_float (orec, "CRVAL2", clat * degrad);
-    kstat += check_and_set_key_float (orec, "CDELT1", map_scale);
-    kstat += check_and_set_key_float (orec, "CDELT2", map_scale);
+    kstat += check_and_set_key_float (orec, "CDELT1", map_scale/rescale);
+    kstat += check_and_set_key_float (orec, "CDELT2", map_scale/rescale);
     if (map_pa != 0.0) {
       kstat += check_and_set_key_float (orec, "PC1_1", cos (map_pa));
 /*  PC1_2 should be multiplied by CDELT2 / CDELT1  */
@@ -753,9 +821,9 @@ printf("lon=%f\n", img_lon);
     kstat += check_and_set_key_float (orec, "LatHG", clat * degrad);
     kstat += check_and_set_key_str   (orec, "MapProj", mapname[proj]);
     kstat += check_and_set_key_float (orec, "MapScale", map_scale);
-    kstat += check_and_set_key_float (orec, "Width", map_cols * map_scale);
-    kstat += check_and_set_key_float (orec, "Height", map_rows * map_scale);
-    kstat += check_and_set_key_float (orec, "Size", sqrt (map_rows * map_cols) * map_scale);
+    kstat += check_and_set_key_float (orec, "Width", map_cols * rescale * map_scale);
+    kstat += check_and_set_key_float (orec, "Height", map_rows * rescale * map_scale);
+    kstat += check_and_set_key_float (orec, "Size", sqrt (map_rows * map_cols) * rescale * map_scale);
     kstat += check_and_set_key_float (orec, "Map_PA", map_pa / raddeg);
     kstat += check_and_set_key_float (orec, "RSunRef", 1.0e-6 * RSUNM);
     kstat += check_and_set_key_str   (orec, "Interp", interpname[intrpopt]);
@@ -780,6 +848,7 @@ printf("lon=%f\n", img_lon);
     drms_free_array (image);
   }
   drms_close_records (ods, DRMS_INSERT_RECORD);
+  drms_free_array (outmap);
   drms_free_array (map);
   return 0;
 }
