@@ -247,7 +247,8 @@ for($l=0; $l<12; $l++) {	#12 sets of 2 processes
     close(L0);
     #$qsubcmd = sprintf("qsub -o %s -e %s -q p.q %s", $QDIR, $QDIR, $file);
     #$qsubcmd = sprintf("qsub -o %s -e %s -q j8.q,o8.q %s", $QDIR, $QDIR, $file);
-    $qsubcmd = sprintf("qsub2 -o %s -e %s -q p.q %s", $QDIR, $QDIR, $file);
+    #$qsubcmd = sprintf("qsub2 -o %s -e %s -q p.q %s", $QDIR, $QDIR, $file);
+    $qsubcmd = sprintf("qsub -o %s -e %s -q a8.q %s", $QDIR, $QDIR, $file);  
     print "$qsubcmd\n";
     $x = `$qsubcmd`;
     print "$x";
