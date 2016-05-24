@@ -137,7 +137,8 @@ $j = 0;
     close(L0);
     #$file = "/home/production/cvs/JSOC/proj/lev0/scripts/date.str"; #!!!TEMP
     #$qsubcmd = sprintf("qsub -o %s -e %s -q p.q %s", $QDIR, $QDIR, $file);
-    $qsubcmd = sprintf("qsub -o %s -e %s -q j8.q %s", $QDIR, $QDIR, $file);
+    #$qsubcmd = sprintf("qsub -o %s -e %s -q j8.q %s", $QDIR, $QDIR, $file);
+    $qsubcmd = sprintf("qsub -o %s -e %s -q a8.q %s", $QDIR, $QDIR, $file);
     print "$qsubcmd\n";
     $x = `$qsubcmd`;
     print "$x";
