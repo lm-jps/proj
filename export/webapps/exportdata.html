@@ -840,19 +840,21 @@ function GetDefaultFormat()
 					var recset = $("ExportRecordSet").value;
 					var posCurlbracket = recset.indexOf("{");
 					var posCurlRbracket = recset.lastIndexOf("}");
-					var seglist = (posCurlbracket >=0 ? recset.substring(posCurlbracket+1,posCurlRbracket) : "");
+					var seglist = ((posCurlbracket >=0 && posCurlRbracket > 0) ? recset.substring(posCurlbracket+1,posCurlRbracket) : "");
+                                        var seglistLength = seglist.length;
 					var WantedSegments = [];
-					if (seglist.length > 0)
-					    {
+					if (seglistLength > 0)
 					    WantedSegments = seglist.split(",");
-					    }
 					for (var iseg=0; iseg<nsegs; ++iseg)
 					    {
-                                            var thisname = SeriesInfo.segments[iseg].name;
-                                            var thisnamearray = [thisname];
-                                            var jointnames = WantedSegments.intersect(thisnamearray)
-                                            if ( jointnames.length == 0)
-                                                continue;
+                                            if (seglistLength > 0)
+                                                {
+                                                var thisname = SeriesInfo.segments[iseg].name;
+                                                var thisnamearray = [thisname];
+                                                var jointnames = WantedSegments.intersect(thisnamearray)
+                                                if (jointnames.length == 0)
+                                                    continue;
+                                                }
 					    var thisProtocol = SeriesInfo.segments[iseg].protocol;
 						if (thisProtocol === "fits")
 						    {
