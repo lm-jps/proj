@@ -58,9 +58,6 @@ hmi.tdpixlist
 hmi.temperature_summary_300s
 hmi.v_sht_72d
 hmi.v_sht_gaps_72d
-hmi.v_sht_gf_72d
-hmi.v_sht_gf_gaps_72d
-hmi.v_sht_modes
 hmi.v_sht_modes_archive
 hmi.V_sht_modes_asym
 hmi.V_sht_modes_asym_archive
@@ -99,9 +96,6 @@ mdi.fd_v_bin2x2
 mdi.fd_v_extract
 mdi.fd_v_sht
 mdi.fd_v_sht_gaps
-mdi.fd_v_sht_gf
-mdi.fd_v_sht_gf_gaps
-mdi.fd_v_sht_modes
 mdi.fd_v_sht_modes_archive
 mdi.fd_V_sht_modes_asym
 mdi.fd_V_sht_modes_asym_archive
