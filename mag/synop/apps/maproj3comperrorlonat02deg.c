@@ -1086,6 +1086,7 @@ printf("vrcenter=%f, rSun=%f, xcen=%f, ycen=%f, INVPHMAP=%s\n", vrcenter, rSun, 
     kstat += check_and_set_key_float (orec, "CRVAL2", clat * degrad);
     kstat += check_and_set_key_float (orec, "CDELT1", map_scale/rescale);
     kstat += check_and_set_key_float (orec, "CDELT2", map_scale/rescale);
+    kstat += check_and_set_key_float (orec, "CROTA2", 0.0);
     if (map_pa != 0.0) {
       kstat += check_and_set_key_float (orec, "PC1_1", cos (map_pa));
 /*  PC1_2 should be multiplied by CDELT2 / CDELT1  */
