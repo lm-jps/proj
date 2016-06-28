@@ -71,6 +71,7 @@ hmi.vw_V_sht_gf_gaps_72d
 hmi.vw_V_sht_modes
 hmi.vw_V_sht_modes_archive
 hmi.vw_V_sht_pow
+hmi_test.qmap_test
 iris.hk_dayfile_mag
 iris.lev1
 iris.lev1_nrt
