@@ -1104,7 +1104,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables_135q.c,v 1.1 2016/07/01 21:58:46 xudong Exp $");
+  return strdup("$Id: HMI_observables_135q.c,v 1.2 2016/07/01 22:00:56 xudong Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -1962,7 +1962,7 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
       if( DataCadence == 45.0)  strcpy(HMISeriesLev1pa,"hmi.HMISeriesLev1pa45Q");
       if( DataCadence == 90.0)  strcpy(HMISeriesLev1pa,"hmi.HMISeriesLev1pa90Q");
       if( DataCadence == 120.0) strcpy(HMISeriesLev1pa,"su_couvidat.HMISeriesLev1pa120Q");
-      if( DataCadence == 135.0) strcpy(HMISeriesLev1pa,"hmi_test.S_135s");
+      if( DataCadence == 135.0) strcpy(HMISeriesLev1pa,"hmi.S_135s");
       if( DataCadence == 150.0) strcpy(HMISeriesLev1pa,"su_couvidat.HMISeriesLev1pa150Q");
       if( DataCadence == 720.0 && unusual == 0) strcpy(HMISeriesLev1pa,"hmi.S_720s_nrt");
       if( DataCadence == 720.0 && unusual == 1) strcpy(HMISeriesLev1pa,"hmi.S2_720s_nrt");
