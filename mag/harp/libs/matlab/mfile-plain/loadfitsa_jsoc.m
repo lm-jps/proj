@@ -70,7 +70,7 @@ end;
 % (i.e., we are now in the http case)
 
 % cache setup
-cacheroot = '/data/hmi/cache';
+cacheroot = '/';
 cache_enabled = exist(cacheroot); % at stanford, cache is not enabled
 
 % make the cache filename
