@@ -15,6 +15,7 @@ hmi.fsi_phase_lon_lat_5d
 hmi.gcvbinned_nrt
 hmi.ic_nolimbdark_720s_nrt
 hmi.lev1_cal
+hmi.m_720s_mod
 hmi.m_720s_nrt
 hmi.marmask_720s
 hmi.marmask_720s_nrt
