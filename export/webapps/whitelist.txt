@@ -3,6 +3,7 @@ aia.lev1_uv_24s
 aia.lev1_vis_1h
 aia.response
 aia.temperature_summary_300s
+aia_test.master_pointing3h
 cgem.lorentz
 hmi.b_720s_e15w1332_cea
 hmi.b_720s_e15w1332_cutout
