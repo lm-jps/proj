@@ -10,7 +10,7 @@ $to_list = join ",", 'jps@lmsal.com', 'wolfson@lmsal.com',
 $msg_file = "$ENV{HOME}/bit_flip.txt";
 exit if -e $msg_file;
 if ($t = shift @ARGV) { $threshold = $t; } else { $threshold = 200; }
-$cmd = "/home/jsoc/cvs/Development/JSOC/bin/$ENV{JSOC_MACHINE}/show_info";
+$cmd = "/home/jsoc/cvs/Development/JSOC/bin/linux_x86_64/show_info";
 for ($cam=1; $cam<5; $cam++) {
   $fsn0 = `$cmd -q key=fsn 'aia.lev0[:#\$]'` - 3999;
   $n = `$cmd -qc 'aia.lev0[$fsn0/4000][?datamin=0?][?camera=$cam?]'` + 0;

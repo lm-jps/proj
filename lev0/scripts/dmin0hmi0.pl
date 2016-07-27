@@ -24,7 +24,7 @@ exit if -e $msg_file;
 $cname[1] = "1=vector=side";
 $cname[2] = "2=Doppler=front";
 if ($t = shift @ARGV) { $threshold = $t; } else { $threshold = 100; }
-$cmd = "/home/jsoc/cvs/Development/JSOC/bin/$ENV{JSOC_MACHINE}/show_info";
+$cmd = "/home/jsoc/cvs/Development/JSOC/bin/linux_x86_64/show_info";
 for ($cam=1; $cam<3; $cam++) {
   $fsn0 = `$cmd -q key=fsn 'hmi.lev0a[:#\$]'` - 399;
   $n = `$cmd -qc 'hmi.lev0a[$fsn0/400][?datamin=0?][?camera=$cam?]'` + 0;
