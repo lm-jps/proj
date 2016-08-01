@@ -6,12 +6,9 @@
 # anomaly was detected. To prevent flood of mail at cron cadence
 # $ENV{HOME}/hmi_cam_anomaly.txt must be deleted after anomaly is fixed
 # to re-enable automatic anomaly detection.
-$to_list = join ",", 'jps@lmsal.com', 'boerner@lmsal.com', 'green@lmsal.com',
-        'zoe@lmsal.com', 'jeneen@sun.stanford.edu',
-        'rock@sun.stanford.edu', 'thailand@sun.stanford.edu',
-        'wolfsonjake@gmail.com', 'mbobra@sun.stanford.edu',
-        'aanorton@stanford.edu', 'baldner@sun.stanford.edu',
-        'william.d.pesnell@nasa.gov', 'cheung@lmsal.com',
+if ($t = shift @ARGV) { $threshold = $t; } else { $threshold = 100; }
+$test = shift @ARGV or $test = 0;
+$to_list = join ",", 'jps@lmsal.com',
         '6509965043@txt.att.net',
         '6504503716@txt.att.net',
         '4084317110@txt.att.net',
@@ -19,11 +16,21 @@ $to_list = join ",", 'jps@lmsal.com', 'boerner@lmsal.com', 'green@lmsal.com',
         '5178969022@vtext.com',
         '6507436500@tmomail.net',
         '6509968590@txt.att.net';
+$to_list = join ",", $to_list, 'boerner@lmsal.com', 'green@lmsal.com',
+        'zoe@lmsal.com', 'jeneen@sun.stanford.edu',
+        'rock@sun.stanford.edu', 'thailand@sun.stanford.edu',
+        'wolfsonjake@gmail.com', 'mbobra@sun.stanford.edu',
+        'aanorton@stanford.edu', 'baldner@sun.stanford.edu',
+        'william.d.pesnell@nasa.gov', 'cheung@lmsal.com'
+        unless $test;
 $msg_file = "$ENV{HOME}/hmi_cam_anomaly.txt";
-exit if -e $msg_file;
+if (-e $msg_file) {
+  $subj = "Stale HMI $msg_file during camera anomaly test";
+  `echo "$subj" | mail -s "$subj" $to_list` if $test;
+  exit;
+}
 $cname[1] = "1=vector=side";
 $cname[2] = "2=Doppler=front";
-if ($t = shift @ARGV) { $threshold = $t; } else { $threshold = 100; }
 $cmd = "/home/jsoc/cvs/Development/JSOC/bin/linux_x86_64/show_info";
 for ($cam=1; $cam<3; $cam++) {
   $fsn0 = `$cmd -q key=fsn 'hmi.lev0a[:#\$]'` - 399;
@@ -31,9 +38,11 @@ for ($cam=1; $cam<3; $cam++) {
   if ($n > $threshold) {
     $c = $cname[$cam];
     $subj = "HMI camera $c anomaly";
+    $subj = join " ", $test, $subj if $test;
     open MSG, ">$msg_file" or die "Can not write mail";
     print MSG "\n", `date -u`,`date`, "$subj detected.\n";
     close MSG or die "Can not close mail message file";
     `mail -s "$subj" $to_list < $msg_file`;
   }
 }
+unlink $msg_file if $test;
