@@ -41,11 +41,12 @@ class Arguments(object):
         # This could raise in a few places. Let the caller handle these exceptions.
         self.parser = parser
         
-        # Parse the arguments.
-        self.parse()
+        if parser:
+            # Parse the arguments.
+            self.parse()
         
-        # Set all args.
-        self.setAllArgs()
+            # Set all args.
+            self.setAllArgs()
         
     def parse(self):
         try:
