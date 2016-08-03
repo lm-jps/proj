@@ -1,5 +1,6 @@
 #!/home/jsoc/anaconda3/bin/python3
 
+import cgi
 import math
 from datetime import datetime
 import sys
@@ -21,6 +22,12 @@ from mpl_toolkits.axes_grid1 import AxesGrid
 
 if sys.version_info < (3, 0):
     raise Exception("You must run the 3.0 release, or a more recent release, of Python.")
+    
+# JSON return status.
+
+JSON_RV_SUCCESS = 0
+JSON_RV_BADARGS = 1
+JSON_RV_CREATEIMGFAIL = 2
 
 #radii is hard coded for the test. need to have the radii inside the data
 slice = 0
@@ -165,19 +172,61 @@ def axisLines():
     
 if __name__ == "__main__":
     #runs all of the functions
+    error = False
+    webRun = False
     
-    parser = CmdlParser(usage='%(prog)s [ -h ] series=<DRMS series containing qmap images> carrot=<Carrington Rotation>')
-    parser.add_argument('series', '--series', help='The DRMS data series that contains the input qmap images.', metavar='<qmap series>', dest='series', required=True)
-    parser.add_argument('carrot', '--carrot', help='The Carrington Rotation for the qmap image.', metavar='<Carrington Rotation>', dest='carrot', type=int, required=True)
-    parser.add_argument('webroot', '--webroot', help='The directory in which the images will be placed.', metavar = '<Web Root>', dest='webroot', required=True)
-    arguments = Arguments(parser)
+    if os.getenv('REQUEST_URI'):
+        webRun = True
+        jsonRoot = {}
+        arguments = Arguments(None)
+        
+        try:
+            # Try to get arguments with the cgi module. If that doesn't work, then fetch them from the command line.
+            args = cgi.FieldStorage()
+        
+            if args:
+                for key in args.keys():
+                    val = args.getvalue(key)
+                    if key in ('series'):
+                        arguments.setArg('series', val)
+                    elif key in ('carrot'):
+                        arguments.setArg('carrot', int(val))
+                    elif key in ('webroot'):
+                        arguments.setArg('webroot', val)
+                    else:
+                        raise ValueError
+        except ValueError:
+            jsonRoot['status'] = JSON_RV_BADARGS
+            jsonRoot['errMsg'] = 'Invalid CGI URL.\nUsage:\n  http://jsoc.stanford.edu/cgi-bin/qmapviewer?series=<DRMS qmap series>&carrot=<Carrington Rotation>&webroot=<web root directory>'
+            error = True
 
-    wr = arguments.webroot
-    car = arguments.carrot
-    ds = arguments.series
+    else:    
+        parser = CmdlParser(usage='%(prog)s [ -h ] series=<DRMS series containing qmap images> carrot=<Carrington Rotation>')
+        parser.add_argument('series', '--series', help='The DRMS data series that contains the input qmap images.', metavar='<qmap series>', dest='series', required=True)
+        parser.add_argument('carrot', '--carrot', help='The Carrington Rotation for the qmap image.', metavar='<Carrington Rotation>', dest='carrot', type=int, required=True)
+        parser.add_argument('webroot', '--webroot', help='The directory in which the images will be placed.', metavar = '<Web Root>', dest='webroot', required=True)
+        arguments = Arguments(parser)
 
-    logqData, brqData, chmapData, synopData = getData(car,ds)
-    slogq_imageData = getImageData()
-    np.nanmax(slogq_imageData)
-    fig, ax = plt.subplots(1,1)
-    createImages(wr)
+    if not error:
+        try:
+            wr = arguments.webroot
+            car = arguments.carrot
+            ds = arguments.series
+
+            logqData, brqData, chmapData, synopData = getData(car,ds)
+            slogq_imageData = getImageData()
+            np.nanmax(slogq_imageData)
+            fig, ax = plt.subplots(1,1)
+            createImages(wr)
+
+            if webRun:
+                jsonRoot['status'] = JSON_RV_SUCCESS
+        except:
+            if webRun:
+                jsonRoot['status'] = JSON_RV_CREATEIMGFAIL
+
+    if webRun:
+        print('Content-type: application/json\n')
+        print(json.dumps(jsonRoot))
+
+        sys.exit(0)
