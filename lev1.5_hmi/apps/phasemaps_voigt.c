@@ -735,8 +735,9 @@ int DoIt(void) {
   int indexref;
 
 
-  nthreads=omp_get_num_procs();                                      //number of threads supported by the machine where the code is running
-  omp_set_num_threads(nthreads);                                     //set the number of threads to the maximum value
+  char *envval = getenv("OMP_NUM_THREADS");
+  nthreads = envval ? atoi(envval) : 1;
+  omp_set_num_threads(nthreads); 
   printf("number of threads for OpenMP = %d\n",nthreads);
 
 
