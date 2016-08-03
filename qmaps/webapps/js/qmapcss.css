@@ -1,0 +1,49 @@
+#backward-button
+{
+    color: blue;
+}
+
+#forward-button
+{
+    color: red;
+}
+.elem-center
+{
+    text-align: center;
+    min-width: 800px;
+}
+#date
+{
+    padding-bottom: 20px;
+    margin: 0;
+}
+#next-prev
+{
+    padding-bottom: 20px;
+    padding-top: 20px;
+}
+
+.Iframe
+{
+    min-width: 660px;
+    min-height: 500px;
+}
+
+.mpld3-figure
+{
+    text-align: center;
+}
+#switcher
+{
+    padding-bottom: 20px;
+}
+
+#entry
+{
+    padding-bottom: 20px;
+}
+
+#carrotInput
+{
+    width: 35px;
+}
