@@ -99,7 +99,7 @@ def getImageData():
     slogq_image = brq_sign * np.log10(logEq)
     return slogq_image
 
-def createImages():
+def createImages(wr):
     #the first part here takes the carrington rotation and tranforms it into the day month and year that the carrot began
     global carrot
     JD = 27.2753*(carrot - 1.0) + 2398167.0
@@ -110,7 +110,7 @@ def createImages():
     manifest['carrot'] = carrot
     manifest['date'] = realDate
     #saves the 10 heights of the slogq maps as seperate files labeled by their solar radii in the public_html/img/ directory
-    colors = np.loadtxt('qmap-colormap.txt')
+    colors = np.loadtxt(os.path.dirname(os.path.realpath(__file__)) + '/../data/qmap-colormap.txt')
     normalcolors = colors/255
     colormap_customized = mcol.ListedColormap(normalcolors)
     
@@ -122,8 +122,8 @@ def createImages():
         plt.imshow(slogq_slice, cmap = colormap_customized, origin = 'lower', extent = [0,360,-90,90], vmax = 3, vmin = -3)
         plt.title('S-logQ Map at %.3f Solar Radii' % radii[slice], y = 1.09)
         axisLines()
-        SlogfileName = 'img/' + str(carrot) + 'slogqmap%.3f.html'  %radii[slice]
-        with open('/home/sam/public_html/' + SlogfileName, 'w') as mpld3image:
+        SlogfileName = '/img/' + str(carrot) + 'slogqmap%.3f.html'  %radii[slice]
+        with open(wr + SlogfileName, 'w') as mpld3image:
             mpld3.save_html(fig,mpld3image)   
         manifest['slogfilenames']["%.3f" %radii[slice]] = SlogfileName
         
@@ -133,8 +133,8 @@ def createImages():
     plt.imshow(chmap_slice, origin = 'lower', extent = [0,360,-90,90], cmap = plt.cm.get_cmap('seismic_r'))
     plt.title('Coronal Hole Map', y = 1.09)
     axisLines()
-    ChmapfileName = 'img/' + str(carrot) + 'chmap.html'
-    with open('/home/sam/public_html/' + ChmapfileName, 'w') as mpld3image:
+    ChmapfileName = '/img/' + str(carrot) + 'chmap.html'
+    with open(wr + ChmapfileName, 'w') as mpld3image:
         mpld3.save_html(fig,mpld3image)
     manifest['chfilename'] = ChmapfileName
         
@@ -143,14 +143,14 @@ def createImages():
     plt.imshow(synop_slice, origin = 'lower', extent = [0,360,-90,90], cmap = plt.cm.get_cmap('Greys'))
     plt.title('Synoptic Map', y = 1.09)
     axisLines()
-    SynopfileName = 'img/' + str(carrot) + 'synop.html'
-    with open('/home/sam/public_html/' + SynopfileName, 'w') as mpld3image:
+    SynopfileName = '/img/' + str(carrot) + 'synop.html'
+    with open(wr + SynopfileName, 'w') as mpld3image:
         mpld3.save_html(fig,mpld3image)        
     manifest['synopfilename'] = SynopfileName
     
     #prints the manifest into a text file that is json serializable    
     jsonString = json.dumps(manifest)
-    with open('/home/sam/public_html/js/jsonString.js','w') as jsonFile:
+    with open(wr + '/js/jsonString.js','w') as jsonFile:
         print(jsonString,file = jsonFile)
         
 def axisLines():
@@ -169,8 +169,10 @@ if __name__ == "__main__":
     parser = CmdlParser(usage='%(prog)s [ -h ] series=<DRMS series containing qmap images> carrot=<Carrington Rotation>')
     parser.add_argument('series', '--series', help='The DRMS data series that contains the input qmap images.', metavar='<qmap series>', dest='series', required=True)
     parser.add_argument('carrot', '--carrot', help='The Carrington Rotation for the qmap image.', metavar='<Carrington Rotation>', dest='carrot', type=int, required=True)
+    parser.add_argument('webroot', '--webroot', help='The directory in which the images will be placed.', metavar = '<Web Root>', dest='webroot', required=True)
     arguments = Arguments(parser)
 
+    wr = arguments.webroot
     car = arguments.carrot
     ds = arguments.series
 
@@ -178,4 +180,4 @@ if __name__ == "__main__":
     slogq_imageData = getImageData()
     np.nanmax(slogq_imageData)
     fig, ax = plt.subplots(1,1)
-    createImages()
+    createImages(wr)
