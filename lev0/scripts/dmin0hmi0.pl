@@ -37,8 +37,7 @@ $to_list = join ",", 'jps@lmsal.com', 'green@lmsal.com',
         '6507436500@tmomail.net',
         '6509968590@txt.att.net',
         '4088964682@messaging.sprintpcs.com',
-        '7192333079@vmobl.com';
-
+        '7192333079@vmobl.com'
         unless $test;
 $msg_file = "$ENV{HOME}/hmi_cam_anomaly.txt";
 if (-e $msg_file) {
