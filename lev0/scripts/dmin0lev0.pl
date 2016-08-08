@@ -5,8 +5,25 @@
 #        '6504503716@txt.att.net', '4084317110@txt.att.net',
 #        '6502248075@txt.att.net', '6503878335@txt.att.net',
 #        '4153141403@vtext.com',   '6034963597@vtext.com';
-$to_list = join ",", 'jps@lmsal.com', 'wolfson@lmsal.com',
-                      'zoe@lmsal.com';
+#$to_list = join ",", 'jps@lmsal.com', 'wolfson@lmsal.com',
+#                      'zoe@lmsal.com';
+
+$to_list = join ",", 'jps@lmsal.com', 'green@lmsal.com',
+        'shelbe@lmsal.com', 'weiliu@lmsal.com', 'wei.liu2004@gmail.com',
+        'zoe@lmsal.com', 'jeneen@sun.stanford.edu',
+        'rock@sun.stanford.edu', 'thailand@sun.stanford.edu',
+        'wolfsonjake@gmail.com', 'mbobra@sun.stanford.edu',
+        'aanorton@stanford.edu', 'baldner@sun.stanford.edu',
+        'william.d.pesnell@nasa.gov', 'cheung@lmsal.com',
+        '6509965043@txt.att.net',
+        '6504503716@txt.att.net',
+        '4084317110@txt.att.net',
+        '5178969022@vtext.com',
+        '6507436500@tmomail.net',
+        '6509968590@txt.att.net'
+        '4088964682@messaging.sprintpcs.com',
+        '7192333079@vmobl.com';
+
 $msg_file = "$ENV{HOME}/bit_flip.txt";
 exit if -e $msg_file;
 if ($t = shift @ARGV) { $threshold = $t; } else { $threshold = 200; }
