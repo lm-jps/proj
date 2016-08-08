@@ -20,7 +20,7 @@ $to_list = join ",", 'jps@lmsal.com', 'green@lmsal.com',
         '4084317110@txt.att.net',
         '5178969022@vtext.com',
         '6507436500@tmomail.net',
-        '6509968590@txt.att.net'
+        '6509968590@txt.att.net',
         '4088964682@messaging.sprintpcs.com',
         '7192333079@vmobl.com';
 
