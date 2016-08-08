@@ -22,23 +22,26 @@ $test = shift @ARGV or $test = 0;
 #        'aanorton@stanford.edu', 'baldner@sun.stanford.edu',
 #        'william.d.pesnell@nasa.gov', 'cheung@lmsal.com'
 
+$to_list = join ",", 'jps@lmsal.com',
+          '6509965043@txt.att.net',
+          '6504503716@txt.att.net',
+          '5178969022@vtext.com',
+          '6507436500@tmomail.net',
+          '6509968590@txt.att.net',
+          '4088964682@messaging.sprintpcs.com',
+          '7192333079@vmobl.com',
+          'mark.cheung@gmail.com';
 
-$to_list = join ",", 'jps@lmsal.com', 'green@lmsal.com',
+$to_list = join ",", $to_list, 'green@lmsal.com',
         'shelbe@lmsal.com', 'weiliu@lmsal.com', 'wei.liu2004@gmail.com',
         'zoe@lmsal.com', 'jeneen@sun.stanford.edu',
         'rock@sun.stanford.edu', 'thailand@sun.stanford.edu',
         'wolfsonjake@gmail.com', 'mbobra@sun.stanford.edu',
         'aanorton@stanford.edu', 'baldner@sun.stanford.edu',
         'william.d.pesnell@nasa.gov', 'cheung@lmsal.com',
-        '6509965043@txt.att.net',
-        '6504503716@txt.att.net',
-        '4084317110@txt.att.net',
-        '5178969022@vtext.com',
-        '6507436500@tmomail.net',
-        '6509968590@txt.att.net',
-        '4088964682@messaging.sprintpcs.com',
-        '7192333079@vmobl.com'
+        '4084317110@txt.att.net'
         unless $test;
+
 $msg_file = "$ENV{HOME}/bit_flip_his.txt";
 if (-e $msg_file) {
   $subj = "Stale AIA $msg_file during camera anomaly test";
