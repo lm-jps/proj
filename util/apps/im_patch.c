@@ -312,7 +312,7 @@ int DoIt(void)
   double trackx, tracky;
   double track_radius;
   double crpix1_0, crpix2_0;
-  int register_padding = 5; // later this should be based on crota2 and box size.
+  int register_padding = 60; // later this should be based on crota2 and box size.
   char *tmpstr = NULL;
   int hasSegList = 0;
   int doingAllSegs = params_isflagset(params, "A");
@@ -1365,11 +1365,15 @@ fprintf(stderr,"$$$$$$$ outArray bzero, bscale are %f, %f\n", outArray->bzero, o
             int newnx, newny;
             int nx = outArray->axis[0];
             int ny = outArray->axis[1];
-            float midx=(nx-1)/2.0;
+            float midx = (nx-1)/2.0;
             float midy = (ny-1)/2.0;
-            float dx = (x1 + midx) - target_x;
-            float dy = (y1 + midy) - target_y;
-
+// XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXx oops  
+            // float dx = (x1 + midx) - target_x;
+            // float dy = (y1 + midy) - target_y; 
+            float dx = target_x - (x1 + midx);
+            float dy = target_y - (y1 + midy); 
+// XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+ 
             /* We do not want to adjust crpix1 and crpix2 more than once per record. */
             if (iSeg == 0)
             {
