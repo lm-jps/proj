@@ -343,8 +343,10 @@ int DoIt ()
                       mag = cdelt1/usemag;
                       cdelt1 = usemag;
                   }
-                  dx = crpix1 - usedx;
-                  dy = crpix2 - usedy;
+                  // dx = crpix1 - usedx;
+                  // dy = crpix2 - usedy;
+                  dx = usedx - crpix1;
+                  dy = usedy - crpix2;
                   status = image_magrotate( (float *)inparr->data, n, m, dtyp, crota2,
                                            mag, dx, dy, &output_array, &nx, &ny, regridtype, do_stretchmarks);
                   if (verbose)
