@@ -999,7 +999,8 @@ fprintf(stderr,"after flip x1=%d, target_x=%lf, y1=%d, target_y=%lf\n",x1,target
     }
     
     /* At this point, all the modifications to x1, y1, target_x, and target_y have been performed, 
-     * so it is safe to calculate dx and dy. */
+     * so it is safe to calculate dx and dy. target_x, target_y are the pixel address of the part of
+     * the image that we want to be in the center of the output array. */
      
     /*
      * To simplify things, error-out if the input segment's patches dimensions are not equivalent.
@@ -1367,12 +1368,10 @@ fprintf(stderr,"$$$$$$$ outArray bzero, bscale are %f, %f\n", outArray->bzero, o
             int ny = outArray->axis[1];
             float midx = (nx-1)/2.0;
             float midy = (ny-1)/2.0;
-// XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXx oops  
-            // float dx = (x1 + midx) - target_x;
-            // float dy = (y1 + midy) - target_y; 
-            float dx = target_x - (x1 + midx);
-            float dy = target_y - (y1 + midy); 
-// XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+            // x1+midx is the data pixel that was just placed at the center of the output array.
+            // target_x is the pixel that contains the data we want to have in the center of the output array.
+            float dx = (x1 + midx) - target_x;
+            float dy = (y1 + midy) - target_y; 
  
             /* We do not want to adjust crpix1 and crpix2 more than once per record. */
             if (iSeg == 0)
