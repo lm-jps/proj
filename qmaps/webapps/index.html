@@ -3,15 +3,16 @@
     <head>
         <h2 id = "carrington" class = "elem-center"></h2>
         <h4 id = "date" class = "elem-center"></h4>
+        <h6 id = "clar" class = "elem-center" size = "100">(Time at Center of Carrington Rotation)</h6>
         <link rel = "stylesheet" href  = "js/qmapcss.css">
         <meta charset='utf-8' />
         <title>S-log Q Maps</title>
         <script src='js/jquery-3.0.0.min.js'></script>
         <script src = "js/qmapjs.js"></script>
         <link rel = "stylesheet" href = "js/jquery-ui.min.css">
-        <script src = "https://code.jquery.com/ui/1.12.0/jquery-ui.js"></script>
-<!--
         <script src = "js/jquery-ui.min.js"></script>
+<!--
+        <script src = "https://code.jquery.com/ui/1.12.0/jquery-ui.js"></script>
         <link rel = "stylesheet" href = "js/jquery-ui.structure.min.css">
         <link rel = "stylesheet" href = "js/jquery-ui.theme.css">
         <link rel = "stylesheet" href = "js/jquery-ui.theme.min.css">
@@ -19,6 +20,7 @@
         <script>
             $(function()
             {
+                $("#loader").hide();
                 var d = new Date();
                 var n = d.getTime();
                 $.getJSON("js/jsonString.js?n="+ n, fxn);
@@ -27,8 +29,19 @@
     </head>
 <body>
     <div class = "elem-center" id = "entry">
-        <input type="text" value="2097" id="carrotInput" maxlength = "4"/>
-        <button id= "submit" class = "floating-dialog-button" type = "button" onclick = "carrotSub()">Submit</button>
+        <label for = "carrotInput">Carrington Rotation: </label>
+        <br>
+        <input name = "carrotInput" type="text" value= "" id="carrotInput" maxlength = "4" autocomplete = "off"/>
+    </div>
+    <div class = "elem-center" id = "entry2">
+        <label for = "seriesInput">Data Series: </label>
+        <br>
+        <input name = "seriesInput" type="text" value= "hmi_test.qmap_test" id="seriesInput"  autocomplete = "off"/>
+    </div>
+    <div class = "elem-center" id = "submit1">
+        <input id = "force" type= "checkbox" autocomplete = "off"> Force Reload</input>
+        <button id= "submit" class = "floating-dialog-button" type = "button" onclick = "carrotSub()" autocomplete = "off">Submit</button>
+        <img id = "loader" src = "img/ajax-loader.gif">
     </div>
     <div id = "switcher" class = "elem-center">
         <form>
@@ -50,22 +63,15 @@
                 <button id="backward-button" class="floating-dialog-button" type="button" onclick="buttonBackwardPress()">Previous</button>
                 <button id="forward-button" class="floating-dialog-button" type="button" onclick="buttonForwardPress()">Next</button>
             </div>
-            <form action = '#'> 
+            <form action = '#' id = "drd"> 
                 <label for = "dropdown">Height Selection(Solar Radii):</label>
                 <select name = "dropdown" id = "dropdown" autocomplete = "off">
-                    <option value = '0' id = "t0">1</option>
-                    <option value = '1' id = "t1">2</option>
-                    <option value = '2' id = "t2">3</option>
-                    <option value = '3' id = "t3">4</option>
-                    <option value = '4' id = "t4">5</option>
-                    <option value = '5' id = "t5">6</option>
-                    <option value = '6' id = "t6">7</option>
-                    <option value = '7' id = "t7">8</option>
-                    <option value = '8' id = "t8">9</option>
-                    <option value = '9' id = "t9">10</option>
                 </select>
             </form>
         </div>
+    </div>
+    <div class = "elem-center" id = "doc">
+        <a href= "img/Slog-QWebsiteDocumentation.pdf">Documentation</a>
     </div>
 </body>
 </html>

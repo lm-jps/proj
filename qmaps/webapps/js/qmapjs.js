@@ -48,11 +48,11 @@ function fxn(data)
     }
     chMap = data["chfilename"]
     synopMap = data["synopfilename"]
-    wr = data["webroot"] ;
-    sr = data["series"];
+    wr = data["webroot"];
     heights.sort();
     for (var x in heights)
     {
+        $("#dropdown").append("<option value=" + "'" + x + "' " + "id=" + "'" +"t"+ x + "'" + "></option>");
         $("#t" + pullDownNumber).html(heights[x]);
         pullDownNumber++;
     }
@@ -60,6 +60,7 @@ function fxn(data)
     loadAllImages();
     showCurrentImage();
     carrot = data["carrot"];
+    $("#carrotInput").val(carrot);
     day = data['date'];
     carRot();
     getDay();
@@ -162,20 +163,45 @@ function uiSetup()
 
 function carrotSub()
 {
+    sr = $("#seriesInput").val();
     cr = parseInt($("#carrotInput").val());
-    //alert(wr)
-    //alert(cr)
-    //alert(sr)
+    fr = $("#force").prop("checked");
+    if (fr == true)
+    {
+        fr = 1;
+    }
+
+    else
+    {
+        fr = 0;
+    }
+    $("#carrotInput").prop("disabled", true);
+    $("#seriesInput").prop("disabled", true);
+    $("#submit").prop("disabled", true);
+    $("#loader").show();
     $.ajax(
     {
         url: "http://jsoc.stanford.edu/cgi-bin/qmapviewer",
-        data: {'carrot': cr, 'webroot': wr, 'series': sr},
+        data: {'carrot': cr, 'webroot': wr, 'series': sr, 'force': fr},
         type: 'POST',
         success: function(response)
+        {
+            if (response.status == 0)
             {
-                //alert(response.status)
                 location.reload();
-            },
-        error: function(error) {alert("no")}
+            }
+            else
+            {
+                $("#loader").hide();
+                alert(response.errmsg);
+                $("#carrotInput").prop("disabled", false);
+                $("#seriesInput").prop("disabled", false);
+                $("#submit").prop("disabled", false);
+            }
+        },
+        error: function(error) 
+        {
+            alert("ERROR")
+        }
     });
 }
