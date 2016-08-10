@@ -8,6 +8,8 @@
 #$to_list = join ",", 'jps@lmsal.com', 'wolfson@lmsal.com',
 #                      'zoe@lmsal.com';
 
+if ($t = shift @ARGV) { $threshold = $t; } else { $threshold = 200; }
+$test = shift @ARGV or $test = 0;
 $to_list = join ",", 'jps@lmsal.com',
           '6509965043@txt.att.net',
           '6504503716@txt.att.net',
@@ -30,7 +32,6 @@ $to_list = join ",", $to_list, 'green@lmsal.com',
 
 $msg_file = "$ENV{HOME}/bit_flip.txt";
 exit if -e $msg_file;
-if ($t = shift @ARGV) { $threshold = $t; } else { $threshold = 200; }
 $cmd = "/home/jsoc/cvs/Development/JSOC/bin/linux_x86_64/show_info";
 for ($cam=1; $cam<5; $cam++) {
   $fsn0 = `$cmd -q key=fsn 'aia.lev0[:#\$]'` - 3999;
@@ -43,3 +44,4 @@ for ($cam=1; $cam<5; $cam++) {
     `mail -s "$subj" $to_list < $msg_file`;
   }
 }
+unlink $msg_file if $test;
