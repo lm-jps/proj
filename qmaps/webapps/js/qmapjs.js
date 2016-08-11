@@ -182,7 +182,7 @@ function carrotSub()
     $.ajax(
     {
         url: "http://jsoc.stanford.edu/cgi-bin/qmapviewer",
-        data: {'carrot': cr, 'webroot': wr, 'series': sr, 'force': fr},
+        data: {'carrot': cr, 'webroot': "/web/jsoc/htdocs/ajax/qmaps", 'series': sr, 'force': fr},
         type: 'POST',
         success: function(response)
         {
