@@ -134,7 +134,7 @@ def createImages(wr,series):
 
         if fr == False:
             
-            if os.path.exists(wr + SlogfileName):
+            if os.path.exists(os.path.join(wr, SlogfileName)):
                 manifest['slogfilenames']["%.3f" %radii[slice]] = SlogfileName
             
         else:
@@ -156,7 +156,7 @@ def createImages(wr,series):
 
     if fr == False:
         
-        if os.path.exists(wr + ChmapfileName):
+        if os.path.exists(os.path.join(wr, ChmapfileName)):
             manifest['chfilename'] = ChmapfileName
         
     else:
@@ -175,7 +175,7 @@ def createImages(wr,series):
     
     if fr == False:
         
-        if os.path.exists(wr + SynopfileName):
+        if os.path.exists(os.path.join(wr, SynopfileName)):
             manifest['synopfilename'] = SynopfileName
         
     else:
