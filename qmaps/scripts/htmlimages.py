@@ -130,7 +130,7 @@ def createImages(wr,series):
     colormap_customized = mcol.ListedColormap(normalcolors)
     
     for slice in range(len(slogq_imageData[:,0,0])):
-        SlogfileName = 'img/' + str(carrot) + 'slogqmap%.3f.html'  %radii[slice]
+        SlogfileName = 'qmap-img/' + str(carrot) + 'slogqmap%.3f.html'  %radii[slice]
 
         if fr == False:
             
@@ -152,7 +152,7 @@ def createImages(wr,series):
             manifest['slogfilenames']["%.3f" %radii[slice]] = SlogfileName
         
     #saves the coronal hole map and the synoptic map to the same directory as the slogqmaps 
-    ChmapfileName = 'img/' + str(carrot) + 'chmap.html'
+    ChmapfileName = 'qmap-img/' + str(carrot) + 'chmap.html'
 
     if fr == False:
         
@@ -171,7 +171,7 @@ def createImages(wr,series):
             mpld3.save_html(fig,mpld3image)
         manifest['chfilename'] = ChmapfileName
     
-    SynopfileName = 'img/' + str(carrot) + 'synop.html'
+    SynopfileName = 'qmap-img/' + str(carrot) + 'synop.html'
     
     if fr == False:
         
@@ -192,7 +192,7 @@ def createImages(wr,series):
     
     #prints the manifest into a text file that is json serializable    
     jsonString = json.dumps(manifest)
-    with open(os.path.join(wr, 'js', 'jsonString.js'),'w') as jsonFile:
+    with open(os.path.join(wr, 'json', 'jsonString.js'),'w') as jsonFile:
         print(jsonString,file = jsonFile)
         
 def axisLines():
