@@ -7,6 +7,8 @@ aia_test.master_pointing3h
 cgem.lorentz
 hmi.b_720s_e15w1332_cea
 hmi.b_720s_e15w1332_cutout
+hmi.b_synoptic
+hmi.b_synoptic_small
 hmi.bharp_720s_nrt
 hmi.bmap_lowres_latlon_720s
 hmi.bmap_lowres_latlon_720s_nrt
