@@ -4,5 +4,5 @@
 
 sleep 60
 
-/home/thailand/cvs/JSOC/proj/lev0/scripts/hk/dsdf.aiasdp-mon.pl rtmon
+/home/jsoc/cvs/Development/JSOC/proj/lev0/scripts/hk/dsdf.sdphs-pri.pl rtmon
 
