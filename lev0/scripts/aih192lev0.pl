@@ -33,10 +33,14 @@ if (-e $msg_file) {
   `echo "$subj" | mail -s "$subj" $to_list` if $test;
   exit;
 }
+$t = time - 86400;
+my ($sc, $mn, $hr, $da, $mo, $yr) = gmtime($t);
+$ts = sprintf '$(%d.%2.2d.%2.2d_00:00)', $yr+1900, $mo+1, $da;
 $cmd = "/home/jsoc/cvs/Development/JSOC/bin/linux_x86_64/show_info";
 for ($cam=1; $cam<5; $cam++) {
   $fsn0 = `$cmd -q key=fsn 'aia.lev0[:#\$]'` - 3999;
-  $n = `$cmd -qc 'aia.lev0[$fsn0/4000][?aihis192>9?][?camera=$cam?]'`;
+  $qs = "aia.lev0[$fsn0/4000][?aihis192>9?][?camera=$cam?][?T_OBS>$ts?]";
+  $n = `$cmd -qc '$qs'` + 0;
   if ($n > $threshold) {
     $subj = "AIA camera $cam histogram anomaly";
     $subj = join " ", $test, $subj if $test;

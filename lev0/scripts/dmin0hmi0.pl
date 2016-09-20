@@ -34,12 +34,16 @@ if (-e $msg_file) {
   `echo "$subj" | mail -s "$subj" $to_list` if $test;
   exit;
 }
+$t = time - 86400;
+my ($sc, $mn, $hr, $da, $mo, $yr) = gmtime($t);
+$ts = sprintf '$(%d.%2.2d.%2.2d_00:00)', $yr+1900, $mo+1, $da;
 $cname[1] = "1=vector=side";
 $cname[2] = "2=Doppler=front";
 $cmd = "/home/jsoc/cvs/Development/JSOC/bin/linux_x86_64/show_info";
 for ($cam=1; $cam<3; $cam++) {
   $fsn0 = `$cmd -q key=fsn 'hmi.lev0a[:#\$]'` - 399;
-  $n = `$cmd -qc 'hmi.lev0a[$fsn0/400][?datamin=0?][?camera=$cam?]'` + 0;
+  $qs = "hmi.lev0a[$fsn0/400][?datamin=0?][?camera=$cam?][?T_OBS>$ts?]";
+  $n = `$cmd -qc '$qs'` + 0;
   if ($n > $threshold) {
     $c = $cname[$cam];
     $subj = "HMI camera $c anomaly";
