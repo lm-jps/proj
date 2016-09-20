@@ -7,21 +7,6 @@
 # deleted after anomaly is fixed to re-enable automatic anomaly detection.
 if ($t = shift @ARGV) { $threshold = $t; } else { $threshold = 5; }
 $test = shift @ARGV or $test = 0;
-#$to_list = join ",", 'jps@lmsal.com',
-#        '6509965043@txt.att.net',
-#        '6504503716@txt.att.net',
-#        '4084317110@txt.att.net',
-#        '5103252489@vtext.com',
-#        '5178969022@vtext.com',
-#        '6507436500@tmomail.net',
-#        '6509968590@txt.att.net';
-#$to_list = join ",", $to_list, 'boerner@lmsal.com', 'green@lmsal.com',
-#        'zoe@lmsal.com', 'jeneen@sun.stanford.edu',
-#        'rock@sun.stanford.edu', 'thailand@sun.stanford.edu',
-#        'wolfsonjake@gmail.com', 'mbobra@sun.stanford.edu',
-#        'aanorton@stanford.edu', 'baldner@sun.stanford.edu',
-#        'william.d.pesnell@nasa.gov', 'cheung@lmsal.com'
-
 $to_list = join ",", 'jps@lmsal.com',
           '6509965043@txt.att.net',
           '6504503716@txt.att.net',

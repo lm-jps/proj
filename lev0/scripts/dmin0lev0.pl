@@ -1,13 +1,4 @@
 #!/usr/bin/perl -w
-#$to_list = join ",", 'jps@lmsal.com', 'zoe@lmsal.com', 'wolfson@lmsal.com',
-#        'emma.m.lehman@lmco.com', 'linford@lmsal.com',
-#        '6505213455@txt.att.net', '6502242826@txt.att.net',
-#        '6504503716@txt.att.net', '4084317110@txt.att.net',
-#        '6502248075@txt.att.net', '6503878335@txt.att.net',
-#        '4153141403@vtext.com',   '6034963597@vtext.com';
-#$to_list = join ",", 'jps@lmsal.com', 'wolfson@lmsal.com',
-#                      'zoe@lmsal.com';
-
 if ($t = shift @ARGV) { $threshold = $t; } else { $threshold = 200; }
 $test = shift @ARGV or $test = 0;
 $to_list = join ",", 'jps@lmsal.com',
