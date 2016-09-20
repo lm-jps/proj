@@ -9,6 +9,9 @@
 #define Q_NOASD  0x04	//ancillary sci data not available or error
 #define Q_NOMPD  0x08	//master pointing data not available or error
 #define Q_NOLIMB 0x10	//limb fit error
+
+#define Q_MISCONF1 0x40 // Instr Misconfig inhereited from lev0
+
 #define Q_CAM_ANOM1 0x80 //Camera Anomaly - Entered by hand 
 
 

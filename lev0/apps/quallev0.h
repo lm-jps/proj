@@ -22,6 +22,10 @@
 #define Q_MISS1 0x200	//missvals > 0.01*totalvals
 #define Q_MISS2 0x400	//missvals > 0.05*totalvals
 #define Q_MISS3 0x800	//missvals > 0.25*totalvals
+
+// Instrument misconfiguration, e.g. worng Aperture Selector target.
+#define Q_MISCONFIG 0x1000   // likely set manually
+
 #define Q_CAM_ANOM 0x8000   //Camera Anomaly - Entered by hand - Hao QUALITY=0x00008000
 
 //HMI sepecific
