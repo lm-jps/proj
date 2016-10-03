@@ -100,7 +100,7 @@ static void retarder(
   
 }
 
-int init_polcal(struct polcal_struct *pars, int method, const char *paramFile)
+int init_polcal(struct polcal_struct *pars, int method)
 {
   int nin=32;
   int malign=32;
@@ -140,9 +140,18 @@ int init_polcal(struct polcal_struct *pars, int method, const char *paramFile)
 
   
   /* Remove hard-coding: fileptr = fopen ("/home/schou/hmi/anapol/pars_131222/fit.bin", "r"); */
-  if (paramFile)
+  /* The path to this bin file in HMIparam.h (in the polcalParamFile global variable ) is a Stanford-only path (it should not really be our NetDRMS release). We need to build observable 
+   * code at at least one other institution, so we are going to make this localizable.
+
+   * Try opening the Stanford-only file, and if we are not at Stanford, then use the localized path defined in the POLCAL_PARAMS parameter. */
+  if (polcalParamFile)
   {
-    fileptr = fopen(paramFile, "r");
+    fileptr = fopen(polcalParamFile, "r");
+  }
+
+  if (fileptr == NULL)
+  {
+    fileptr = fopen(POLCAL_PARAMS, "r");
   }
   
   if (fileptr==NULL) {
@@ -710,6 +719,6 @@ shared(nlead,output,helpq,helpu,nx,ny)
 
 char *polcal_version() // Returns CVS version of polcal.c
 {
-  return strdup("$Id: polcal.c,v 1.6 2016/01/21 20:30:48 arta Exp $");
+  return strdup("$Id: polcal.c,v 1.7 2016/10/03 17:43:52 arta Exp $");
 }
 

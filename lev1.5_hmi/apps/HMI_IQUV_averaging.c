@@ -1089,7 +1089,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.49 2016/05/04 17:19:35 yliu Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.50 2016/10/03 17:43:52 arta Exp $");
 }
 
 
@@ -1631,7 +1631,7 @@ int DoIt(void)
     }      
   //CODEVERSION1=const_param.code_version;
   //CODEVERSION2=CODEVERSION1; //same version number actually because they are both in interpol_code.c
-  status = init_polcal(&pars,method,POLCAL_PARAMS);
+  status = init_polcal(&pars,method);
   if(status != 0)
     {
       printf("Error: could not initialize the polarization calibration routine\n");

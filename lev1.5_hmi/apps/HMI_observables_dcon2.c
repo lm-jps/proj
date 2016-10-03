@@ -1104,7 +1104,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables_dcon2.c,v 1.1 2016/02/09 15:40:42 arta Exp $");
+  return strdup("$Id: HMI_observables_dcon2.c,v 1.2 2016/10/03 17:43:52 arta Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -1780,7 +1780,7 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
     }
   if(Lev1pWanted || (Lev15Wanted && TestLevIn[2]==0))
     {
-       status = init_polcal(&pars,method,  POLCAL_PARAMS);
+       status = init_polcal(&pars,method);
       if(status != 0)
 	{
 	  printf("Error: could not initialize the polarization calibration routine\n");
