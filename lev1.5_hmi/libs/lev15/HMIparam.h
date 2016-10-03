@@ -45,9 +45,6 @@ int  referencenlam=7000;                                                        
 //char referencewavelength[]="/home/jsoc/cvs/Development/JSOC/proj/lev1.5_hmi/apps/ReferenceWavelength4.bin" ;    //wavelength grid for the solar line, binary file, single precision (float)
 //int  referencenlam=16001;
 
-// Polarization calibration - THIS IS A HARD-CODED STANFORD ONLY FILE.
-char polcalParamFile[] = "/home/jsoc/hmi/tables/lev15/polcal-param-fit.bin";        // Used by init_polcal
-
 float MISSINGDATA=NAN;         //value given to a missing datum of type FLOAT (filtergrams)
 float MISSINGKEYWORDINT=-32768;//value given to a missing keyword of type INT
 float MISSINGKEYWORD= -100000.0;    //value given to a missing keyword of type FLOAT or DOUBLE

@@ -10,8 +10,12 @@
 #include <omp.h>
 #include "polcal.h"
 #include "fresize.h"
+#include "localization.h"
 #define minval(x,y) (((x) < (y)) ? (x) : (y))
 #define maxval(x,y) (((x) > (y)) ? (x) : (y))
+
+// Polarization calibration - THIS IS A HARD-CODED STANFORD ONLY FILE.
+char polcalParamFile[] = "/home/jsoc/hmi/tables/lev15/polcal-param-fit.bin";        // Used by init_polcal
 
 static void printm(double *m)
 {
@@ -719,6 +723,6 @@ shared(nlead,output,helpq,helpu,nx,ny)
 
 char *polcal_version() // Returns CVS version of polcal.c
 {
-  return strdup("$Id: polcal.c,v 1.7 2016/10/03 17:43:52 arta Exp $");
+  return strdup("$Id: polcal.c,v 1.8 2016/10/03 19:11:21 arta Exp $");
 }
 
