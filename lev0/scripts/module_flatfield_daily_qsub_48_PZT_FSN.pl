@@ -18,7 +18,7 @@ sub usage {
 
 $IN1 = "hmi.lev1";  #use to be hmi.lev1_nrt
 $IN2 = "hmi.lev1";  #use to be hmi.lev1c_nrt
-$QDIR = "/surge40/jsocprod/qsub/flat"; #dir for qsub scripts
+$QDIR = "/tmp28/jsocprod/qsub/flat"; #dir for qsub scripts
 $PID = getppid;
 $host = `hostname -s`;
 chomp($host);
@@ -142,7 +142,7 @@ $j = 0;
     print "going to qsub for: $cmd\n";
     #$file = "/home/production/cvs/JSOC/proj/lev0/scripts/date.str"; #!!!TEMP
     #$qsubcmd = sprintf("qsub -o %s -e %s -q p.q %s", $QDIR, $QDIR, $file);
-    $qsubcmd = sprintf("qsub2 -o %s -e %s -q p.q %s", $QDIR, $QDIR, $file);
+    $qsubcmd = sprintf("qsub2 -o %s -e %s -q p.q %s ; sleep 300", $QDIR, $QDIR, $file);
     print "$qsubcmd\n";
     $x = `$qsubcmd`;
     print "$x";
