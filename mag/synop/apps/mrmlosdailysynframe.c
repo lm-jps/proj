@@ -79,7 +79,7 @@ int DoIt(void)
   drmethod = (char *)params_get_str(&cmdparams, "drmethod");
 
   char historyofthemodule[2048]; // put history info into the data
-  char *cvsinfo = strdup("$Id: mrmlosdailysynframe.c,v 1.2 2016/10/13 00:18:16 yliu Exp $");
+  char *cvsinfo = strdup("$Id: mrmlosdailysynframe.c,v 1.3 2016/10/13 00:28:19 yliu Exp $");
   cvsinfo = (char *)malloc(2048 * sizeof(char));
   sprintf(historyofthemodule,"o2helio.c bug corrected -- July 2013");
 
@@ -827,7 +827,7 @@ double dtmp;
     if (status) DIE("problem writing file");
     drms_free_array(smalloutArray);
 
-    free(trec_str); free(recp); free(aveData);
+    free(trec_str); free(recp); free(aveData); free(countNumber);
     drms_free_array(supsynArray);
     drms_free_array(synArray);
 
