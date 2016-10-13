@@ -80,7 +80,7 @@ int DoIt(void)
   drmethod = (char *)params_get_str(&cmdparams, "drmethod");
 
   char historyofthemodule[2048]; // put history info into the data
-  char *cvsinfo = strdup("$Id: mrmlosdailysynframe_nrt.c,v 1.1 2014/06/24 17:35:31 yliu Exp $");
+  char *cvsinfo = strdup("$Id: mrmlosdailysynframe_nrt.c,v 1.2 2016/10/13 00:51:01 yliu Exp $");
   cvsinfo = (char *)malloc(2048 * sizeof(char));
   sprintf(historyofthemodule,"o2helio.c bug corrected, CRVAL, CRPIX corrected -- Feb. 2014");
 
@@ -301,13 +301,14 @@ double dtmp;
 // average remapped mags
 
   float *aveData;
+  int *countNumber;
 //  xmg = 1801; ymg = 1440;
   xdim_syn = 3600; ydim_syn = 1440;
   int inDims[2] = {xmg, ymg};
   int dxsz = 2 * inDims[0];     // jph in IDL, zgrid.pro
   int ith = inDims[1];
   int ppd = xdim_syn/360;       // pixels per degree
-  int xbeg = 30;
+  int xbeg = 10;
   if (xx1 == -1) xx1 = 60;              // in degrees
   if (yy1 == -1) yy1 = 0;                  // in pixels
   int hwd = xx1;       // in degree
@@ -318,8 +319,16 @@ double dtmp;
   xx1 *= ppd;          // in pixels
   xbeg *= ppd;
   aveData = (float *)malloc(xmg * ymg * sizeof(float));
+  countNumber = (int *)malloc(xmg * ymg * sizeof(int));
   xout = xdim_syn/nbin; yout = ydim_syn/(nbin-1);
   smallDims[0] = xout; smallDims[1] = yout;
+
+  for (jj = 0; jj < ymg; jj++){
+       for (ii = 0; ii < xmg; ii++) {
+            countNumber[jj * xmg + ii] = 0;
+            aveData[jj * xmg + ii] = 0.0;
+       }
+  }
 
   for (i = 0; i < count; i++)
     {
@@ -338,17 +347,26 @@ double dtmp;
             {
             for (ii = xbeg; ii < xmg - xbeg; ii++)
                 {
-                  aveData[jj * xmg + ii] += inData[jj * xmg + ii - xshift];
+                 if (isnan(inData[jj * xmg + ii - xshift])) continue;
+                 aveData[jj * xmg + ii] += inData[jj * xmg + ii - xshift];
+                 countNumber[jj * xmg + ii] +=1;
                 }
-            } 
+            }
         drms_free_array(inArray);
     }
 
    tobs_ave = tobs_total/count;
-   for (jj = 0; jj < ymg; jj++)
-       for (ii = 0; ii < xmg; ii++)
-           aveData[jj * xmg + ii] /= count;
 
+   for (jj = 0; jj < ymg; jj++){
+       for (ii = 0; ii < xmg; ii++){
+           if (countNumber[jj * xmg + ii] == 0)
+              {
+                  aveData[jj * xmg + ii] = DRMS_MISSING_FLOAT;
+                  continue;
+              }
+            aveData[jj * xmg + ii] /= countNumber[jj * xmg + ii];
+        }
+     }
   drms_close_records(inRSfinal, DRMS_FREE_RECORD);
 
 // read synoptic charts
@@ -833,7 +851,7 @@ printf("synopN=%d\n", nds);
     if (status) DIE("problem writing file");
     drms_free_array(smalloutArray);
 
-    free(trec_str); free(recp); free(aveData);
+    free(trec_str); free(recp); free(aveData); free(countNumber);
     drms_free_array(supsynArray);
     drms_free_array(synArray);
 
