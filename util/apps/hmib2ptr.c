@@ -140,6 +140,12 @@ int DoIt(void)
     /* Input and output data */
 
     DRMS_RecordSet_t *inRS = drms_open_records(drms_env, inQuery, &status);
+    
+    if (!inRS)
+    {
+        DIE("No records specified by record-set specification.\n");
+    }
+    
     int nrecs = inRS->n;
     if (status || nrecs == 0) DIE("Input records error.");
     
@@ -156,9 +162,21 @@ int DoIt(void)
     for (int irec = 0; irec < nrecs; irec++) {
         
         // Input record
-        
         DRMS_Record_t *inRec = inRS->records[irec];
+        
+        if (!inRec)
+        {
+            fprintf(stderr, "No record with index %d in record set.\n", irec);
+            continue;
+        }
+        
         TIME t_rec = drms_getkey_time(inRec, "T_REC", &status);
+        
+        if (status != DRMS_SUCCESS)
+        {
+            fprintf(stderr, "Unable to obtain keyword value for T_REC.\n");
+            continue;            
+        }
         
         char t_rec_str[100];
         sprint_time(t_rec_str, t_rec, "TAI", 0);
@@ -167,14 +185,37 @@ int DoIt(void)
         // Ephemeris
         
         struct ephemeris ephem;
-        status = getEphemeris(inRec, &ephem);
+        status = getEphemeris(inRec, &ephem); // can never return anything but 'success'.
         
         // Input images
         
         DRMS_Segment_t *inSeg_fld = drms_segment_lookup(inRec, "field");
+        if (!inSeg_fld)
+        {
+            fprintf(stderr, "Missing required segment 'field'.\n");
+            continue;
+        }
+        
         DRMS_Segment_t *inSeg_inc = drms_segment_lookup(inRec, "inclination");
+        if (!inSeg_inc)
+        {
+            fprintf(stderr, "Missing required segment 'inclination'.\n");
+            continue;
+        }
+        
         DRMS_Segment_t *inSeg_azi = drms_segment_lookup(inRec, "azimuth");
+        if (!inSeg_azi)
+        {
+            fprintf(stderr, "Missing required segment 'azimuth'.\n");
+            continue;
+        }
+        
         DRMS_Segment_t *inSeg_amb = drms_segment_lookup(inRec, "disambig");
+        if (!inSeg_amb)
+        {
+            fprintf(stderr, "Missing required segment 'disambig'.\n");
+            continue;
+        }
         
         int status_fld = 0, status_inc = 0, status_azi = 0, status_amb = 0;
         DRMS_Array_t *inArray_fld = NULL, *inArray_inc = NULL, *inArray_azi = NULL, *inArray_amb = NULL;
@@ -200,8 +241,16 @@ int DoIt(void)
             DRMS_Segment_t *inSeg_cc_fi = drms_segment_lookup(inRec, "field_inclination_err");
             DRMS_Segment_t *inSeg_cc_fa = drms_segment_lookup(inRec, "field_az_err");
             DRMS_Segment_t *inSeg_cc_ia = drms_segment_lookup(inRec, "inclin_azimuth_err");
+            
+            if (!inSeg_err_fld || !inSeg_err_inc || !inSeg_err_azi || !inSeg_cc_fi || !inSeg_cc_fa || !inSeg_cc_ia) 
+            {
+                fprintf(stderr, "Missing one or more required error segments.\n");
+                continue;
+            }            
+            
             int status_err_fld = 0, status_err_inc = 0, status_err_azi = 0;
             int status_cc_fi = 0, status_cc_fa = 0, status_cc_ia = 0;
+
             inArray_err_fld = drms_segment_read(inSeg_err_fld, DRMS_TYPE_FLOAT, &status_err_fld);
             inArray_err_inc = drms_segment_read(inSeg_err_inc, DRMS_TYPE_FLOAT, &status_err_inc);
             inArray_err_azi = drms_segment_read(inSeg_err_azi, DRMS_TYPE_FLOAT, &status_err_azi);
@@ -295,10 +344,32 @@ int DoIt(void)
         // Output
         
         DRMS_Record_t *outRec = outRS->records[irec];
+        if (!outRec)
+        {
+            fprintf(stderr, "No output record with index %d in record set.\n", irec);
+            continue;
+        }
         
         DRMS_Segment_t *outSeg_bp = drms_segment_lookup(outRec, "Bp");
+        if (!outSeg_bp)
+        {
+            fprintf(stderr, "Missing required output segment 'Bp'.\n");
+            continue;
+        }
+        
         DRMS_Segment_t *outSeg_bt = drms_segment_lookup(outRec, "Bt");
+        if (!outSeg_bt)
+        {
+            fprintf(stderr, "Missing required output segment 'Bt'.\n");
+            continue;
+        }
+
         DRMS_Segment_t *outSeg_br = drms_segment_lookup(outRec, "Br");
+        if (!outSeg_br)
+        {
+            fprintf(stderr, "Missing required output segment 'Br'.\n");
+            continue;
+        }
         
         int status_bp = 0, status_bt = 0, status_br = 0;
         DRMS_Array_t *outArray_bp = NULL, *outArray_bt = NULL, *outArray_br = NULL;
@@ -329,8 +400,25 @@ int DoIt(void)
         
         if (do_error) {
             DRMS_Segment_t *outSeg_err_bp = drms_segment_lookup(outRec, "Bp_err");
+            if (!outSeg_err_bp)
+            {
+                fprintf(stderr, "Missing required output segment 'Bp_err'.\n");
+                continue;
+            }
+            
             DRMS_Segment_t *outSeg_err_bt = drms_segment_lookup(outRec, "Bt_err");
+            if (!outSeg_err_bt)
+            {
+                fprintf(stderr, "Missing required output segment 'Bt_err'.\n");
+                continue;
+            }
+
             DRMS_Segment_t *outSeg_err_br = drms_segment_lookup(outRec, "Br_err");
+            if (!outSeg_err_br)
+            {
+                fprintf(stderr, "Missing required output segment 'Br_err'.\n");
+                continue;
+            }
             
             int status_err_bp = 0, status_err_bt = 0, status_err_br = 0;
             DRMS_Array_t *outArray_err_bp = NULL, *outArray_err_bt = NULL, *outArray_err_br = NULL;
@@ -360,7 +448,18 @@ int DoIt(void)
         
         if (do_lonlat) {
             DRMS_Segment_t *outSeg_lon = drms_segment_lookup(outRec, "lon");
+            if (!outSeg_lon)
+            {
+                fprintf(stderr, "Missing required output segment 'lon'.\n");
+                continue;
+            }
+            
             DRMS_Segment_t *outSeg_lat = drms_segment_lookup(outRec, "lat");
+            if (!outSeg_lon)
+            {
+                fprintf(stderr, "Missing required output segment 'lat'.\n");
+                continue;
+            }
 
             int status_lon = 0, status_lat = 0;
             DRMS_Array_t *outArray_lon = NULL, *outArray_lat = NULL;
