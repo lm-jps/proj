@@ -154,4 +154,4 @@ su_phil.hmi_M_remap_720s
 su_phil.mdi_lowl_gf
 su_tplarson.corr_vw_V_sht_modes
 su_yang.B3comp_noisemask_remap_deglatlon_720s
-update_hmi.MrMap_latlon_720s_nrt
+su_yang.B3comp_noisemask_remap_deglatlon_test_720s
