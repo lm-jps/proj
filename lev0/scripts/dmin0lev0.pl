@@ -12,7 +12,7 @@ $to_list = join ",", 'jps@lmsal.com',
           'mark.cheung@gmail.com';
 
 $to_list = join ",", $to_list, 'green@lmsal.com',
-        'shelbe@lmsal.com', 'weiliu@lmsal.com', 'wei.liu2004@gmail.com',
+        '4087208116@txt.att.net', 'weiliu@lmsal.com', 'wei.liu2004@gmail.com',
         'zoe@lmsal.com', 'jeneen@sun.stanford.edu',
         'rock@sun.stanford.edu', 'thailand@sun.stanford.edu',
         'wolfsonjake@gmail.com', 'mbobra@sun.stanford.edu',
