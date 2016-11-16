@@ -193,7 +193,7 @@ int DoIt(void)
   double eph[30];
   char historyofthemodule[2048]; // put history info into the data
     // set cvs commit version into keyword HEADER
-  char *cvsinfo = strdup("$Id: hmib3compsynoptic.c,v 1.1 2016/05/03 01:03:10 yliu Exp $");
+  char *cvsinfo = strdup("$Id: hmib3compsynoptic.c,v 1.2 2016/11/16 22:14:13 yliu Exp $");
 //  cvsinfo = (char *)malloc(2048 * sizeof(char));
 //  char cvsinfo[2048];
   sprintf(historyofthemodule,"New Module -- March 2014");
@@ -1061,7 +1061,8 @@ for (ds = 0; ds < nsynop; ds++)
         drms_setkey_double(outRec, "CRVAL2", i);
         l=-360.0/len[0];
         drms_setkey_double(outRec, "CDELT1", l);
-        drms_setkey_double(outRec, "CDELT2", 1.0/sinbdivs);
+        l=2.0/len[1];
+        drms_setkey_double(outRec, "CDELT2", l);
         drms_setkey_string(outRec, "CUNIT1", "degree");
         drms_setkey_string(outRec, "CUNIT2", "Sine Latitude");
         drms_setkey_string(outRec, "WCSNAME", "Carrington Heliographic");
@@ -1176,7 +1177,8 @@ for (ds = 0; ds < nsynop; ds++)
         drms_setkey_double(smallRec, "CRVAL2", tmp);
         l=-360.0/xout;
         drms_setkey_double(smallRec, "CDELT1", l);
-        drms_setkey_double(smallRec, "CDELT2", nbin*1.0/sinbdivs);
+        l=2.0/yout;
+        drms_setkey_double(smallRec, "CDELT2", l);
         drms_setkey_string(smallRec, "CUNIT1", "degree");
         drms_setkey_string(smallRec, "CUNIT2", "Sine Latitude");
         drms_setkey_string(smallRec, "WCSNAME", "Carrington Heliographic");
@@ -1948,7 +1950,7 @@ double earth_B(TIME t)
 */
 
 /*
-$Id: hmib3compsynoptic.c,v 1.1 2016/05/03 01:03:10 yliu Exp $
+$Id: hmib3compsynoptic.c,v 1.2 2016/11/16 22:14:13 yliu Exp $
 $Source: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/mag/synop/apps/hmib3compsynoptic.c,v $
 $Author: yliu $
 */
@@ -1961,6 +1963,9 @@ $Author: yliu $
  * revision 2010/03/01   Yang
  *            
  * $Log: hmib3compsynoptic.c,v $
+ * Revision 1.2  2016/11/16 22:14:13  yliu
+ * Fixed a bug that causes CDELT2 incorrect in small-version maps
+ *
  * Revision 1.1  2016/05/03 01:03:10  yliu
  * New module to generate synoptic chart of vector magnetic field
  *
