@@ -190,7 +190,7 @@ int DoIt(void)
   long long calVer;
   double eph[30];
   char historyofthemodule[2048]; // put history info into the data
-  char *cvsinfo = strdup("$Id: mrmlossynoptic.c,v 1.2 2016/11/16 21:45:48 yliu Exp $");
+  char *cvsinfo = strdup("$Id: mrmlossynoptic.c,v 1.3 2016/11/16 21:58:08 yliu Exp $");
   cvsinfo = (char *)malloc(2048 * sizeof(char));
   sprintf(historyofthemodule,"Carrington-Time conversion corrected; o2helio.c bug corrected -- July 2013");
 
@@ -1003,8 +1003,9 @@ for (ds = 0; ds < nsynop; ds++)
         l=-360.0/len[0];
         drms_setkey_double(outRec, "CDELT1", l);
         drms_setkey_double(outMlRec, "CDELT1", l);
-        drms_setkey_double(outRec, "CDELT2", 1.0/sinbdivs);
-        drms_setkey_double(outMlRec, "CDELT2", 1.0/sinbdivs);
+        l=2.0/len[1];
+        drms_setkey_double(outRec, "CDELT2", l);
+        drms_setkey_double(outMlRec, "CDELT2", l);
         drms_setkey_string(outRec, "CUNIT1", "degree");
         drms_setkey_string(outMlRec, "CUNIT1", "degree");
         drms_setkey_string(outRec, "CUNIT2", "Sine Latitude");
@@ -1938,7 +1939,7 @@ double earth_B(TIME t)
 */
 
 /*
-$Id: mrmlossynoptic.c,v 1.2 2016/11/16 21:45:48 yliu Exp $
+$Id: mrmlossynoptic.c,v 1.3 2016/11/16 21:58:08 yliu Exp $
 $Source: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/mag/synop/apps/mrmlossynoptic.c,v $
 $Author: yliu $
 */
@@ -1951,6 +1952,9 @@ $Author: yliu $
  * revision 2010/03/01   Yang
  *            
  * $Log: mrmlossynoptic.c,v $
+ * Revision 1.3  2016/11/16 21:58:08  yliu
+ * Fixed a bug that causes CDELT2 wrong in small-version maps
+ *
  * Revision 1.2  2016/11/16 21:45:48  yliu
  * Fixed a bug that causes CDELT2 wrong in small-version maps
  *
