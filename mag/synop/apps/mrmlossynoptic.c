@@ -190,7 +190,7 @@ int DoIt(void)
   long long calVer;
   double eph[30];
   char historyofthemodule[2048]; // put history info into the data
-  char *cvsinfo = strdup("$Id: mrmlossynoptic.c,v 1.1 2014/06/18 17:36:15 yliu Exp $");
+  char *cvsinfo = strdup("$Id: mrmlossynoptic.c,v 1.2 2016/11/16 21:45:48 yliu Exp $");
   cvsinfo = (char *)malloc(2048 * sizeof(char));
   sprintf(historyofthemodule,"Carrington-Time conversion corrected; o2helio.c bug corrected -- July 2013");
 
@@ -1176,12 +1176,15 @@ printf("keywords wring half-way done\n");
         drms_setkey_double(smallMlRec, "CRVAL2", tmp);
         l=-360.0/xout;
         drms_setkey_double(smallMrRec, "CDELT1", l);
-        drms_setkey_double(smallMrRec, "CDELT2", nbin*1.0/sinbdivs);
+        l = 2.0/yout;
+        drms_setkey_double(smallMrRec, "CDELT2", l);
         drms_setkey_string(smallMrRec, "CUNIT1", "Degree");
         drms_setkey_string(smallMrRec, "CUNIT2", "Sine Latitude");
         drms_setkey_string(smallMrRec, "WCSNAME", "Carrington Heliographic");
+        l=-360.0/xout;
         drms_setkey_double(smallMlRec, "CDELT1", l);
-        drms_setkey_double(smallMlRec, "CDELT2", nbin*1.0/sinbdivs);
+        l = 2.0/yout;
+        drms_setkey_double(smallMlRec, "CDELT2", l);
         drms_setkey_string(smallMlRec, "CUNIT1", "Degree");
         drms_setkey_string(smallMlRec, "CUNIT2", "Sine Latitude");
         drms_setkey_string(smallMlRec, "WCSNAME", "Carrington Heliographic");
@@ -1935,7 +1938,7 @@ double earth_B(TIME t)
 */
 
 /*
-$Id: mrmlossynoptic.c,v 1.1 2014/06/18 17:36:15 yliu Exp $
+$Id: mrmlossynoptic.c,v 1.2 2016/11/16 21:45:48 yliu Exp $
 $Source: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/mag/synop/apps/mrmlossynoptic.c,v $
 $Author: yliu $
 */
@@ -1948,6 +1951,9 @@ $Author: yliu $
  * revision 2010/03/01   Yang
  *            
  * $Log: mrmlossynoptic.c,v $
+ * Revision 1.2  2016/11/16 21:45:48  yliu
+ * Fixed a bug that causes CDELT2 wrong in small-version maps
+ *
  * Revision 1.1  2014/06/18 17:36:15  yliu
  * New module to produce both Mr and Mlos synoptic charts
  *
