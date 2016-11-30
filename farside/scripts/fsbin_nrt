@@ -8,6 +8,8 @@
 #   current record in the input series. To fill in records for an earlier
 #   set of days, the first (and last) day can be specified as arguments
 
+setenv JSOC_DBUSER `whoami`
+
 # base naming convention for I/O series and logs
 set NMSP = hmi
 set SUFX = _nrt

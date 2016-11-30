@@ -53,8 +53,6 @@
  *  Revision history is at end of file.
  */
 #include <math.h>
-#include <stdlib.h>
-#include "drms.h"
 
 #define RECTANGULAR	(0)
 #define CASSINI		(1)

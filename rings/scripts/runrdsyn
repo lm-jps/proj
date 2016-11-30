@@ -4,11 +4,6 @@
 # The invoked scripts should be run every 5 deg of Carrington rotation,
 #   i.e. about 9 hours for the 5-deg series, every 15 deg (27 hours) for
 #   the 15-deg series, and 30 deg (54 hours) for the 30-deg series
-#
-# The script does not check for the pre-existence of the averaged data for
-#   background subtraction. This is bad because the first time a missing
-#   average is encountered, all three instances of the rdday script will
-#   create it, resulting in unnecessary extra processing and records
 
 @ TEST = 0	# set to 1 for production in namespace hmi_test
 set TW
@@ -21,6 +16,12 @@ endif
 if ($#argv < 2) then
   echo "usage: $0 [-test] Carrington_rot Lon_start [Lon_stop] [spacing]"
   echo "       default spacing = 540 min"
+  exit
+endif
+
+# check platform: qsub2 will only run on avx host
+if ($JPLAT != 'linux_avx') then
+  echo required qsub2 command will only run on avx platform
   exit
 endif
 
@@ -50,9 +51,9 @@ set QMASK = 0x80004000
 set COVER = rdcover
 set SCRIPT = rdday
 set AVG120 = avg120
-set QSUB = qsub
+set QSUB = qsub2
 
-set QUEUE = j.q
+set QUEUE = k.q
 
 # base naming convention for I/O series, logs, and scripts
 if ($TEST) then
@@ -85,6 +86,8 @@ foreach CMD ($SCRIPT $AVG120 $COVER)
     endif
   endif
 end
+
+# echo "$SCRIPT being used"
 
 # input/output series
 set BCKG = $NMSP.V_avg120

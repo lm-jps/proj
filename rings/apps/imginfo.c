@@ -1,5 +1,3 @@
-#include "drms.h"
-
 	    /*  The following code is adapted from SOI functions/keywords.c  */
 #define PLATFORM_UNKNOWN	(0)
 #define PLATFORM_UNRECOGNIZED	(1)

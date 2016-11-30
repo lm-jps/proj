@@ -41,7 +41,7 @@
  *	cvno	string	none		64-bit mask of acceptable values for
  *				calibration veraion of input; default -> no
  *				values unacceptable
- *	max_miss int	All		Tolerance threshold for number of blank
+ *	max_miss int	0		Tolerance threshold for number of blank
  *				values in image (assumed to exclude crop)
  *	tmid	string	-		Midpoint of target tracking interval;
  *				ignored if input specified as data set; defined
@@ -76,11 +76,11 @@
  *				0.03 for HMI or AIA
  *	cols	int	0		Columns in output maps; 0 -> rows
  *	rows	int	0		Rows in output maps; 0 -> cols
- *      map_pa  float*  [0.0]           The angle(s) between heliographic
- *				north and "up" on the output map (in the
- *				direction of increasing rows) [deg[, in the
- *				sense that a positive position angle represents
- *				a clockwise displacement of the north axis.
+ *      map_pa  float   0.0             The angle between heliographic north
+ *				and "up" on the output map (in the direction
+ *				of increasing rows) [deg[, in the sense that a
+ *				positive position angle represents a clockwise
+ *				displacement of the north axis.
  *      a0      float   -0.02893	Coefficients in sin^2 (latitude)
  *      a2      float   -0.3441		expansion of rotation rate minus
  *      a4      float   -0.5037		Carrington rotation (urad/sec)
@@ -133,9 +133,11 @@
  *	-Z	log times in UT (default is TAI)
  *
  *  Notes:
- *    This module is a DRMS-based version of fastrack, which it has replaced
+ *    This module is a DRMS-based version of fastrack, which it is intended
+ *	to replace.
  *
  *  Bugs:
+ *    The option for removal of solar rotation is not implemented
  *    The code does not check that the output data segments match those of
  *	the output series when the segment protocol is variable
  *    Checks for validity of tstart and tstop parameters are unreliable, due
@@ -202,7 +204,7 @@
 						      /*  module identifier  */
 char *module_name = "mtrack";
 char *module_desc = "track multiple regions from solar image sequences";
-char *version_id = "1.8";
+char *version_id = "1.6";
 
 #define CARR_RATE       (2.86532908457)
 #define RSUNM		(6.96e8)
@@ -218,8 +220,7 @@ ModuleArgs_t module_args[] = {
       "background record-segment image to be subtracted from input data"}, 
   {ARG_STRING,	"reject", "Not Specified", "file containing rejection list"}, 
   {ARG_INT,	"qmask", "0x80000000", "quality bit mask for image rejection"},
-  {ARG_INT,	"max_miss", "All",
-      "missing values threshold for image rejection"},
+  {ARG_INT,	"max_miss", "0", "missing values threshold for image rejection"},
   {ARG_STRING,	"tmid", "Not Specified", "midpoint of tracking interval"}, 
   {ARG_INT,	"length", "0",
       "target length of tracking interval [input cadence]"}, 
@@ -238,7 +239,7 @@ ModuleArgs_t module_args[] = {
   {ARG_FLOAT,	"scale", "Not specified", "map scale at center [deg/pxl]"},
   {ARG_INT,     "cols", "0", "columns in output map(s)"},
   {ARG_INT,     "rows", "0", "rows in output map(s)"},
-  {ARG_FLOATS,	"map_pa", "0.0", "position angle(s) of north on output map"},
+  {ARG_FLOAT,	"map_pa", "0.0", "position angle of north on output map"},
   {ARG_FLOAT,	"a0", "-0.02893",
       "equatorial rotation - Carrington rate [urad/sec]"},
   {ARG_FLOAT,	"a2", "-0.3441", "solar rotation parameter A2 [urad/sec]"},
@@ -312,6 +313,73 @@ long long params_get_mask (CmdParams_t *params, char *arg,
   retval  = strtoull (str, &ext, 16);
   if (strlen (ext)) retval = defval;
   return retval;
+}
+
+int drms_appendstr_tokey (DRMS_Record_t *rec, const char *key, const char *str,
+    int addline) {
+/*
+ *  This is just a private, slightly simplified version of the static function
+ *    AppendStrKeyInternal() in $DRMS/base/drms/libs/api/drms_keyword.c
+ */
+  DRMS_Keyword_t *keyword = NULL;
+  int rv;
+
+  if (!rec || !str) return DRMS_ERROR_INVALIDDATA;
+  if (!strlen (str)) return 0;
+  keyword = drms_keyword_lookup (rec, key, 0);
+  if (!keyword) return DRMS_ERROR_UNKNOWNKEYWORD;
+  if (keyword->info->islink || drms_keyword_isconstant (keyword) ||
+      drms_keyword_isslotted (keyword))
+    return DRMS_ERROR_KEYWORDREADONLY;
+  if (keyword->info->type != DRMS_TYPE_STRING) return DRMS_ERROR_INVALIDDATA;
+	       /*  append to old string, if it exists, otherwise just assign  */
+  if (keyword->value.string_val) {
+    char *tmp = NULL;
+    if (strlen (keyword->value.string_val)) {
+      size_t strsz = strlen (keyword->value.string_val) + strlen (str) + 2;
+      tmp = malloc(strsz);
+      if (addline)
+	snprintf (tmp, strsz, "%s\n%s", keyword->value.string_val, str);
+      else
+	snprintf (tmp, strsz, "%s%s", keyword->value.string_val, str);
+    } else tmp = strdup (str);
+    free (keyword->value.string_val);
+    keyword->value.string_val = tmp;
+  } else keyword->value.string_val = strdup (str);
+  return 0;
+}
+
+void append_args_tokey (DRMS_Record_t *rec, const char *key) {
+/*
+ *  Appends a list of all calling argument values to the designated
+ *    key (presumably HISTORY or COMMENT)
+ *  This function should be a general utility, maybe move to keystuff.c
+ *    There is another copy in datavg.c
+ */
+  ModuleArgs_t *arg = gModArgs;
+  CmdParams_t *params = &cmdparams;
+  int flagct = 0;
+  char *strval;
+  char flaglist[72];
+
+  drms_appendstr_tokey (rec, key, "Module called with following arguments:", 1);
+  while (arg->type != ARG_END) {
+    if (arg->type == ARG_FLAG) {
+      if (params_isflagset (params, arg->name)) {
+        if (!flagct) sprintf (flaglist, "with flags -");
+        strcat (flaglist, arg->name);
+        flagct++;
+      }
+    } else {
+      drms_appendstr_tokey (rec, key, arg->name, 1);
+      drms_appendstr_tokey (rec, key, "= ", 0);
+      strval = strdup (params_get_str (params, arg->name));
+      drms_appendstr_tokey (rec, key, strval, 0);
+    }
+    arg++;
+  }
+  if (flagct) drms_appendstr_tokey (rec, key, flaglist, 1);
+  return;
 }
 
 /*
@@ -390,6 +458,7 @@ int ephemeris_params (DRMS_Record_t *img, double *vr, double *vw, double *vn) {
   if (kstat) *vr = *vw = *vn = 0.0;
   return kstat;
 }
+
 /*
  *  Adjust all values for various components of relative line-of-sight
  *    velocity at center of map (does not require image geometry, only
@@ -423,40 +492,6 @@ void adjust_for_observer_velocity (float *map, int mapct, float *mapclat,
     for (n = 0; n < pixct; n++) map[n + mset] -= vobs;
     mset += pixct;
   }
-}
-/*
- *  Adjust all values for line-of-sight components of standard solar rotational
- *    velocity at center of map (does not require image geometry, only the
- *    target heliographic coordinates)
- */
-static void adjust_for_solar_rotation (float *map, int mapct, float *mapclat,
-    float *mapclon, int pixct, double latc, double lonc) {
-  static double a0 = -0.02893, a2 = -0.3441, a4 = -0.5037;
-  static double RSunMm = 1.0e-6 * RSUNM;
-  double vrot, uonlos;
-  double chi, clon, coslat, sinlat, sin2lat, sinth, x, y;
-  double coslatc = cos (latc), sinlatc = sin (latc);
-  int m, n, mset = 0;
-
-  for (m = 0; m < mapct; m++) {
-    coslat = cos (mapclat[m]);
-    sinlat = sin (mapclat[m]);
-    sin2lat = sinlat * sinlat;
-    clon = mapclon[m] - lonc;
-    x = coslat * sin (clon);
-    y = sin (mapclat[m]) * coslatc - sinlatc * coslat * cos (clon);
-    chi = atan2 (x, y);
-    sinth = hypot (x, y);
-		     /*  Line-of-sight component of zonal surface component  */
-    uonlos = (coslat > 1.e-8) ? sinth * coslatc * sin (chi) / coslat : 0.0;
-    vrot = (a0 + CARR_RATE) *  RSunMm * coslat * uonlos;
-    vrot += a2 *  RSunMm * coslat * uonlos * sin2lat;
-    vrot += a4 *  RSunMm * coslat * uonlos * sin2lat * sin2lat;
-
-    for (n = 0; n < pixct; n++) map[n + mset] -= vrot;
-    mset += pixct;
-  }
-  return;
 }
 
 int set_stat_keys (DRMS_Record_t *rec, long long ntot, long long valid,
@@ -956,7 +991,7 @@ int DoIt (void) {
   TIME trec, tobs, tmid, tbase, tfirst, tlast, ttrgt;
   double *maplat, *maplon, *map_coslat, *map_sinlat = NULL;
   double *cmaplat, *cmaplon, *ctrmu, *ctrx, *ctry, *muavg, *xavg, *yavg, *latavg;
-  double *delta_rot, *map_pa;
+  double *delta_rot;
   double *minval, *maxval, *datamean, *datarms, *dataskew, *datakurt;
   double min_scaled, max_scaled;
   double carr_lon, cm_lon_start, cm_lon_stop, lon_span;
@@ -965,7 +1000,7 @@ int DoIt (void) {
   double lat, lon, img_lat, img_lon;
   double t_cl, tmid_cl, lon_cm;
   double x, y, x0, y0, xstp, ystp;
-  double *cos_phi, *sin_phi;
+  double cos_phi, sin_phi;
   double img_xc, img_yc, img_xscl, img_yscl, img_radius, img_pa;
   double ellipse_e, ellipse_pa;
   double kscale;
@@ -1033,12 +1068,12 @@ int DoIt (void) {
   int latct = params_get_int (params, "lat_nvals");
   int lonct = params_get_int (params, "lon_nvals");
   int maict = params_get_int (params, "mai_nvals");
-  int pact = params_get_int (params, "map_pa_nvals");
   int proj = params_get_int (params, "map");
   int intrpopt = params_get_int (params, "interp");
   double map_scale = params_get_double (params, "scale");
   int map_cols = params_get_int (params, "cols");
   int map_rows = params_get_int (params, "rows");
+  double map_pa = params_get_double (params, "map_pa") * raddeg;
   double a0 = params_get_double (params, "a0");
   double a2 = params_get_double (params, "a2");
   double a4 = params_get_double (params, "a4");
@@ -1129,6 +1164,8 @@ need_limb_dist = 1;
   }
   MDI_correct = MDI_correct_distort = MDI_proc;
   pixct = map_rows * map_cols;
+  cos_phi = cos (map_pa);
+  sin_phi = sin (map_pa);
   xstp = ystp = map_scale * raddeg;
   x0 = 0.5 * (1.0 - map_cols) * xstp;
   y0 = 0.5 * (1.0 - map_rows) * ystp;
@@ -1558,13 +1595,11 @@ need_limb_dist = 1;
   found = 0;
   for (nr = 0; nr < recct; nr++) {
     tobs = drms_getkey_time (ids->records[nr], tobs_key, &status);
-    if (time_is_invalid (tobs)) continue;
     if (fabs (tobs - tmid) < cadence) {
       irec = ids->records[nr];
       if (need_crcl) {
         tmid_cl = drms_getkey_double (irec, clon_key, &status);
         tmid_cr = drms_getkey_int (irec, crot_key, &status);
-	if (isnan (tmid_cl) || tmid_cr < 0) continue;
       }
       found = 1;
     }
@@ -1666,9 +1701,6 @@ need_limb_dist = 1;
   clat = (float *)malloc (rgnct * sizeof (float));
   clon = (float *)malloc (rgnct * sizeof (float));
   mai = (float *)malloc (rgnct * sizeof (float));
-  map_pa = (double *)malloc (rgnct * sizeof (double));
-  cos_phi = (double *)malloc (rgnct * sizeof (double));
-  sin_phi = (double *)malloc (rgnct * sizeof (double));
   delta_rot = (double *)malloc (rgnct * sizeof (double));
   for (i = 0; i < latct; i++) {
     snprintf (key, 64, "lat_%d_value", i);
@@ -1680,17 +1712,6 @@ need_limb_dist = 1;
   }
   for (i = latct; i < rgnct; i++) clat[i] = clat[i-1];
   for (i = lonct; i < rgnct; i++) clon[i] = clon[i-1];
-  for (i = 0; i < pact; i++) {
-    snprintf (key, 64, "map_pa_%d_value", i);
-    map_pa[i] = params_get_double (params, key) * raddeg;
-    cos_phi[i] = cos (map_pa[i]);
-    sin_phi[i] = sin (map_pa[i]);
-  }
-  for (; i < rgnct; i++) {
-    map_pa[i] = map_pa[i-1];
-    cos_phi[i] = cos_phi[i-1];
-    sin_phi[i] = sin_phi[i-1];
-  }
   if (setmais) {
     for (i = 0; i < rgnct; i++) {
       snprintf (key, 64, "mai_%d_value", i);
@@ -1746,8 +1767,8 @@ need_limb_dist = 1;
     double xrot, yrot;
     for (row=0, y=y0; row < map_rows; row++, y +=ystp) {
       for (col=0, x=x0; col < map_cols; col++, x +=xstp, n++) {
-	xrot = x * cos_phi[rgn] - y * sin_phi[rgn];
-	yrot = y * cos_phi[rgn] + x * sin_phi[rgn];
+	xrot = x * cos_phi - y * sin_phi;
+	yrot = y * cos_phi + x * sin_phi;
 	offsun[n] = plane2sphere (xrot, yrot, clat[rgn], clon[rgn], &lat, &lon,
 	    proj);
 	maplat[n] = lat;
@@ -1897,7 +1918,7 @@ need_limb_dist = 1;
       continue;
     } else qualcheck = 1;
     blankvals = drms_getkey_int (irec, "MISSVALS", &status);
-    if ((max_miss >= 0) && (blankvals > max_miss) && !status) {
+    if (blankvals > max_miss && !status) {
 						    /*  partial image, skip  */
       badfill++;
       continue;
@@ -2155,25 +2176,7 @@ fprintf (stderr, "Data range in image[%d]: [%.2f, %.2f]\n", nr, minval, maxval);
       apsd = img_xscl * img_radius * raddeg / 3600.0;
       adjust_for_observer_velocity (maps, rgnct, clat, clon, pixct,
 	  img_lat, img_lon, obsvr, obsvw, obsvn, apsd, 0);
-/*
-{
-double v, rgnavg = 0.0;
-int vct = 0;
-for (n = 0; n < pixct; n++) {
-  v = maps[n];
-  if (isfinite (v)) {
-    rgnavg += v;
-    vct++;
-  }
-}
-printf ("%4d: %f %f %.3f %.3f\n", nr, img_xc, img_yc, obsvr, rgnavg / vct);
-}
-*/
     }
-			 /*  remove solar rotation signal from Doppler data  */
-    if (remove_rotation) adjust_for_solar_rotation (maps, rgnct, clat, clon,
-	pixct, img_lat, img_lon);
-
     if (ttrgt < tobs) {
 	/*  linearly interpolate individual pixels between last valid map
 								and current  */
@@ -2477,7 +2480,7 @@ printf ("%4d: %f %f %.3f %.3f\n", nr, img_xc, img_yc, obsvr, rgnavg / vct);
     kstat += check_and_set_key_float (orec, "Width", map_cols * map_scale);
     kstat += check_and_set_key_float (orec, "Height", map_rows * map_scale);
     kstat += check_and_set_key_float (orec, "Size", sqrt (map_rows * map_cols) * map_scale);
-    kstat += check_and_set_key_float (orec, "Map_PA", map_pa[rgn] / raddeg);
+    kstat += check_and_set_key_float (orec, "Map_PA", map_pa / raddeg);
     kstat += check_and_set_key_float (orec, "RSunRef", 1.0e-6 * RSUNM);
     if (setmais && isfinite (mai[rgn]))
       kstat += check_and_set_key_float (orec, "MAI", mai[rgn]);
@@ -2682,18 +2685,4 @@ printf ("%4d: %f %f %.3f %.3f\n", nr, img_xc, img_yc, obsvr, rgnavg / vct);
  *	values used
  *		Fixed bscale-bzero overrides
  *  v 1.6 frozen 2013.04.08
- *    1.7	Added optional removal of solar rotation Doppler signal from
- *	input (2013.06.03)
- *    		Fixed bug in determination of midpoint elements when keying
- *	from date/time and using T_REC as tobs_key and when elements missing
- *	for the midpoint input record (2013.08.30)
- *  v 1.7 frozen 2013.09.04
- *    1.8	Removed functions drms_appendstr_tokey() and append_args_tokey()
- *	(now in keystuff) (2014.10.19)
- *  v 1.8 frozen 2015.01.13
- *    1.9	Added option for position angle of output maps to be individually
- *	specified rather than uniform (2015.08.20)
- *		Changed default for max_miss from 0 to "All" (i.e. no check)
- *	(2015.09.21)
  */
-
