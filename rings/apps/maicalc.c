@@ -1,3 +1,4 @@
+/******************************************************************************/
 /*
  *  maicalc.c						~rick/hmi/rings/src/
  *
@@ -5,45 +6,61 @@
  *    of magnetograms after mapping in order to form time-region indices
  *
  *  Responsible:
- *      Rick Bogart					RBogart@spd.aas.org
+ *      Rick Bogart					rick@sun.stanford.edu
  *
  *  Parameters: (type   default         description)
- *	ds	 str	-		input data series name
- *	cr	 int	current		Carrington rotation
- *	cl	 float	0 or current	Carrington longitude
- *	interval float	15		length of sampling interval [deg]
+ *	ds	str	-		input data series name
+ *	cr	int	current		Carrington rotation
+ *	cl	float	0 or current	Carrington longitude
+ *	interval float	-		length of sampling interval [deg]
  *	rec_step int	64		sampling step size [rec]
- *	scale	 float	0.04		map scale in heliographic deg / pixel
- *	extent	 float	15.36		map extent in degrees
- *	lat	 float*	[0.0]		Target heliographic latitude(s)
- *	lon	 float*	[0.0]		Target heliographic longitude(s)
- *	mask_in  float	0.9765625	inner edge for 1-r^2 apodization
- *	mask_ex  float	1.000		outer edge for 1-r^2 apodization
- *	floor    float	50.0		"noise" floor for inclusion in integration [gauss]
- *
+ *	scale	float	-		map scale in heliographic deg / pixel
+ *	extent	float	15.36		map extent in degrees
+ *	lat	float*	[0.0]		Target heliographic latitude(s)
+ *	lon	float*	[0.0]		Target heliographic longitude(s)
+ *	mask_in	float	0.9765625	inner edge for 1-r^2 apodization
+ *	mask_ex	float	1.000		outer edge for 1-r^2 apodization
+ *	floor	float	50.0		"noise" floor for inclusion in integration [gauss]
+ *	reject	string	-		If specified, name of a file with a
+ *				list of input images to be rejected regardless
+ *	qmask	int	0x80000000	Quality mask for data acceptability;
+ *				records rejected if (qmask & qkey:value) != 0
+ *	qual_key string	Quality		Keyname of int type keyword describing
+ *				record quality as bitmask
+ *	clat_key string	CRLT_OBS
+ *	clon_key string	CRLN_OBS
+ *	crot_key string	CAR_ROT
+ *	rsun_key string	R_SUN
+ *	apsd_key string	RSUN_OBS
  *	dsun_key string	DSUN_OBS	Keyname of double type keyword for
  *				distance from sun in m for of each image
+ *	max_reach float	0.5		maximum distance from target sample
+ *				to search when target is unaaceptable, in units
+ *				of sample spacing
  *
  *  Flags
  *	-n	turn off tracking
  *	-r	turn off apodization
+ *	-t	include time range check (for backward compatability)
  *	-v	run verbose
  *
  *  Bugs:
  *    No check for multiple segment, just reads segment 0 unconditionally
  *    There is no correction for foreshortening
+ *    The query used for opening records by the function
+ *`	select_dataset_from_time_interval() is inefficient
  *
  *  Possible Improvements:
  *
  *  Revision history is at end of file.
- *
  */
+/******************************************************************************/
 
 #include <jsoc_main.h>
 
 char *module_name = "maicalc";
 char *module_desc = "integration of mapped and tracked magnetogram data";
-char *version_id = "0.9";
+char *version_id = "1.1";
 
 #define RSUNM		(6.96e8)
 
@@ -52,39 +69,36 @@ ModuleArgs_t module_args[] = {
   {ARG_INT,	"cr", "Not Specified", "Carrington Rotation (default: current)"},
   {ARG_FLOAT,	"cl", "Not Specified",
       "Carrington longitude of central meridian (default: current or 180"},
-  {ARG_FLOAT,   "interval", "15.0", "length of sampling interval, Carr. deg", "(0.0,)"},
-  {ARG_INT,     "rec_step", "64", "sampling step, record steps", "[1,)"},
-  {ARG_FLOAT,	"scale", "0.04",
-      "integrating map scale for interpolation [deg/pixel]"},
-  {ARG_FLOAT,	"extent", "15.36", "extent of integrating maps [degrees]"},
+  {ARG_FLOAT,   "interval", "", "length of sampling interval, Carr. deg",
+      "(0.0,)"},
+  {ARG_INT,	"qmask", "0x80000000", "quality bit mask for image rejection"},
+  {ARG_STRING,	"reject", "Not Specified", "file containing rejection list"}, 
+  {ARG_INT,     "rec_step", "", "sampling step, record steps", "[1,)"},
+  {ARG_FLOAT,	"max_reach", "0.5", "maximum reach to acceptable record",
+      "[0.0,1.0]"},
+  {ARG_FLOAT,	"scale", "",
+      "integrating map scale for interpolation [deg/pixel]", "(0.0,)"},
+  {ARG_FLOAT,	"extent", "", "extent of integrating maps [degrees]"},
   {ARG_FLOATS,	"lat", "[0.0]",
       "heliographic latitude(s) of tracking center(s) [deg]"},
   {ARG_FLOATS,	"lon", "[0.0]",
       "heliographic longitude(s) of tracking center(s) [deg]"},
-/*
-  {ARG_FLOAT,	"lat_min", "-60.0", "minimum latitude of centers [deg]"},
-  {ARG_FLOAT,	"lat_max", "60.0", "maximum latitude of centers [deg]"},
-  {ARG_FLOAT,	"lat_step", "7.5", "latitude step of centers [deg]"},
-  {ARG_FLOAT,	"lon_min", "-60.0", "minimum longitude of centers, rel to cl [deg]"},
-  {ARG_FLOAT,	"lon_max", "60.0", "maximum longitude of centers [deg]"},
-  {ARG_FLOAT,	"lon_step", "7.5", "longitude step of centers [deg]"},
-*/
   {ARG_FLOAT,   "mask_in", "0.9765625", "inner edge of 1 - r^2 apodization",
       "[0.0,)"},
   {ARG_FLOAT,   "mask_ex", "1.0", "outer edge of 1 - r^2 apodization", "[0.0,)"},
   {ARG_FLOAT,   "floor", "50.0", "noise floor (gauss)", "[0.0,)"},
-/*
-  {ARG_STRING,  "file", "Not Specified", "output file name; default CRot.CLon"},
-*/
   {ARG_STRING,  "file", "Not Specified", "output file name for diagnostics"},
+  {ARG_STRING,	"qual_key", "Quality",  "keyname for 32-bit image quality field"}, 
   {ARG_STRING,	"clon_key", "CRLN_OBS", "keyname for image central longitude"}, 
   {ARG_STRING,	"clat_key", "CRLT_OBS", "keyname for image central latitude"}, 
   {ARG_STRING,	"crot_key", "CAR_ROT", "keyname for image Carrington rotation"}, 
   {ARG_STRING,	"rsun_key", "R_SUN", "keyname for image semi-diameter (pixel)"}, 
-  {ARG_STRING,	"apsd_key", "RSUN_OBS", "keyname for apparent solar semi-diameter (arcsec)"}, 
+  {ARG_STRING,	"apsd_key", "RSUN_OBS",
+      "keyname for apparent solar semi-diameter (arcsec)"}, 
   {ARG_STRING,	"dsun_key", "DSUN_OBS", "keyname for observer distance"}, 
   {ARG_FLAG,	"n",	"", "turns off tracking; target cl only determines time"}, 
   {ARG_FLAG,	"r",	"", "turns off apodization"}, 
+  {ARG_FLAG,	"t",	"", "turns on time range checks"}, 
   {ARG_FLAG,	"v",	"", "runs in verbose mode"}, 
   {}
 };
@@ -100,6 +114,54 @@ ModuleArgs_t module_args[] = {
 		 /*  global declaration of missing to be initialized as NaN  */
 float missing_val;
 
+/*
+ *  Functions to support reading from a specified rejection list of the
+ *    appropriate format
+ */
+int fgetline (FILE *in, char *line, int max) {
+  if (fgets (line, max, in) == NULL) return 0;
+  else return (strlen (line));
+}
+
+int read_reject_list (FILE *file, int **list) {
+  int ds, sn, rec, last_rec;
+  int allocd = 1024, ct = 0, gap = 0;
+  char line[1024], t_str[64], estr[16];
+
+  *list = (int *)malloc (allocd * sizeof (int));
+  while (fgetline (file, line, 1024)) {
+    if (strlen (line) == 1) continue;
+    if (line[0] == '#') continue;
+    if (sscanf (line, "%d %d %d %s", &ds, &sn, &rec, t_str) != 4) {
+      if (sscanf (line, "%d %s", &rec, t_str) != 2) {
+        sscanf (line, "%s", estr);
+        if (strcmp (estr, "...")) continue;
+        gap = 1;
+        last_rec = rec;
+        continue;
+      }
+    }
+    if (gap) {
+      while (rec > last_rec) {
+	last_rec++;
+	(*list)[ct++] = last_rec;
+	if (ct >= allocd) {
+	  allocd += 1024;
+	  *list = (int *)realloc (*list, allocd * sizeof (int));
+	}
+      }
+      gap = 0;
+      continue;
+    }
+    (*list)[ct++] = rec;
+    if (ct >= allocd) {
+      allocd += 1024;
+      *list = (int *)realloc (*list, allocd * sizeof (int));
+    }
+  }
+  return ct;
+}
+
 double apodization (double x, double y, double inner, double outer) {
   double f, r = hypot (x, y), r2;
 
@@ -108,17 +170,6 @@ double apodization (double x, double y, double inner, double outer) {
   r2 = 1.0 - r * r;
   f = (r >= 1.0) ? 0.0 : (r <= 0.0) ? 1.0 : r2 * r2;
   return f;
-}
-
-int correct_foreshort (DRMS_Array_t *mgram) {
-/*
-  float *bz;
-
-  int nt = sds_data_length (mgram);
-
-  bz = (float *)sds_data (mgram);
-*/
-  return (0);
 }
 
 int eliminate_outliers (DRMS_Array_t *img, double accept, double baseval) {
@@ -341,7 +392,114 @@ double carrington_rots (TIME obs_time) {
   if ((clest - clong) > 0.5) carr_ct++;
   return (carr_ct + clong);
 }
+/*
+ *  Function to determine the closest acceptable record, if any,
+ *    to the target nrt, within 0.5 of rstp
+ *  Acceptability is based on the presence of of a T_OBS value within
+ *   the range (t0, t1), a quality keyword value matching bits in qmask
+ *   and presence of the T_REC_index value in a rejection list
+ */
+int good_record (DRMS_RecordSet_t *ds, int nrt, int rstp, float max_reach,
+    TIME t0, TIME t1, int time_check, char *qual_key, unsigned int qmask,
+    int *rejects, int *reject_list, int *shift) {
+  DRMS_Record_t *rec;
+  TIME t, tobs;
+  unsigned int quality;
+  int idrec, match;
+  int n, nr, nrr, nrmn, nrmx, offset, status;
 
+  static int qcheck = 1;
+  int found = 1;
+  static unsigned char *ok = NULL;
+
+  rec = ds->records[nrt];
+  if (time_check) {
+    tobs = drms_getkey_time (rec, "T_OBS", &status);
+    t = tobs - MISSION_EPOCH;
+    if (t < t0 || t > t1 || status) found = 0;
+  }
+  if (qcheck) {
+	/*  check for data missing or otherwise unacceptable bits in quality  */
+    quality = drms_getkey_int (rec, qual_key, &status);
+    if (status) qcheck = 0;
+    else if (quality & qmask) found = 0;
+  }
+  if (*rejects) {
+    idrec = drms_getkey_int (rec, "T_REC_index", &status);
+    match = 0;
+    if (status) {
+      fprintf (stderr, "Warning: \"T_REC_index\" keyword not found\n");
+      fprintf (stderr, "         up to %d bad images could be processed\n",
+	  *rejects);
+      *rejects = 0;
+    }
+    for (n = 0; n < *rejects; n++) {
+      if (idrec == reject_list[n]) {
+	match = 1;
+	break;
+      }
+    }
+    if (match) found = 0;
+  }
+  if (found) {
+    *shift = 0;
+    return nrt;
+  }
+				   /*  target record unacceptable, try range  */
+  nrr = -1;
+  *shift = offset = max_reach * rstp;
+  if (!offset) return nrr;
+  nrmx = nrt + offset;
+  nrmn = nrt - offset;
+  ok = (unsigned char *)realloc (ok, ds->n * sizeof (char));
+  if (nrmx >= ds->n) nrmx = ds->n - 1;
+  if (nrmn < 0) nrmn = 0;
+  for (nr = nrmn; nr <=  nrmx; nr++) {
+    rec = ds->records[nr];
+    tobs = drms_getkey_time (rec, "T_OBS", &status);
+    t = tobs - MISSION_EPOCH;
+    if (t < t0 || t > t1 || status) {
+      ok[nr] = 0;
+      continue;
+    }
+    if (qcheck) {
+	/*  check for data missing or otherwise unacceptable bits in quality  */
+      quality = drms_getkey_int (rec, qual_key, &status);
+      if (status) qcheck = 0;
+      else if (quality & qmask) {
+	ok[nr] = 0;
+	continue;
+      }
+    }
+    if (*rejects) {
+				   /*  check for inclusion in rejection list  */
+      idrec = drms_getkey_int (rec, "T_REC_index", &status);
+      match = 0;
+      for (n = 0; n < *rejects; n++) {
+	if (idrec == reject_list[n]) {
+	  match = 1;
+	  break;
+	}
+      }
+      if (match) {
+	ok[nr] = 0;
+	continue;
+      }
+    }
+    ok[nr] = 1;
+  }
+  for (nr = nrmn; nr <=  nrmx; nr++) {
+    
+    if (ok[nr] && (abs (nr - nrt) < *shift)) {
+      nrr = nr;
+      *shift = abs (nr - nrt);
+    }
+  }
+  return nrr;
+}
+/******************************************************************************/
+			/*  module body begins here  */
+/******************************************************************************/
 int DoIt (void) {
   CmdParams_t *params = &cmdparams;
   DRMS_RecordSet_t *ds;
@@ -359,50 +517,45 @@ int DoIt (void) {
   double img_radius, ellipse_e, ellipse_pa;
   double x, y, x0, y0, xstp, ystp, mscale;
   double xc, yc, xscale, yscale, imgscale, latc, lonc, peff;
-  double lat, mlat, lon, mlon, mclon;
+  double lat, lon;
   double twt, tfac, wtfac, img_weight;
   double f0, f1;
   float *clat, *clon;
   float b;
-  int nrec, recct;
+  int *reject_list = NULL;
+  int nrec, recct, use, valct;
   int mcol, mcols, mrow, mrows, map, maps, n, ntot, s, size;
   int plate_cols, plate_rows, plate_width;
   int x_invrt, y_invrt;
   int need_ephem;
   int rank, off, count;
+  int badqual, rejects, shifted, shiftct;
   char *dpc_str;
   char module_ident[64], time_str[64], key[64];
-                                                   /*  constants & counters  */
-/*
-  double s1_full = 0.0, st_full = 0.0, st2_full = 0.0;
-*/
+						    /*  constants & counters  */
   double raddeg = M_PI / 180.0;
   double degrad = 1.0 / raddeg;
   int projection = LAMBERT;
   int status = 0;
   missing_val = 0.0 / 0.0;
-                                                             /*  parameters  */
+							      /*  parameters  */
   char *inset = strdup (params_get_str (params, "ds"));
   char *filename = strdup (params_get_str (params, "file"));
   int cr = params_get_int (params, "cr");
   float cl = params_get_float (params, "cl");
+  unsigned int qmask = cmdparams_get_int64 (params, "qmask", &status);
   int latct = params_get_int (params, "lat_nvals");
   int lonct = params_get_int (params, "lon_nvals");
   float map_scale = params_get_float (params, "scale");
   float map_size = params_get_float (params, "extent");
-/*
-  double max_lat = params_get_double (params, "lat_max") * raddeg;
-  double min_lat = params_get_double (params, "lat_min") * raddeg;
-  double max_lon = params_get_double (params, "lon_max") * raddeg;
-  double min_lon = params_get_double (params, "lon_min") * raddeg;
-  double lat_step = params_get_double (params, "lat_step") * raddeg;
-  double lon_step = params_get_double (params, "lon_step") * raddeg;
-*/
   double apode_inner = params_get_double (params, "mask_in");
   double apode_outer = params_get_double (params, "mask_ex");
   double noise_floor = params_get_double (params, "floor");
   double interval = params_get_double (params, "interval");
   int rec_step = params_get_int (params, "rec_step");
+  float max_reach = params_get_float (params, "max_reach");
+  char *rejectfile = strdup (params_get_str (params, "reject"));
+  char *qual_key = strdup (params_get_str (params, "qual_key"));
   char *clon_key = strdup (params_get_str (params, "clon_key"));
   char *clat_key = strdup (params_get_str (params, "clat_key"));
   char *crot_key = strdup (params_get_str (params, "crot_key"));
@@ -412,6 +565,7 @@ int DoIt (void) {
 
   int no_track = params_isflagset (params, "n");
   int no_apode = params_isflagset (params, "r");
+  int time_check = params_isflagset (params, "t");
   int verbose = params_isflagset (params, "v");
   int filereq = strcasecmp (filename, "Not Specified");
 
@@ -419,7 +573,7 @@ int DoIt (void) {
   if (verbose) fprintf (stderr, "%s: JSOC version %s\n", module_ident, jsoc_version);
 
   if (cr < 0) {
-		      /*  just approximate to previous carrington longitude  */
+		       /*  just approximate to previous carrington longitude  */
     double rsun, lat, lon, vr, vn, vw;
     tcm = CURRENT_SYSTEM_TIME;
     earth_ephemeris (tcm, &rsun, &lat, &lon, &vr, &vn, &vw);
@@ -434,7 +588,7 @@ fprintf (stderr, "       use data series and params cr, cl, and length\n");
 return 0;
   } else {
 				/*  only the input data series is named,
-				   get record specifications from arguments  */
+				    get record specifications from arguments  */
     char ttarget[64];
     sprintf (ttarget, "%d:%06.2f", cr, cl);
 /*  hack to approximate longitude length from length in minutes  */
@@ -447,10 +601,17 @@ return 0;
     if ((recct = ds->n) < 2) {
       printf ("<2 records in selected input set\n");
       drms_close_records (ds, DRMS_FREE_RECORD);
-      return 0;
+      return 1;
     }
   }
-  tcm = earth_meridian_crossing (cl, cr);
+		 /*  support special hack of reading of rejection list file  */
+  rejects = 0;
+  if (strcmp (rejectfile, "Not Specified")) {
+    FILE *rejectfp = fopen (rejectfile, "r");
+    if (rejectfp) rejects = read_reject_list (rejectfp, &reject_list);
+    else fprintf (stderr,
+	"Warning: could not open rejection list %s; ignored\n", rejectfile);
+  }
 
   maps = (latct > lonct) ? latct : lonct;
   clat = (float *)malloc (maps * sizeof (float));
@@ -474,19 +635,10 @@ return 0;
     if (verbose) fprintf (out, "CR %d:%03.0f\n", cr, cl);
   } else verbose = 0;
 /*
-  if (min_lat > max_lat) {
-    double tmp = min_lat;
-    min_lat = max_lat;
-    max_lat = tmp;
-  }
-  if (lat_step < 0.0) lat_step *= -1;
-  min_lat -= 0.1 * lat_step;
-*/
-/*
- *  determine SOI time (day, hour, minute) corresponding to meridian
- *    crossing of given longitude for given Carrington rotation and limits
- *    of tracking interval
+ *  determine mission time corresponding to meridian crossing of given
+ *    longitude for given Carrington rotation and limits of tracking interval
  */
+  tcm = earth_meridian_crossing (cl, cr);
   tcm -= MISSION_EPOCH;
 /*  hack to approximate interval length in min from longitude interval  */
 /*  synodic rotation rate varies from ~ 13.17 - 13.23 deg/day  */
@@ -494,7 +646,7 @@ return 0;
   t0 = tcm - interval * 30.0;
   t1 = tcm + interval * 30.0;
   tfac = 2.0 / (t1 - t0);
-					    /*  Initialize target locations  */
+					     /*  Initialize target locations  */
   mcols = mrows = map_size / map_scale + 0.5;
   size = mcols * mrows;
   xstp = ystp = map_scale * raddeg;
@@ -502,7 +654,7 @@ return 0;
   y0 = 0.5 * (1.0 - mrows) * ystp;
   mscale = (map_size > map_scale) ?
       2.0 / (map_size - map_scale) / raddeg : 0.0;
-			     /*  pixel area in cm^2: gives flux in Maxwells  */
+			      /*  pixel area in cm^2: gives flux in Maxwells  */
 /*
   pxl_area = xstp * ystp * RSUNCM * RSUNCM;
 */
@@ -511,15 +663,6 @@ return 0;
     for (mcol=0, x=x0; mcol<mcols; mcol++, x+=xstp, ntot++) ;
   }
   ntot *= maps;
-/*
-  for (mlat = max_lat; mlat >= min_lat; mlat -= lat_step) {
-    for (mclon = min_lon; mclon <= max_lon; mclon += lon_step, maps++) {
-      for (mrow=0, y=y0; mrow<mrows; mrow++, y+=ystp) {
-        for (mcol=0, x=x0; mcol<mcols; mcol++, x+=xstp, ntot++) ;
-      }
-    }
-  }
-*/
   mloc = (struct maploc *)malloc (ntot * sizeof (struct maploc));
   sum = (double *)malloc (maps * sizeof (double));
   suma = (double *)malloc (maps * sizeof (double));
@@ -545,26 +688,6 @@ return 0;
       }
     }
   }
-/*
-  for (mlat = max_lat; mlat >= min_lat; mlat -= lat_step) {
-    for (mclon = min_lon; mclon <= max_lon; mclon += lon_step, map++) {
-      sum[map] = 0.0;
-      mlon = mclon + cl * raddeg;
-      while (mlon < 0.0) mlon += 2.0 * M_PI;
-      while (mlon > 2.0 * M_PI) mlon -= 2.0 * M_PI;
-      for (mrow=0, y=y0; mrow<mrows; mrow++, y+=ystp) {
-        for (mcol=0, x=x0; mcol<mcols; mcol++, x+=xstp, n++) {
-	  off = plane2sphere (x, y, mlat, mlon, &lat, &lon, projection);
-	  mloc[n].lat = lat;
-	  mloc[n].lon = lon;
-	  mloc[n].wt = (off) ? 0.0 : (no_apode) ? 1.0 :
-	      apodization (x * mscale, y * mscale, apode_inner, apode_outer);
-	  sum[map] += mloc[n].wt;
-	}
-      }
-    }
-  }
-*/
   for (map = 0, n = 0; map < maps; map++) {
     if (sum[map] != 0.0) {
       wtfac = 1.0 / sum[map];
@@ -572,21 +695,38 @@ return 0;
 	mloc[n].wt *= wtfac;
     } else n += size;
   }
-					     /*  loop through input records  */
+  valct = 0;
+					      /*  loop through input records  */
+  badqual = shiftct = shifted = 0;
   for (nrec = 0; nrec < recct; nrec += rec_step) {
     float bmax = -HUGE_VAL, bmin = HUGE_VAL;
-    double lonmax, lonmin, latmax, latmin, t;
-    rec = ds->records[nrec];
-    t = drms_getkey_time (rec, "T_OBS", &status) - MISSION_EPOCH;
-    if (t < t0) continue;
-    if (t > t1) continue;
+    double lonmax, lonmin, latmax, latmin;
+		/*  call function to determine the closest acceptable record,
+			  if any, to the target nrec within +/- 0.5 rec_step  */
+    
+    use = good_record (ds, nrec, rec_step, max_reach, t0, t1, time_check,
+	qual_key, qmask, &rejects, reject_list, &shifted);
+    if (use < 0) {
 /*
-sprint_time (time_str, t + MISSION_EPOCH, "TAI", 0);
-printf ("%d: %s\n", nrec, time_str);
+fprintf (stderr, "record %d skipped after trying all within %d\n", nrec,
+shifted);
 */
+      if (shifted) badqual++;
+      continue;
+    }
+    if (shifted) shiftct++;
+    rec = ds->records[use];
+    t = drms_getkey_time (rec, "T_OBS", &status) - MISSION_EPOCH;
     seg = drms_segment_lookupnum (rec, 0);
     mgram = drms_segment_read (seg, DRMS_TYPE_FLOAT, &status);
-    if (!mgram) continue;
+    if (!mgram || status) {
+/*
+      sprint_time (time_str, tobs, "TAI", 0);
+      fprintf (stderr, "Error: segment read failed for record %s\n", time_str);
+*/
+      if (mgram) drms_free_array (mgram);
+      continue;
+    }
     if ((rank = drms_array_naxis (mgram)) != 2) {
       fprintf (stderr, "improper format for record %d: rank = %d\n", nrec,
 	  rank);
@@ -595,26 +735,10 @@ printf ("%d: %s\n", nrec, time_str);
     }
     plate_cols = drms_array_nth_axis (mgram, 0);
     plate_rows = drms_array_nth_axis (mgram, 1);
-/*
-    if ((plate_cols = drms_array_nth_axis (mgram, 0)) != 1024 ||
-        (plate_rows = drms_array_nth_axis (mgram, 1)) != 1024) {
-      fprintf (stderr, "improper dimensions: %d\n", nrec);
-      drms_free_array (mgram);
-      continue;
-    }
-*/
     twt = tfac * (t - tcm);
-/*
-    s1_full += 1.0;
-    st_full += twt;
-    st2_full += twt * twt;
-*/
     count = drms_getkey_int (rec, "DATAVALS", &status);
-/*
-      status = get_ancillary (mgram, &xscale, &yscale, &tsd, &xc, &yc, &latc,
-          &lonc, &peff);
-*/
-			   /*  get needed info from record keys for mapping  */
+    if (status) count = plate_cols * plate_rows;
+			    /*  get needed info from record keys for mapping  */
     status = solar_image_info (rec, &xscale, &yscale, &xc, &yc,
 	&img_radius, rsun_key, apsd_key, &peff, &ellipse_e, &ellipse_pa,
 	&x_invrt, &y_invrt, &need_ephem, 0);
@@ -622,18 +746,20 @@ printf ("%d: %s\n", nrec, time_str);
       int keystat = 0;
       double dsun_obs = drms_getkey_double (rec, dsun_key, &keystat);
       if (keystat) {
-	fprintf (stderr, "Error: one or more essential keywords or values missing; skipped\n");
+	fprintf (stderr,
+	    "Error: one or more essential keywords or values missing; skipped\n");
 	fprintf (stderr, "solar_image_info() returned %08x\n", status);
 	continue;
       }
-			       /*  set image radius from scale and distance  */
+				/*  set image radius from scale and distance  */
       img_radius = asin (RSUNM / dsun_obs);
       img_radius *= 3600.0 * degrad;
       img_radius /= (xscale <= yscale) ? xscale : yscale;
       status &= ~NO_SEMIDIAMETER;
     }
     if (status) {
-      fprintf (stderr, "Error: one or more essential keywords or values missing; skipped\n");
+      fprintf (stderr,
+          "Error: one or more essential keywords or values missing; skipped\n");
       fprintf (stderr, "solar_image_info() returned %08x\n", status);
       continue;
     }
@@ -649,28 +775,30 @@ printf ("%d: %s\n", nrec, time_str);
 	fprintf (out, "%.16s : %08lx\n", time_str, strtol (dpc_str, NULL, 16));
       else fprintf (out, "%.16s\n", time_str);
     }
-						/*  Truncate "noise" values  */
+						 /*  Truncate "noise" values  */
     status = truncate_noise (mgram, noise_floor);
 
-    if (verbose && filereq) fprintf (out, "  zeroed %d (of %d) values within limits +/- %.1f\n",
-        status, count, noise_floor);
+    if (verbose && filereq) fprintf (out,
+	"  zeroed %d (of %d) values within limits +/- %.1f\n",
+	status, count, noise_floor);
 
     count -= status;
-						     /*  Eliminate outliers  */
+						      /*  Eliminate outliers  */
     status = eliminate_outliers (mgram, OUTLIER_RATIO, OUTLIER_BASE);
     if (status && verbose && filereq)
       fprintf (out, "  removed %d (of %d) outlier(s)\n", status, count);
-     /*  Correct values for geometric effects in observed coordinate system  */
+      /*  Correct values for geometric effects in observed coordinate system  */
 /*
     status = correct_foreshort (mgram);
 */
+    status = 0;
     plate_width = (plate_cols > plate_rows) ? plate_cols : plate_rows;
     xc -= 0.5 * (plate_cols - 1);
     yc -= 0.5 * (plate_rows - 1);
     xc *= 2.0 / plate_width;
     yc *= 2.0 / plate_width;
     img_radius *= 2.0 / plate_width;
-				     /*  map field values for each location  */
+				      /*  map field values for each location  */
     for (map = 0, n = 0; map < maps; map++) {
       sum[map] = suma[map] = 0.0;
       ntot = 0;
@@ -721,60 +849,21 @@ printf ("%d: %s\n", nrec, time_str);
 	  lonmax/raddeg, latmax/raddeg);
     }
     drms_free_array (mgram);
+    valct++;
+  }
+  drms_close_records (ds, DRMS_FREE_RECORD);
+  if (valct < 2) {
+    fprintf (stderr, "Error: <2 usable magnetograms in interval\n");
+    if (filereq) fclose (out);
+    return 1;
   }
   if (verbose && filereq) fprintf (out, "\n");
 
-  for (map = 0; map < maps; map++) {
+  for (map = 0; map < maps; map++)
     det[map] = 1.0 / (s1[map] * st2[map] - st[map] * st[map]);
-  }
-/*
-for (map = 0; map < maps; map++)
-  printf ("%8.1f", clon[map]/raddeg);
-printf ("\n");
-for (map = 0; map < maps; map++)
-  printf ("%8.1f", clat[map]/raddeg);
-printf ("\n");
-*/
-/*
-  if (filereq) {
-    if (verbose) fprintf (out, "\n");
-    fprintf (out, "lon:  ");
-      for (mclon = min_lon; mclon <= max_lon; mclon += lon_step) {
-      mlon = cl + mclon / raddeg;
-      while (mlon >= 360.0) mlon -= 360.0;
-      while (mlon < 0.0) mlon += 360.0;
-      fprintf (out, "%8.1f", mlon);
-    }
-    fprintf (out, "\nBz [Gauss]:\n");
-  }
-*/
-/*
-  for (map = 0, mlat = max_lat; mlat >= min_lat; mlat -= lat_step) {
-    if (filereq) fprintf (out, "%5.1f:", mlat / raddeg);
-    for (mclon = min_lon; mclon <= max_lon; mclon += lon_step, map++) {
-      f0 = det[map] * (st2[map] * sb[map] - st[map] * sbt[map]);
-      if (filereq) fprintf (out, "%8.3f", f0);
-    }
-    if (filereq) fprintf (out, "\n");
-  }
-  if (filereq) fprintf (out, "dBz/dt [u-Gauss/sec]:\n");
-  for (map = 0, mlat = max_lat; mlat >= min_lat; mlat -= lat_step) {
-    if (filereq) fprintf (out, "%5.1f:", mlat / raddeg);
-    for (mclon = min_lon; mclon <= max_lon; mclon += lon_step, map++) {
-      f1 = det[map] * tfac * (s1[map] * sbt[map] - st[map] * sb[map]);
-      if (filereq) fprintf (out, "%8.3f", 1.0e6 * f1);
-    }
-    if (filereq) fprintf (out, "\n");
-  }
-*/
   if (filereq) fprintf (out, " Lon   Lat       |Bz|   d|Bz|/dt    Bz     dBz/dt [Gauss(/sec)]:\n");
 
   for (map = 0; map < maps; map++) {
-/*
-  for (map = 0, mlat = max_lat; mlat >= min_lat; mlat -= lat_step) {
-    if (filereq) fprintf (out, "%5.1f:", mlat / raddeg);
-    for (mclon = min_lon; mclon <= max_lon; mclon += lon_step, map++) {
-*/
     f0 = det[map] * (st2[map] * sf[map] - st[map] * sft[map]);
     printf ("%8.3f", f0);
     if (filereq) {
@@ -787,18 +876,12 @@ printf ("\n");
     }
   }
   printf ("\n");
-/*
-  if (filereq) fprintf (out, "d|Bz|/dt [u-Gauss/sec]:\n");
-  for (map = 0, mlat = max_lat; mlat >= min_lat; mlat -= lat_step) {
-    if (filereq) fprintf (out, "%5.1f:", mlat / raddeg);
-    for (mclon = min_lon; mclon <= max_lon; mclon += lon_step, map++) {
-      f1 = det[map] * tfac * (s1[map] * sft[map] - st[map] * sf[map]);
-      if (filereq) fprintf (out, "%8.3f", 1.0e6 * f1);
-    }
-    if (filereq) fprintf (out, "\n");
-  }
-*/
   if (filereq) fclose (out);
+  if (verbose && badqual) fprintf (stderr,
+      "    %d of %d records rejected for quality matching %08x\n",
+      badqual, valct, qmask);
+  if (verbose && shiftct) fprintf (stderr,
+      "%d records shifted from  targets for quality issues\n", shiftct);
 
   return status;
 }
@@ -843,4 +926,19 @@ printf ("\n");
  *  v 0.8 frozen 2010.08.20
  *  v 0.9	Modified for new call to solar_image_info
  *  v 0.9 frozen 2012.04.24
+ *  v 1.0	Make sure 0 status is returned on successful completion;
+ *		Clean up unused commented code; more complete error checking,
+ *	including status return when there are no accepted magnetograms
+ *  v 1.0 frozen 2016.03.10
+ *  v 1.1	Removed default values for several arguments: interval,
+ *	rec_step, scale, extent
+ *		Added argument max_reach, with default value of 0.5 to control
+ *	how far from target times to search for acceptable images
+ *		Added ability to reject input magnetograms on basis of a
+ *	a quality mask, and to search for acceptable "nearby" records (within
+ *	max_reach * rec_step (which no longer defaults to 64)
+ *		Made time range check for acceptability optional, set by
+ *	default, but with intent that it be option requiring flag, preserved
+ *	only for backward compatability
+ *  v 1.1 frozen 2016.11.09
  */

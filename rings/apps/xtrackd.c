@@ -37,7 +37,7 @@
 
 char *module_name = "xtrackd";
 char *module_desc = "extract subset from tracked region";
-char *version_id = "0.7";
+char *version_id = "0.8";
 
 ModuleArgs_t module_args[] = {
   {ARG_DATASET,	"in", "", "input data set: tracked cubes"}, 
@@ -271,7 +271,7 @@ int DoIt (void) {
 
   char *inset = strdup (params_get_str (params, "in"));
   char *oser = strdup (params_get_str (params, "out"));
-  TIME tmid = params_get_time (params, "time");
+  TIME tmid = params_get_time (params, "tmid");
   int lngth = params_get_int (params, "length");
   int maict = params_get_int (params, "mai_nvals");
   int no_save = params_isflagset (params, "n");
@@ -585,4 +585,6 @@ bscale = 1.0;
  *  12.03.06	created this file, based on xxtrackd, stripping out CGI and
  *		export related stuff and old libraries
  *  v 0.7 frozen 2013.04.08
+ *  15.02.13	fixed bug in tmid argument parsing
+ *  v 0.8 frozen 2016.11.29
  */

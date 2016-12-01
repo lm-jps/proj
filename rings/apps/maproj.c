@@ -56,6 +56,7 @@
  *
  *  Flags
  *	-c	center map(s) at image center(s)
+ *	-n	no output: diagnostics only
  *	-s	interpret clon as Stonyhurst rather than Carrington longitude
  *	-v	run verbose
  *	-M	correct for MDI distortion
@@ -107,7 +108,7 @@
 						       /*  module identifier  */
 char *module_name = "maproj";
 char *module_desc = "mapping from solar images";
-char *version_id = "1.1";
+char *version_id = "1.2";
 
 ModuleArgs_t module_args[] = {
   {ARG_DATASET,	"in", "", "input data set"}, 
@@ -133,6 +134,7 @@ ModuleArgs_t module_args[] = {
   {ARG_STRING,	"dsun_key", "DSUN_OBS", "keyname for observer distance"}, 
   {ARG_STRING,	"RequestID", "none", "RequestID for jsoc export management"},
   {ARG_FLAG,	"c",	"", "center map at center of image"}, 
+  {ARG_FLAG,	"n",	"", "no output records produced; diagnostics only"}, 
   {ARG_FLAG,	"s",	"", "clon is Stonyhurst longitude"}, 
   {ARG_FLAG,	"v",	"", "verbose mode"}, 
   {ARG_FLAG,	"M",	"", "correct for MDI distortion"},
@@ -397,11 +399,14 @@ int DoIt (void) {
   char *dsun_key = strdup (params_get_str (params, "dsun_key"));
   char *RequestID = strdup (params_get_str (params, "RequestID"));
   int center = params_isflagset (params, "c");
+  int no_save = params_isflagset (params, "n");
   int stonyhurst = params_isflagset (params, "s");
   int verbose = params_isflagset (params, "v");
   int overlay = (isfinite (grid_spacing));
   int MDI_proc = params_isflagset (params, "M");
   int cvlostor = params_isflagset (params, "R");
+
+  int dispose = (no_save) ? DRMS_FREE_RECORD : DRMS_INSERT_RECORD;
 
   snprintf (module_ident, 64, "%s v %s", module_name, version_id);
   if (verbose) printf ("%s: JSOC version %s\n", module_ident, jsoc_version);
@@ -582,6 +587,13 @@ int DoIt (void) {
     drms_sprint_rec_query (source, irec);
     iseg = drms_segment_lookupnum (irec, isegnum);
     image = drms_segment_read (iseg, DRMS_TYPE_FLOAT, &status);
+						/*  trap failed segment read  */
+    if (status || !image) {
+      fprintf (stderr, "Error reading segment %s from record\n      %s\n",
+	  iseg->info->name, source);
+      if (image) drms_free_array (image);
+      continue;
+    }
 			    /*  get needed info from record keys for mapping  */
 			      /*  replace with call to solar_ephemeris_info?  */
     img_lon = drms_getkey_double (irec, clon_key, &status);
@@ -738,7 +750,7 @@ img_lat *= raddeg;
     }
     drms_free_array (image);
   }
-  drms_close_records (ods, DRMS_INSERT_RECORD);
+  drms_close_records (ods, dispose);
   drms_free_array (map);
   return 0;
 }
@@ -772,5 +784,8 @@ img_lat *= raddeg;
  *  v 1.0 frozen 15.01.13
  *  15.07.27	free each input image array
  *  v 1.1 frozen 15.09.21
+ *  16.02.09	trap failed segment reads
+ *  16.02.26	added nomap option -n for testing
+ *  v 1.2 frozen 16.06.20
  *
  */
