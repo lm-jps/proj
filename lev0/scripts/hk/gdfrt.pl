@@ -65,7 +65,7 @@ $subject_email_failed_decode_dayfile="JSOC:ERROR:HK Level 0 Real Time Processing
 
 #(3) set choices for input dayfile directory
 # input dayfile directory location with subdirectories with apid names(0x081,0x029,etc).
-$ENV{'HK_DDF_RT_DIRECTORY'}="/hmisdp-mon/log/packets";
+$ENV{'HK_DDF_RT_DIRECTORY'}="/sdphs-pri/log/packets";
 
 #(4) set choices for minute file directory
 # minute dayfile directory location - this is temp location- since all files are deleted  
