@@ -7,9 +7,8 @@
 // function and variable names associated with that processing type.
 // For processing 'Xxxx' the following functions should be defined in this file.
 //
-//  XxxxInit(isActive) - if isActive == 0 reset all visible elements to default state, reset associated global variables.
-//                       if isActive == 1 reset only quantities needed between user actions, if any.
-//                       XxxxInit(0) should be called from ProcessingInit() at the end of this file to initialize
+//  XxxxInit()  - reset all visible elements to default state, reset associated global variables.
+//                       XxxxInit() should be called from ProcessingInit() at the end of this file to initialize
 //                       the html for this processing type.
 //  XxxxCheck() - Examine all user set parameters for correctness and consistency, mark incorrect entries with color.
 //                Build string to use in call to jsoc_fetch in the "process" parameter for this processing type.
@@ -47,8 +46,8 @@ var keyNoaaLon = 2;
 var keyNoaaLonX = 3;
 
 // Support functions for multiple processing options
-
-function processingGetRecInfo(DoCheck, n)
+// This function gets the first or last record of a series.
+function processingGetRecInfo(DoCheck, exportOption, n)
   {
   // Get keywords for a single record.  n will be 1 for first record, -1 for last record.
   if (n==1)
@@ -62,39 +61,49 @@ function processingGetRecInfo(DoCheck, n)
   $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   var RecordSet = $("ExportRecordSet").value;
   $("ImRecordSet").innerHTML = RecordSet;
-  new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + JSOC_INFO,
-    {
+
+  var ajaxParameters = {
     method: 'get',
     parameters: {"ds" : RecordSet, "op" : "rs_list", "n" : n, "key" : keysneeded, "seg" : segsneeded, "l" : 1 },
 
     onSuccess: function(transport, json)
       {
-      var thisN = ""+n;
-      var response = transport.responseText || "no response text";
-      var recinfo = response.evalJSON();
+          var thisN = ""+n;
+          var response = transport.responseText || "no response text";
+          var recinfo = response.evalJSON();
 
-      if (recinfo.status == 0)
-        {
-        if (thisN == "1")
+          if (recinfo.status == 0)
+            {
+            if (thisN == "1")
+              {
+              processingFirstRecord = recinfo;
+
+              if (processingLastRecord)
+                DoCheck();
+              }
+            if (thisN == "-1")
+              {
+              processingLastRecord = recinfo;
+              if (processingFirstRecord)
+                DoCheck();
+              }
+            }
+          else
           {
-          processingFirstRecord = recinfo;
-          if (processingLastRecord)
-            DoCheck();
+            alert("Processing setup code failed to get record info for n="+thisN+" of " + RecordSet);
           }
-        if (thisN == "-1")
+          $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
+        
+          if (exportOption)
           {
-          processingLastRecord = recinfo;
-          if (processingFirstRecord)
-            DoCheck();
+              exportOption.argsReady = true;
           }
-        }
-      else
-        alert("Processing setup code failed to get record info for n="+thisN+" of " + RecordSet);
-      $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
       },
-    onFailure: function() { alert('Something went wrong...'); },
-    onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
-    });
+    onFailure: function() { alert('Something went wrong...'); if (exportOption) { exportOption.argsReady = true; } },
+    onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; if (exportOption) { exportOption.argsReady = true; } }
+    };
+    
+  new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + JSOC_INFO, ajaxParameters);
   }
 
 // Processing Options Code
@@ -105,35 +114,66 @@ function processingGetRecInfo(DoCheck, n)
 
 var HmiB2ptrOption;
 
-function HmiB2ptrSet()
+function HmiB2ptrSet(param)
   {
+    var checkRes = null;
+
+    this.argsReady = false;
+    this.paramsValid = null;
+
+    checkRes = this.Check();
+      
+    if (checkRes === null)
+    {
+        this.argsReady = true;
+        return 1;    
+    }
+    else if (checkRes.length == 0)
+    {
+        this.argsReady = true;
+        return 0;
+    }
+    
+    this.argsReady = true;
+    return 0;
   }
 
-function HmiB2ptrInit(isActive)
+function HmiB2ptrInit(onLoad)
   {
-  if (!isActive)
-    {
     $("ProcessHmiB2ptr").style.display="none";
-    }
   }
 
 function HmiB2ptrCheck()
   {
   var HmiB2ptrSizeRatio = 1.0;
-  var isok = 1;
+  var isok = true;
   var args = "HmiB2ptr,l=1";
-  if (SeriesName === 'hmi.B_720s')
+  
+  if (!$("OptionHmiB2ptr").checked)
+  {
+    // If this processing option is not selected, then do not check parameter values.
+    return '';
+  }
+  
+  if (this.paramsValid !== null)
+  {
+    // Already checked.
+    return this.paramsValid; // Empty string if the previous call determined the arguments to be invalid.
+  }
+  
+  if (SeriesName.toUpperCase() === 'hmi.B_720s'.toUpperCase())
     {
     // $("ExportFilenameFmt").value = $("ExportFilenameFmt").value.replace('T_REC','T_OBS');
     }
   else
     {
-    isok = 0;
+    isok = false;
     alert("Error - HmiB2ptr can only be used for series hmi.B_720s");
+    return null;
     }
 
   ExportProcessingOptions[HmiB2ptrOption].Size = HmiB2ptrSizeRatio;
-  ExportProcessingOK = isok;
+  this.paramsValid = (isok ? args : "");
   CheckRediness();
   return (isok ? args : "");
   }
@@ -146,35 +186,67 @@ function HmiB2ptrCheck()
 
 var AiaScaleOption;
 
-function AiaScaleSet()
+function AiaScaleSet(param)
   {
+    var checkRes = null;
+    
+    this.argsReady = false;
+    this.paramsValid = null;
+    checkRes = this.Check();
+    
+    if (checkRes === null)
+    {
+        // Error - uncheck the processing step.
+        this.argsReady = true;
+        return 1;
+    }
+    else if (checkRes.length == 0)
+    {
+        // The arguments are invalid, but do not uncheck the processing step.
+        this.argsReady = true;
+        return 0;
+    }
+    
+    this.argsReady = true;
+    return 0;
   }
 
-function AiaScaleInit(isActive)
+function AiaScaleInit(onLoad)
   {
-  if (!isActive)
-    {
     $("ProcessAiaScale").style.display="none";
-    }
   }
 
 function AiaScaleCheck()
   {
   var AiaScaleSizeRatio = 1.0;
-  var isok = 1;
+  var isok = true;
   var args = "aia_scale";
+  
+  if (!$("OptionAiaScale").checked)
+  {
+    // If this processing option is not selected, then do not check parameter values.
+    return '';
+  }
+  
+  if (this.paramsValid !== null)
+  {
+    // Already checked.
+    return this.paramsValid; // Empty string if the previous call determined the arguments to be invalid.
+  }
+  
   if (SeriesName === 'aia.lev1')
     {
     $("ExportFilenameFmt").value = $("ExportFilenameFmt").value.replace('T_REC','T_OBS');
     }
   else
     {
-    isok = 0;
+    isok = false;
     alert("Error - aia_scale can only be used for series aia.lev1");
+    return null; // Tell calling function to uncheck this processing step.
     }
 
   ExportProcessingOptions[AiaScaleOption].Size = AiaScaleSizeRatio;
-  ExportProcessingOK = isok;
+  this.paramsValid = (isok ? args : "");
   CheckRediness();
   return (isok ? args : "");
   }
@@ -187,10 +259,8 @@ function AiaScaleCheck()
 
 var RebinOption;
 
-function RebinInit(isActive)
+function RebinInit(onLoad)
   {
-  if (!isActive)
-    {
     // Clear out any old settings.
     $("RebinMethod").selectedIndex=0;
     $("RebinSegments").checked = false;
@@ -204,13 +274,17 @@ function RebinInit(isActive)
     $("RebinFWHMRow").style.display = "none";
     $("RebinNvectorRow").style.display = "none";
     $("ProcessRebin").style.display = "none";
-    
+
     // Display the rebin options table.
-    }
   }
 
 function RebinSet(control)
   {
+    var checkRes = null;
+    
+    this.argsReady = false;
+    this.paramsValid = null;
+      
     if (control == "method")
     {
         if ($("RebinMethod").selectedIndex==1)
@@ -246,14 +320,41 @@ function RebinSet(control)
             $("RebinNvector").style.backgroundColor = colorWhite;
         }
     }
-  RebinCheck();
+    
+    checkRes = this.Check();
+    
+    if (checkRes === null)
+    {
+        this.argsReady = true;
+        return 1;
+    }
+    else if (checkRes.length == 0)
+    {
+        this.argsReady = true;
+        return 0;
+    }
+    
+    this.argsReady = true;
+    return 0;
   }
 
 function RebinCheck()
   {
   var RebinSizeRatio = 1.0;
   var rv = "rebin";
-  var isok = 1;
+  var isok = true;
+  
+    if (!$("OptionRebin").checked)
+    {
+        // If this processing option is not selected, then do not check parameter values.
+        return '';
+    }
+    
+    if (this.paramsValid !== null)
+    {
+        // Already checked.
+        return this.paramsValid; // Empty string if the previous call determined the arguments to be invalid.
+    }  
     
   if ($("RebinSegments").checked)
     {
@@ -277,7 +378,7 @@ function RebinCheck()
   if (parseFloat($("RebinScale").value) != 1.0)
     {
     if ($("RebinScale").value <= 0)
-      isok = 0;
+      isok = false;
     rv = rv + ",scale=" + $("RebinScale").value;
     RebinSizeRatio = parseFloat($("RebinScale").value);
     }
@@ -287,7 +388,7 @@ function RebinCheck()
     rv = rv + ",method=gaussian";
     if (parseFloat($("RebinFWHM").value) <= 0)
       {
-      isok = 0;
+      isok = false;
       }
     else
       {
@@ -296,7 +397,7 @@ function RebinCheck()
         
     if (parseFloat($("RebinNvector").value) == -1.0)
       {
-      isok = 0;
+      isok = false;
       }
     else
       {
@@ -309,7 +410,7 @@ function RebinCheck()
     }
     
   ExportProcessingOptions[RebinOption].Size = RebinSizeRatio*RebinSizeRatio;
-  ExportProcessingOK = isok;
+  this.paramsValid = (isok ? rv : "");
   CheckRediness();
   return (isok ? rv : "");
   }
@@ -322,10 +423,8 @@ function RebinCheck()
 
 var ResizeOption;
 
-function ResizeInit(isActive)
+function ResizeInit(onLoad)
   {
-  if (!isActive)
-    {
     // Clear out any old settings.
     $("ResizeScaleRow").style.display = "table-row";
     $("ResizeBicubic").checked = true;
@@ -336,11 +435,15 @@ function ResizeInit(isActive)
     $("ResizeCdelt").value = "-1.0";
     $("ResizeCdelt").style.backgroundColor = colorRed;
     $("ResizeScaleRow").style.display = "none";
-    }
   }
 
 function ResizeSet(control)
   {
+    var checkRes = null;
+    
+    this.argsReady = false;
+    this.paramsValid = null;
+
   if (control == "do_scale")
     {
     if ($("ResizeDoScale").checked)
@@ -357,15 +460,28 @@ function ResizeSet(control)
     $("ResizeCdelt").style.backgroundColor = colorWhite;
     }
   // no specific action needed for "method", "register_to", "crop", or "replicate" 
-  processingGetRecInfo(ResizeCheck, 1);
-  ResizeCheck();
+  
+    processingGetRecInfo(this.Check, this, 1);
+    return 0;
   }
 
 function ResizeCheck()
   {
   var ResizeSizeRatio = 1.0;
   var rv = "resize";
-  var isok = 1;
+  var isok = true;
+  
+    if (!$("OptionResize").checked)
+    {
+        // If this processing option is not selected, then do not check parameter values.
+        return '';
+    }
+    
+    if (this.paramsValid !== null)
+    {
+        // Already checked.
+        return this.paramsValid; // Empty string if the previous call determined the arguments to be invalid.
+    }
     
   if ($("ResizeBicubic").checked)
     rv += ",regrid=1";
@@ -389,7 +505,7 @@ function ResizeCheck()
     rv = rv + ",rescale=1";
     rv = rv + ",scale_to=" + $("ResizeCdelt").value;
     if ($("ResizeCdelt").value <= 0)
-      isok = 0;
+      isok = false;
     if (processingFirstRecord)
       ResizeSizeRatio = processingFirstRecord.keywords[keyCDELT].values[0] / parseFloat($("ResizeCdelt").value);
     }
@@ -402,7 +518,7 @@ function ResizeCheck()
     }
     
   ExportProcessingOptions[ResizeOption].Size = ResizeSizeRatio;
-  ExportProcessingOK = isok;
+  this.paramsValid = (isok ? rv : "");
   CheckRediness();
   return (isok ? rv : "");
   }
@@ -483,60 +599,109 @@ function ImPatchGetNoaa()
     }
   }
   
+// The values of the ImPatch inputs have changed. We need to call ImPatchCheck() to make sure the changes were valid.
+// If there is no first or last record saved in global variables, then we need to get them. In this case, we have
+// to put ImPatchCheck() in a callback, since we cannot actually do the check synchronously - we have to wait until
+// a jsoc_info call has completed.
+//
+// If the processingFirstRecord or processingLastRecord is missing (no record-set query has been entered, or it hasn't
+// been processed yet) OR if the record-set specification has changed, then the first and last record information will
+// be fetched asynchronously. Then ImPatchCheck() will be run. If no first/last record information is fetched, then only
+// ImPatchCheck() is run.
 function ImPatchSet(param)
   {
-  // Get first and last record info
-  if (param == 1) defaultStartUsed = 0;
-  if (param == 2) defaultStopUsed = 0;
-  var needCheck = 1;
-  if (!processingFirstRecord)
+    var checkRes = null;
+    
+    // Get first and last record info
+    this.argsReady = false;
+    this.paramsValid = null;
+    if (param == 1) defaultStartUsed = 0;
+    if (param == 2) defaultStopUsed = 0;
+        
+    if ($("ImRecordSet").innerHTML !== $("ExportRecordSet").value)
     {
-    needCheck = 0;
-    processingGetRecInfo(ImPatchCheck, 1);
+        processingFirstRecord = null;
+        processingLastRecord = null;
+        $("ImTDelta").value = "NotSpecified";
     }
-  if (!processingLastRecord)
+    
+    if (RecordCount === null)
     {
-    needCheck = 0;
-    processingGetRecInfo(ImPatchCheck, -1);
+        processingFirstRecord = null;
+        processingLastRecord = null;
+        if (defaultStartUsed) $("ImTStart").value = "NotSpecified";
+        if (defaultStopUsed) $("ImTStop").value = "NotSpecified";
+        ExportNewRS(); // This will gracefully fail if there is no record-set specification entered.
     }
-  if (needCheck)
-    ImPatchCheck();
+    
+    if ($("ImTrack").checked)
+    {
+        ImTracked = 1;
+    }
+    else
+    {
+        ImTracked = 0;
+    }
+    
+    if (processingFirstRecord && processingLastRecord)
+    {
+        checkRes = this.Check();
+
+        if (checkRes === null)
+        {
+            this.argsReady = true;
+            return 1;        
+        }
+        else if (checkRes.length == 0)
+        {
+            this.argsReady = true;
+            return 0;
+        }
+
+        this.argsReady = true;
+        return 0;
+    }
+
+    // This looks like it will call potentially ImPatchCheck() twice, which is not ideal.
+    if (!processingFirstRecord)
+    {
+        processingGetRecInfo(this.Check, this, 1);
+    }
+    if (!processingLastRecord)
+    {
+        processingGetRecInfo(this.Check, this, -1);
+    }
+    
+    return 0;
   }
 
 // ImResetParams values:
-//  0 set in ImPatchCheck
-//  1 set onload
-//  2 set by Reset params button
-//  3 set by Update RecordSet Times button
+//  0 set in ImPatchCheck (do not reset parameters)
+//  1 set onload (reset parameters to default)
+//  2 set by Reset params button (reset parameters to default)
+//  3 set by Update RecordSet Times button (reset parameters to default)
 
 function ImPatchCheck()
   {
-  if (ImResetParams==2)
+    var args = "im_patch";
+    var isok = true;
+    var localImPatchSizeRatio = 1.0;
+
+    if (!$("OptionImPatch").checked)
     {
-    ImPatchInit(0);
-    ImPatchSet(0);
+        // If this processing option is not selected, then do not check parameter values.
+        return '';
     }
-  else if (ImResetParams==3 || $("ImRecordSet").innerHTML !== $("ExportRecordSet").value)
+    
+    if (this.paramsValid !== null)
     {
-    processingFirstRecord = null;
-    processingLastRecord = null;
-    $("ImTDelta").value = "NotSpecified";
-    ImResetParams = 0;
-    ImPatchSet(0);
+        // Already checked.
+        return this.paramsValid; // Empty string if the previous call determined the arguments to be invalid.
     }
-  var isok = 1;
-  var args = "im_patch";
-  var ImLocOption;
-  var ImPatchSizeRatio = 1.0;
-  if (RecordCountNeeded)
+  
+  if (RecordCount === null)
     {
-    processingFirstRecord = null;
-    processingLastRecord = null;
-    if (defaultStartUsed) $("ImTStart").value = "NotSpecified";
-    if (defaultStopUsed) $("ImTStop").value = "NotSpecified";
-    ExportProcessingOK = 0;
-    ExportNewRS();
-    return("");
+        return("");
     }
 
   if ( ($("ImTStart").value === "East Limb" && !$("ImEastLimb").checked) || ($("ImTStart").value.strip().empty()) )
@@ -549,7 +714,7 @@ function ImPatchCheck()
   if ($("ImTStart").value == "NotSpecified")
     {
     $("ImTStart").style.backgroundColor=colorRed;
-    isok = 0;
+    isok = false;
     }
   else
     {
@@ -574,7 +739,7 @@ function ImPatchCheck()
   if ($("ImTStop").value == "NotSpecified")
     {
     $("ImTStop").style.backgroundColor=colorRed;
-    isok = 0;
+    isok = false;
     }
   else
     {
@@ -592,13 +757,11 @@ function ImPatchCheck()
   if ($("ImTrack").checked) // checked for tracking, default
     {
     args += ",t=0";
-    ImTracked = 1;
     }
   else
     {
     args += ",t=1";
     $("ImTRef").value = $("ImTStart").value;
-    ImTracked = 0;
     }
 
   if ($("ImRegister").checked) // checked for registering by interpolation, default is no.
@@ -636,9 +799,8 @@ function ImPatchCheck()
     }
 
   $("ImLocType").style.backgroundColor=noaaColor;
-  ImLocOption = $("ImLocType").selectedIndex;
   // values are one of: stony, arcsec, pixels, carrlong
-  args += ",locunits=" + $("ImLocType").options[ImLocOption].value;
+  args += ",locunits=" + $("ImLocType").options[$("ImLocType").selectedIndex].value;
   $("ImBoxType").style.backgroundColor=colorWhite;
   args += ",boxunits=" + $("ImBoxType").options[$("ImBoxType").selectedIndex].value;
 
@@ -663,7 +825,7 @@ function ImPatchCheck()
   if ($("ImTRef").value == "NotSpecified" && $("ImLocType").indexSelected != 3)
     {
     $("ImTRef").style.backgroundColor=colorRed;
-    isok = 0;
+    isok = false;
     }
   else
     {
@@ -678,7 +840,7 @@ function ImPatchCheck()
       $("ImCarrot").value = processingFirstRecord.keywords[keyCARROT].values[0];
     if ($("ImCarrot").value == "NotSpecified" )
       {
-      isok = 0;
+      isok = false;
       $("ImCarrot").style.backgroundColor=colorRed;
       }
     else
@@ -696,7 +858,7 @@ function ImPatchCheck()
     }
   if ($("ImX").value == "NotSpecified")
     {
-    isok = 0;
+    isok = false;
     $("ImX").style.backgroundColor=colorRed;
     }
   else
@@ -709,7 +871,7 @@ function ImPatchCheck()
   if ($("ImY").value == "NotSpecified")
     {
     $("ImY").style.backgroundColor=colorRed;
-    isok = 0;
+    isok = false;
     }
   else
     {
@@ -721,7 +883,7 @@ function ImPatchCheck()
   if ($("ImWide").value == "NotSpecified")
     {
     $("ImWide").style.backgroundColor=colorRed;
-    isok = 0;
+    isok = false;
     }
   else
     {
@@ -734,7 +896,7 @@ function ImPatchCheck()
   if ($("ImHigh").value == "NotSpecified")
     {
     $("ImHigh").style.backgroundColor=colorRed;
-    isok = 0;
+    isok = false;
     }
   else
     {
@@ -764,51 +926,44 @@ function ImPatchCheck()
     var dims = processingFirstRecord.segments[0].dims[0];
     var oldDimX = dims.substring(0,dims.indexOf("x"));
     var oldDimY = dims.substring(dims.indexOf("x")+1);
-    ImPatchSizeRatio = (newDimX * newDimY) / (oldDimX * oldDimY);
+    localImPatchSizeRatio = (newDimX * newDimY) / (oldDimX * oldDimY);
     }
-  ExportProcessingOptions[ImPatchOption].Size = ImPatchSizeRatio;
-  ExportProcessingOK = isok;
+  ExportProcessingOptions[ImPatchOption].Size = localImPatchSizeRatio;
+  this.paramsValid = (isok ? args : "");
   CheckRediness();
   return (isok ? args : "");
   }
 
 
 // Set display defaults
-
-var ImResetParams = 1;
-function ImPatchInit(isActive)
+function ImPatchInit(onLoad)
   {
-  if (isActive == 0 && ImResetParams>0)
-    {
-    noaaColor = colorWhite;
-    var requireColor = colorRed;
-    if (ImResetParams==1)
-        $("ProcessImPatch").style.display="none";
-    $("ImTrack").checked = true;
-    $("ImRegister").checked = false;
-    $("ImCrop").checked = false;
-    $("ImNOAA").style.backgroundColor=colorWhite; $("ImNOAA").value = "NotSpecified";
-    $("ImTStart").value = "NotSpecified";
-    $("ImTStop").value = "NotSpecified";
-    $("ImTDelta").value = "NotSpecified";
-    $("ImTRef").style.backgroundColor = requireColor; $("ImTRef").value = "NotSpecified";
-    $("ImCarrot").style.backgroundColor = requireColor; $("ImCarrot").value = "NotSpecified";
-    $("ImX").style.backgroundColor = requireColor; $("ImX").value = "NotSpecified";
-    $("ImY").style.backgroundColor = requireColor; $("ImY").value = "NotSpecified";
-    $("ImWide").style.backgroundColor = requireColor; $("ImWide").value = "NotSpecified";
-    $("ImHigh").style.backgroundColor = requireColor; $("ImHigh").value = "NotSpecified";
-    ImTracked = 1;
-    processingFirstRecord = null;
-    processingLastRecord = null;
-    defaultStartUsed = 1;
-    defaultStopUsed = 1;
-    if (RecordCountNeeded == 1 || ImResetParams==2)
-      ImResetParams = 0;
-    }
-  else
-    {
-    ImPatchSet(0);
-    }
+        // Truly reset ImPatch parameters to default values.
+        noaaColor = colorWhite;
+        var requireColor = colorRed;
+        if (onLoad)
+        {
+            // When web page first loads.
+            $("ProcessImPatch").style.display="none";
+        }
+        $("ImTrack").checked = true;
+        $("ImRegister").checked = false;
+        $("ImCrop").checked = false;
+        $("ImNOAA").style.backgroundColor=colorWhite; $("ImNOAA").value = "NotSpecified";
+        $("ImTStart").value = "NotSpecified";
+        $("ImTStop").value = "NotSpecified";
+        $("ImTDelta").value = "NotSpecified";
+        $("ImTRef").style.backgroundColor = requireColor; $("ImTRef").value = "NotSpecified";
+        $("ImCarrot").style.backgroundColor = requireColor; $("ImCarrot").value = "NotSpecified";
+        $("ImX").style.backgroundColor = requireColor; $("ImX").value = "NotSpecified";
+        $("ImY").style.backgroundColor = requireColor; $("ImY").value = "NotSpecified";
+        $("ImWide").style.backgroundColor = requireColor; $("ImWide").value = "NotSpecified";
+        $("ImHigh").style.backgroundColor = requireColor; $("ImHigh").value = "NotSpecified";
+        ImTracked = 1;
+        processingFirstRecord = null;
+        processingLastRecord = null;
+        defaultStartUsed = 1;
+        defaultStopUsed = 1;
   }
 
 // End of IM Patch code
@@ -892,31 +1047,67 @@ function MaprojGetNoaa()
 
 function MaprojSet(param)
   {
-  // Get first and last record info
-  if (param == 1) defaultStartUsed = 0;
-  if (param == 2) defaultStopUsed = 0;
-  var needCheck = 1;
-  if (!processingFirstRecord)
+    var checkRes = null;
+    
+    this.argsReady = false;
+    this.paramsValid = null;
+      
+    // Get first and last record info
+    if (param == 1) defaultStartUsed = 0;
+    if (param == 2) defaultStopUsed = 0;
+    
+    if (processingFirstRecord && processingLastRecord)
     {
-    needCheck = 0;
-    processingGetRecInfo(MaprojCheck, 1);
+        checkRes = this.Check();
+        
+        if (checkRes === null)
+        {
+            this.argsReady = true;
+            return 1;        
+        }
+        else if (checkRes.length == 0)
+        {
+            this.argsReady = true;
+            return 0;
+        }
+        
+        this.argsReady = true;
+        return 0;
     }
-  if (!processingLastRecord)
+
+    // This looks like it will call potentially MaprojCheck() twice, which is not ideal.
+    if (!processingFirstRecord)
     {
-    needCheck = 0;
-    processingGetRecInfo(MaprojCheck, -1);
+        processingGetRecInfo(this.Check, this, 1);
     }
-  if (needCheck)
-    MaprojCheck();
+    if (!processingLastRecord)
+    {
+        processingGetRecInfo(this.Check, this, -1);
+    }
+    
+    return 0;
   }
 
 function MaprojCheck()
   {
   var MaprojSizeRatio = 1.0;
-  var isok = 1;
+  var isok = true;
   var args = "Maproj";
   var MaprojLocOption;
-  if (RecordCountNeeded)
+  
+    if (!$("OptionMaproj").checked)
+    {
+        // If this processing option is not selected, then do not check parameter values.
+        return '';
+    }
+    
+    if (this.paramsValid !== null)
+    {
+        // Already checked.
+        return this.paramsValid; // Empty string if the previous call determined the arguments to be invalid.
+    }
+  
+  if (RecordCount === null)
     {
     ExportNewRS();
     return("");
@@ -951,7 +1142,7 @@ function MaprojCheck()
   if ($("MaprojX").value.strip().empty()) $("MaprojX").value = "NotSpecified";
   if ($("MaprojX").value == "NotSpecified")
     {
-    isok = 0;
+    isok = false;
     $("MaprojX").style.backgroundColor=colorRed;
     }
   else
@@ -964,7 +1155,7 @@ function MaprojCheck()
   if ($("MaprojY").value == "NotSpecified")
     {
     $("MaprojY").style.backgroundColor=colorRed;
-    isok = 0;
+    isok = false;
     }
   else
     {
@@ -976,7 +1167,7 @@ function MaprojCheck()
   if ($("MaprojScale").value == "NotSpecified")
     {
     $("MaprojScale").style.backgroundColor=colorRed;
-    isok = 0;
+    isok = false;
     }
   else
     {
@@ -988,7 +1179,7 @@ function MaprojCheck()
   if ($("MaprojWide").value == "NotSpecified")
     {
     $("MaprojWide").style.backgroundColor=colorRed;
-    isok = 0;
+    isok = false;
     }
   else
     {
@@ -1002,7 +1193,7 @@ function MaprojCheck()
   if ($("MaprojHigh").value == "NotSpecified")
     {
     $("MaprojHigh").style.backgroundColor=colorRed;
-    isok = 0;
+    isok = false;
     }
   else
     {
@@ -1035,17 +1226,15 @@ function MaprojCheck()
     }
 
   ExportProcessingOptions[MaprojOption].Size = MaprojSizeRatio;
-  ExportProcessingOK = isok;
+  this.paramsValid = (isok ? args : "");
   CheckRediness();
   return (isok ? args : "");
   }
 
 // Set display defaults
 
-function MaprojInit(isActive)
+function MaprojInit(onLoad)
   {
-  if (!isActive)
-    {
     noaaColor = colorWhite;
     var requireColor = colorRed;
     $("ProcessMaproj").style.display="none";
@@ -1061,11 +1250,6 @@ function MaprojInit(isActive)
     processingLastRecord = null;
     defaultStartUsed = 1;
     defaultStopUsed = 1;
-    }
-  else
-    {
-    MaprojSet(0);
-    }
   }
 
 // End of MapProj code
@@ -1091,6 +1275,8 @@ function ProcessingInit()
   ExpOpt.id="OptionNone";
   ExpOpt.rowid = "ExpSel_none";
   ExpOpt.Size = 1.0;
+  ExpOpt.argsReady = false;
+  ExpOpt.paramsValid = null;
   ExportProcessingOptions[iOpt] = ExpOpt;
 
   iOpt++;
@@ -1104,6 +1290,8 @@ function ProcessingInit()
   ExpOpt.Check = AiaScaleCheck;
   ExpOpt.Set = AiaScaleSet;
   ExpOpt.Size = 1.0;
+    ExpOpt.argsReady = false;
+    ExpOpt.paramsValid = null;
   ExportProcessingOptions[iOpt] = ExpOpt;
   AiaScaleOption = iOpt;
 
@@ -1118,6 +1306,8 @@ function ProcessingInit()
   ExpOpt.Check = HmiB2ptrCheck;
   ExpOpt.Set = HmiB2ptrSet;
   ExpOpt.Size = 1.0;
+    ExpOpt.argsReady = false;
+    ExpOpt.paramsValid = null;
   ExportProcessingOptions[iOpt] = ExpOpt;
   HmiB2ptrOption = iOpt;
 
@@ -1132,6 +1322,8 @@ function ProcessingInit()
   ExpOpt.Check = ResizeCheck;
   ExpOpt.Set = ResizeSet;
   ExpOpt.Size = 1.0;
+    ExpOpt.argsReady = false;
+    ExpOpt.paramsValid = null;
   ExportProcessingOptions[iOpt] = ExpOpt;
   ResizeOption = iOpt;
 
@@ -1144,8 +1336,10 @@ function ProcessingInit()
   ExpOpt.rowid = "ProcessImPatch";
   ExpOpt.Init = ImPatchInit;
   ExpOpt.Check = ImPatchCheck;
-  ExpOpt.Set = null;
+  ExpOpt.Set = ImPatchSet;
   ExpOpt.Size = 1.0;
+    ExpOpt.argsReady = false;
+    ExpOpt.paramsValid = null;
   ExportProcessingOptions[iOpt] = ExpOpt;
   ImPatchOption = iOpt;
 
@@ -1158,8 +1352,10 @@ function ProcessingInit()
   ExpOpt.rowid = "ProcessMaproj";
   ExpOpt.Init = MaprojInit;
   ExpOpt.Check = MaprojCheck;
-  ExpOpt.Set = null;
+  ExpOpt.Set = MaprojSet;
   ExpOpt.Size = 1.0;
+    ExpOpt.argsReady = false;
+    ExpOpt.paramsValid = null;
   ExportProcessingOptions[iOpt] = ExpOpt;
   MaprojOption = iOpt;
 
@@ -1174,6 +1370,8 @@ function ProcessingInit()
   ExpOpt.Check = RebinCheck;
   ExpOpt.Set = RebinSet;
   ExpOpt.Size = 1.0;
+    ExpOpt.argsReady = false;
+    ExpOpt.paramsValid = null;
   ExportProcessingOptions[iOpt] = ExpOpt;
   RebinOption = iOpt;
 
@@ -1185,9 +1383,49 @@ for (iOpt=1; iOpt<nOpt; iOpt++)
     {
     var id;
     ExpOpt = ExportProcessingOptions[iOpt];
-    ExpOpt.Init(0);
+    ExpOpt.Init(1);
     $(ExpOpt.id).checked = false;
     $(ExpOpt.rowid).style.display = "none";
     }
   }
+
+function ProcessingOK()
+{
+    var processingIsOk = true;
+    var iOpt;
+  
+    // Skip the no-op processing step (index 0).
+    for (iOpt = 1; iOpt < ExportProcessingOptions.length; iOpt++)
+    {
+        ExpOpt = ExportProcessingOptions[iOpt];
+        
+        if ($(ExpOpt.id).checked && (ExpOpt.paramsValid === null || ExpOpt.paramsValid.length == 0))
+        {
+            processingIsOk = false;
+            break;
+        }
+    }
+        
+    return processingIsOk;
+}
+
+function ExportProcessingArgsReady()
+{
+    var argsReady = true;
+    var iOpt;
+  
+    // Skip the no-op processing step (index 0).
+    for (iOpt = 1; iOpt < ExportProcessingOptions.length; iOpt++)
+    {
+        ExpOpt = ExportProcessingOptions[iOpt];
+        
+        if ($(ExpOpt.id).checked && !ExpOpt.argsReady)
+        {
+            argsReady = false;
+            break;
+        }
+    }
+    
+    return argsReady;
+}
 

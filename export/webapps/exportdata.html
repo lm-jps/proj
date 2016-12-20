@@ -98,11 +98,13 @@ function NotifyProcessingCode()
   // Set flags to alert processing or method options here.
   // variables here will usually be defined in exportdata.d/processing.js
   // or exportdata.d/export_request_form.html
+  
+  // SeriesName is determined asynchronously.
   if (SeriesName == previousSeries)
-    SetProcessing(-1);
+    SetProcessing(-1); // Do not initialize all processing options to their defaults.
   else
     {
-    SetProcessing(-2);
+    SetProcessing(-2); // Init all processing options to their defaults.
     ProtocolOptionsSet = 0;
     }
   previousSeries = SeriesName;
@@ -116,8 +118,7 @@ var SeriesInfo;
 var firstRealSegment;
 var RequestID;
 var RecordLimit;
-var RecordCount = -1;
-var RecordCountNeeded;
+var RecordCount = null; // Initialized in initVars(), Modified in GetRSCount()
 var ExportQueryOK;
 var ExportRecordSetOK;
 var ExportRedinessStatus;
@@ -125,7 +126,6 @@ var ExportFromFileList;
 var ExportMethodOK;
 var ExportMethodIsDirect;
 var ExportFilenameFmtOK;
-var ExportProcessingOK;
 var ExportProcessingOptions;
 var ExportUserOK;
 var ExportNotifyOK;
@@ -139,6 +139,11 @@ var ExportProcessingArgs = "";
 var ProcessingAllowed = 1;
 var ExportMethodValue = "url_quick";
 var exportparameters;
+
+// Export processing globals.
+var ExportProcessingArgsPoll = null;
+var ExportProcessingOK = null;
+var ProcessRSChangePoll = null;
 
 // Protocol global vars
 var ExportCompressOK;
@@ -154,7 +159,6 @@ var protocolEnable;
 // Misc vars
 var firstTimePrime;
 var expURL;
-var exportdataLoaded = false;
 
 // Colors
 var colorNeutral = "#D4D0C8";
@@ -180,8 +184,7 @@ function initVars()
     Internal = 0;
   SeriesName = "";
   RequestID = "";
-  RecordCount = 0;
-  RecordCountNeeded = 1;
+  RecordCount = null;
   RecordLimit = 0;
   ExportRecordSetOK = 0;
   ExportQueryOK = 0;
@@ -199,8 +202,10 @@ function initVars()
   ProcessingAllowed = 1;
 
   // Init processing
-  ExportProcessingOK = 1;
   ExportProcessingArgs = "";
+  ExportProcessingOK = null;
+  ExportProcessingArgsPoll = null;
+  ProcessRSChangePoll = null;
 
   // Init protocols
   ExportProtocolOK = 1;
@@ -209,11 +214,14 @@ function initVars()
   protocolEnable = 0;
   ProtocolOptionsSet = 0;
 
-  if (exportdataLoaded)
-    {
+    // If the page is being loaded, then exportdataLoaded is true. If the reset page button was clicked, then 
+    // exportdataLoaded is true as well. So, there is no need to check for a true value for exportdataLoaded.
     ProcessingInit();
+    ProcessingEnabled()
     ProtocolOptionsInit();
-    }
+
+    // Enable the reset button, now that the page has completed loaded.
+    $("ResetPageButton").disabled = false;
 
   // if (state < 2)
   // Form init
@@ -295,6 +303,7 @@ function getargs()
   else
     {
     var exportargs = location.search;
+
     exportargs = decodeURIComponent(exportargs);
     exportargs = exportargs.substr(1);
     exportargs = exportargs.replace(/\?/g,"QUESTIONMARK");
@@ -314,7 +323,8 @@ function OnLoadInit()
   {
   var needcount = 0;
   Cookie.init({name:exportdata, expires:14});
-  initVars();
+  initVars(); // ART - Ah, here's the problem! This call runs code that requires RecordSet to be set. However, that is not true  
+              // before it is set below [ $("ExportRecordSet").value = args.ds ]
   if (Internal)
     {
     $("header_logo").href="http://jsoc2.stanford.edu";
@@ -323,6 +333,7 @@ function OnLoadInit()
   state = 0;
   Cookie.setData("state",state);
   args = getargs();
+
   if (args.ds)
     {
     $("ExportRecordSet").value = args.ds;
@@ -340,11 +351,13 @@ function OnLoadInit()
     }
   if (needcount && $("ExportRecordSet").value != "")
     {
-    GetRSCount();
+    if (GetRSCount())
+    {
+        $("ExportCheckMsg").innerHTML = "Invalid record-set specification";
+    }
     GetDefaultFormat();
     }
-  if (exportdataLoaded)
-    ProcessingEnabled();
+
   CreateTips();
   $("TipsOnOffButton").value = "Turn Help Off";
   window.focus();
@@ -485,13 +498,17 @@ function ToggleHelp()
 function CheckNoProcessingList()
   {
   var n = NoProcessingList.length;
-// alert("NoProcessingList length = "+n+" SeriesName="+SeriesName);
   var i;
   var result = 1;
   var prior = ProcessingAllowed;
   for (i=0; i<n; i++)
-    if (SeriesName == NoProcessingList[i])
-      result = 0;
+    {
+        if (SeriesName == NoProcessingList[i])
+        {
+            result = 0;
+            break;
+        }
+    }
   ProcessingAllowed = result;
   if (ProcessingAllowed != prior)
     ProcessingEnabled();
@@ -593,10 +610,20 @@ function CallLookdata()
   var firstbracket = posbracket>=0 ? posbracket : posCurlbracket;
   var seriesname = (firstbracket == -1 ? recset : recset.substring(0,firstbracket));
   var recfilt = (posbracket >=0 ? recset.substring(posbracket,posRbracket+1) : "");
-  var recordcount = RecordCount + "";
   var lookdataargs="ds="+seriesname;
-  if (recfilt.length > 0 || RecordCount > 0)
-    lookdataargs += "&rs=" + recfilt + "&n=" + recordcount;
+
+  if (recfilt.length > 0)
+    {
+        // This is the filter used to select a series in lookdata.html, step 1.
+        lookdataargs += "&rs=" + recfilt
+    }
+    
+    // I guess the RecordCount can never be negative.
+    if (RecordCount !== null && RecordCount > 0)
+    {
+        lookdataargs += "&n=" + RecordCount.toString();
+    }
+    
   LookdataWindow=window.open("http://" + Host + "/ajax/" + LOOKDATA + ".html?" + encodeURIComponent(lookdataargs), "JSOC Lookdata");
   LookdataWindow.window.focus();
   }
@@ -675,8 +702,16 @@ WlSeriesInfo.prototype.extractSnames = function(args)
 function GetRSCount()
   {
   ExportQueryOK = 0;
-  var recset = $("ExportRecordSet").value;
+  ExportRecordSetOK = 0;
+  SeriesName = "";
 
+  var recset = $("ExportRecordSet").value;
+  
+  if (recset.length == 0)
+  {
+    $("RSCountPlace").innerHTML = "ERROR - missing record-set specification.";
+    return(1);
+  }
 
   var recfilt, segfilt;
   var posbracket = recset.indexOf("[");
@@ -693,6 +728,7 @@ function GetRSCount()
        }
   var firstbracket = posbracket>=0 ? posbracket : posCurlbracket;
   SeriesName = (firstbracket == -1 ? recset : recset.substring(0,firstbracket));
+
   if (SeriesName.length < 3)
     {
     $("RSCountPlace").innerHTML = "ERROR - missing SeriesName";
@@ -704,7 +740,7 @@ function GetRSCount()
   
   $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   $("RSCountPlace").innerHTML = RSCountActiveMSg;
-  RecordCount = -1;
+  RecordCount = null; // To indicate that the RecordCount has not been set yet.
   var RecordSet = $("ExportRecordSet").value;
   
     // Internal-db pass-through. We need to determine which host has the series information needed.
@@ -739,7 +775,7 @@ function GetRSCount()
                 
                 if (data.status != 0)
                 {
-                    RecordCount = 0;
+                    RecordCount = null;
                     $("RSCountPlace").innerHTML = data.error;
                     ExportRecordSetOK = 0;
                 }
@@ -769,8 +805,8 @@ function GetRSCount()
 function GetDefaultFormat()
 {
 	$("AjaxBusy").innerHTML = Ajax.activeRequestCount;
-	$("RSCountPlace").innerHTML = "Getting count - wait...";
-	RecordCount = -1;
+	// $("RSCountPlace").innerHTML = RSCountActiveMSg; why?
+	// RecordCount = null; why?
 	var RecordSet = $("ExportRecordSet").value;
   
 	var doInfoReqFn = function()
@@ -915,24 +951,63 @@ function ExportNop()
 function ExportRSChanged()
   {
   ExportQueryOK = 0;
-  RecordCountNeeded = 1;
+  RecordCount = null; // This will cause the record-count global to be updated later.
   $("CountButton").style.backgroundColor = colorYellow;
-  // CheckRediness();
   ExportNewRS(); // to fix opeator not pressing enter or count.
   }
+  
+function ProcessRSChange()
+{
+    if (ExportRecordSetOK == 0)
+    {
+        // Try again later (wait till jsoc_info that checks record-set validity completes).
+        return;
+    }
+    
+    GetDefaultFormat();
+    CheckNoProcessingList();
+    // NotifyProcessingCode requires the first jsoc_info to have completed (the one started by SetRecordLimit()).
+    NotifyProcessingCode();
+    CheckRediness();
 
+    clearInterval(ProcessRSChangePoll);
+    ProcessRSChangePoll = null;
+    
+    // Re-enable the RecordSet text box.
+    $('ExportRecordSet').disabled = false;
+}
+
+// Called when record-set changes, when user clicks on Recount, when user clicks on enter key in RecordSet field.
 function ExportNewRS()
   {
+    if (ProcessRSChangePoll)
+    {
+        // A previous call to ExportNewRS() has not completed yet.
+        return;
+    }
+  
+    $("ExportCheckMsg").innerHTML = "";
+    SeriesName = "";
+    
   ExportQueryOK = 0;
   $("CountButton").style.backgroundColor = colorNeutral;
-  RecordCountNeeded = 0;
   if (SetRecordLimit())
     return; // SetRecordLimit calls GetRSCount(), non-zero on RS syntax error
+    
+  // SetRecordLimit() starts jsoc_info asynchronously (via GetRSCount()). NotifyProcessingCode() below requires jsoc_info to have completed.
+  // We know that jsoc_info has completed when ExportRecordSetOK is not 0.
   firstTimePrime = "";
-  GetDefaultFormat();
-  CheckNoProcessingList();
-  NotifyProcessingCode();
-  CheckRediness();
+  
+    // GetDefaultFormat() starts another jsoc_info asnchronously. It sets firstTimePrime. firstTimePrime is used in processing.js.
+    // GetDefaultFormat() requires SeriesName, which is set in the first jsoc_info.
+    // SO WE HAVE TO WAIT FOR THE FIRST jsoc_info TO COMPLETE BEFORE RUNNING GetDefaultFormat().
+  
+    // Timer function to do the stuff in response to a record-set change.
+    ProcessRSChangePoll = setInterval(ProcessRSChange, 100);
+    
+    // Disable RecordSet text edit while the asynchronous stuff runs for the newly set record-set.
+    $('ExportRecordSet').disabled = true;
+    CheckRediness();
   }
 
 function SetRecordLimit()
@@ -1037,6 +1112,7 @@ function SetExportFilenameFmt()
   CheckRediness();
   }
 
+// Called after user clicks on 'Enable Processing' checkbox.
 function ProcessingEnabled()
   {
   ExportQueryOK = 0;
@@ -1044,6 +1120,7 @@ function ProcessingEnabled()
     $("ProcessingCheckbox").checked = false;
   if ($("ProcessingCheckbox").checked)
     {
+        // The user enabled processing
     if ($("ExportRecordSet").value == "" || $("ExportRecordSet").value == "[$]")
       {
       $("ProcessingWaitMessage").style.display = "table-row";
@@ -1051,15 +1128,14 @@ function ProcessingEnabled()
       return;
       }
     $("ProcessingWaitMessage").style.display = "none";
-    $("ProcessingCheckbox").checked = true;
     $("ProcessingCheckboxHide").checked = false;
     $("ProcessingShowCheckbox").style.display = "none";
     $("ExportProcessing").style.display = "table-row";
     }
   else
     {
-    $("ProcessingCheckbox").checked = false;
-    $(ExportProcessingOptions[0].id).checked = true;
+        // The user disabled processing.
+    $(ExportProcessingOptions[0].id).checked = true; // Enable the none processing option.
     $("ExportProcessing").style.display = "none";
     if (ProcessingAllowed == 0)
       {
@@ -1074,22 +1150,31 @@ function ProcessingEnabled()
       $("ProcessingCheckboxHide").checked = false;
       $("ProcessingShowCheckbox").style.display = "table-row";
       }
-    SetProcessing(0);
+    SetProcessing(0); // Pretend the user clicked on the none processing option.
     }
   }
 
 var SizeRatio;
 
+// Called when a processing-option checkbox has changed, or the record-set query has changed.
+// Make the ExportProcessingArgs string (a |-separated list of processing steps).
 function SetProcessing(ichecked)
-  { // 0 if no procesing enabled,  -1 if same seriesname, -2 if changed
+  { // 0 if no procesing enabled,  -1 if same seriesname, -2 if series has changed between export processing requests.
+    if (ExportProcessingArgsPoll)
+    {
+        alert('cant do this right now');
+        return;
+    }
   ExportQueryOK = 0;
   if (ProcessingAllowed == 0)
     {
     $(ExportProcessingOptions[0].id).checked = true;
     }
-  if (ichecked > 0) $(ExportProcessingOptions[0].id).checked = false; // this will apparently never happen
-  ExportProcessingOK = 0;
-  // Add recordLimit FIRST always.
+  if (ichecked > 0) $(ExportProcessingOptions[0].id).checked = false; // Disable the 'none' processing step.
+
+    ExportProcessingOK = null;
+
+  // Add recordLimit FIRST always. Could change when user changes RecordSet specification.
   ExportProcessingArgs = "n=" + RecordLimit;
   var isok = 1;
   var nchecked = 0;
@@ -1098,6 +1183,7 @@ function SetProcessing(ichecked)
   SizeRatio = 1.0;
   if ($(ExportProcessingOptions[0].id).checked) // no_op case must be first
     {
+        // The none processing case.
     nchecked++;
     for (iProc=1; iProc<nProcs; iProc++)
       {
@@ -1119,52 +1205,169 @@ function SetProcessing(ichecked)
       if ($(ExpOpt.id).checked)
         {
         nchecked++;
-        $(ExportProcessingOptions[0].id).checked = false;
+        $(ExportProcessingOptions[0].id).checked = false; // Do not send the 'none' processing option to jsoc_fetch.
         if (ichecked == -2)
           {
+            // This is the on-load case, where we want to initialize all processing parameters to their defaults.
           ExpOpt.Init(0);
           $(ExpOpt.rowid).style.display="table-row";
           isok = 0;
           }
         else
           {
-          ExpOpt.Init(1);
-          $(ExpOpt.rowid).style.display="table-row";
-          var args = ExpOpt.Check();
-          if (args.length > 0)
+            $(ExpOpt.rowid).style.display="table-row";
+            // This is the case where we do not want to reset the processing parameters to the default.
+            // We basically want to NOT reset the impatch and maproj parameters in this case. But we do
+            // want to run the 'set' functions that essentially check to see if the existing parameters
+            // are valid.
+            if (ExpOpt.hasOwnProperty('Set') && ExpOpt.Set && typeof ExpOpt.Set === 'function')
             {
-            // args contains all the processing args. 
-            ExportProcessingArgs += "|"+args;
-            SizeRatio *= ExpOpt.Size;
+                // Set() might run asynchronously. We might not know about the error returned by Set()
+                // at this point.
+                if (ExpOpt.Set(0)) // 0 means to not disrupt the current settings for 'use default start/stop time'.
+                {
+                    $(ExpOpt.id).checked = false;
+                    $(ExpOpt.rowid).style.display = 'none';
+                    nchecked--;
+                }
             }
-          // else
-            // {
-            // ExportProcessingArgs += "|--ERROR>>"+args+"<<";
-            // isok = 0;
-            // }
-          }
         }
+      }
       else
         {
         $(ExpOpt.rowid).style.display="none";
-        ExpOpt.Init(0);
+        ExpOpt.Init(1);
+        }
+      }
+      
+      if (nchecked > 0)
+      {
+        // The Set() functions can run asynchronously. We have at least one Set() function that succeeded (which means 
+        // there could be AJAX running.
+        ExportProcessingArgsPoll = setInterval(GetExportProcessingArguments, 100);
+        
+        // Disable all processing-step checkboxes, until GetExportProcessingArguments() resolves.
+        for (iProc = 0; iProc < nProcs; iProc++)
+        {
+            var ExpOpt = ExportProcessingOptions[iProc];
+            $(ExpOpt.id).disabled = true;
         }
       }
     }
   if (nchecked == 0)
     {
-    $(ExportProcessingOptions[0].id).checked = true;
-    SetProcessing(0);
+    $(ExportProcessingOptions[0].id).checked = true; // Set no-op processing step.
+    
+    // Hide the non-no-op steps.
+    for (iProc=1; iProc<nProcs; iProc++)
+    {
+        var ExpOpt = ExportProcessingOptions[iProc];
+        $(ExpOpt.rowid).style.display = "none";
+    }
+    
+    ExportProcessingArgs += "|no_op";
     }
   $("ExportSizeRatio").value = SizeRatio;
         
   $("ExportProcessingHidden").value = ExportProcessingArgs;
-  if (isok)
-    ExportProcessingOK = 1;
+  
+  if (ExportProcessingArgsPoll)
+  {
+    // We don't know if export processing is OK yet.
+    ExportProcessingOK = false;
+  }
   else
-    ExportProcessingOK = 0;
+  {
+    if (isok)
+    {
+        ExportProcessingOK = true;
+    }
+    else
+    {
+        ExportProcessingOK = false;
+    }
+  }
   CheckRediness();
   }
+ 
+// Cannot determine the arguments at the time that SetProcessing() is called because there might be
+// asynchronous processes running (AJAX calls) that need to complete before the arguments can be 
+// finalized.
+
+// Polling function
+function GetExportProcessingArguments()
+{
+    var ExpOpt = null;
+    var args = null;
+    var iProc = 0;
+    var SizeRatio = 1.0;
+    var oneChecked = false;
+    
+    if (!ExportProcessingArgsReady())
+    {
+        // Wait till all the Set() procs for each processing step have completed their asynchronous processing.
+        return;
+    }
+    
+    for (iProc = 1; iProc < ExportProcessingOptions.length; iProc++)
+    {
+        ExpOpt = ExportProcessingOptions[iProc];
+        
+        if ($(ExpOpt.id).checked)
+        {
+            args = ExportProcessingOptions[iProc].Check();
+            
+            if (args === null)
+            {
+                // Error that requires the checkbox to be unchecked.
+                $(ExpOpt.id).checked = false;
+                $(ExpOpt.rowid).style.display = 'none';
+                continue;
+            }
+            
+            oneChecked = true;
+        
+            // At this point, we know for sure if there is an error with the export options chosen. If so, 
+            // ignore that processing step, and uncheck its checkbox.
+            if (args.length > 0)
+            {
+                // args contains all the processing args. ExportProcessingArgs will have n=X already.
+                ExportProcessingArgs += "|" + args;
+                SizeRatio *= ExpOpt.Size;
+            }
+        }
+    }
+    
+    if (!oneChecked)
+    {
+        $(ExportProcessingOptions[0].id).checked = true; // Set no-op processing step.
+    
+        // Hide the non-no-op steps.
+        for (iProc = 1; iProc < ExportProcessingOptions.length; iProc++)
+        {
+            var ExpOpt = ExportProcessingOptions[iProc];
+            $(ExpOpt.rowid).style.display = "none";
+        }
+    
+        ExportProcessingArgs += "|no_op";
+    }
+    
+    // Re-enable all processing-step checkboxes, until GetExportProcessingArguments() resolves.
+    for (iProc = 0; iProc < ExportProcessingOptions.length; iProc++)
+    {
+        var ExpOpt = ExportProcessingOptions[iProc];
+        $(ExpOpt.id).disabled = false;
+    }
+    
+    $("ExportSizeRatio").value = SizeRatio;
+    $("ExportProcessingHidden").value = ExportProcessingArgs; // Not used.
+    CheckRediness();
+    
+    clearInterval(ExportProcessingArgsPoll);
+    ExportProcessingArgsPoll = null;
+    ExportProcessingOK = true; // This means that everything that is going to modify the export arguments has completed
+                               // modifying said parameters. It does NOT mean that the parameter values are acceptable.
+}
 
 function SetExportProtocol(byWhom)
   { 
@@ -1275,14 +1478,19 @@ function ExportShowQuery()
 
 function CheckRediness()
   {
-  var status = ExportQueryOK * ExportRecordSetOK * ExportMethodOK * ExportFilenameFmtOK * ExportProcessingOK * ExportProtocolOK * (ExportNotifyOK==1);
+  var status = ExportQueryOK * ExportRecordSetOK * ExportMethodOK * ExportFilenameFmtOK * ExportProtocolOK * (ExportNotifyOK==1);
+  
+  if ($("ProcessingCheckbox").checked)
+  {
+    status = status * (ExportProcessingOK ? 1 : 0) * (ProcessingOK() ? 1 : 0);
+  }
+
   if (status)
     {
     $("ExportButtonMsg").innerHTML = "Please only click once for export request.";
     $("ExportButton").value = "Submit Export Request";
     $("ExportButton").style.backgroundColor = colorGreen;
     $("ExportCheckMsg").style.color = colorBlack;
-    $("ExportCheckMsg").innerHTML = "OK to proceed";
     $("ExportCheckButton").style.backgroundColor = colorGreen;
     }
   else
@@ -1300,7 +1508,12 @@ function CheckRediness()
 function SetExportParams()
 {
     // All these variables on the RHS are global.
-    var isOK = ExportRecordSetOK * ExportMethodOK * ExportFilenameFmtOK * ExportProcessingOK * ExportProtocolOK * (ExportNotifyOK==1);
+    var isOK = ExportRecordSetOK * ExportMethodOK * ExportFilenameFmtOK * ExportProtocolOK * (ExportNotifyOK==1);
+    
+    if ($("ProcessingCheckbox").checked)
+    {
+        isOK = isOK * (ExportProcessingOK ? 1 : 0) * (ProcessingOK() ? 1 : 0);
+    }
 
     if (isOK)
     {
@@ -1337,7 +1550,13 @@ function SetExportParams()
 // button. 
 function CheckExportParams()
   {
-  if ($("RSCountPlace").innerHTML == RSCountActiveMSg)
+  if ($("ExportRecordSet").value.length == 0)
+  {
+    $("ExportCheckButton").style.backgroundColor = colorYellow;
+    $("ExportCheckMsg").innerHTML = "Please enter a record-set specification.";
+    return 0;
+  }
+  if (RecordCount === null)
     {
     $("ExportCheckButton").style.backgroundColor = colorYellow;
     $("ExportCheckMsg").innerHTML = "Still counting records, wait a second then retry";
@@ -1347,7 +1566,12 @@ function CheckExportParams()
     {
     if (ExportRecordSetOK == 0)
       {
-      GetRSCount();
+      if (GetRSCount())
+      {
+        $("ExportCheckMsg").innerHTML = "Invalid record-set specification";
+        break;
+      }
+
       $("ExportCheckMsg").innerHTML = "RecordSet not verified, enter RecordSet then retry export request.";
       break;
       }
@@ -1363,11 +1587,13 @@ function CheckExportParams()
       $("ExportCheckMsg").innerHTML = "FilenameFmt not given, Enter FilenameFmt then retry export request.";
       break;
       }
-    SetProcessing(-1);
-    if (ExportProcessingOK == 0)
+      
+    // Do not call SetProcessing() here. SetProcessing() gets called whenever a processing option gets modified.
+    // If there was an error in the processing options, then ExportProcessingOK is not true.        
+    if ($("ProcessingCheckbox").checked && (!ExportProcessingOK || !ProcessingOK()))
       {
-      $("ExportCheckMsg").innerHTML = "Processing details not correct, fix and retry export request.";
-      break;
+          $("ExportCheckMsg").innerHTML = "Processing details not correct, fix and retry export request.";
+          break;
       }
     SetExportProtocol(1);
     if (ExportProtocolOK == 0)
@@ -1396,7 +1622,13 @@ function CheckExportParams()
     break;
     }
 
-  var isOK = ExportRecordSetOK * ExportMethodOK * ExportFilenameFmtOK * ExportProcessingOK * ExportProtocolOK * (ExportNotifyOK==1);
+  var isOK = ExportRecordSetOK * ExportMethodOK * ExportFilenameFmtOK * ExportProtocolOK * (ExportNotifyOK==1);
+  
+  if ($("ProcessingCheckbox").checked)
+  {
+      isOK = isOK * (ExportProcessingOK ? 1 : 0) * (ProcessingOK() ? 1 : 0);
+  }
+  
   if (isOK)
     {
     var protocolparam = $("ExportProtocolHidden").value;
@@ -1681,7 +1913,7 @@ function ProcessExportResponse(response)
     $("ExportButton").value = "Submit Export Request";
     $("ExportButton").style.backgroundColor = "#D8D8D8";
     RequestID = data.requestid;
-// alert('req id is ' + RequestID);
+
     if (RequestID.length == 0) RequestID = "N.A.";
     $("RequestIdPlace").innerHTML = RequestID;
     $("ExportStatus").innerHTML = "Data Ready, size=" + data.size + "MB";
@@ -1922,7 +2154,7 @@ function GetStatus()
 <b><big style="vertical-align:middle">&nbsp;&nbsp;JSOC Data Export</big></b>
 &nbsp;&nbsp;&nbsp;
 &nbsp;&nbsp;&nbsp;
-<input type="button" value="reset page" onClick="ReInitPage();" >
+<input id="ResetPageButton" type="button" value="reset page" onClick="ReInitPage();" disabled>
 &nbsp;&nbsp;&nbsp;
 <input id="TipsOnOffButton" type="button" value="Turn Help Off" onClick="ToggleHelp();" >
 &nbsp;&nbsp;<span id="AjaxBusy">0</span> Requests Pending
@@ -2079,9 +2311,8 @@ Use this section to request a renewal/repeat of a prior export for which the dat
 <script type="text/javascript">
 var unescaped_html = unescape(escaped_html);
 $("ExportRequestForm").innerHTML = unescaped_html;
-ProcessingInit();
-ProcessingEnabled();
-exportdataLoaded=true;
+
+// The onload function is called after this. It calls ProcessingInit() and ProcessingEnabled(). Don't do that here as well.
 </script>
 
 </body>
