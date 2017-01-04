@@ -618,12 +618,15 @@ int do_ingest(long long bbrec, long long eerec, const char *dpath)
       }
       else {
 	// Apply image corruption patch(es)
-	// Patch 1 - crop table corruption Dec 2011 - Jan 2012
+	// Patch 1 - camera 1 crop table corruption Dec 2011 - Jan 2012
 	if (NEED_PATCH1(fsnx))
 	    do_patch1(l0l1->adata0);
 	// Patch 2 - camera 1 lookup table corruption 30 March 2014 
 	if (NEED_PATCH2(fsnx)) 
 	    do_patch2(l0l1->adata0);
+	// Patch 3 - camera 2 crop table corruption 31 Dec 2016
+	if (NEED_PATCH3(fsnx))
+	    do_patch3(l0l1->adata0);
 
         l0l1->dat1.adata1 = &data1;
         l0l1->himgcfid = drms_getkey_int(rs0, "HIMGCFID", &rstatus);
