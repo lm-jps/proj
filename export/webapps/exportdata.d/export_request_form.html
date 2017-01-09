@@ -129,9 +129,9 @@
             <td colspan="2">
               <form>
               Co-register images to:
-              <input value="0" id="ResizeSunCenter" name="ResizeRegisterTo" type="radio" onChange="ExportProcessingOptions[ResizeOption].Set('register_to')" />Sun center or
-              <input value="1" id="ResizeFirstImage" name="ResizeRegisterTo" type="radio" onChange="ExportProcessingOptions[ResizeOption]Set('register_to')" />First Image
-              <input value="2" id="ResizeNoInterp" name="ResizeRegisterTo" type="radio" onChange="ExportProcessingOptions[ResizeOption]Set('register_to')" />No Change
+              <input value="0" id="ResizeSunCenter" name="ResizeRegisterTo" type="radio" onChange="ResizeSet('register_to')" />Sun center or
+              <input value="1" id="ResizeFirstImage" name="ResizeRegisterTo" type="radio" onChange="ResizeSet('register_to')" />First Image
+              <input value="2" id="ResizeNoInterp" name="ResizeRegisterTo" type="radio" onChange="ResizeSet('register_to')" />No Change
               </form>
             </td>
           </tr>
@@ -139,29 +139,29 @@
             <td colspan="2">
               <form>
               Interpolation method is:
-              <input value="bicubic" id="ResizeBicubic" name="ResizeMethod" type="radio"  onChange="ExportProcessingOptions[ResizeOption].Set('method')" />bicubic or
-              <input value="nearest" id="ResizeNearest" name="ResizeMethod" type="radio"  onChange="ExportProcessingOptions[ResizeOption].Set('method')" />nearest
+              <input value="bicubic" id="ResizeBicubic" name="ResizeMethod" type="radio"  onChange="ResizeSet('method')" />bicubic or
+              <input value="nearest" id="ResizeNearest" name="ResizeMethod" type="radio"  onChange="ResizeSet('method')" />nearest
               </form>
-              <input id="ResizeDoScale" type="checkbox" name="ResizeDoScale" onChange="ExportProcessingOptions[ResizeOption].Set('do_scale')" />
+              <input id="ResizeDoScale" type="checkbox" name="ResizeDoScale" onChange="ResizeSet('do_scale')" />
               Do scale change as well as registration.
             </td>
           </tr>
           <tr id="ResizeScaleRow" style="display:table-row">
             <td colspan="2">
               <input id="ResizeCdelt" type="text" name="ResizeCdelt" style="width:12em;background-color:#FFFFFF" value="1.0"
-               onChange="ExportProcessingOptions[ResizeOption].Set('scale')" />
+               onChange="ResizeSet('scale')" />
               Target scale in arcsec per pixel. (for AIA lev1p5 use 0.6)
             </td>
           </tr>
           <tr>
             <td colspan="2">
-              <input id="ResizeCrop" type="checkbox" name="ResizeCrop" onChange="ExportProcessingOptions[ResizeOption].Set('crop')" />
+              <input id="ResizeCrop" type="checkbox" name="ResizeCrop" onChange="ResizeSet('crop')" />
               Crop pixels that are located outside the limb.<br>
             </td>
           </tr>
           <tr>
             <td colspan="2">
-              <input id="ResizeReplicate" type="checkbox" name="ResizeReplicate" value="0" onChange="ExportProcessingOptions[ResizeOption].Set('replicate')" />
+              <input id="ResizeReplicate" type="checkbox" name="ResizeReplicate" value="0" onChange="ResizeSet('replicate')" />
               Replicate needed pixels, select if HMI and cropped to get NaNs instead of 0.0 for extra pixels.
             </td>
           </tr>
@@ -194,22 +194,22 @@
         RecordSet:&nbsp;
         <span id="ImRecordSet" style="background-color:#FFFFFF"></span>
         <span id="ImPatchResetHelp" class="tip">?</span>
-        <input type="button" style="width:10em" value="Reset params" onClick="ImPatchInit();ExportProcessingOptions[ImPatchOption].Set(0);">
-        <input type="button" style="width:14em" value="Update RecordSet Times" onClick='processingFirstRecord = null;processingLastRecord = null;$("ImTDelta").value = "NotSpecified";ExportProcessingOptions[ImPatchOption].Set(0);'>
+        <input type="button" style="width:10em" value="Reset params" onClick="ImResetParams=2;ImPatchCheck();">
+        <input type="button" style="width:14em" value="Update RecordSet Times" onClick="ImResetParams=3;ImPatchCheck();">
         </td>
         </tr>
         <tr>
            <td>Options</td>
            <td colspan="2">
-           <input id="ImTrack" type="checkbox" name="ImTrack" onChange="ExportProcessingOptions[ImPatchOption].Set(0);">
+           <input id="ImTrack" type="checkbox" name="ImTrack" onChange="ImPatchCheck();">
            &nbsp;Tracking,
            &nbsp;
            &nbsp;
-           <input id="ImRegister" type="checkbox" name="ImRegister" onChange="ExportProcessingOptions[ImPatchOption].Set(0);">
+           <input id="ImRegister" type="checkbox" name="ImRegister" onChange="ImPatchCheck();">
            &nbsp;Register,
            &nbsp;
            &nbsp;
-           <input id="ImCrop" type="checkbox" name="ImCrop" onChange="ExportProcessingOptions[ImPatchOption].Set(0);">
+           <input id="ImCrop" type="checkbox" name="ImCrop" onChange="ImPatchCheck();">
            &nbsp;Crop,
            &nbsp;
            &nbsp;
@@ -223,30 +223,30 @@
            <td>T_START </td>
            <td colspan="2">
            <span id="ImTStartHelp" class="tip">?</span>
-           <input id="ImTStart" type="text" name="ImTStart" style="width:20em;background-color:#FFFFFF" value="NotSpecified" onChange="ExportProcessingOptions[ImPatchOption].Set(1);">
-           &nbsp; <input id="ImEastLimb" type="checkbox" onChange="ExportProcessingOptions[ImPatchOption].Set(0);"> &nbsp; Check for start at east limb.
+           <input id="ImTStart" type="text" name="ImTStart" style="width:20em;background-color:#FFFFFF" value="NotSpecified" onChange="ImPatchSet(1);">
+           &nbsp; <input id="ImEastLimb" type="checkbox" onChange="ImPatchCheck();"> &nbsp; Check for start at east limb.
            </td>
         </tr>
         <tr>
            <td>T_STOP </td>
            <td colspan="2">
            <span id="ImTStopHelp" class="tip">?</span>
-           <input id="ImTStop" type="text" name="ImTStop" style="width:20em;background-color:#FFFFFF" value="NotSpecified" onChange="ExportProcessingOptions[ImPatchOption].Set(2);">
-           &nbsp; <input id="ImWestLimb" type="checkbox" onChange="ExportProcessingOptions[ImPatchOption].Set(0);"> &nbsp; Check for stop at west limb.
+           <input id="ImTStop" type="text" name="ImTStop" style="width:20em;background-color:#FFFFFF" value="NotSpecified" onChange="ImPatchSet(2);">
+           &nbsp; <input id="ImWestLimb" type="checkbox" onChange="ImPatchCheck();"> &nbsp; Check for stop at west limb.
            </td>
         </tr>
         <tr>
            <td>CADENCE</td> 
            <td colspan="2">
            &nbsp;<span id="ImCadenceHelp" class="tip">?</span>
-           <input id="ImTDelta" type="text" name="ImTDelta" style="width:12em;background-color:#FFFFFF" value="NotSpecified" onChange="ExportProcessingOptions[ImPatchOption].Set(0);">
+           <input id="ImTDelta" type="text" name="ImTDelta" style="width:12em;background-color:#FFFFFF" value="NotSpecified" onChange="ImPatchCheck();">
            </td>
         </tr>
         <tr>
            <td>LocUnits</td>
            <td colspan="2">
            &nbsp;<span id="ImLocUnitsHelp" class="tip">?</span>
-           <select id="ImLocType" type="text" name="ImLocType" style="width:20em;background-color:#FFFFFF" value="stony" onChange="ExportProcessingOptions[ImPatchOption].Set(3);">
+           <select id="ImLocType" type="text" name="ImLocType" style="width:20em;background-color:#FFFFFF" value="stony" onChange="ImPatchSet(3);">
              <option value="stony">Stonyhurst degrees 
              <option value="arcsec">arcsec from center 
              <option value="pixels">pixels from (1,1) 
@@ -259,7 +259,7 @@
            <td>T_REF</td>
            <td colspan="2">
            &nbsp;<span id="ImTRefHelp" class="tip">?</span>
-           <input id="ImTRef" type="text" name="ImTRef" style="width:20em;background-color:#D88080" value="NotSpecified" onChange="ExportProcessingOptions[ImPatchOption].Set(0);">
+           <input id="ImTRef" type="text" name="ImTRef" style="width:20em;background-color:#D88080" value="NotSpecified" onChange="ImPatchCheck();">
            &nbsp; Reference time for X,Y to define center of extract patch.
            </td>
         </tr>
@@ -267,7 +267,7 @@
            <td>CAR_ROT </td>
            <td colspan="2">
            &nbsp;<span id="ImCARROTHelp" class="tip">?</span>
-           <input id="ImCarrot" type="text" name="ImCarrot" style="width:20em;background-color:#D88080" value="NotSpecified" onChange="ExportProcessingOptions[ImPatchOption].Set(0);">
+           <input id="ImCarrot" type="text" name="ImCarrot" style="width:20em;background-color:#D88080" value="NotSpecified" onChange="ImPatchCheck();">
            &nbsp; Carrington rotation number for X and Y, latitude and longitude.
            </td>
         </tr>
@@ -275,7 +275,7 @@
            <td>X</td>
            <td colspan="2">
            &nbsp;<span id="ImXHelp" class="tip">?</span>
-           <input id="ImX" type="text" name="ImX" style="width:12em;background-color:#D88080" value="NotSpecified" onChange="ExportProcessingOptions[ImPatchOption].Set(0);">
+           <input id="ImX" type="text" name="ImX" style="width:12em;background-color:#D88080" value="NotSpecified" onChange="ImPatchCheck();">
            &nbsp; East-West location of patch center.
            </td>
         </tr>
@@ -283,7 +283,7 @@
            <td>Y</td>
            <td colspan="2">
            &nbsp;<span id="ImYHelp" class="tip">?</span>
-           <input id="ImY" type="text" name="ImY" style="width:12em;background-color:#D88080" value="NotSpecified" onChange="ExportProcessingOptions[ImPatchOption].Set(0);">
+           <input id="ImY" type="text" name="ImY" style="width:12em;background-color:#D88080" value="NotSpecified" onChange="ImPatchCheck();">
            &nbsp; North-South location of patch center.
            </td>
         </tr>
@@ -291,7 +291,7 @@
            <td>BoxUnits</td>
            <td colspan="2">
 	   &nbsp;<span id="ImBoxUnitsHelp" class="tip">?</span>
-           <select id="ImBoxType" type="text" name="ImBoxType" style="width:20em;background-color:#FFFFFF" value="pixels" onChange="ExportProcessingOptions[ImPatchOption].Set(0);">
+           <select id="ImBoxType" type="text" name="ImBoxType" style="width:20em;background-color:#FFFFFF" value="pixels" onChange="ImPatchCheck();">
              <option value="pixels">pixels 
              <option value="degrees">degrees 
              <option value="arcsec">arcsec 
@@ -303,7 +303,7 @@
            <td>Width </td>
            <td colspan="2">
            &nbsp;<span id="ImWideHelp" class="tip">?</span>
-           <input id="ImWide" type="text" name="ImWide" style="width:12em;background-color:#D88080" value="NotSpecified"  onChange="ExportProcessingOptions[ImPatchOption].Set(0);">
+           <input id="ImWide" type="text" name="ImWide" style="width:12em;background-color:#D88080" value="NotSpecified"  onChange="ImPatchCheck();">
            &nbsp; Width of extracted patch, Units determined be BoxUnits.
            </td>
         </tr>
@@ -311,7 +311,7 @@
           <td>Height </td>
           <td colspan="2">
            &nbsp;<span id="ImHighHelp" class="tip">?</span>
-          <input id="ImHigh" type="text" name="ImHigh" style="width:12em;background-color:#D88080" value="NotSpecified"  onChange="ExportProcessingOptions[ImPatchOption].Set(0);">
+          <input id="ImHigh" type="text" name="ImHigh" style="width:12em;background-color:#D88080" value="NotSpecified"  onChange="ImPatchCheck();">
            &nbsp; Height of extracted patch, Units determined be BoxUnits.
           </td>
         </tr>
@@ -319,7 +319,7 @@
           <td>Verify </td>
           <td colspan="2">
            &nbsp;<span id="ImVerifyHelp" class="tip">?</span>
-          <input type="button" style="width:12em" value="Check params" onClick="ExportProcessingOptions[ImPatchOption].Set(0);">
+          <input type="button" style="width:12em" value="Check params" onClick="ImPatchCheck();">
           &nbsp;
           <span id="ImVerify" style="width:12em;background-color:#D88080">Not Ready</span>
           </td>
@@ -456,7 +456,7 @@
           <tr>
             <td>
               <select id="RebinMethod" size=1 name="RebinMethod" style="width:12em;background-color:#FFFFFF"
-                onChange="ExportProcessingOptions[RebinOption].Set('method')">
+                onChange="RebinSet('method')">
                  <option value="boxcar">boxcar</option>
                  <option value="gaussian">gaussian</option>
               </select> Re-binning method to use.
@@ -465,39 +465,39 @@
           <tr>
             <td>
               <input id="RebinScale" type="text" name="RebinScale" style="width:12em;background-color:#FFFFFF" value="1.0"
-               onChange="ExportProcessingOptions[RebinOption].Set('scale')" />
+               onChange="RebinSet('scale')" />
               Scaling factor to apply to image, < 1.0 for smaller images.
             </td>
           </tr>
           <tr id="RebinFWHMRow">
             <td>
               <input id="RebinFWHM" type="text" name="RebinFWHM" style="width:12em;background-color:#D88080" value="-1.0"
-                onChange="ExportProcessingOptions[RebinOption].Set('fwhm')" />
+                onChange="RebinSet('fwhm')" />
               Width in pixels of smoothing Gaussian function (FWHM).
             </td>
           </tr>
           <tr id="RebinNvectorRow">
             <td>
               <input id="RebinNvector" type="text" name="RebinNvector" style="width:12em;background-color:#D88080" value="-1.0"
-                onChange="ExportProcessingOptions[RebinOption].Set('nvector')" />
+                onChange="RebinSet('nvector')" />
               Length in pixels of smoothing Gaussian function.
             </td>
           </tr>
           <tr>
             <td>
-              <input id="RebinSegments" type="checkbox" name="RebinSegments" onChange="ExportProcessingOptions[RebinOption].Set('segs')" />
+              <input id="RebinSegments" type="checkbox" name="RebinSegments" onChange="RebinSet('segs')" />
               Process all segments if no {...} list is given.
             </td>
           </tr>
           <tr>
             <td>
-              <input id="RebinCrop" type="checkbox" name="RebinCrop" onChange="ExportProcessingOptions[RebinOption].Set('crop')" />
+              <input id="RebinCrop" type="checkbox" name="RebinCrop" onChange="RebinSet('crop')" />
               Crop pixels that are greater than rsun_obs units from the center of the image.
             </td>
           </tr>
           <tr>
             <td>
-              <input id="RebinRotate" type="checkbox" name="RebinRotate" value="roton" onChange="ExportProcessingOptions[RebinOption].Set('rotate')" />
+              <input id="RebinRotate" type="checkbox" name="RebinRotate" value="roton" onChange="RebinSet('rotate')" />
               Rotate image by 180 degrees if needed for north up.
             </td>
           </tr>

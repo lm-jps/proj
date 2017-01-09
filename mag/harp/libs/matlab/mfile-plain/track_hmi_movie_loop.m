@@ -130,11 +130,8 @@ end;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % check that the track index exists
-%   empty can be OK in case of very quiet sun, where no tracks are present
-%   but this can also occur if the pointer to the .mat files where track
-%   info is held, is incorrect - so warn.
 if isempty(Tinfo) || isempty(FTinx), 
-  disp(sprintf('%s: No track info found: ok if very quiet sun.', mfilename));
+  error('No track info; did you use the initialization hook?');
 end;
 
 % we need to write the movie every < 2GB or existing tools fall over
@@ -191,7 +188,6 @@ geom = JJ.s_geom;
 clear JJ
 
 % get the regions for this frame
-%   (will be empty in case of no tracks)
 [rgn,rgnTid,rgnAge,rgnMrg,rgnTag,bound2tk] = ...
     get_regions(frame_num, Tinfo, FTinx, FTpatch);
 nR = size(rgn, 1);
@@ -515,6 +511,7 @@ return;
 %
 % track_summary: load tracks and distill summary information
 %
+% Tinfo:
 % FTinx: 2d sparse, indexed by (frame number, track id)
 %   FTinx(f,t) = 1 if frame f contains an instance of track t
 % FTpatch: cell array, indexed by (frame number, track id)
@@ -532,8 +529,7 @@ fnTdir  = fileparts(fnTwild);
 fnTlist = dir(fnTwild);
 nT = length(fnTlist);
 if nT == 0,
-  % zero tracked regions: will return with empty arrays: this is OK
-  disp(sprintf('%s: No tracks matching %s (OK if very quiet sun)', mfilename, fnTs));
+  error('No tracks matching %s', fnTs);
 end;
 FTinx = sparse(1, nT);
 Tinfo = cell(1, nT);
