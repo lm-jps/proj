@@ -13,12 +13,15 @@ hmi.bharp_720s_nrt
 hmi.bmap_lowres_latlon_720s
 hmi.bmap_lowres_latlon_720s_nrt
 hmi.c_avg120
+hmi.coefficients
 hmi.flatfield
 hmi.fsi_phase_lon_lat
 hmi.fsi_phase_lon_lat_5d
 hmi.gcvbinned_nrt
 hmi.ic_nolimbdark_720s_nrt
 hmi.lev1_cal
+hmi.lookup_corrected_expanded
+hmi.lookup_expanded
 hmi.m_720s_mod
 hmi.m_720s_nrt
 hmi.marmask_720s
