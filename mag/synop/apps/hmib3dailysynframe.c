@@ -56,6 +56,7 @@ int DoIt(void)
   float aa, bb, cc, dd, ee;
   int status = DRMS_SUCCESS, nrecs, irec, quality;
   int i, j, crn;
+  int idcamera; //For HMI: 1 (side camera), 2 (front camera), or 3 (both cameras)
   int xdim_syn, ydim_syn, xmg, ymg;
   char sdatestime[100], sdatetmp[100], timetmp[100];
   memset(sdatetmp, 0, sizeof(sdatetmp));
@@ -79,7 +80,7 @@ int DoIt(void)
   drmethod = (char *)params_get_str(&cmdparams, "drmethod");
 
   char historyofthemodule[2048]; // put history info into the data
-  char *cvsinfo = strdup("$Id: hmib3dailysynframe.c,v 1.1 2016/11/17 02:03:35 yliu Exp $");
+  char *cvsinfo = strdup("$Id: hmib3dailysynframe.c,v 1.2 2017/01/17 21:20:21 yliu Exp $");
   cvsinfo = (char *)malloc(2048 * sizeof(char));
   sprintf(historyofthemodule,"o2helio.c bug corrected -- July 2013");
 
@@ -185,6 +186,7 @@ int DoIt(void)
   crlt = drms_getkey_float(inRecfinal, "CRLT_OBS", &status);
   crln = drms_getkey_float(inRecfinal, "CRLN_OBS", &status);
   clog0 = drms_getkey_double(inRecfinal, "CRVAL1", &status);
+  idcamera = drms_getkey_int(inRecfinal, "CAMERA", &status);
 
   drms_copykey(outRec, inRecfinal, "DATASIGN");
   drms_copykey(outRec, inRecfinal, "DSUN_OBS");
@@ -392,8 +394,8 @@ double dtmp;
   supsynArrayBp = drms_array_create(DRMS_TYPE_FLOAT, 2, supsynDim, NULL, &status);
   supsynDataBp = supsynArrayBp->data;
 
-  outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, synDim, NULL, &status);
-  smalloutArray = drms_array_create(DRMS_TYPE_FLOAT, 2, smallDims, NULL, &status);
+//  outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, synDim, NULL, &status);
+//  smalloutArray = drms_array_create(DRMS_TYPE_FLOAT, 2, smallDims, NULL, &status);
 
   if (!(outDataBlos = (float *) malloc(synDim[0]*synDim[1]*4)))
      DIE("MALLOC_FAILED");
@@ -697,6 +699,10 @@ double dtmp;
     drms_setkey_string(outRec, "HISTORY", historyofthemodule);
     drms_setkey_string(outRec, "BLD_VERS", jsoc_version);
     status = drms_setkey_string(outRec, "CODEVER", cvsinfo);
+
+    if (idcamera == 1) drms_setkey_string(outRec, "INSTRUME", "HMI_SIDE1");
+    if (idcamera == 2) drms_setkey_string(outRec, "INSTRUME", "HMI_FRONT2");
+    if (idcamera == 3) drms_setkey_string(outRec, "INSTRUME", "HMI_COMBINED");
 
     double loncen = xdim_syn-(xdim_syn/2 + 1.0)+1.0;
                  // 1. CRVAL is defined as 180 degree longitude.
