@@ -16,7 +16,10 @@ char *version_id = "1.8";
 
 int DoIt () {
   char keyname[10];
-  int i, j, status, k, n, count, dostat;
+  int i, j, status, dostat;
+  arraylen_t n;
+  arraylen_t k;
+  arraylen_t count;
   char *rsname;
   DRMS_RecordSet_t *oldrs, *newrs;
   DRMS_Array_t *array;

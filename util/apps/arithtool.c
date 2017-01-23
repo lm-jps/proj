@@ -498,7 +498,7 @@ static char *CreateStrFromDRMSValue(DRMS_Record_t *rec, char *keyName, int *erro
      return drms_getkey_string(rec, keyName, error);
 }
 
-static int MultChar(const char *pInData, const char *pWithData, int nElements, char *pOutData)
+static int MultChar(const char *pInData, const char *pWithData, arraylen_t nElements, char *pOutData)
 {
    int error = 0;
 
@@ -522,7 +522,7 @@ static int MultChar(const char *pInData, const char *pWithData, int nElements, c
    else
    {
       char *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -561,7 +561,7 @@ static int MultChar(const char *pInData, const char *pWithData, int nElements, c
    return error;
 }
 
-static int MultShort(const short *pInData, const short *pWithData, int nElements, short *pOutData)
+static int MultShort(const short *pInData, const short *pWithData, arraylen_t nElements, short *pOutData)
 {
    int error = 0;
 
@@ -585,7 +585,7 @@ static int MultShort(const short *pInData, const short *pWithData, int nElements
    else
    {
       short *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -625,7 +625,7 @@ static int MultShort(const short *pInData, const short *pWithData, int nElements
    return error;
 }
 
-static int MultInt(const int *pInData, const int *pWithData, int nElements, int *pOutData)
+static int MultInt(const int *pInData, const int *pWithData, arraylen_t nElements, int *pOutData)
 {
    int error = 0;
 
@@ -649,7 +649,7 @@ static int MultInt(const int *pInData, const int *pWithData, int nElements, int 
    else
    {
       int *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -691,7 +691,7 @@ static int MultInt(const int *pInData, const int *pWithData, int nElements, int 
 
 static int MultLongLong(const long long *pInData, 
 			const long long *pWithData, 
-			int nElements, 
+			arraylen_t nElements, 
 			long long *pOutData)
 {
    int error = 0;
@@ -716,7 +716,7 @@ static int MultLongLong(const long long *pInData,
    else
    {
       long long *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -756,7 +756,7 @@ static int MultLongLong(const long long *pInData,
    return error;
 }
 
-static int MultFloat(const float *pInData, const float *pWithData, int nElements, float *pOutData)
+static int MultFloat(const float *pInData, const float *pWithData, arraylen_t nElements, float *pOutData)
 {
    int error = 0;
 
@@ -780,7 +780,7 @@ static int MultFloat(const float *pInData, const float *pWithData, int nElements
    else
    {
       float *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -820,7 +820,7 @@ static int MultFloat(const float *pInData, const float *pWithData, int nElements
    return error;
 }
 
-static int MultDouble(const double *pInData, const double *pWithData, int nElements, double *pOutData)
+static int MultDouble(const double *pInData, const double *pWithData, arraylen_t nElements, double *pOutData)
 {
    int error = 0;
 
@@ -844,7 +844,7 @@ static int MultDouble(const double *pInData, const double *pWithData, int nEleme
    else
    {
       double *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -884,7 +884,7 @@ static int MultDouble(const double *pInData, const double *pWithData, int nEleme
    return error;
 }
 
-static int DivChar(const char *pInData, const char *pWithData, int nElements, char *pOutData)
+static int DivChar(const char *pInData, const char *pWithData, arraylen_t nElements, char *pOutData)
 {
    int error = 0;
 
@@ -908,7 +908,7 @@ static int DivChar(const char *pInData, const char *pWithData, int nElements, ch
    else
    {
       char *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -948,7 +948,7 @@ static int DivChar(const char *pInData, const char *pWithData, int nElements, ch
    return error;
 }
 
-static int DivShort(const short *pInData, const short *pWithData, int nElements, short *pOutData)
+static int DivShort(const short *pInData, const short *pWithData, arraylen_t nElements, short *pOutData)
 {
    int error = 0;
 
@@ -972,7 +972,7 @@ static int DivShort(const short *pInData, const short *pWithData, int nElements,
    else
    {
       short *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -1012,7 +1012,7 @@ static int DivShort(const short *pInData, const short *pWithData, int nElements,
    return error;
 }
 
-static int DivInt(const int *pInData, const int *pWithData, int nElements, int *pOutData)
+static int DivInt(const int *pInData, const int *pWithData, arraylen_t nElements, int *pOutData)
 {
    int error = 0;
 
@@ -1036,7 +1036,7 @@ static int DivInt(const int *pInData, const int *pWithData, int nElements, int *
    else
    {
       int *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -1078,7 +1078,7 @@ static int DivInt(const int *pInData, const int *pWithData, int nElements, int *
 
 static int DivLongLong(const long long *pInData, 
 		       const long long *pWithData, 
-		       int nElements, 
+		       arraylen_t nElements, 
 		       long long *pOutData)
 {
    int error = 0;
@@ -1103,7 +1103,7 @@ static int DivLongLong(const long long *pInData,
    else
    {
       long long *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -1143,7 +1143,7 @@ static int DivLongLong(const long long *pInData,
    return error;
 }
 
-static int DivFloat(const float *pInData, const float *pWithData, int nElements, float *pOutData)
+static int DivFloat(const float *pInData, const float *pWithData, arraylen_t nElements, float *pOutData)
 {
    int error = 0;
 
@@ -1167,7 +1167,7 @@ static int DivFloat(const float *pInData, const float *pWithData, int nElements,
    else
    {
       float *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -1207,7 +1207,7 @@ static int DivFloat(const float *pInData, const float *pWithData, int nElements,
    return error;
 }
 
-static int DivDouble(const double *pInData, const double *pWithData, int nElements, double *pOutData)
+static int DivDouble(const double *pInData, const double *pWithData, arraylen_t nElements, double *pOutData)
 {
    int error = 0;
 
@@ -1231,7 +1231,7 @@ static int DivDouble(const double *pInData, const double *pWithData, int nElemen
    else
    {
       double *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -1271,7 +1271,7 @@ static int DivDouble(const double *pInData, const double *pWithData, int nElemen
    return error;
 }
 
-static int AddChar(const char *pInData, const char *pWithData, int nElements, char *pOutData)
+static int AddChar(const char *pInData, const char *pWithData, arraylen_t nElements, char *pOutData)
 {
    int error = 0;
 
@@ -1295,7 +1295,7 @@ static int AddChar(const char *pInData, const char *pWithData, int nElements, ch
    else
    {
       char *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -1334,7 +1334,7 @@ static int AddChar(const char *pInData, const char *pWithData, int nElements, ch
    return error;
 }
 
-static int AddShort(const short *pInData, const short *pWithData, int nElements, short *pOutData)
+static int AddShort(const short *pInData, const short *pWithData, arraylen_t nElements, short *pOutData)
 {
    int error = 0;
 
@@ -1358,7 +1358,7 @@ static int AddShort(const short *pInData, const short *pWithData, int nElements,
    else
    {
       short *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -1397,7 +1397,7 @@ static int AddShort(const short *pInData, const short *pWithData, int nElements,
    return error;
 }
 
-static int AddInt(const int *pInData, const int *pWithData, int nElements, int *pOutData)
+static int AddInt(const int *pInData, const int *pWithData, arraylen_t nElements, int *pOutData)
 {
    int error = 0;
 
@@ -1421,7 +1421,7 @@ static int AddInt(const int *pInData, const int *pWithData, int nElements, int *
    else
    {
       int *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -1462,7 +1462,7 @@ static int AddInt(const int *pInData, const int *pWithData, int nElements, int *
 
 static int AddLongLong(const long long *pInData, 
 		       const long long *pWithData, 
-		       int nElements, 
+		       arraylen_t nElements, 
 		       long long *pOutData)
 {
    int error = 0;
@@ -1487,7 +1487,7 @@ static int AddLongLong(const long long *pInData,
    else
    {
       long long *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -1526,7 +1526,7 @@ static int AddLongLong(const long long *pInData,
    return error;
 }
 
-static int AddFloat(const float *pInData, const float *pWithData, int nElements, float *pOutData)
+static int AddFloat(const float *pInData, const float *pWithData, arraylen_t nElements, float *pOutData)
 {
    int error = 0;
 
@@ -1550,7 +1550,7 @@ static int AddFloat(const float *pInData, const float *pWithData, int nElements,
    else
    {
       float *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -1589,7 +1589,7 @@ static int AddFloat(const float *pInData, const float *pWithData, int nElements,
    return error;
 }
 
-static int AddDouble(const double *pInData, const double *pWithData, int nElements, double *pOutData)
+static int AddDouble(const double *pInData, const double *pWithData, arraylen_t nElements, double *pOutData)
 {
    int error = 0;
 
@@ -1613,7 +1613,7 @@ static int AddDouble(const double *pInData, const double *pWithData, int nElemen
    else
    {
       double *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -1652,7 +1652,7 @@ static int AddDouble(const double *pInData, const double *pWithData, int nElemen
    return error;
 }
 
-static int SubChar(const char *pInData, const char *pWithData, int nElements, char *pOutData)
+static int SubChar(const char *pInData, const char *pWithData, arraylen_t nElements, char *pOutData)
 {
    int error = 0;
 
@@ -1676,7 +1676,7 @@ static int SubChar(const char *pInData, const char *pWithData, int nElements, ch
    else
    {
       char *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -1715,7 +1715,7 @@ static int SubChar(const char *pInData, const char *pWithData, int nElements, ch
    return error;
 }
 
-static int SubShort(const short *pInData, const short *pWithData, int nElements, short *pOutData)
+static int SubShort(const short *pInData, const short *pWithData, arraylen_t nElements, short *pOutData)
 {
    int error = 0;
 
@@ -1739,7 +1739,7 @@ static int SubShort(const short *pInData, const short *pWithData, int nElements,
    else
    {
       short *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -1778,7 +1778,7 @@ static int SubShort(const short *pInData, const short *pWithData, int nElements,
    return error;
 }
 
-static int SubInt(const int *pInData, const int *pWithData, int nElements, int *pOutData)
+static int SubInt(const int *pInData, const int *pWithData, arraylen_t nElements, int *pOutData)
 {
    int error = 0;
 
@@ -1802,7 +1802,7 @@ static int SubInt(const int *pInData, const int *pWithData, int nElements, int *
    else
    {
       int *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -1843,7 +1843,7 @@ static int SubInt(const int *pInData, const int *pWithData, int nElements, int *
 
 static int SubLongLong(const long long *pInData, 
 		       const long long *pWithData, 
-		       int nElements, 
+		       arraylen_t nElements, 
 		       long long *pOutData)
 {
    int error = 0;
@@ -1868,7 +1868,7 @@ static int SubLongLong(const long long *pInData,
    else
    {
       long long *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -1907,7 +1907,7 @@ static int SubLongLong(const long long *pInData,
    return error;
 }
 
-static int SubFloat(const float *pInData, const float *pWithData, int nElements, float *pOutData)
+static int SubFloat(const float *pInData, const float *pWithData, arraylen_t nElements, float *pOutData)
 {
    int error = 0;
 
@@ -1931,7 +1931,7 @@ static int SubFloat(const float *pInData, const float *pWithData, int nElements,
    else
    {
       float *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -1970,7 +1970,7 @@ static int SubFloat(const float *pInData, const float *pWithData, int nElements,
    return error;
 }
 
-static int SubDouble(const double *pInData, const double *pWithData, int nElements, double *pOutData)
+static int SubDouble(const double *pInData, const double *pWithData, arraylen_t nElements, double *pOutData)
 {
    int error = 0;
 
@@ -1994,7 +1994,7 @@ static int SubDouble(const double *pInData, const double *pWithData, int nElemen
    else
    {
       double *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -2033,7 +2033,7 @@ static int SubDouble(const double *pInData, const double *pWithData, int nElemen
    return error;
 }
 
-static int AbsChar(const char *pInData, int nElements, char *pOutData)
+static int AbsChar(const char *pInData, arraylen_t nElements, char *pOutData)
 {
    int error = 0;
 
@@ -2051,7 +2051,7 @@ static int AbsChar(const char *pInData, int nElements, char *pOutData)
    else
    {
       char *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -2088,7 +2088,7 @@ static int AbsChar(const char *pInData, int nElements, char *pOutData)
    return error;
 }
 
-static int AbsShort(const short *pInData, int nElements, short *pOutData)
+static int AbsShort(const short *pInData, arraylen_t nElements, short *pOutData)
 {
    int error = 0;
 
@@ -2106,7 +2106,7 @@ static int AbsShort(const short *pInData, int nElements, short *pOutData)
    else
    {
       short *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -2143,7 +2143,7 @@ static int AbsShort(const short *pInData, int nElements, short *pOutData)
    return error;
 }
 
-static int AbsInt(const int *pInData, int nElements, int *pOutData)
+static int AbsInt(const int *pInData, arraylen_t nElements, int *pOutData)
 {
    int error = 0;
 
@@ -2161,7 +2161,7 @@ static int AbsInt(const int *pInData, int nElements, int *pOutData)
    else
    {
       int *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -2198,7 +2198,7 @@ static int AbsInt(const int *pInData, int nElements, int *pOutData)
    return error;
 }
 
-static int AbsLongLong(const long long *pInData, int nElements, long long *pOutData)
+static int AbsLongLong(const long long *pInData, arraylen_t nElements, long long *pOutData)
 {
    int error = 0;
 
@@ -2216,7 +2216,7 @@ static int AbsLongLong(const long long *pInData, int nElements, long long *pOutD
    else
    {
       long long *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -2253,7 +2253,7 @@ static int AbsLongLong(const long long *pInData, int nElements, long long *pOutD
    return error;
 }
 
-static int AbsFloat(const float *pInData, int nElements, float *pOutData)
+static int AbsFloat(const float *pInData, arraylen_t nElements, float *pOutData)
 {
    int error = 0;
 
@@ -2271,7 +2271,7 @@ static int AbsFloat(const float *pInData, int nElements, float *pOutData)
    else
    {
       float *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -2308,7 +2308,7 @@ static int AbsFloat(const float *pInData, int nElements, float *pOutData)
    return error;
 }
 
-static int AbsDouble(const double *pInData, int nElements, double *pOutData)
+static int AbsDouble(const double *pInData, arraylen_t nElements, double *pOutData)
 {
    int error = 0;
 
@@ -2326,7 +2326,7 @@ static int AbsDouble(const double *pInData, int nElements, double *pOutData)
    else
    {
       double *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -2363,7 +2363,7 @@ static int AbsDouble(const double *pInData, int nElements, double *pOutData)
    return error;
 }
 
-static int SqrtChar(const char *pInData, int nElements, char *pOutData)
+static int SqrtChar(const char *pInData, arraylen_t nElements, char *pOutData)
 {
    int error = 0;
 
@@ -2381,7 +2381,7 @@ static int SqrtChar(const char *pInData, int nElements, char *pOutData)
    else
    {
       char *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -2418,7 +2418,7 @@ static int SqrtChar(const char *pInData, int nElements, char *pOutData)
    return error;
 }
 
-static int SqrtShort(const short *pInData, int nElements, short *pOutData)
+static int SqrtShort(const short *pInData, arraylen_t nElements, short *pOutData)
 {
    int error = 0;
 
@@ -2436,7 +2436,7 @@ static int SqrtShort(const short *pInData, int nElements, short *pOutData)
    else
    {
       short *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -2473,7 +2473,7 @@ static int SqrtShort(const short *pInData, int nElements, short *pOutData)
    return error;
 }
 
-static int SqrtInt(const int *pInData, int nElements, int *pOutData)
+static int SqrtInt(const int *pInData, arraylen_t nElements, int *pOutData)
 {
    int error = 0;
 
@@ -2491,7 +2491,7 @@ static int SqrtInt(const int *pInData, int nElements, int *pOutData)
    else
    {
       int *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -2528,7 +2528,7 @@ static int SqrtInt(const int *pInData, int nElements, int *pOutData)
    return error;
 }
 
-static int SqrtLongLong(const long long *pInData, int nElements, long long *pOutData)
+static int SqrtLongLong(const long long *pInData, arraylen_t nElements, long long *pOutData)
 {
    int error = 0;
 
@@ -2546,7 +2546,7 @@ static int SqrtLongLong(const long long *pInData, int nElements, long long *pOut
    else
    {
       long long *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -2583,7 +2583,7 @@ static int SqrtLongLong(const long long *pInData, int nElements, long long *pOut
    return error;
 }
 
-static int SqrtFloat(const float *pInData, int nElements, float *pOutData)
+static int SqrtFloat(const float *pInData, arraylen_t nElements, float *pOutData)
 {
    int error = 0;
 
@@ -2601,7 +2601,7 @@ static int SqrtFloat(const float *pInData, int nElements, float *pOutData)
    else
    {
       float *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -2638,7 +2638,7 @@ static int SqrtFloat(const float *pInData, int nElements, float *pOutData)
    return error;
 }
 
-static int SqrtDouble(const double *pInData, int nElements, double *pOutData)
+static int SqrtDouble(const double *pInData, arraylen_t nElements, double *pOutData)
 {
    int error = 0;
 
@@ -2656,7 +2656,7 @@ static int SqrtDouble(const double *pInData, int nElements, double *pOutData)
    else
    {
       double *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -2693,7 +2693,7 @@ static int SqrtDouble(const double *pInData, int nElements, double *pOutData)
    return error;
 }
 
-static int LogChar(const char *pInData, int nElements, char *pOutData)
+static int LogChar(const char *pInData, arraylen_t nElements, char *pOutData)
 {
    int error = 0;
 
@@ -2711,7 +2711,7 @@ static int LogChar(const char *pInData, int nElements, char *pOutData)
    else
    {
       char *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -2748,7 +2748,7 @@ static int LogChar(const char *pInData, int nElements, char *pOutData)
    return error;
 }
 
-static int LogShort(const short *pInData, int nElements, short *pOutData)
+static int LogShort(const short *pInData, arraylen_t nElements, short *pOutData)
 {
    int error = 0;
 
@@ -2766,7 +2766,7 @@ static int LogShort(const short *pInData, int nElements, short *pOutData)
    else
    {
       short *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -2803,7 +2803,7 @@ static int LogShort(const short *pInData, int nElements, short *pOutData)
    return error;
 }
 
-static int LogInt(const int *pInData, int nElements, int *pOutData)
+static int LogInt(const int *pInData, arraylen_t nElements, int *pOutData)
 {
    int error = 0;
 
@@ -2821,7 +2821,7 @@ static int LogInt(const int *pInData, int nElements, int *pOutData)
    else
    {
       int *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -2858,7 +2858,7 @@ static int LogInt(const int *pInData, int nElements, int *pOutData)
    return error;
 }
 
-static int LogLongLong(const long long *pInData, int nElements, long long *pOutData)
+static int LogLongLong(const long long *pInData, arraylen_t nElements, long long *pOutData)
 {
    int error = 0;
 
@@ -2876,7 +2876,7 @@ static int LogLongLong(const long long *pInData, int nElements, long long *pOutD
    else
    {
       long long *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -2913,7 +2913,7 @@ static int LogLongLong(const long long *pInData, int nElements, long long *pOutD
    return error;
 }
 
-static int LogFloat(const float *pInData, int nElements, float *pOutData)
+static int LogFloat(const float *pInData, arraylen_t nElements, float *pOutData)
 {
    int error = 0;
 
@@ -2931,7 +2931,7 @@ static int LogFloat(const float *pInData, int nElements, float *pOutData)
    else
    {
       float *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -2968,7 +2968,7 @@ static int LogFloat(const float *pInData, int nElements, float *pOutData)
    return error;
 }
 
-static int LogDouble(const double *pInData, int nElements, double *pOutData)
+static int LogDouble(const double *pInData, arraylen_t nElements, double *pOutData)
 {
    int error = 0;
 
@@ -2986,7 +2986,7 @@ static int LogDouble(const double *pInData, int nElements, double *pOutData)
    else
    {
       double *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -3023,7 +3023,7 @@ static int LogDouble(const double *pInData, int nElements, double *pOutData)
    return error;
 }
 
-static int PowChar(const char *pInData, int nElements, char *pOutData)
+static int PowChar(const char *pInData, arraylen_t nElements, char *pOutData)
 {
    int error = 0;
 
@@ -3041,7 +3041,7 @@ static int PowChar(const char *pInData, int nElements, char *pOutData)
    else
    {
       char *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -3078,7 +3078,7 @@ static int PowChar(const char *pInData, int nElements, char *pOutData)
    return error;
 }
 
-static int PowShort(const short *pInData, int nElements, short *pOutData)
+static int PowShort(const short *pInData, arraylen_t nElements, short *pOutData)
 {
    int error = 0;
 
@@ -3096,7 +3096,7 @@ static int PowShort(const short *pInData, int nElements, short *pOutData)
    else
    {
       short *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -3133,7 +3133,7 @@ static int PowShort(const short *pInData, int nElements, short *pOutData)
    return error;
 }
 
-static int PowInt(const int *pInData, int nElements, int *pOutData)
+static int PowInt(const int *pInData, arraylen_t nElements, int *pOutData)
 {
    int error = 0;
 
@@ -3151,7 +3151,7 @@ static int PowInt(const int *pInData, int nElements, int *pOutData)
    else
    {
       int *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -3188,7 +3188,7 @@ static int PowInt(const int *pInData, int nElements, int *pOutData)
    return error;
 }
 
-static int PowLongLong(const long long *pInData, int nElements, long long *pOutData)
+static int PowLongLong(const long long *pInData, arraylen_t nElements, long long *pOutData)
 {
    int error = 0;
 
@@ -3206,7 +3206,7 @@ static int PowLongLong(const long long *pInData, int nElements, long long *pOutD
    else
    {
       long long *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -3243,7 +3243,7 @@ static int PowLongLong(const long long *pInData, int nElements, long long *pOutD
    return error;
 }
 
-static int PowFloat(const float *pInData, int nElements, float *pOutData)
+static int PowFloat(const float *pInData, arraylen_t nElements, float *pOutData)
 {
    int error = 0;
 
@@ -3261,7 +3261,7 @@ static int PowFloat(const float *pInData, int nElements, float *pOutData)
    else
    {
       float *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -3298,7 +3298,7 @@ static int PowFloat(const float *pInData, int nElements, float *pOutData)
    return error;
 }
 
-static int PowDouble(const double *pInData, int nElements, double *pOutData)
+static int PowDouble(const double *pInData, arraylen_t nElements, double *pOutData)
 {
    int error = 0;
 
@@ -3316,7 +3316,7 @@ static int PowDouble(const double *pInData, int nElements, double *pOutData)
    else
    {
       double *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -3353,7 +3353,7 @@ static int PowDouble(const double *pInData, int nElements, double *pOutData)
    return error;
 }
 
-static int SqrChar(const char *pInData, int nElements, char *pOutData)
+static int SqrChar(const char *pInData, arraylen_t nElements, char *pOutData)
 {
    int error = 0;
 
@@ -3371,7 +3371,7 @@ static int SqrChar(const char *pInData, int nElements, char *pOutData)
    else
    {
       char *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -3408,7 +3408,7 @@ static int SqrChar(const char *pInData, int nElements, char *pOutData)
    return error;
 }
 
-static int SqrShort(const short *pInData, int nElements, short *pOutData)
+static int SqrShort(const short *pInData, arraylen_t nElements, short *pOutData)
 {
    int error = 0;
 
@@ -3426,7 +3426,7 @@ static int SqrShort(const short *pInData, int nElements, short *pOutData)
    else
    {
       short *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -3463,7 +3463,7 @@ static int SqrShort(const short *pInData, int nElements, short *pOutData)
    return error;
 }
 
-static int SqrInt(const int *pInData, int nElements, int *pOutData)
+static int SqrInt(const int *pInData, arraylen_t nElements, int *pOutData)
 {
    int error = 0;
 
@@ -3481,7 +3481,7 @@ static int SqrInt(const int *pInData, int nElements, int *pOutData)
    else
    {
       int *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -3518,7 +3518,7 @@ static int SqrInt(const int *pInData, int nElements, int *pOutData)
    return error;
 }
 
-static int SqrLongLong(const long long *pInData, int nElements, long long *pOutData)
+static int SqrLongLong(const long long *pInData, arraylen_t nElements, long long *pOutData)
 {
    int error = 0;
 
@@ -3536,7 +3536,7 @@ static int SqrLongLong(const long long *pInData, int nElements, long long *pOutD
    else
    {
       long long *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -3573,7 +3573,7 @@ static int SqrLongLong(const long long *pInData, int nElements, long long *pOutD
    return error;
 }
 
-static int SqrFloat(const float *pInData, int nElements, float *pOutData)
+static int SqrFloat(const float *pInData, arraylen_t nElements, float *pOutData)
 {
    int error = 0;
 
@@ -3591,7 +3591,7 @@ static int SqrFloat(const float *pInData, int nElements, float *pOutData)
    else
    {
       float *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -3628,7 +3628,7 @@ static int SqrFloat(const float *pInData, int nElements, float *pOutData)
    return error;
 }
 
-static int SqrDouble(const double *pInData, int nElements, double *pOutData)
+static int SqrDouble(const double *pInData, arraylen_t nElements, double *pOutData)
 {
    int error = 0;
 
@@ -3646,7 +3646,7 @@ static int SqrDouble(const double *pInData, int nElements, double *pOutData)
    else
    {
       double *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -3683,7 +3683,7 @@ static int SqrDouble(const double *pInData, int nElements, double *pOutData)
    return error;
 }
 
-static int RecipChar(const char *pInData, int nElements, char *pOutData)
+static int RecipChar(const char *pInData, arraylen_t nElements, char *pOutData)
 {
    int error = 0;
 
@@ -3701,7 +3701,7 @@ static int RecipChar(const char *pInData, int nElements, char *pOutData)
    else
    {
       char *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -3738,7 +3738,7 @@ static int RecipChar(const char *pInData, int nElements, char *pOutData)
    return error;
 }
 
-static int RecipShort(const short *pInData, int nElements, short *pOutData)
+static int RecipShort(const short *pInData, arraylen_t nElements, short *pOutData)
 {
    int error = 0;
 
@@ -3756,7 +3756,7 @@ static int RecipShort(const short *pInData, int nElements, short *pOutData)
    else
    {
       short *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -3793,7 +3793,7 @@ static int RecipShort(const short *pInData, int nElements, short *pOutData)
    return error;
 }
 
-static int RecipInt(const int *pInData, int nElements, int *pOutData)
+static int RecipInt(const int *pInData, arraylen_t nElements, int *pOutData)
 {
    int error = 0;
 
@@ -3811,7 +3811,7 @@ static int RecipInt(const int *pInData, int nElements, int *pOutData)
    else
    {
       int *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -3848,7 +3848,7 @@ static int RecipInt(const int *pInData, int nElements, int *pOutData)
    return error;
 }
 
-static int RecipLongLong(const long long *pInData, int nElements, long long *pOutData)
+static int RecipLongLong(const long long *pInData, arraylen_t nElements, long long *pOutData)
 {
    int error = 0;
 
@@ -3866,7 +3866,7 @@ static int RecipLongLong(const long long *pInData, int nElements, long long *pOu
    else
    {
       long long *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -3903,7 +3903,7 @@ static int RecipLongLong(const long long *pInData, int nElements, long long *pOu
    return error;
 }
 
-static int RecipFloat(const float *pInData, int nElements, float *pOutData)
+static int RecipFloat(const float *pInData, arraylen_t nElements, float *pOutData)
 {
    int error = 0;
 
@@ -3921,7 +3921,7 @@ static int RecipFloat(const float *pInData, int nElements, float *pOutData)
    else
    {
       float *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -3958,7 +3958,7 @@ static int RecipFloat(const float *pInData, int nElements, float *pOutData)
    return error;
 }
 
-static int RecipDouble(const double *pInData, int nElements, double *pOutData)
+static int RecipDouble(const double *pInData, arraylen_t nElements, double *pOutData)
 {
    int error = 0;
 
@@ -3976,7 +3976,7 @@ static int RecipDouble(const double *pInData, int nElements, double *pOutData)
    else
    {
       double *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -4013,7 +4013,7 @@ static int RecipDouble(const double *pInData, int nElements, double *pOutData)
    return error;
 }
 
-static int SubmeanChar(const char *pInData, int nElements, char *pOutData, double mean)
+static int SubmeanChar(const char *pInData, arraylen_t nElements, char *pOutData, double mean)
 {
    int error = 0;
 
@@ -4031,7 +4031,7 @@ static int SubmeanChar(const char *pInData, int nElements, char *pOutData, doubl
    else
    {
       char *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -4068,7 +4068,7 @@ static int SubmeanChar(const char *pInData, int nElements, char *pOutData, doubl
    return error;
 }
 
-static int SubmeanShort(const short *pInData, int nElements, short *pOutData, double mean)
+static int SubmeanShort(const short *pInData, arraylen_t nElements, short *pOutData, double mean)
 {
    int error = 0;
 
@@ -4086,7 +4086,7 @@ static int SubmeanShort(const short *pInData, int nElements, short *pOutData, do
    else
    {
       short *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -4123,7 +4123,7 @@ static int SubmeanShort(const short *pInData, int nElements, short *pOutData, do
    return error;
 }
 
-static int SubmeanInt(const int *pInData, int nElements, int *pOutData, double mean)
+static int SubmeanInt(const int *pInData, arraylen_t nElements, int *pOutData, double mean)
 {
    int error = 0;
 
@@ -4141,7 +4141,7 @@ static int SubmeanInt(const int *pInData, int nElements, int *pOutData, double m
    else
    {
       int *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -4178,7 +4178,7 @@ static int SubmeanInt(const int *pInData, int nElements, int *pOutData, double m
    return error;
 }
 
-static int SubmeanLongLong(const long long *pInData, int nElements, long long *pOutData, double mean)
+static int SubmeanLongLong(const long long *pInData, arraylen_t nElements, long long *pOutData, double mean)
 {
    int error = 0;
 
@@ -4196,7 +4196,7 @@ static int SubmeanLongLong(const long long *pInData, int nElements, long long *p
    else
    {
       long long *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -4233,7 +4233,7 @@ static int SubmeanLongLong(const long long *pInData, int nElements, long long *p
    return error;
 }
 
-static int SubmeanFloat(const float *pInData, int nElements, float *pOutData, double mean)
+static int SubmeanFloat(const float *pInData, arraylen_t nElements, float *pOutData, double mean)
 {
    int error = 0;
 
@@ -4251,7 +4251,7 @@ static int SubmeanFloat(const float *pInData, int nElements, float *pOutData, do
    else
    {
       float *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -4288,7 +4288,7 @@ static int SubmeanFloat(const float *pInData, int nElements, float *pOutData, do
    return error;
 }
 
-static int SubmeanDouble(const double *pInData, int nElements, double *pOutData, double mean)
+static int SubmeanDouble(const double *pInData, arraylen_t nElements, double *pOutData, double mean)
 {
    int error = 0;
 
@@ -4306,7 +4306,7 @@ static int SubmeanDouble(const double *pInData, int nElements, double *pOutData,
    else
    {
       double *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -4343,7 +4343,7 @@ static int SubmeanDouble(const double *pInData, int nElements, double *pOutData,
    return error;
 }
 
-static int NopChar(const char *pInData, int nElements, char *pOutData)
+static int NopChar(const char *pInData, arraylen_t nElements, char *pOutData)
 {
    int error = 0;
 
@@ -4361,7 +4361,7 @@ static int NopChar(const char *pInData, int nElements, char *pOutData)
    else
    {
       char *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -4398,7 +4398,7 @@ static int NopChar(const char *pInData, int nElements, char *pOutData)
    return error;
 }
 
-static int NopShort(const short *pInData, int nElements, short *pOutData)
+static int NopShort(const short *pInData, arraylen_t nElements, short *pOutData)
 {
    int error = 0;
 
@@ -4416,7 +4416,7 @@ static int NopShort(const short *pInData, int nElements, short *pOutData)
    else
    {
       short *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -4453,7 +4453,7 @@ static int NopShort(const short *pInData, int nElements, short *pOutData)
    return error;
 }
 
-static int NopInt(const int *pInData, int nElements, int *pOutData)
+static int NopInt(const int *pInData, arraylen_t nElements, int *pOutData)
 {
    int error = 0;
 
@@ -4471,7 +4471,7 @@ static int NopInt(const int *pInData, int nElements, int *pOutData)
    else
    {
       int *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -4508,7 +4508,7 @@ static int NopInt(const int *pInData, int nElements, int *pOutData)
    return error;
 }
 
-static int NopLongLong(const long long *pInData, int nElements, long long *pOutData)
+static int NopLongLong(const long long *pInData, arraylen_t nElements, long long *pOutData)
 {
    int error = 0;
 
@@ -4526,7 +4526,7 @@ static int NopLongLong(const long long *pInData, int nElements, long long *pOutD
    else
    {
       long long *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -4563,7 +4563,7 @@ static int NopLongLong(const long long *pInData, int nElements, long long *pOutD
    return error;
 }
 
-static int NopFloat(const float *pInData, int nElements, float *pOutData)
+static int NopFloat(const float *pInData, arraylen_t nElements, float *pOutData)
 {
    int error = 0;
 
@@ -4581,7 +4581,7 @@ static int NopFloat(const float *pInData, int nElements, float *pOutData)
    else
    {
       float *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -4618,7 +4618,7 @@ static int NopFloat(const float *pInData, int nElements, float *pOutData)
    return error;
 }
 
-static int NopDouble(const double *pInData, int nElements, double *pOutData)
+static int NopDouble(const double *pInData, arraylen_t nElements, double *pOutData)
 {
    int error = 0;
 
@@ -4636,7 +4636,7 @@ static int NopDouble(const double *pInData, int nElements, double *pOutData)
    else
    {
       double *result = NULL;
-      unsigned int index = 0;
+      arraylen_t index = 0;
 
       for (; index < nElements; index++) 
       {
@@ -4677,7 +4677,7 @@ static int NopDouble(const double *pInData, int nElements, double *pOutData)
 * if any error happens. */
 static int PerformOperation(ArithOp_t op, DRMS_Type_t dtype, 
 			    const void *pInData, const void *pWithData, 
-			    int nElements, void *pOutData, double mean)
+			    arraylen_t nElements, void *pOutData, double mean)
 {
    int error = 0;
 
@@ -5093,8 +5093,8 @@ int DoBinaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
 		    if (!error)
 		    {
 			 /* Have inSeries seg data and withSeries seg data - do binary op. */
-			 int nElementsIn = drms_array_count(inSegArray);
-			 int nElementsWith = drms_array_count(withSegArray);
+			 arraylen_t nElementsIn = drms_array_count(inSegArray);
+			 arraylen_t nElementsWith = drms_array_count(withSegArray);
 			 double *pInData = inSegArray->data;
 			 double *pWithData = withSegArray->data;
 
@@ -5369,7 +5369,7 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
                     }
 		   
                     /* Have inSeries seg data - do unary op. */
-                    int nElementsIn = drms_array_count(inSegArray);
+                    arraylen_t nElementsIn = drms_array_count(inSegArray);
                     void *pInData = inSegArray->data;
                     void *pOut = NULL;
 
@@ -5414,7 +5414,7 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
                        if (op == kArithOpSubmean)
                        {
                           int n = 0;			      
-                          int iData = 0;
+                          arraylen_t iData = 0;
 			       
                           switch (actualtype)
                           {

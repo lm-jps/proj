@@ -186,7 +186,7 @@ int eliminate_outliers (DRMS_Array_t *img, double accept, double baseval) {
   double amn, amx;
   float *z;
   float v, blank = 0.0/ 0.0;
-  long long n;
+  arraylen_t n;
   int cl[8];
   int col, cols, row, rows, i;
   int count = 0;
@@ -254,9 +254,9 @@ col, row, n, z[n], s, w);
 }
 
 int truncate_noise (DRMS_Array_t *img, double accept) {
-  long long n = drms_array_count (img);
+  arraylen_t n = drms_array_count (img);
   float *z;
-  int count = 0;
+  int count = 0; /* This should be arraylen_t (long long). */
 
   z = (float *)img->data;
   while (n--) {
