@@ -129,8 +129,10 @@ int cosmic_rays(DRMS_Record_t *record, float *image, int *badpix, int nbad, int 
 		if (imhp[j*nx+i] > limit*factor*sig || image[j*nx+i] > maxval)
 		{
                   #pragma omp critical(detect)
-		  cosmic[count]=j*nx+i;
-		  ++count;
+                  {
+		    cosmic[count]=j*nx+i;
+		    ++count;
+                  }
 		}
 	      }
 	    }
