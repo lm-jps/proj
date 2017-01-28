@@ -95,6 +95,7 @@ iris.orbit_vectors
 iris.pointing_data
 iris.saa_hlz
 iris.temperatures_60s
+lm_jps.mater_pointing3h
 mdi.caltables_doppler
 mdi.caltables_doppler_orig
 mdi.caltables_intensity
