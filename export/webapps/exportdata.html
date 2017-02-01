@@ -143,7 +143,6 @@ var exportparameters;
 // Export processing globals.
 var ExportProcessingArgsPoll = null;
 var ExportProcessingOK = null;
-var ProcessRSChangePoll = null;
 
 // Protocol global vars
 var ExportCompressOK;
@@ -205,7 +204,6 @@ function initVars()
   ExportProcessingArgs = "";
   ExportProcessingOK = null;
   ExportProcessingArgsPoll = null;
-  ProcessRSChangePoll = null;
 
   // Init protocols
   ExportProtocolOK = 1;
@@ -351,7 +349,7 @@ function OnLoadInit()
     }
   if (needcount && $("ExportRecordSet").value != "")
     {
-    if (GetRSCount())
+    if (GetRSCount(null))
     {
         $("ExportCheckMsg").innerHTML = "Invalid record-set specification";
     }
@@ -699,7 +697,8 @@ WlSeriesInfo.prototype.extractSnames = function(args)
 // External users have access to a sanctioned list of internal data series. So, we do not necessarily want to use the 'Host'
 // variable to identify the jsoc_info CGI. If the user is accessing a sanctioned internal series, then we need to use the jsoc_info
 // CGI hosted on jsoc2.stanford.edu, not the one on 'Host' (which is jsoc.stanford.edu).
-function GetRSCount()
+// The callback is optional. Many functions require jsoc_info to have returned before they can continue.
+function GetRSCount(countCallback)
   {
   ExportQueryOK = 0;
   ExportRecordSetOK = 0;
@@ -744,7 +743,7 @@ function GetRSCount()
   var RecordSet = $("ExportRecordSet").value;
   
     // Internal-db pass-through. We need to determine which host has the series information needed.
-    var doInfoReqFn = function()
+    var doInfoReqFn = function(infoCallback)
     {
         var arguments = null;
         var jsocinfoCGI = null;
@@ -788,6 +787,11 @@ function GetRSCount()
                          
                 $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
                 CheckRediness();
+                
+                if (infoCallback !== null)
+                {
+                    infoCallback();
+                }
             },
             onFailure: function() { alert('Something went wrong...'); },
             onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
@@ -797,7 +801,7 @@ function GetRSCount()
     }
 
 	// Just call the function. It will determine if it should use the internal or external version of the CGI.
-	doInfoReqFn();
+	doInfoReqFn(countCallback);
     
   return(0);
   }
@@ -957,60 +961,74 @@ function ExportRSChanged()
   }
   
 function ProcessRSChange()
-{
-    if (ExportRecordSetOK == 0)
-    {
-        // Try again later (wait till jsoc_info that checks record-set validity completes).
-        return;
-    }
+{    
     
+    // GetDefaultFormat() starts another jsoc_info asnchronously. It sets firstTimePrime. firstTimePrime is used in processing.js.
+    // GetDefaultFormat() requires SeriesName, which is set in the first jsoc_info.
+    // ProcessRSChange() is now not called until the first jsoc_info has completed.
+    firstTimePrime = ""; // Used in GetDefaultFormat()
     GetDefaultFormat();
+
     CheckNoProcessingList();
     // NotifyProcessingCode requires the first jsoc_info to have completed (the one started by SetRecordLimit()).
+    // It also requires that SetProcessing() has completed its asynchronous running.
     NotifyProcessingCode();
     CheckRediness();
-
-    clearInterval(ProcessRSChangePoll);
-    ProcessRSChangePoll = null;
     
     // Re-enable the RecordSet text box.
     $('ExportRecordSet').disabled = false;
+    
+    // re-enable the processing step checkboxes
+    for (iProc = 0; iProc < ExportProcessingOptions.length; iProc++)
+    {
+        var ExpOpt = ExportProcessingOptions[iProc];
+        $(ExpOpt.id).disabled = false;
+    }
+    
+    newRSRunning = false;
 }
 
 // Called when record-set changes, when user clicks on Recount, when user clicks on enter key in RecordSet field.
+var newRSRunning = false;
 function ExportNewRS()
   {
-    if (ProcessRSChangePoll)
+    // This took forever to figure out. JS event handlers CAN interrupt each other at alert()s. 
+    // ExportRecordSet has both an onchange and an onclick handler that fire when you click on the Recount
+    // button after you enter a record-set specification. As a result, ExportNewRS() is called twice.
+    // IFF you have an alert anywhere between the checking for newRSRunning and the setting of 
+    // newRSRunning in ExportNewRS(), then the onchange handler
+    // will be interrupted at the alert() statement, and the onclick handler will run. 
+    if (newRSRunning)
     {
-        // A previous call to ExportNewRS() has not completed yet.
         return;
+    }
+    // NO alert()!
+    newRSRunning = true;
+
+    // disable processing step checkboxes for now, since we are about to change the record-set, and some processing steps
+    // need the record-set to be present
+    for (iProc = 0; iProc < ExportProcessingOptions.length; iProc++)
+    {
+        var ExpOpt = ExportProcessingOptions[iProc];
+        $(ExpOpt.id).disabled = true;
     }
   
     $("ExportCheckMsg").innerHTML = "";
     SeriesName = "";
-    
-  ExportQueryOK = 0;
-  $("CountButton").style.backgroundColor = colorNeutral;
-  if (SetRecordLimit())
-    return; // SetRecordLimit calls GetRSCount(), non-zero on RS syntax error
-    
-  // SetRecordLimit() starts jsoc_info asynchronously (via GetRSCount()). NotifyProcessingCode() below requires jsoc_info to have completed.
-  // We know that jsoc_info has completed when ExportRecordSetOK is not 0.
-  firstTimePrime = "";
-  
-    // GetDefaultFormat() starts another jsoc_info asnchronously. It sets firstTimePrime. firstTimePrime is used in processing.js.
-    // GetDefaultFormat() requires SeriesName, which is set in the first jsoc_info.
-    // SO WE HAVE TO WAIT FOR THE FIRST jsoc_info TO COMPLETE BEFORE RUNNING GetDefaultFormat().
-  
-    // Timer function to do the stuff in response to a record-set change.
-    ProcessRSChangePoll = setInterval(ProcessRSChange, 100);
-    
+    ExportQueryOK = 0;
+    $("CountButton").style.backgroundColor = colorNeutral;
+      
     // Disable RecordSet text edit while the asynchronous stuff runs for the newly set record-set.
     $('ExportRecordSet').disabled = true;
-    CheckRediness();
+
+    // SetRecordLimit() starts jsoc_info asynchronously (via GetRSCount()).        
+    if (SetRecordLimit(ProcessRSChange))
+    {
+        return; // SetRecordLimit calls GetRSCount(), non-zero on RS syntax error
+    }    
   }
 
-function SetRecordLimit()
+function SetRecordLimit(callbackAfterJsocinfo)
   {
   var newLimit;
   newLimit = 1 * $("ExportRecordLimit").value;
@@ -1033,7 +1051,7 @@ function SetRecordLimit()
     RecordLimit = newLimit;
     }
   $("ExportRecordLimit").style.backgroundColor = colorWhite;
-  return(GetRSCount());
+  return(GetRSCount(callbackAfterJsocinfo));
   }
 
 function SetExportMethod(byWhom)
@@ -1158,20 +1176,35 @@ var SizeRatio;
 
 // Called when a processing-option checkbox has changed, or the record-set query has changed.
 // Make the ExportProcessingArgs string (a |-separated list of processing steps).
+var setProcessingQueue = [];
+function queueSetProcessing(ichecked)
+{
+    setProcessingQueue.push(ichecked);
+    
+    setInterval(function(){ SetProcessing(ichecked); }, 100);
+}
+
+
 function SetProcessing(ichecked)
-  { // 0 if no procesing enabled,  -1 if same seriesname, -2 if series has changed between export processing requests.
+  { // 0 if no procesing enabled (Enable Processing is not checked),  -1 if same seriesname, -2 if series has changed between export processing requests.
+    // ichecked > 0 if the user clicks on/off a processing-step checkbox.    
     if (ExportProcessingArgsPoll)
     {
-        alert('cant do this right now');
+        alert('cant do this right now ' + ichecked);
         return;
     }
-  ExportQueryOK = 0;
-  if (ProcessingAllowed == 0)
-    {
-    $(ExportProcessingOptions[0].id).checked = true;
-    }
-  if (ichecked > 0) $(ExportProcessingOptions[0].id).checked = false; // Disable the 'none' processing step.
+    
+    ExportQueryOK = 0;
 
+    if (ProcessingAllowed == 0)
+    {
+        $(ExportProcessingOptions[0].id).checked = true;
+    }
+    if (ichecked > 0)
+    {
+        $(ExportProcessingOptions[0].id).checked = false; // Disable the 'none' processing step.
+    }
+    
     ExportProcessingOK = null;
 
   // Add recordLimit FIRST always. Could change when user changes RecordSet specification.
@@ -1209,7 +1242,7 @@ function SetProcessing(ichecked)
         if (ichecked == -2)
           {
             // This is the on-load case, where we want to initialize all processing parameters to their defaults.
-          ExpOpt.Init(0);
+          ExpOpt.Init(1);
           $(ExpOpt.rowid).style.display="table-row";
           isok = 0;
           }
@@ -1233,17 +1266,23 @@ function SetProcessing(ichecked)
             }
         }
       }
-      else
+        else
         {
-        $(ExpOpt.rowid).style.display="none";
-        ExpOpt.Init(1);
+            $(ExpOpt.rowid).style.display="none";
+            // keep existing argument values for ImPatch only (the other processing options have no way
+            // of resetting them to default values, so we have to do that here if the user has unchecked
+            // the option's checkbox
+            if (ExpOpt.id != "OptionImPatch")
+            {
+                ExpOpt.Init(1);
+            }
         }
       }
       
       if (nchecked > 0)
       {
         // The Set() functions can run asynchronously. We have at least one Set() function that succeeded (which means 
-        // there could be AJAX running.
+        // there could be AJAX running).
         ExportProcessingArgsPoll = setInterval(GetExportProcessingArguments, 100);
         
         // Disable all processing-step checkboxes, until GetExportProcessingArguments() resolves.
@@ -1566,7 +1605,7 @@ function CheckExportParams()
     {
     if (ExportRecordSetOK == 0)
       {
-      if (GetRSCount())
+      if (GetRSCount(null))
       {
         $("ExportCheckMsg").innerHTML = "Invalid record-set specification";
         break;
