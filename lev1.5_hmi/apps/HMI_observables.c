@@ -1104,7 +1104,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.54 2016/10/03 17:43:52 arta Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.55 2017/02/01 23:39:23 baldner Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -4504,7 +4504,11 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 		      if(inLinearity == 1)      CALVER32[0] = CALVER32[0] | CALVER_LINEARITY;
 		      if(inRotationalFlat == 1) CALVER32[0] = CALVER32[0] | CALVER_ROTATIONAL;
 		      if(inSmoothTables == 1)   CALVER32[0] = CALVER32[0] | CALVER_SMOOTH;
-		      if(TargetHFLID == 58312 || TargetHFLID == 1022) {CALVER32[0] = CALVER32[0] | CALVER_MODL;} else CALVER32[0] = CALVER32[0] & CALVER_NOMODL;
+		      if(TargetHFLID == 58312 || TargetHFLID == 1022 || TargetHFLID == 2032 // added all ModL framelists, 2017.02.01
+			  || TargetHFLID == 2042 || TargetHFLID == 2043 || TargetHFLID == 3040
+			  || TargetHFLID == 3041 || TargetHFLID == 3042 || TargetHFLID == 3043
+			  || TargetHFLID == 3048) {
+			CALVER32[0] = CALVER32[0] | CALVER_MODL;} else CALVER32[0] = CALVER32[0] & CALVER_NOMODL;
 		      statusA[48]= drms_setkey_longlong(recLev1d->records[k],CALVER64S,CALVER32[0]); 
 
 		      TotalStatus=0;
