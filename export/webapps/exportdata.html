@@ -1176,23 +1176,31 @@ var SizeRatio;
 
 // Called when a processing-option checkbox has changed, or the record-set query has changed.
 // Make the ExportProcessingArgs string (a |-separated list of processing steps).
+
+var setProcessingRunning = false;
 var setProcessingQueue = [];
-function queueSetProcessing(ichecked)
-{
-    setProcessingQueue.push(ichecked);
-    
-    setInterval(function(){ SetProcessing(ichecked); }, 100);
-}
 
-
-function SetProcessing(ichecked)
-  { // 0 if no procesing enabled (Enable Processing is not checked),  -1 if same seriesname, -2 if series has changed between export processing requests.
+function runSetProcessing(intervalFn)
+{ // 0 if no procesing enabled (Enable Processing is not checked),  -1 if same seriesname, -2 if series has changed between export processing requests.
     // ichecked > 0 if the user clicks on/off a processing-step checkbox.    
-    if (ExportProcessingArgsPoll)
+    if (setProcessingRunning)
     {
-        alert('cant do this right now ' + ichecked);
-        return;
-    }
+        // do not clear interval, this will continue to run until it is safe to run the code in the rest of the function
+		return;
+	}
+
+    // No alerts in here.
+	setProcessingRunning = true;
+	
+    ichecked = setProcessingQueue.shift()
+	if (typeof ichecked == 'undefined')
+	{
+		// nothing to do; should not get here because each function instance handles one SetProcessing() call
+		alert('bad')
+		clearInterval(intervalFn);
+		setProcessingRunning = false;
+		return;
+	}
     
     ExportQueryOK = 0;
 
@@ -1223,6 +1231,11 @@ function SetProcessing(ichecked)
       var ExpOpt = ExportProcessingOptions[iProc];
       $(ExpOpt.id).checked = false;
       $(ExpOpt.rowid).style.display = "none";
+      
+        if (ExpOpt.id != "OptionImPatch")
+        {
+            ExpOpt.Init(1);
+        }
       }
     ExportProcessingArgs += "|no_op";
     }
@@ -1283,7 +1296,7 @@ function SetProcessing(ichecked)
       {
         // The Set() functions can run asynchronously. We have at least one Set() function that succeeded (which means 
         // there could be AJAX running).
-        ExportProcessingArgsPoll = setInterval(GetExportProcessingArguments, 100);
+        ExportProcessingArgsPoll = setInterval(GetExportProcessingArguments, 50);
         
         // Disable all processing-step checkboxes, until GetExportProcessingArguments() resolves.
         for (iProc = 0; iProc < nProcs; iProc++)
@@ -1310,24 +1323,38 @@ function SetProcessing(ichecked)
         
   $("ExportProcessingHidden").value = ExportProcessingArgs;
   
-  if (ExportProcessingArgsPoll)
-  {
-    // We don't know if export processing is OK yet.
-    ExportProcessingOK = false;
-  }
-  else
-  {
-    if (isok)
+    clearInterval(intervalFn);
+  
+    if (ExportProcessingArgsPoll)
     {
-        ExportProcessingOK = true;
+        // We don't know if export processing is OK yet.
+        ExportProcessingOK = false;
+        // do not clear the setProcessingRunning flag
     }
     else
     {
-        ExportProcessingOK = false;
+        if (isok)
+        {
+            ExportProcessingOK = true;
+        }
+        else
+        {
+            ExportProcessingOK = false;
+        }
+        
+        setProcessingRunning = false;
     }
-  }
-  CheckRediness();
-  }
+    
+    CheckRediness();
+}
+
+function SetProcessing(ichecked)
+{
+	var intervalFn;
+
+	setProcessingQueue.push(ichecked)
+	intervalFn = setInterval(function(){ runSetProcessing(intervalFn); }, 100);
+}
  
 // Cannot determine the arguments at the time that SetProcessing() is called because there might be
 // asynchronous processes running (AJAX calls) that need to complete before the arguments can be 
@@ -1406,6 +1433,8 @@ function GetExportProcessingArguments()
     ExportProcessingArgsPoll = null;
     ExportProcessingOK = true; // This means that everything that is going to modify the export arguments has completed
                                // modifying said parameters. It does NOT mean that the parameter values are acceptable.
+
+    setProcessingRunning = false;
 }
 
 function SetExportProtocol(byWhom)
