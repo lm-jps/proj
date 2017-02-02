@@ -1089,7 +1089,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.51 2017/02/01 23:39:49 baldner Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.52 2017/02/02 00:11:33 baldner Exp $");
 }
 
 
@@ -4406,7 +4406,7 @@ printf("combineornot=%d, combine=%d\n", combineornot, combineYesNo);
 	      //statusA[45]= drms_setkey_string(recLev1p->records[timeindex],ROTFLAT,QueryFlatField); //apply a rotational flat field yes (query used) or no (empty string)?
 	      if(inLinearity == 1)      CALVER32[0] = CALVER32[0] | CALVER_LINEARITY;
 	      if(inRotationalFlat == 1) CALVER32[0] = CALVER32[0] | CALVER_ROTATIONAL;
-	      if(TargetHFLID == 58312 || TargetHFLID == 1022 TargetHFLID == 2032 // added all ModL framelists, 2016.11.02
+	      if(TargetHFLID == 58312 || TargetHFLID == 1022 || TargetHFLID == 2032 // added all ModL framelists, 2016.11.02
 		  || TargetHFLID == 2042 || TargetHFLID == 2043 || TargetHFLID == 3040
 		  || TargetHFLID == 3041 || TargetHFLID == 3042 || TargetHFLID == 3043
 		  || TargetHFLID == 3048) {
