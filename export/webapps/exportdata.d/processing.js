@@ -47,6 +47,7 @@ var keyNoaaLonX = 3;
 
 // Support functions for multiple processing options
 // This function gets the first or last record of a series.
+// It gets called ONLY from the Set() functions. So, the argument to DoCheck() should be false.
 function processingGetRecInfo(DoCheck, exportOption, n)
   {
   // Get keywords for a single record.  n will be 1 for first record, -1 for last record.
@@ -78,15 +79,18 @@ function processingGetRecInfo(DoCheck, exportOption, n)
               {
               processingFirstRecord = recinfo;
 
-              if (processingLastRecord)
-                DoCheck();
               }
             if (thisN == "-1")
               {
               processingLastRecord = recinfo;
-              if (processingFirstRecord)
-                DoCheck();
               }
+              
+                if (exportOption)
+                {
+                    exportOption.argsReady = false;
+                    exportOption.paramsValid = null;
+                    exportOption.Check(false);
+                }
             }
           else
           {
@@ -121,7 +125,7 @@ function HmiB2ptrSet(param)
     this.argsReady = false;
     this.paramsValid = null;
 
-    checkRes = this.Check();
+    checkRes = this.Check(false);
       
     if (checkRes === null)
     {
@@ -140,10 +144,13 @@ function HmiB2ptrSet(param)
 
 function HmiB2ptrInit(onLoad)
   {
-    $("ProcessHmiB2ptr").style.display="none";
+    if (onLoad)
+    {
+        $("ProcessHmiB2ptr").style.display="none";
+    }
   }
 
-function HmiB2ptrCheck()
+function HmiB2ptrCheck(fromSetProcessing)
   {
   var HmiB2ptrSizeRatio = 1.0;
   var isok = true;
@@ -155,21 +162,30 @@ function HmiB2ptrCheck()
     return '';
   }
   
-  if (this.paramsValid !== null)
-  {
-    // Already checked.
-    return this.paramsValid; // Empty string if the previous call determined the arguments to be invalid.
-  }
-  
-  if (SeriesName.toUpperCase() === 'hmi.B_720s'.toUpperCase())
+    if (fromSetProcessing)
     {
-    // $("ExportFilenameFmt").value = $("ExportFilenameFmt").value.replace('T_REC','T_OBS');
+        if (!this.argsReady)
+        {
+            // a Set() is pending
+            return null;
+        }
     }
-  else
+    
+    if (this.paramsValid !== null)
     {
-    isok = false;
-    alert("Error - HmiB2ptr can only be used for series hmi.B_720s");
-    return null;
+        // Already checked.
+        return this.paramsValid; // Empty string if the previous call determined the arguments to be invalid.
+    }
+  
+    if (SeriesName.toUpperCase() === 'hmi.B_720s'.toUpperCase())
+    {
+        // $("ExportFilenameFmt").value = $("ExportFilenameFmt").value.replace('T_REC','T_OBS');
+    }
+    else
+    {
+        isok = false;
+        alert("Error - HmiB2ptr can only be used for series hmi.B_720s");
+        return 'error';
     }
 
   ExportProcessingOptions[HmiB2ptrOption].Size = HmiB2ptrSizeRatio;
@@ -192,7 +208,7 @@ function AiaScaleSet(param)
     
     this.argsReady = false;
     this.paramsValid = null;
-    checkRes = this.Check();
+    checkRes = this.Check(false);
     
     if (checkRes === null)
     {
@@ -213,10 +229,13 @@ function AiaScaleSet(param)
 
 function AiaScaleInit(onLoad)
   {
-    $("ProcessAiaScale").style.display="none";
+    if (onLoad)
+    {
+        $("ProcessAiaScale").style.display="none";
+    }
   }
 
-function AiaScaleCheck()
+function AiaScaleCheck(fromSetProcessing)
   {
   var AiaScaleSizeRatio = 1.0;
   var isok = true;
@@ -228,21 +247,30 @@ function AiaScaleCheck()
     return '';
   }
   
-  if (this.paramsValid !== null)
-  {
-    // Already checked.
-    return this.paramsValid; // Empty string if the previous call determined the arguments to be invalid.
-  }
-  
-  if (SeriesName === 'aia.lev1')
+    if (fromSetProcessing)
     {
-    $("ExportFilenameFmt").value = $("ExportFilenameFmt").value.replace('T_REC','T_OBS');
+        if (!this.argsReady)
+        {
+            // a Set() is pending
+            return null;
+        }
     }
-  else
+    
+    if (this.paramsValid !== null)
     {
-    isok = false;
-    alert("Error - aia_scale can only be used for series aia.lev1");
-    return null; // Tell calling function to uncheck this processing step.
+        // Already checked.
+        return this.paramsValid; // Empty string if the previous call determined the arguments to be invalid.
+    }
+  
+    if (SeriesName === 'aia.lev1')
+    {
+        $("ExportFilenameFmt").value = $("ExportFilenameFmt").value.replace('T_REC','T_OBS');
+    }
+    else
+    {
+        isok = false;
+        alert("Error - aia_scale can only be used for series aia.lev1");
+        return 'error'; // Tell calling function to uncheck this processing step.
     }
 
   ExportProcessingOptions[AiaScaleOption].Size = AiaScaleSizeRatio;
@@ -261,19 +289,22 @@ var RebinOption;
 
 function RebinInit(onLoad)
   {
-    // Clear out any old settings.
-    $("RebinMethod").selectedIndex=0;
-    $("RebinSegments").checked = false;
-    $("RebinCrop").checked = false;
-    $("RebinRotate").checked = false;
-    $("RebinScale").value = "1.0";
-    $("RebinFWHM").value = "-1.0";
-    $("RebinNvector").value = "-1.0";
-    $("RebinFWHM").style.backgroundColor = colorRed;
-    $("RebinNvector").style.backgroundColor = colorRed;
-    $("RebinFWHMRow").style.display = "none";
-    $("RebinNvectorRow").style.display = "none";
-    $("ProcessRebin").style.display = "none";
+    if (onLoad)
+    {
+        // Clear out any old settings.
+        $("RebinMethod").selectedIndex=0;
+        $("RebinSegments").checked = false;
+        $("RebinCrop").checked = false;
+        $("RebinRotate").checked = false;
+        $("RebinScale").value = "1.0";
+        $("RebinFWHM").value = "-1.0";
+        $("RebinNvector").value = "-1.0";
+        $("RebinFWHM").style.backgroundColor = colorRed;
+        $("RebinNvector").style.backgroundColor = colorRed;
+        $("RebinFWHMRow").style.display = "none";
+        $("RebinNvectorRow").style.display = "none";
+        $("ProcessRebin").style.display = "none";
+    }
 
     // Display the rebin options table.
   }
@@ -321,7 +352,7 @@ function RebinSet(control)
         }
     }
     
-    checkRes = this.Check();
+    checkRes = this.Check(false);
     
     if (checkRes === null)
     {
@@ -338,7 +369,7 @@ function RebinSet(control)
     return 0;
   }
 
-function RebinCheck()
+function RebinCheck(fromSetProcessing)
   {
   var RebinSizeRatio = 1.0;
   var rv = "rebin";
@@ -348,6 +379,15 @@ function RebinCheck()
     {
         // If this processing option is not selected, then do not check parameter values.
         return '';
+    }
+    
+    if (fromSetProcessing)
+    {
+        if (!this.argsReady)
+        {
+            // a Set() is pending
+            return null;
+        }
     }
     
     if (this.paramsValid !== null)
@@ -425,16 +465,19 @@ var ResizeOption;
 
 function ResizeInit(onLoad)
   {
-    // Clear out any old settings.
-    $("ResizeScaleRow").style.display = "table-row";
-    $("ResizeBicubic").checked = true;
-    $("ResizeSunCenter").checked = true;
-    $("ResizeCrop").checked = false;
-    $("ResizeReplicate").checked = false;
-    $("ResizeDoScale").checked = false;
-    $("ResizeCdelt").value = "-1.0";
-    $("ResizeCdelt").style.backgroundColor = colorRed;
-    $("ResizeScaleRow").style.display = "none";
+    if (onLoad)
+    {
+        // Clear out any old settings.
+        $("ResizeScaleRow").style.display = "table-row";
+        $("ResizeBicubic").checked = true;
+        $("ResizeSunCenter").checked = true;
+        $("ResizeCrop").checked = false;
+        $("ResizeReplicate").checked = false;
+        $("ResizeDoScale").checked = false;
+        $("ResizeCdelt").value = "-1.0";
+        $("ResizeCdelt").style.backgroundColor = colorRed;
+        $("ResizeScaleRow").style.display = "none";
+    }
   }
 
 function ResizeSet(control)
@@ -465,7 +508,17 @@ function ResizeSet(control)
     return 0;
   }
 
-function ResizeCheck()
+// If the Check() functions are called without first calling the corresponding Set() functions, then 
+// it is possible that the Check() functions are operating on stale data because the Check() functions
+// may use variables set by the Set() functions.
+// 
+// We basically do not want to call the Check() functions from SetProcessing() until the the Set()
+// functions have completed. The way to do that is to wait until this.paramsValid is !== null.
+// 
+// The parameter, if true, says we are calling from SetProcessing(). If that is the case, then 
+// return this.paramsValid. SetProcessing() keeps calling the Check() function until
+// this.paramsValid !== null.
+function ResizeCheck(fromSetProcessing)
   {
   var ResizeSizeRatio = 1.0;
   var rv = "resize";
@@ -475,6 +528,15 @@ function ResizeCheck()
     {
         // If this processing option is not selected, then do not check parameter values.
         return '';
+    }
+        
+    if (fromSetProcessing)
+    {
+        if (!this.argsReady)
+        {
+            // a Set() is pending
+            return null;
+        }
     }
     
     if (this.paramsValid !== null)
@@ -625,6 +687,7 @@ function ImPatchSet(param)
         $("ImTDelta").value = "NotSpecified";
     }
     
+    // RecordCount cannot be null - you have to have a valid record-set before you can click on im_patch processing.
     if (RecordCount === null)
     {
         processingFirstRecord = null;
@@ -645,7 +708,7 @@ function ImPatchSet(param)
     
     if (processingFirstRecord && processingLastRecord)
     {
-        checkRes = this.Check();
+        checkRes = this.Check(false);
 
         if (checkRes === null)
         {
@@ -681,16 +744,33 @@ function ImPatchSet(param)
 //  2 set by Reset params button (reset parameters to default)
 //  3 set by Update RecordSet Times button (reset parameters to default)
 
-function ImPatchCheck()
+function ImPatchCheck(fromSetProcessing)
   {
     var args = "im_patch";
     var isok = true;
     var localImPatchSizeRatio = 1.0;
+    
+    // alert('lkwelfwjef ' + fromSetProcessing);
 
     if (!$("OptionImPatch").checked)
     {
         // If this processing option is not selected, then do not check parameter values.
         return '';
+    }
+
+    // If this.argsReady == false, we know that some Set() call was made and we are possibly waiting for
+    // resolution of asynchronous calls. If this Check() was called by Set(), then we need to continue
+    // and finalize the Set() call. But if this Check() was called by SetProcessing(), then we need to
+    // check if there is a pending Set() call. We do that by looking at this.argsReady. If it is
+    // false, then we know that there is a pending Set(), and SetProcessing() must wait. If it is true,
+    // then there is no pending Set(), and SetProcessing() can get an answer and continue.    
+    if (fromSetProcessing)
+    {
+        if (!this.argsReady)
+        {
+            // a Set() is pending
+            return null;
+        }
     }
     
     if (this.paramsValid !== null)
@@ -698,7 +778,7 @@ function ImPatchCheck()
         // Already checked.
         return this.paramsValid; // Empty string if the previous call determined the arguments to be invalid.
     }
-  
+    
   if (RecordCount === null)
     {
         return("");
@@ -777,7 +857,8 @@ function ImPatchCheck()
   if ($("ImTDelta").value.strip().empty()) $("ImTDelta").value = "NotSpecified";
   if ($("ImTDelta").value == "NotSpecified" && processingFirstRecord)
     {
-    var recset = $("ExportRecordSet").value;
+    var recset = $("ExportRecordSet").value; // This can be undefined if user has changed record set and has not waited for the 
+                                             // record count to complete.
     var posAt = recset.indexOf("@");
     if (posAt > 0)
       {
@@ -938,14 +1019,14 @@ function ImPatchCheck()
 // Set display defaults
 function ImPatchInit(onLoad)
   {
+    if (onLoad)
+    {
         // Truly reset ImPatch parameters to default values.
         noaaColor = colorWhite;
         var requireColor = colorRed;
-        if (onLoad)
-        {
-            // When web page first loads.
-            $("ProcessImPatch").style.display="none";
-        }
+
+        $("ProcessImPatch").style.display="none";
+
         $("ImTrack").checked = true;
         $("ImRegister").checked = false;
         $("ImCrop").checked = false;
@@ -964,6 +1045,15 @@ function ImPatchInit(onLoad)
         processingLastRecord = null;
         defaultStartUsed = 1;
         defaultStopUsed = 1;
+    }
+    else        
+    {
+        // set first and last record for impatch
+
+        // blow away arguments cache since we are changing the values of processingFirstRecord and processingLastRecord
+        processingGetRecInfo(this.Check, this, 1); // changes this.argsReady to true        
+        processingGetRecInfo(this.Check, this, -1);
+    }
   }
 
 // End of IM Patch code
@@ -1058,7 +1148,7 @@ function MaprojSet(param)
     
     if (processingFirstRecord && processingLastRecord)
     {
-        checkRes = this.Check();
+        checkRes = this.Check(false);
         
         if (checkRes === null)
         {
@@ -1088,7 +1178,7 @@ function MaprojSet(param)
     return 0;
   }
 
-function MaprojCheck()
+function MaprojCheck(fromSetProcessing)
   {
   var MaprojSizeRatio = 1.0;
   var isok = true;
@@ -1101,16 +1191,19 @@ function MaprojCheck()
         return '';
     }
     
+    if (fromSetProcessing)
+    {
+        if (!this.argsReady)
+        {
+            // a Set() is pending
+            return null;
+        }
+    }
+    
     if (this.paramsValid !== null)
     {
         // Already checked.
         return this.paramsValid; // Empty string if the previous call determined the arguments to be invalid.
-    }
-  
-  if (RecordCount === null)
-    {
-    ExportNewRS();
-    return("");
     }
 
   args += ",map=" + $("MaprojProj").value;
@@ -1235,21 +1328,29 @@ function MaprojCheck()
 
 function MaprojInit(onLoad)
   {
-    noaaColor = colorWhite;
-    var requireColor = colorRed;
-    $("ProcessMaproj").style.display="none";
-    $("MaprojReflatLine").style.display="none";
-    $("MaprojNOAA").style.backgroundColor=colorWhite; $("MaprojNOAA").value = "NotSpecified";
-    $("MaprojScale").style.backgroundColor = requireColor; $("MaprojScale").value = "NotSpecified";
-    $("MaprojX").style.backgroundColor = requireColor; $("MaprojX").value = "NotSpecified";
-    $("MaprojLnObs").checked = 0;
-    $("MaprojY").style.backgroundColor = requireColor; $("MaprojY").value = "NotSpecified";
-    $("MaprojWide").style.backgroundColor = requireColor; $("MaprojWide").value = "NotSpecified";
-    $("MaprojHigh").style.backgroundColor = requireColor; $("MaprojHigh").value = "NotSpecified";
-    processingFirstRecord = null;
-    processingLastRecord = null;
-    defaultStartUsed = 1;
-    defaultStopUsed = 1;
+    if (onLoad)
+    {
+        noaaColor = colorWhite;
+        var requireColor = colorRed;
+        $("ProcessMaproj").style.display="none";
+        $("MaprojReflatLine").style.display="none";
+        $("MaprojNOAA").style.backgroundColor=colorWhite; $("MaprojNOAA").value = "NotSpecified";
+        $("MaprojScale").style.backgroundColor = requireColor; $("MaprojScale").value = "NotSpecified";
+        $("MaprojX").style.backgroundColor = requireColor; $("MaprojX").value = "NotSpecified";
+        $("MaprojLnObs").checked = 0;
+        $("MaprojY").style.backgroundColor = requireColor; $("MaprojY").value = "NotSpecified";
+        $("MaprojWide").style.backgroundColor = requireColor; $("MaprojWide").value = "NotSpecified";
+        $("MaprojHigh").style.backgroundColor = requireColor; $("MaprojHigh").value = "NotSpecified";
+        processingFirstRecord = null;
+        processingLastRecord = null;
+        defaultStartUsed = 1;
+        defaultStopUsed = 1;
+    }
+    else
+    {
+        processingGetRecInfo(this.Check, this, 1);
+        processingGetRecInfo(this.Check, this, -1);
+    }
   }
 
 // End of MapProj code
@@ -1275,8 +1376,8 @@ function ProcessingInit()
   ExpOpt.id="OptionNone";
   ExpOpt.rowid = "ExpSel_none";
   ExpOpt.Size = 1.0;
-  ExpOpt.argsReady = false;
-  ExpOpt.paramsValid = null;
+  ExpOpt.argsReady = true; // no Set() call pending
+  ExpOpt.paramsValid = null; // cache last Check() call
   ExportProcessingOptions[iOpt] = ExpOpt;
 
   iOpt++;
@@ -1290,7 +1391,7 @@ function ProcessingInit()
   ExpOpt.Check = AiaScaleCheck;
   ExpOpt.Set = AiaScaleSet;
   ExpOpt.Size = 1.0;
-    ExpOpt.argsReady = false;
+    ExpOpt.argsReady = true;
     ExpOpt.paramsValid = null;
   ExportProcessingOptions[iOpt] = ExpOpt;
   AiaScaleOption = iOpt;
@@ -1306,7 +1407,7 @@ function ProcessingInit()
   ExpOpt.Check = HmiB2ptrCheck;
   ExpOpt.Set = HmiB2ptrSet;
   ExpOpt.Size = 1.0;
-    ExpOpt.argsReady = false;
+    ExpOpt.argsReady = true;
     ExpOpt.paramsValid = null;
   ExportProcessingOptions[iOpt] = ExpOpt;
   HmiB2ptrOption = iOpt;
@@ -1322,7 +1423,7 @@ function ProcessingInit()
   ExpOpt.Check = ResizeCheck;
   ExpOpt.Set = ResizeSet;
   ExpOpt.Size = 1.0;
-    ExpOpt.argsReady = false;
+    ExpOpt.argsReady = true;
     ExpOpt.paramsValid = null;
   ExportProcessingOptions[iOpt] = ExpOpt;
   ResizeOption = iOpt;
@@ -1338,7 +1439,7 @@ function ProcessingInit()
   ExpOpt.Check = ImPatchCheck;
   ExpOpt.Set = ImPatchSet;
   ExpOpt.Size = 1.0;
-    ExpOpt.argsReady = false;
+    ExpOpt.argsReady = true;
     ExpOpt.paramsValid = null;
   ExportProcessingOptions[iOpt] = ExpOpt;
   ImPatchOption = iOpt;
@@ -1354,7 +1455,7 @@ function ProcessingInit()
   ExpOpt.Check = MaprojCheck;
   ExpOpt.Set = MaprojSet;
   ExpOpt.Size = 1.0;
-    ExpOpt.argsReady = false;
+    ExpOpt.argsReady = true;
     ExpOpt.paramsValid = null;
   ExportProcessingOptions[iOpt] = ExpOpt;
   MaprojOption = iOpt;
@@ -1370,7 +1471,7 @@ function ProcessingInit()
   ExpOpt.Check = RebinCheck;
   ExpOpt.Set = RebinSet;
   ExpOpt.Size = 1.0;
-    ExpOpt.argsReady = false;
+    ExpOpt.argsReady = true;
     ExpOpt.paramsValid = null;
   ExportProcessingOptions[iOpt] = ExpOpt;
   RebinOption = iOpt;

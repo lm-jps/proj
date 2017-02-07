@@ -101,10 +101,10 @@ function NotifyProcessingCode()
   
   // SeriesName is determined asynchronously.
   if (SeriesName == previousSeries)
-    SetProcessing(-1); // Do not initialize all processing options to their defaults.
+    SetProcessing(-1, null); // Do not initialize all processing options to their defaults.
   else
     {
-    SetProcessing(-2); // Init all processing options to their defaults.
+    SetProcessing(-2, null); // Init all processing options to their defaults.
     ProtocolOptionsSet = 0;
     }
   previousSeries = SeriesName;
@@ -1168,7 +1168,7 @@ function ProcessingEnabled()
       $("ProcessingCheckboxHide").checked = false;
       $("ProcessingShowCheckbox").style.display = "table-row";
       }
-    SetProcessing(0); // Pretend the user clicked on the none processing option.
+    SetProcessing(0, null); // Pretend the user clicked on the none processing option.
     }
   }
 
@@ -1180,7 +1180,7 @@ var SizeRatio;
 var setProcessingRunning = false;
 var setProcessingQueue = [];
 
-function runSetProcessing(intervalFn)
+function runSetProcessing(intervalFn, spCallback)
 { // 0 if no procesing enabled (Enable Processing is not checked),  -1 if same seriesname, -2 if series has changed between export processing requests.
     // ichecked > 0 if the user clicks on/off a processing-step checkbox.    
     if (setProcessingRunning)
@@ -1193,6 +1193,7 @@ function runSetProcessing(intervalFn)
 	setProcessingRunning = true;
 	
     ichecked = setProcessingQueue.shift()
+
 	if (typeof ichecked == 'undefined')
 	{
 		// nothing to do; should not get here because each function instance handles one SetProcessing() call
@@ -1258,6 +1259,22 @@ function runSetProcessing(intervalFn)
           ExpOpt.Init(1);
           $(ExpOpt.rowid).style.display="table-row";
           isok = 0;
+          
+            // We need to run the check function for each checked option since we changed the record-set.
+            // The Check() functions always run synchronously.
+            if (ExpOpt.hasOwnProperty('Check') && ExpOpt.Check && typeof ExpOpt.Check === 'function')
+            {
+                ExpOpt.paramsValid = null; // blow-away the cache so Check() can actually do the check and generate the command-line arguments.
+                args = ExpOpt.Check(true);
+
+                if (args == 'error')
+                {
+                    // Error that requires the checkbox to be unchecked.
+                    $(ExpOpt.id).checked = false;
+                    $(ExpOpt.rowid).style.display = 'none';
+                    nchecked--;
+                }
+            }
           }
         else
           {
@@ -1266,17 +1283,20 @@ function runSetProcessing(intervalFn)
             // We basically want to NOT reset the impatch and maproj parameters in this case. But we do
             // want to run the 'set' functions that essentially check to see if the existing parameters
             // are valid.
-            if (ExpOpt.hasOwnProperty('Set') && ExpOpt.Set && typeof ExpOpt.Set === 'function')
-            {
-                // Set() might run asynchronously. We might not know about the error returned by Set()
-                // at this point.
-                if (ExpOpt.Set(0)) // 0 means to not disrupt the current settings for 'use default start/stop time'.
-                {
-                    $(ExpOpt.id).checked = false;
-                    $(ExpOpt.rowid).style.display = 'none';
-                    nchecked--;
-                }
-            }
+            // Do not run Set() here. Each Set() function has a parameter with unique semantics.
+            // Call Check() instead in an interval function. Check() returns null if it is
+            // not ready to be executed (it is waiting for the results of other asynchronous functions).
+            //if (ExpOpt.hasOwnProperty('Set') && ExpOpt.Set && typeof ExpOpt.Set === 'function')
+            //{
+            //    if (ExpOpt.Set(0)) // 0 means to not disrupt the current settings for 'use default start/stop time'.
+            //    {
+            //        $(ExpOpt.id).checked = false;
+            //        $(ExpOpt.rowid).style.display = 'none';
+            //        nchecked--;
+            //    }
+            //}
+            // alert('init 0')
+            ExpOpt.Init(0); // some Check() functions need asynchronous calls to initialize variables
         }
       }
         else
@@ -1296,7 +1316,7 @@ function runSetProcessing(intervalFn)
       {
         // The Set() functions can run asynchronously. We have at least one Set() function that succeeded (which means 
         // there could be AJAX running).
-        ExportProcessingArgsPoll = setInterval(GetExportProcessingArguments, 50);
+        ExportProcessingArgsPoll = setInterval(function(){ GetExportProcessingArguments(spCallback); }, 50);
         
         // Disable all processing-step checkboxes, until GetExportProcessingArguments() resolves.
         for (iProc = 0; iProc < nProcs; iProc++)
@@ -1343,17 +1363,22 @@ function runSetProcessing(intervalFn)
         }
         
         setProcessingRunning = false;
+        
+        if (spCallback)
+        {
+            spCallback();
+        }
     }
     
     CheckRediness();
 }
 
-function SetProcessing(ichecked)
+function SetProcessing(ichecked, spCallback)
 {
 	var intervalFn;
 
 	setProcessingQueue.push(ichecked)
-	intervalFn = setInterval(function(){ runSetProcessing(intervalFn); }, 100);
+	intervalFn = setInterval(function(){ runSetProcessing(intervalFn, spCallback); }, 100);
 }
  
 // Cannot determine the arguments at the time that SetProcessing() is called because there might be
@@ -1361,7 +1386,7 @@ function SetProcessing(ichecked)
 // finalized.
 
 // Polling function
-function GetExportProcessingArguments()
+function GetExportProcessingArguments(spCallback)
 {
     var ExpOpt = null;
     var args = null;
@@ -1375,15 +1400,23 @@ function GetExportProcessingArguments()
         return;
     }
     
+    // alert('GetExportProcessingArguments');
+
     for (iProc = 1; iProc < ExportProcessingOptions.length; iProc++)
     {
         ExpOpt = ExportProcessingOptions[iProc];
         
         if ($(ExpOpt.id).checked)
         {
-            args = ExportProcessingOptions[iProc].Check();
+            args = ExportProcessingOptions[iProc].Check(true);
             
             if (args === null)
+            {
+                // a Set() function is pending; wait until it has completed
+                return;
+            }
+            
+            if (args == 'error')
             {
                 // Error that requires the checkbox to be unchecked.
                 $(ExpOpt.id).checked = false;
@@ -1435,6 +1468,11 @@ function GetExportProcessingArguments()
                                // modifying said parameters. It does NOT mean that the parameter values are acceptable.
 
     setProcessingRunning = false;
+    
+    if (spCallback)
+    {
+        spCallback();
+    }
 }
 
 function SetExportProtocol(byWhom)
@@ -1547,6 +1585,7 @@ function ExportShowQuery()
 function CheckRediness()
   {
   var status = ExportQueryOK * ExportRecordSetOK * ExportMethodOK * ExportFilenameFmtOK * ExportProtocolOK * (ExportNotifyOK==1);
+  // alert('status 1 ExportQueryOK, ExportRecordSetOK, ExportMethodOK, ExportFilenameFmtOK, ExportProtocolOK, ExportNotifyOK ' + ExportQueryOK + ' ' + ExportRecordSetOK + ' ' + ExportMethodOK + ' ' + ExportFilenameFmtOK + ' ' + ExportProtocolOK + ' ' + ExportNotifyOK)
   
   if ($("ProcessingCheckbox").checked)
   {
@@ -1616,32 +1655,40 @@ function SetExportParams()
 
 // This function is called when the user clicks on the "Check Params for Export"
 // button. 
-function CheckExportParams()
+// A lot of the calls in this function are asynchronous. 
+function CheckExportParamsInternal()
   {
+    // complete the SetProcessing part of this check
+    // If there was an error in the processing options, then ExportProcessingOK is not true.
+    // ProcessingOK() is synchronous.
+    if ($("ProcessingCheckbox").checked && (!ExportProcessingOK || !ProcessingOK()))
+    {
+        $("ExportCheckMsg").innerHTML = "Processing details not correct, fix and retry export request.";
+    }
+    else
+    {
+  
+  
   if ($("ExportRecordSet").value.length == 0)
   {
     $("ExportCheckButton").style.backgroundColor = colorYellow;
     $("ExportCheckMsg").innerHTML = "Please enter a record-set specification.";
     return 0;
   }
+  
   if (RecordCount === null)
     {
     $("ExportCheckButton").style.backgroundColor = colorYellow;
     $("ExportCheckMsg").innerHTML = "Still counting records, wait a second then retry";
     return(0);
     }
+    
   while (1) // use with break instead of goto done.
     {
     if (ExportRecordSetOK == 0)
       {
-      if (GetRSCount(null))
-      {
         $("ExportCheckMsg").innerHTML = "Invalid record-set specification";
         break;
-      }
-
-      $("ExportCheckMsg").innerHTML = "RecordSet not verified, enter RecordSet then retry export request.";
-      break;
       }
     SetExportMethod(1);
     if (ExportMethodOK == 0)
@@ -1656,13 +1703,6 @@ function CheckExportParams()
       break;
       }
       
-    // Do not call SetProcessing() here. SetProcessing() gets called whenever a processing option gets modified.
-    // If there was an error in the processing options, then ExportProcessingOK is not true.        
-    if ($("ProcessingCheckbox").checked && (!ExportProcessingOK || !ProcessingOK()))
-      {
-          $("ExportCheckMsg").innerHTML = "Processing details not correct, fix and retry export request.";
-          break;
-      }
     SetExportProtocol(1);
     if (ExportProtocolOK == 0)
       {
@@ -1676,7 +1716,8 @@ function CheckExportParams()
     else if (protocolEnable)
       {
       ProtocolImageCheck();
-      }
+      }      
+      
     if (ExportNotifyOK == 0 || ExportNotifyOK == 2)
       {
       // This is an asynchronous call, so we need to put the following "isOK" check into a
@@ -1689,7 +1730,10 @@ function CheckExportParams()
     $("ExportCheckMsg").innerHTML = "OK to proceed";
     break;
     }
+    
+    }
 
+    // note - ExportQueryOK is missing here
   var isOK = ExportRecordSetOK * ExportMethodOK * ExportFilenameFmtOK * ExportProtocolOK * (ExportNotifyOK==1);
   
   if ($("ProcessingCheckbox").checked)
@@ -1725,7 +1769,14 @@ function CheckExportParams()
   var isOK = CheckRediness();
   return isOK;
   }
-
+  
+function CheckExportParams()
+{
+    // Up till now, SetProcessing() gets called whenever a processing option checkbox gets clicked.
+    // But SetProcessing() does not get called when the user changes processing option values. Call it
+    // now with -1 (which means the record-set spec has not changed).
+    SetProcessing(-1, CheckExportParamsInternal);  // asynchronous - can't do the rest until this asynchronous call completes.
+}
 
 function GetExport() // This is the code executed when the user clicks on the "Submit Export Request" button.
   {
