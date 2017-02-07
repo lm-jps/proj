@@ -749,8 +749,6 @@ function ImPatchCheck(fromSetProcessing)
     var args = "im_patch";
     var isok = true;
     var localImPatchSizeRatio = 1.0;
-    
-    // alert('lkwelfwjef ' + fromSetProcessing);
 
     if (!$("OptionImPatch").checked)
     {
@@ -1355,6 +1353,8 @@ function MaprojInit(onLoad)
 
 // End of MapProj code
 
+// HTML element event handlers
+
 //
 // Processing details for all options
 //
@@ -1443,6 +1443,10 @@ function ProcessingInit()
     ExpOpt.paramsValid = null;
   ExportProcessingOptions[iOpt] = ExpOpt;
   ImPatchOption = iOpt;
+  
+    // add processing HTML element event handlers
+    $('ResetImPatchButton').addEventListener('click', function() { ImPatchInit(1); ExportProcessingOptions[ImPatchOption].Set(0); $("ProcessImPatch").style.display="table-row";}, false);
+
 
   iOpt++;
   ProcessingOptionsHTML += 

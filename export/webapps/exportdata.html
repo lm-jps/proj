@@ -321,7 +321,7 @@ function OnLoadInit()
   {
   var needcount = 0;
   Cookie.init({name:exportdata, expires:14});
-  initVars(); // ART - Ah, here's the problem! This call runs code that requires RecordSet to be set. However, that is not true  
+  initVars(); // This call runs code that requires RecordSet to be set. However, that is not true  
               // before it is set below [ $("ExportRecordSet").value = args.ds ]
   if (Internal)
     {
@@ -1280,23 +1280,8 @@ function runSetProcessing(intervalFn, spCallback)
           {
             $(ExpOpt.rowid).style.display="table-row";
             // This is the case where we do not want to reset the processing parameters to the default.
-            // We basically want to NOT reset the impatch and maproj parameters in this case. But we do
-            // want to run the 'set' functions that essentially check to see if the existing parameters
-            // are valid.
-            // Do not run Set() here. Each Set() function has a parameter with unique semantics.
-            // Call Check() instead in an interval function. Check() returns null if it is
-            // not ready to be executed (it is waiting for the results of other asynchronous functions).
-            //if (ExpOpt.hasOwnProperty('Set') && ExpOpt.Set && typeof ExpOpt.Set === 'function')
-            //{
-            //    if (ExpOpt.Set(0)) // 0 means to not disrupt the current settings for 'use default start/stop time'.
-            //    {
-            //        $(ExpOpt.id).checked = false;
-            //        $(ExpOpt.rowid).style.display = 'none';
-            //        nchecked--;
-            //    }
-            //}
-            // alert('init 0')
-            ExpOpt.Init(0); // some Check() functions need asynchronous calls to initialize variables
+            ExpOpt.Init(0); // 0 initializes globals needed by Check() functions; initialization is asynchronous, so 
+                            // we run a setInterval function below, waiting for completion; the Check() functions can modify the UI
         }
       }
         else
@@ -1399,8 +1384,6 @@ function GetExportProcessingArguments(spCallback)
         // Wait till all the Set() procs for each processing step have completed their asynchronous processing.
         return;
     }
-    
-    // alert('GetExportProcessingArguments');
 
     for (iProc = 1; iProc < ExportProcessingOptions.length; iProc++)
     {
@@ -1585,7 +1568,6 @@ function ExportShowQuery()
 function CheckRediness()
   {
   var status = ExportQueryOK * ExportRecordSetOK * ExportMethodOK * ExportFilenameFmtOK * ExportProtocolOK * (ExportNotifyOK==1);
-  // alert('status 1 ExportQueryOK, ExportRecordSetOK, ExportMethodOK, ExportFilenameFmtOK, ExportProtocolOK, ExportNotifyOK ' + ExportQueryOK + ' ' + ExportRecordSetOK + ' ' + ExportMethodOK + ' ' + ExportFilenameFmtOK + ' ' + ExportProtocolOK + ' ' + ExportNotifyOK)
   
   if ($("ProcessingCheckbox").checked)
   {
@@ -2430,7 +2412,6 @@ Use this section to request a renewal/repeat of a prior export for which the dat
 <script type="text/javascript">
 var unescaped_html = unescape(escaped_html);
 $("ExportRequestForm").innerHTML = unescaped_html;
-
 // The onload function is called after this. It calls ProcessingInit() and ProcessingEnabled(). Don't do that here as well.
 </script>
 
