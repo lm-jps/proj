@@ -594,6 +594,17 @@ int do_ingest(long long bbrec, long long eerec, const char *dpath)
       l0l1->recnum0 = recnum0;
       l0l1->fsn = fsnx;
       if(hmiaiaflg) {			//aia
+	
+	// Lookup table #18 corruption 2017.02.07
+	// FSN range 145600147 - 145616603, WAVELNTH 1700 only
+	// Any pixel with value 16329 should be changed to 714
+	
+	int lutid = drms_getkey_int(rs0, "LUTID", &rstatus);
+	if (fsnx >= 145600147 && fsnx <=145616603 && lutid == 18) {
+	    for (int i=0; i<4096*4096; ++i)
+		if (l0l1->adata0[i] == 16329) l0l1->adata0[i] = 714;
+	}
+
         l0l1->dat1.adata1A = &data1A;
         //l0l1->himgcfid = drms_getkey_int(rs0, "AIFDBID", &rstatus);
 	l0l1->himgcfid = 90;	//!!TEMP force uncropped, no overscan
