@@ -5,6 +5,7 @@ aia.response
 aia.temperature_summary_300s
 aia_test.master_pointing3h
 cgem.lorentz
+hmi.b_135s
 hmi.b_720s_e15w1332_cea
 hmi.b_720s_e15w1332_cutout
 hmi.b_synoptic
@@ -26,6 +27,7 @@ hmi.m_720s_mod
 hmi.m_720s_nrt
 hmi.marmask_720s
 hmi.marmask_720s_nrt
+hmi.me_135s
 hmi.me_720s_e15w1332
 hmi.me_720s_e15w1332_harp
 hmi.me_720s_fd10_harp
@@ -53,6 +55,7 @@ hmi.mrsynop_small_720s
 hmi.offpoint_flatfield
 hmi.rdvavgpspec_fd15
 hmi.rdvavgpspec_fd30
+hmi.s_135s
 hmi.sharp_720s_nrt
 hmi.sharp_cea_720s
 hmi.sharp_cea_720s_nrt
