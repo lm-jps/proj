@@ -5,12 +5,12 @@ use warnings;
 #this file is: cvs/JSOC/proj/lev0/scripts/crs2drms_cron.pl
 #called by cron to detect new CRS and ingest into DRMS
 
-$ENV{SUMSERVER} = "j1";
+$ENV{SUMSERVER} = "k1";
 $ENV{JSOC_DBUSER} = "production";
-my $series = 'iris_ground.window_table';
-my $stage = '/scr21/jps/IRIS';
+my $series = 'iris.crs_table';
+my $stage = '/tmp28/jps/iris/stage';
 my $seg = "${stage}/CRS";
-my $scriptdir = '/home/jsoc/cvs/JSOC/proj/lev0/scripts';
+my $scriptdir = '/home/jsoc/cvs/Development/JSOC/proj/lev0/scripts';
 foreach my $flag (glob "$stage/CRS/[1-9]*") {
   unlink $flag;
   my $ser_num = `basename $flag`; chomp $ser_num;
