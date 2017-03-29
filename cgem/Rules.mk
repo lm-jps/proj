@@ -12,7 +12,8 @@ dir     := $(d)/lorentz
 -include                $(SRCDIR)/$(dir)/Rules.mk
 dir     := $(d)/pdfi
 -include                $(SRCDIR)/$(dir)/Rules.mk
-
+dir     := $(d)/prep
+-include                $(SRCDIR)/$(dir)/Rules.mk
 
 # Standard things
 d               := $(dirstack_$(sp))
