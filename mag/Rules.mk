@@ -28,6 +28,8 @@ dir     := $(d)/synop
 -include                $(SRCDIR)/$(dir)/Rules.mk
 dir     := $(d)/polarfield
 -include                $(SRCDIR)/$(dir)/Rules.mk
+dir     := $(d)/polcorr
+-include                $(SRCDIR)/$(dir)/Rules.mk
 
 # Standard things
 d               := $(dirstack_$(sp))
