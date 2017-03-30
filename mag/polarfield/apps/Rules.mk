@@ -4,7 +4,7 @@ dirstack_$(sp)	:= $(d)
 d		:= $(dir)
 
 # Local variables
-MODEXE_$(d)	:= $(addprefix $(d)/, cp_polarfield meanpf)
+MODEXE_$(d)	:= $(addprefix $(d)/, cp_polarfield meanpf usflux)
 MODEXE		:= $(MODEXE) $(MODEXE_$(d))
 
 #MODEXE_SOCK_$(d):= $(MODEXE_$(d):%=%_sock)
