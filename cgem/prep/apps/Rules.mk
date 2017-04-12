@@ -14,7 +14,7 @@ MODEXE_USEF_$(d) := $(addprefix $(d)/, cgem_prep cgem_cutout cgem_map cgem_flct)
 MODEXE_USEF := $(MODEXE_USEF) $(MODEXE_USEF_$(d))
 
 ## wrapped Fortran codes
-WRAPPEDF_OBJ_$(d)    := $(addprefix $(d)/, ffunc.o azim_mindiff_jsoc.o)
+WRAPPEDF_OBJ_$(d)    := $(addprefix $(d)/, azim_mindiff_jsoc.o)
 
 # flags for compiling and linking
 MYCMPFLG_$(d) := -O2 -nofor-main -fp-model strict -fomit-frame-pointer
