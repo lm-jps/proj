@@ -244,6 +244,7 @@ c
      1 fcoe,idimf,pertrb,ierror,w)
       if(ierror .ne. 0) then
          write(6,*) 'ptdsolve_ss: scrj ierror .ne. 0; = ',ierror
+         write(6,*) 'ptdsolve_ss: c,d = ',c,d
          stop
       endif
 c

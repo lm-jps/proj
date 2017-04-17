@@ -201,11 +201,16 @@ c keywords: bthr_relax -|B| threshold for relaxation
       real*8 :: bthr_relax
 c number of iterations, verbose (1) or mute (0), show debug (1) or not
       integer :: max_iter,verbose,debug
+c maskflag to determine mask values when interpolated value .ne. 0 or 1
+c     maskflag should be set to either 0 or 1
+      integer :: maskflag
 c
 c additional constants
       real*8 dphi,dtheta
       real*8 dt
       real*8 pi,dum
+c - - debug variables (for sdf) - uncomment if needed
+c     integer*8 :: dims(20)
 c     
 c Function in FISHPACK (FFTPACK) that computes pi
 c
@@ -218,6 +223,7 @@ c
       debug=1
       bthr=200.d0
       bthr_relax=0.d0
+      maskflag=1
 c      
       pi=pimach(dum)
 c - - radius of the Sun [ in km] is now set as an input parameter
@@ -287,6 +293,12 @@ c
 c
       call interp_var_ss(m,n,maskcoe,maskcoe,maskcoe,
      1 a,b,mskte,mskpe,mskr)
+c
+c - - fix mask values in cases where interpolated value is between 0 and 1
+c
+      call fix_mask_ss(m+1,n,maskflag,mskte)
+      call fix_mask_ss(m,n+1,maskflag,mskpe)
+      call fix_mask_ss(m,n,maskflag,mskr)
 c         
 c Compute arrays of sin(theta) for the edge locations and at the
 c half-cell locations
@@ -344,29 +356,40 @@ c Integrate Helicity flux density over area to get helicity injection rate:
       call hmtot_ss(m,n,rsun,sinth_hlf,dtheta,dphi,hm,hmtot)
 c
 c Transpose E_h data arrays from theta,phi to lon,lat order 
-      call ehtp2ll_ss(m,n,etpdfi,eppdfi,elonpdfi,elatpdfi)
-      call ertp2ll_ss(m,n,erpdfi,erllpdfi)
+      call ehyeetp2ll_ss(m,n,etpdfi,eppdfi,elonpdfi,elatpdfi)
+      call eryeetp2ll_ss(m,n,erpdfi,erllpdfi)
 c
 c Calculate Bvec at t0 at TE and PE in lon, lat order
       call bhll2tp_ss(m,n,bloncoe0,blatcoe0,btcoe0,bpcoe0)
       call brll2tp_ss(m,n,brllcoe0,brtpcoe0)
       call interp_var_ss(m,n,btcoe0,bpcoe0,brtpcoe0,
      1 a,b,bt0,bp0,br0)
-      call bhtp2ll_ss(m,n,bt0,bp0,blon0,blat0)
-      call brtp2ll_ss(m,n,br0,brll0)
-
+      call bhyeetp2ll_ss(m,n,bt0,bp0,blon0,blat0)
+      call bryeetp2ll_ss(m,n,br0,brll0)
+c - - debug statements to create diagnostic .sdf file
+c     dims(1)=n
+c     dims(2)=m
+c     call sdf_rm_f77('debug_wrapper.sdf')
+c     call sdf_write_f77('debug_wrapper.sdf','brll0','f',8,2,dims,brll0)
+c     dims(1)=n+1
+c     dims(2)=m
+c     call sdf_write_f77('debug_wrapper.sdf','blon0','f',8,2,dims,blon0)
+c     dims(1)=n
+c     dims(2)=m+1
+c     call sdf_write_f77('debug_wrapper.sdf','blat0','f',8,2,dims,blat0)
+c
 c
 c Calculate Bvec at t1 at TE and PE in lon, lat order      
       call bhll2tp_ss(m,n,bloncoe1,blatcoe1,btcoe1,bpcoe1)
       call brll2tp_ss(m,n,brllcoe1,brtpcoe1)            
       call interp_var_ss(m,n,btcoe1,bpcoe1,brtpcoe1,
      1 a,b,bt1,bp1,br1)
-      call bhtp2ll_ss(m,n,bt1,bp1,blon1,blat1)
-      call brtp2ll_ss(m,n,br1,brll1)
+      call bhyeetp2ll_ss(m,n,bt1,bp1,blon1,blat1)
+      call bryeetp2ll_ss(m,n,br1,brll1)
 c
 c - - rotate sr and hm into lon, lat order using brtp2ll_ss subroutine:
-      call brtp2ll_ss(m,n,sr,srll)
-      call brtp2ll_ss(m,n,hm,hmll)
+      call bryeetp2ll_ss(m,n,sr,srll)
+      call bryeetp2ll_ss(m,n,hm,hmll)
 c
 c Compute time at half-way between vector magnetograms:
 c

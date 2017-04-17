@@ -1,22 +1,27 @@
-      subroutine add_padding_ss(m,n,npadlat,npadlon,arr,arrpadded)
+      subroutine pad_abcd_ss(m,n,npadlat,npadlon,a,b,c,d,
+     1           mp,np,ap,bp,cp,dp)
 c
 c+
-c - - Purpose:  To add a buffer of zero-padding around a 2-d array containing
-c               non-zero values.
-c - - Usage:    call add_padding_ss(m,n,npadlat,npadlon,arrs,arrpadded)
+c - - Purpose:  To correct the values of a,b,c,d to reflect an added buffer of 
+c               zero-padding around a 2-d array containing non-zero values. Also
+c               compute corrected values of m,n (ie mp,np) to reflect the 
+c               padding.
+c - - Usage:    call pad_abcd_ss(m,n,npadlat,npadlon,a,b,c,d,
+c               mp,np,ap,bp,cp,dp)
 c - - Input:    m,n - integers describing the number of cell interiors
 c               in latitude/colatitude, and in longitude, respectively, 
 c               of the unpadded array.  
 c - - Input:    npadlat,npadlon - integers descibing the number of 0-padded
 c               cells in latitude and longitude, respectively, that will 
 c               surround the unpadded array.
-c - - Input:    arr(n+1,m+1) - real*8 array of the unpadded array values,
-c               stored in lon,lat index order on the COE grid.
-c - - Output:   arpadded(n+2*npadlon+1,m+2*npadlat+1) - real*8 array of 
-c               of the padded array values.  Note array is stored in lon,lat
-c               index order, same as input array, also on COE grid, but with
-c               increase in assumed array size.
-c
+c - - Input:    a,b,c,d - real*8 variables describing the minimum and
+c               maximum co-latitude, and minimum and maximum longitude, 
+c               respectively, spanned by the unpadded array
+c - - Output:   mp,np - integers describing the number of cell interiors in 
+c               latitude/colatitude, and in longitude, respectively, of the
+c               padded array.  mp=m+2*npadlat, and np=n+2*npadlon
+c - - Output:   ap,bp,cp,dp - real*8 variables describing minimum and maximum
+c               colatitude and longitude of the padded array.
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index
@@ -48,23 +53,41 @@ c
 c - - Input argument declarations:
 c
       integer :: m,n,npadlat,npadlon
-      real*8 :: arr(n+1,m+1)
+      real*8 :: a,b,c,d
 c
 c - - Output argument declarations:
 c
-      real*8 :: arrpadded(n+2*npadlon+1,m+2*npadlat+1)
+      integer :: mp,np
+      real*8 :: ap,bp,cp,dp
 c
 c - - local variable declarations:
 c
-      integer :: mp,np
+      real*8 :: dum,pi,twopi,dtheta,dphi
 c
+c - - declaration of pimach function from FISHPACK/FFTPACK:
+c
+      real*8 :: pimach
+c
+      pi=pimach(dum)
+      twopi=2.d0*pimach(dum)
+c
+      dtheta=(b-a)/m
+      dphi=(d-c)/n
+c
+      ap=a-npadlat*dtheta
+      bp=b+npadlat*dtheta
+      cp=c-npadlon*dphi
+      dp=d+npadlon*dphi
+c
+c - - error exit if ap < 0 or bp > pi or dp-cp > 2*pi
+c
+      if((ap .le. 0.d0) .or. (bp .gt. pi) .or. (dp-cp .gt. twopi)) then
+        write(6,*) 'pad_abcd_ss: ',
+     1  'ap, bp, or dp-cp out of range: ap,bp,dp-cp = ',ap,bp,dp-cp
+        stop
+      endif
       mp=m+2*npadlat
       np=n+2*npadlon
-c - - Initialize padded array to 0:
-      arrpadded(1:np+1,1:mp+1)=0.d0
-c - - fill in non-zero values:
-      arrpadded(1+npadlon:n+1+npadlon,1+npadlat:m+1+npadlat) =
-     1     arr(1:n+1,1:m+1)
 c
       return
       end

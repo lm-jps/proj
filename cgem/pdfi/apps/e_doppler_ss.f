@@ -130,12 +130,21 @@ c
      2 brcoe(2:m,2:n)*lr(2:m,2:n)*brcoe(2:m,2:n)*lr(2:m,2:n))
       bdotl=btcoe(2:m,2:n)*lt(2:m,2:n)+bpcoe(2:m,2:n)*lp(2:m,2:n)
      1 +brcoe(2:m,2:n)*lr(2:m,2:n)
+c    
+c     components of B_los lhat:
+c
       blost=bdotl*lt(2:m,2:n)
       blosp=bdotl*lp(2:m,2:n)
       blosr=bdotl*lr(2:m,2:n)
+c
+c     components of B_transverse:
+c
       btt=btcoe(2:m,2:n)-blost(1:m-1,1:n-1)
       btp=bpcoe(2:m,2:n)-blosp(1:m-1,1:n-1)
       btr=brcoe(2:m,2:n)-blosr(1:m-1,1:n-1)
+c
+c     magnitude of B_transverse:
+c
       btrn=sqrt(btt*btt+btp*btp+btr*btr)
 c 
       where(btrn .ne. 0.d0) 
