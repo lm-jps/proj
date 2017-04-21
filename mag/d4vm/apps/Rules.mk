@@ -10,7 +10,7 @@ d := $(dir)
 # module name(s) to be generated and file name(s) to be compiled
 
 ## C-wrapper name (name must end with .c)
-MODEXE_USEF_$(d) := $(addprefix $(d)/, test_d4vm)
+MODEXE_USEF_$(d) := $(addprefix $(d)/, test_d4vm dave4vm4velocity)
 
 ## wrapped Fortran codes
 WRAPPEDF_$(d)    := $(addprefix $(d)/, d4vm_preproc.o d4vm_matrix.o d4vm_derivs.o d4vm_2dconv.o d4vm_solver.o d4vm_kernel.o)
@@ -42,7 +42,7 @@ S_$(d) := $(notdir $(MODEXE_USEF_$(d)))
 
 # making object/executable with Rules file and extra options
 $(OBJ_$(d)): $(SRCDIR)/$(d)/Rules.mk
-$(OBJ_$(d)): CF_TGT := $(CF_TGT) -I$(SRCDIR)/$(d)/../../libs/astro -DCDIR="\"$(SRCDIR)/$(d)\""
+$(OBJ_$(d)): CF_TGT := $(CF_TGT) -I$(SRCDIR)/$(d)/../../libs/astro -DCDIR="\"$(SRCDIR)/$(d)\"" -I$(SRCDIR)/$(d)/../../../libs/stats
 
 $(WRAPPEDF_$(d)): FF_TGT := $(FF_TGT) # $(MYCMPFLG)
 $(MODEXE_USEF_$(d)): LL_TGT := $(LL_TGT) $(MYLNKFLG)
