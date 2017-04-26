@@ -519,6 +519,11 @@ printk("bad_geo: cropid=%d  fsn=%u\n", img->cropid, img->fsn);
 		old -= diff;
 	    else
 		old += diff;
+
+	    // just in case
+	    if (old > 16383)
+		goto __DECOMPRESS_FAILURE__;
+
 	    pix[ndecoded++] = old;
 	}
 

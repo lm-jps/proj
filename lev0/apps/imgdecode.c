@@ -496,6 +496,11 @@ ___DECODE_START___:
 		old -= diff;
 	    else
 		old += diff;
+	    
+	    // just in case
+	    if (old > 16383)
+		goto __DECOMPRESS_FAILURE__;
+
 	    pix[ndecoded++] = old;
 	}
 
