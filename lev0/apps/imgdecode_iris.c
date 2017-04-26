@@ -182,7 +182,6 @@ int imgdecode_iris(unsigned short *impdu, IMG *img)
 {
     unsigned short old, final, diff, w, h, skp, tak;
     int i, N, K, bits2go, wordcnt, nzero;
-    int headerr, overlfow;
     unsigned u, bitbuf, sgn, low, fs, kmask, nmask, nmk;
     unsigned offset, ndecoded;
     uint64_t uu;
