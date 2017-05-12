@@ -19,6 +19,8 @@ dir     := $(d)/egsehmicomp
 -include                $(SRCDIR)/$(dir)/Rules.mk
 dir     := $(d)/imrotate
 -include                $(SRCDIR)/$(dir)/Rules.mk
+dir     := $(d)/limbcompute_aia
+-include                $(SRCDIR)/$(dir)/Rules.mk
 dir     := $(d)/projection
 -include                $(SRCDIR)/$(dir)/Rules.mk
 
