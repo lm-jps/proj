@@ -1104,7 +1104,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables_dcon2.c,v 1.2 2016/10/03 17:43:52 arta Exp $");
+  return strdup("$Id: HMI_observables_dcon2.c,v 1.3 2017/05/16 13:21:09 arta Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -1780,7 +1780,7 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
     }
   if(Lev1pWanted || (Lev15Wanted && TestLevIn[2]==0))
     {
-       status = init_polcal(&pars,method);
+      status = init_polcal(&pars,method);
       if(status != 0)
 	{
 	  printf("Error: could not initialize the polarization calibration routine\n");
@@ -1919,11 +1919,11 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 	}
       if(DataCadence == 720.0 && unusual == 0)
 	{						             
-	  strcpy(HMISeriesLev15a,"hmi.V_720s"  );              
-	  strcpy(HMISeriesLev15b,"hmi.M_720s" );              
-	  strcpy(HMISeriesLev15c,"hmi.Ld_720s" );              
-	  strcpy(HMISeriesLev15d,"hmi.Lw_720s" );              
-	  strcpy(HMISeriesLev15e,"hmi.Ic_720s" );
+	  strcpy(HMISeriesLev15a,"hmi.V_720s_dcon"  );              
+	  strcpy(HMISeriesLev15b,"hmi.M_720s_dcon" );              
+	  strcpy(HMISeriesLev15c,"hmi.Ld_720s_dcon" );              
+	  strcpy(HMISeriesLev15d,"hmi.Lw_720s_dcon" );              
+	  strcpy(HMISeriesLev15e,"hmi.Ic_720s_dcon" );
 	}
       if(DataCadence == 720.0 && unusual == 1)
 	{						             
@@ -1974,7 +1974,7 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
       if( DataCadence == 120.0) strcpy(HMISeriesLev1pa,"su_couvidat.HMISeriesLev1pa120");
       if( DataCadence == 135.0) strcpy(HMISeriesLev1pa,"hmi.HMISeriesLev1pa135");
       if( DataCadence == 150.0) strcpy(HMISeriesLev1pa,"su_couvidat.HMISeriesLev1pa150");
-      if( DataCadence == 720.0 && unusual == 0) strcpy(HMISeriesLev1pa,"hmi.S_720s");
+      if( DataCadence == 720.0 && unusual == 0) strcpy(HMISeriesLev1pa,"hmi.S_720s_dcon");
       if( DataCadence == 720.0 && unusual == 1) strcpy(HMISeriesLev1pa,"hmi.S2_720s");
     }
 
