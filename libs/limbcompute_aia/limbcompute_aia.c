@@ -53,6 +53,16 @@ void printintarray(int *x, int n);
 #define EPSILON 1.e-10
 double systime();				/* internal systime */
  /*------------------------------------------------------------------------- */
+double systime()                                /* internal systime */
+{
+  double t;
+  struct timeval tp;
+  struct timezone tzp;
+  gettimeofday(&tp, &tzp);
+  t = (double) tp.tv_sec + .000001* (double) tp.tv_usec;
+  return t;
+}
+/*--------------------------------------------------------------------------*/
 void getmin9(int *p, int ix, int iy, int nx, float *x0, float *y0)
  {
  /* modified from the ana internal getmin, computes local minimum for a 3x3 subarray in p using x index
