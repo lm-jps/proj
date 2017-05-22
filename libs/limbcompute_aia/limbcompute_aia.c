@@ -1,10 +1,13 @@
-/* porting limbcompute to C, a bit awkward */
 #include <stdio.h>
-#include <string.h>
 #include <math.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 #include <sys/time.h>
+#include <ctype.h>
+
+/*------------------------------------------------------------------------- */
+extern int verbose;
 static float lastr1, lastr2, lastyc, lastxc;
 float sdisk_xc=2047.5, sdisk_yc=2047.5, sdisk_r, chicircle;
 static unsigned char *mask, *mask2, *masks;
@@ -46,14 +49,15 @@ void getmin9(int *p, int ix, int iy, int nx, float *x0, float *y0);
 void zeroinonlimb(float *xlimb, float *ylimb, int nin, float dr, float *g);
 void  minihough(int nc, float *xlimb, float *ylimb, int niter);
 void decomp(double *x, int n, int nd);
+void solve(double *a, double *b, int n, int nd);
 int pit(float *qxbase, float *qybase, int nxq, int npow, double *a, double *cfbase, double *fbase );
 float parabolicmax5(int *x, int nx);
 void printarray(float *x, int n);
 void printintarray(int *x, int n);
 #define EPSILON 1.e-10
 double systime();				/* internal systime */
- /*------------------------------------------------------------------------- */
-double systime()                                /* internal systime */
+/*------------------------------------------------------------------------------------------------*/
+double systime()				/* internal systime */
 {
   double t;
   struct timeval tp;
@@ -126,7 +130,7 @@ void zeroinonlimb(float *xlimb, float *ylimb, int nin, float dr, float *g)
    x[i] = xlimb[j];  y[i] = ylimb[j];  w[i] = g[j];
  } 
  circle_fit_lsq(x, y, w, n, &sdisk_xc, &sdisk_yc, &sdisk_r, &chicircle);
- printf("zeroinonlimb: sdisk_xc, sdisk_yc, sdisk_r = %g, %g, %g\n",sdisk_xc, sdisk_yc, sdisk_r);
+ if (verbose>2) printf("zeroinonlimb: sdisk_xc, sdisk_yc, sdisk_r = %g, %g, %g\n",sdisk_xc, sdisk_yc, sdisk_r);
  free(index);
  free(x);  free(y);  free(w);
  }
@@ -147,9 +151,9 @@ void  minihough(int nc, float *xlimb, float *ylimb, int niter)
  tstart = systime();
  rdlimb = (float *) malloc(nc * sizeof(float));
  dxprev = dyprev = 5.0;
- printf("minihough, nc = %d\n", nc);
+ if (verbose>2) printf("minihough, nc = %d\n", nc);
  if (niter > MAXNITER) {
-   printf("iteration count request (%d) exceeds MAXNITER (%d)\n", niter, MAXNITER);
+   if (verbose>1) printf("iteration count request (%d) exceeds MAXNITER (%d)\n", niter, MAXNITER);
    niter = MAXNITER; }
  
  dt1 = dt2 = 0.0;
@@ -190,9 +194,9 @@ void  minihough(int nc, float *xlimb, float *ylimb, int niter)
    //printf("ix, iy, dx, dy = %d, %d, %g, %g\n", ix, iy, dx, dy);
    /* check if on the edge and bail out if so */
    if (ix <= 0 || ix >= (NXC-1)) {
-      printf("x center max at edge, ix = %d\n", ix);   return; }
+      if (verbose > -1) printf("x center max at edge, ix = %d\n", ix); return;   }
    if (iy <= 0 || iy >= (NYC-1)) {
-      printf("y center max at edge, iy = %d\n", iy);   return; }
+      if (verbose > -1) printf("y center max at edge, iy = %d\n", iy); return;   }
    /* get the new center in the image from these */
    /* call getmin9 */
    getmin9(mhcount, ix, iy, NXC, &xc1, &yc1);
@@ -205,7 +209,7 @@ void  minihough(int nc, float *xlimb, float *ylimb, int niter)
 //    if (fabsf(dy) > dyprev) { if (dy < 0) dx = -dyprev * 0.75; else dy = dyprev * 0.75; }
    dxprev = fabsf(dx);
    dyprev = fabsf(dy);
-   printf("dx, dy = %g, %g\n", dx, dy);
+   if (verbose>4) printf("dx, dy = %g, %g\n", dx, dy);
    /* and now use the dx, dy to re-compute the nc rdlimb values */
    for (irc=0;irc<nc;irc++) {
      xq = xlimb[irc] - dx - sdisk_xc;
@@ -217,7 +221,7 @@ void  minihough(int nc, float *xlimb, float *ylimb, int niter)
    rx = parabolicmax5(hr, nh) + (float) hmin;
    free(hr);
    dr = rx * 0.5;  /* damp */
-   printf("Hough dx, dy, dr = %g, %g, %g\n", dx, dy, dr);
+   if (verbose>4) printf("Hough dx, dy, dr = %g, %g, %g\n", dx, dy, dr);
    sdisk_xc += dx;
    sdisk_yc += dy;
    sdisk_r += dr;
@@ -225,31 +229,33 @@ void  minihough(int nc, float *xlimb, float *ylimb, int niter)
    radiai[nextcenter] = sdisk_r; pcounts[nextcenter] = rmax;  nextcenter++;
    /* check if we are done */
    if ((dx*dx + dy*dy) < 0.0002 && fabsf(dr) < 0.01) {
-     printf("close enough, k = %d\n", k);  break;
+     if (verbose>2) printf("close enough, k = %d\n", k);  break;
    }
    t2 = systime();
    dt2 += t2 - t1;
  }
  ndone = nextcenter;
  /* print out the iteration results while debugging */
- printf("$xcenters =");
- printarray(xcenters, ndone);
+ if (verbose>3) {
+   printf("$xcenters =");
+   printarray(xcenters, ndone);
 
- printf("$ycenters =");
- printarray(ycenters, ndone);
+   printf("$ycenters =");
+   printarray(ycenters, ndone);
 
- printf("$radiai =");
- printarray(radiai, ndone);
+   printf("$radiai =");
+   printarray(radiai, ndone);
 
- printf("$pcounts =");
- for (k=0;k<ndone;k++) {
-   if (k%6 == 0) printf("\n");
-   printf("%12.5e", (float) pcounts[k]);
+   printf("$pcounts =");
+   for (k=0;k<ndone;k++) {
+     if (k%6 == 0) printf("\n");
+     printf("%12.5e", (float) pcounts[k]);
+   }
+   printf("\n");
+   printf("minihough times %8.3f %8.3f\n", dt1, dt2);
+   tend = systime();
+   printf("total minihough time %8.3f\n", tend - tstart);
  }
- printf("\n");
- printf("minihough times %8.3f %8.3f\n", dt1, dt2);
- tend = systime();
- printf("total minihough time %8.3f\n", tend - tstart);
  free(rdlimb);
  }
  /*------------------------------------------------------------------------- */
@@ -445,11 +451,8 @@ int key_locations(int *array, int n, int *nv, int **counts, int **values, int **
  int	*vscratch, *p, *q, val_sym, cnt_sym, indexsymarr;
  int	*countp, **qp, **qpbase, **qpstart, *valueoffsets, *pv;
  /* always need the range */
- //printf("n = %d\n", n);
  mm_int(array, n, &max, &min);
- //printf("min, max = %d, %d\n", min, max);
  range = max - min + 1;
- //printf("range = %d\n", range);
  /* need some scratch to keep the temporary values and indices */
  vscratch = (int *) malloc(range * sizeof (int));
  valueoffsets = (int *) malloc(range * sizeof (int));
@@ -475,8 +478,6 @@ int key_locations(int *array, int n, int *nv, int **counts, int **values, int **
  /* the indexptrs term is an array of pointers, each pointing to an array of indices */
  *indexptrs = qpbase = (int **) malloc(nuniq * sizeof (int *));/* there are nuniq ptr to index sets */
  qp = qpstart = (int **) malloc(nuniq * sizeof (int *));  /* for an incrementing set of scratch pointers */
-// printf("mark a\n");
-// printf("qp start = %p\n", qp);
  i = 0;
  pv = valueoffsets;  /* valueoffsets is used later to help populate the offset arrays */
  for (j=0;j<range;j++) {
@@ -490,11 +491,6 @@ int key_locations(int *array, int n, int *nv, int **counts, int **values, int **
      if (i > nuniq) { printf("internal error 1 in key_locations\n");  return -1; }
    } else *pv++ = -1;  /* we need a pv for each value within "range" */
  }
-//  printf("qp final = %p\n", qp);
-//  for (j=0;j<nuniq;j++) {
-//    printf("j, qpstart[j] = %d, %p\n", j, qpstart[j]);
-//  }
-// printf("mark b\n");
 
  /* now we have to scan the original array again to collect all the locations
  and populate the index arrays, we need valueoffsets to connect things */
@@ -505,10 +501,8 @@ int key_locations(int *array, int n, int *nv, int **counts, int **values, int **
    k = *(valueoffsets + i);
    if (k < 0) printf("bad k = %d\n", k);
    if (k >= nuniq) printf("bad k = %d\n", k);
-//   if (j <500) printf("j, i, k, qpstart[k] = %d, %d, %d, %p\n", j, i, k, qpstart[k]);
    *(qpstart[k])++ = j;     
  }
-// printf("mark c\n");
 
  free(vscratch);
  free(qpstart);
@@ -662,7 +656,6 @@ void decomp(double *x, int n, int nd)
   k++; qd += (nd + 1); }				/*end of outer loop */
 }
 /*------------------------------------------------------------------------- */
-void solve(double *a, double *b, int n, int nd);
 void solve(double *a, double *b, int n, int nd)
 {
   register	double	sum, *p1, *p2;
@@ -1011,10 +1004,11 @@ int limbcompute(float *x, int nx, int ny, float xcguess, float ycguess, float rg
     /* for the center, just have to be close, try 10 */
     if ( (fabsf(lastxc-xcguess) <= 10) && fabsf(lastyc-ycguess) <= 10) makeannflag = 0;
   }
-  printf("mark 2, makeannflag = %d\n", makeannflag);
   if (makeannflag) {
-    printf("r1, lastr1, r2, lastr2 = %g %g %g %g\n", r1, lastr1, r2, lastr2);
-    printf("lastxc, xcguess, lastyc, ycguess = %g %g %g %g\n", lastxc, xcguess, lastyc, ycguess);
+    if (verbose > 1) {
+      printf("r1, lastr1, r2, lastr2 = %g %g %g %g\n", r1, lastr1, r2, lastr2);
+      printf("lastxc, xcguess, lastyc, ycguess = %g %g %g %g\n", lastxc, xcguess, lastyc, ycguess);
+    }
   }
   if (makeannflag) {
     float r1uv, r2uv;
@@ -1036,7 +1030,6 @@ int limbcompute(float *x, int nx, int ny, float xcguess, float ycguess, float rg
     rmax = 2100.;  /* to exclude corners, only really needed when center is way off as in flats */
     //njs = njs_s = njs2 = 0;
     jprev = jprev_s = jprev2 = -1;
-    printf("mark 3\n");
     for (j=margin; j<(ny-margin); j++) {
 	float rys = powf ( j - ycguess, 2);
 	for (i=margin; i<(nx-margin); i++) {
@@ -1103,10 +1096,8 @@ int limbcompute(float *x, int nx, int ny, float xcguess, float ycguess, float rg
     doesn't remove many indices, just the ones that are partially occulted since the fully occulted ones
     don't appear anyhow. We expect a broad max in population counts (all full sectors will have close to
     the same #), so just eliminate all with < max(counts)*.75 for a trial */
-    printf("mark 3.5\n");
     key_locations(thann, num_inann, &nv, &counts, &values, &in4annulus);
     /* in4annulus are indices in thann */
-    printf(" nv = %d\n", nv);
     /* check out */
 //     for (j=0;j<nv;j++) {
 //       printf("j, values[j], counts[j] = %d, %d, %d\n", j, values[j], counts[j]);
@@ -1130,7 +1121,7 @@ int limbcompute(float *x, int nx, int ny, float xcguess, float ycguess, float rg
 	}
       }
       /* in2use are indices in the thann, innan, etc arrays */
-      printf("nc, num_inann = %d, %d\n", nc, num_inann);
+      //printf("nc, num_inann = %d, %d\n", nc, num_inann);
       if (nc > num_inann) { printf("internal error, nc, num_inann = %d, %d\n", nc, num_inann); return 1; }
    //    /* in2use now packed with nc indices from inann, reload the other arrays
    //       note that in2use must be monotonic */
@@ -1142,10 +1133,9 @@ int limbcompute(float *x, int nx, int ny, float xcguess, float ycguess, float rg
     free(counts);
     free(values);
 
-  }  else { printf("re-using last annulus\n"); }
-  printf("mark 4, limbmode = %d\n", limbmode);
+  }  else if (verbose > 1) { printf("re-using last annulus\n"); }
   t1 = systime();
-  printf("time for setup %8.3f\n", t1-tstart);
+  if (verbose > 0) printf("time for setup %8.3f\n", t1-tstart);
 
 
 
@@ -1153,7 +1143,6 @@ int limbcompute(float *x, int nx, int ny, float xcguess, float ycguess, float rg
   bzero((void *) fscratch, nxny);
   /* limbmode is used for different approaches, 0 for EUV, 1 for 1600/1700, 2 for 4500, 3 for 304, 4 for HMI */
   result = malloc(sizeof(float) * num_inanns);
-  printf("fwhm = %g\n", fwhm);
   if (limbmode == 1) {
     /* the UV case uses an extra mask and does a double Sobel */
     gsmooth_index(x, fwhm, nx, ny, inanns, num_inanns, result);
@@ -1171,19 +1160,15 @@ int limbcompute(float *x, int nx, int ny, float xcguess, float ycguess, float rg
     /* the final grad/ang are free'ed later */
   } else {
     /* the non-UV case */
-  printf("mark 5\n");
     gsmooth_index(x, fwhm, nx, ny, inanns, num_inanns, result);
     /* insert this result for the gsmoothy */
-  printf("mark 5.5\n");
     fill_image(fscratch, nx, ny, inanns, num_inanns, result);
     //fill_image(xs1, nx, ny, inanns, num_inanns, result);  /* for debug */
-    printf("mark 6\n");
     gsmoothy_index(fscratch, fwhm, nx, ny, inanns, num_inanns, result);
     fill_image(fscratch, nx, ny, inanns, num_inanns, result);
     //fill_image(ys1, nx, ny, inanns, num_inanns, result);  /* for debug */
     /* and the sobel step, uses a smaller mask */
     sobel_index(fscratch, nx, ny, inann, num_inann, &grad, &ang);
-    printf("mark 7\n");
     //fill_image(gradout, nx, ny, inann, num_inann, grad);
     //fill_image(angout, nx, ny, inann, num_inann, ang);
     /* note that presently, grad and ang are allocated in sobel_index and must be freed */
@@ -1191,7 +1176,7 @@ int limbcompute(float *x, int nx, int ny, float xcguess, float ycguess, float rg
  free(fscratch);
  free(result);
  t2 = systime();
- printf("time for image processing %8.3f\n", t2-t1);
+ if (verbose > 0) printf("time for image processing %8.3f\n", t2-t1);
  /* only inann and in2use matter now, done with inanns and inann2 until next image */
  //printf("theta (aka ang here)\n");
 //  for (k=0;k<20;k++) printf("k, inann[k], ang[k], grad[k] = %d, %ld %13.5e, %13.5e\n", k, inann[k], (float) 57.29578 * ang[k], grad[k]);
@@ -1199,7 +1184,6 @@ int limbcompute(float *x, int nx, int ny, float xcguess, float ycguess, float rg
 //    int iq = in2use[k];
 //    printf("k, iq, inann[iq], ang[iq], grad[iq] = %d, %d, %ld %13.5e, %13.5e\n", k, iq, inann[iq], (float) 57.29578 * ang[iq], grad[iq]);
 //  }
- printf("mark 8\n");
 
  /* mark all within 5 degrees of expected orientation */
  if (limbmode == 3) da = 5.0; else da = 5.0;   /* originally tried different da's for different modes */
@@ -1215,7 +1199,7 @@ int limbcompute(float *x, int nx, int ny, float xcguess, float ycguess, float rg
    }
    in2 = p1 = malloc(sizeof(int) * num_in2use);
    nc = 0;
-   printf("num_in2use %d\n", num_in2use);
+   if (verbose > 2) printf("num_in2use %d\n", num_in2use);
    for (k=0;k<num_in2use;k++) {
      iq = in2use[k];  /* index for ang and annth (or annthr) */
      xq = fabsf( fp1[iq] - (float) 57.29578 * ang[iq]);
@@ -1227,7 +1211,8 @@ int limbcompute(float *x, int nx, int ny, float xcguess, float ycguess, float rg
      }
    }
    num_in2 = nc;
-   printf("n within 5 degrees, num_inann = %d, %d\n", num_in2, num_inann);
+   if (verbose > 2)
+     printf("n within 5 degrees, num_inann = %d, %d\n", num_in2, num_inann);
  }
  /* note that in2 are still indices in the full num_inann set */
  {
@@ -1244,7 +1229,7 @@ int limbcompute(float *x, int nx, int ny, float xcguess, float ycguess, float rg
    //printf("size of theta3 %d\n", num_in2);
    key_locations(theta3, num_in2, &nzones, &counts, &values, &in4annulus);
    /* the nzones pointers are in in4annulus, these are indices in theta3 */
-   printf("nzones = %d\n", nzones);
+   if (verbose > 2) printf("nzones = %d\n", nzones);
    indx = malloc(sizeof(int) * nzones);  /* checked free */
    /* next we want to eliminate bright zones on the limb if EUV (limbmode 0 or 3) */
    /* get mean intensity in each zone */
@@ -1292,7 +1277,6 @@ int limbcompute(float *x, int nx, int ny, float xcguess, float ycguess, float rg
    float *ixlimb, *iylimb, *rsec, *weights, rq, thq, *rdlimb;
    long irmax, *inx4ann;
    int jfaint, *indxrdlimb;
-   //printf("mark 9\n");
    ixlimb = malloc(sizeof(float) * nfaint);  /* checked free */
    iylimb = malloc(sizeof(float) * nfaint);  /* checked free */
    jfaint = 0;  /* use jfaint to load ixlimb in case there are zones with nc =0 */
@@ -1341,7 +1325,6 @@ int limbcompute(float *x, int nx, int ny, float xcguess, float ycguess, float rg
        jfaint++;
      }
    }
-   //printf("mark 10\n");
    /* for all the cases we now have nfaint entries in ixlimb and iylimb */
    if (nfaint != jfaint) printf("nfaint, jfaint do not match: %d %d\n", nfaint, jfaint);
    nfaint = jfaint;  /* usually the same, maybe always? */
@@ -1349,7 +1332,8 @@ int limbcompute(float *x, int nx, int ny, float xcguess, float ycguess, float rg
    weights = malloc(sizeof(float) * nfaint);  /* weights, just all 1.0 here */ /* checked free */
    for (j=0;j<nfaint;j++) { weights[j] = 1.0; }
    circle_fit_lsq(ixlimb, iylimb, weights, nfaint, &sdisk_xc, &sdisk_yc, &sdisk_r, &chicircle);
-   printf("sdisk_xc, sdisk_yc, sdisk_r = %g, %g, %g\n",sdisk_xc, sdisk_yc, sdisk_r);
+   if (verbose > 0)
+     printf("sdisk_xc, sdisk_yc, sdisk_r = %g, %g, %g\n",sdisk_xc, sdisk_yc, sdisk_r);
    
    xcenters[0] = sdisk_xc; ycenters[0] = sdisk_yc; radiai[0] = sdisk_r; pcounts[0] = nfaint;
    nextcenter = 1;
@@ -1367,7 +1351,6 @@ int limbcompute(float *x, int nx, int ny, float xcguess, float ycguess, float rg
    {
      float *ixlimb2, *iylimb2;
      int n2reject, nreject, n2use;
-   printf("mark 11\n");
      n2reject = nfaint/4;
      ixlimb2 = malloc(sizeof(float) * nfaint);
      iylimb2 = malloc(sizeof(float) * nfaint);
@@ -1385,11 +1368,12 @@ int limbcompute(float *x, int nx, int ny, float xcguess, float ycguess, float rg
        //printf("j, n2use, rdlimb[i] = %d, %d, %g\n",j, n2use, rdlimb[i]);
      }
      /* n2use is the new count for a circle fit, it is smaller than nfaint so reuse the weights */
-     printf("# of values sent to circle_fit %d\n", n2use);
+     if (verbose > 1) printf("# of values sent to circle_fit %d\n", n2use);
      circle_fit_lsq(ixlimb2, iylimb2, weights, n2use, &sdisk_xc, &sdisk_yc, &sdisk_r, &chicircle);
      xcenters[nextcenter] = sdisk_xc; ycenters[nextcenter] = sdisk_yc;
      radiai[nextcenter] = sdisk_r; pcounts[nextcenter] = n2use;  nextcenter++;
-     printf("sdisk_xc, sdisk_yc, sdisk_r = %g, %g, %g\n",sdisk_xc, sdisk_yc, sdisk_r);
+     if (verbose > 0)
+       printf("sdisk_xc, sdisk_yc, sdisk_r = %g, %g, %g\n",sdisk_xc, sdisk_yc, sdisk_r);
      free(ixlimb2);
      free(iylimb2);
    }
@@ -1401,12 +1385,11 @@ int limbcompute(float *x, int nx, int ny, float xcguess, float ycguess, float rg
   
  }
  /* we have either the previous center or a preliminary computation, now zero in */
-   printf("mark 12\n");
 
  if (limbmode != 0 && limbmode != 3) {  /* not EUV or 304, gets 1, 2, and 4 */
    float *g3, *g3ptr;
    /* these cases will use more circle fitting but we want the larger set of points so collect */
-   printf("in UV or 304 zone, nfaint = %d\n", nfaint);
+   if (verbose) printf("in UV or 304 zone, nfaint = %d\n", nfaint);
    nc = 0;  /* get total needed */
    for (j=0;j<nfaint;j++) {
      k = indx[j];
@@ -1439,7 +1422,7 @@ int limbcompute(float *x, int nx, int ny, float xcguess, float ycguess, float rg
    {
      float drs[] = {50., 35., 25.,15, 10., 5};
      int ndr = sizeof(drs)/sizeof(float);
-     printf("ndr = %d,\n",ndr);
+     // printf("ndr = %d,\n",ndr);
      for (k=0;k<ndr;k++) {
        zeroinonlimb(xlimb, ylimb, n2use, drs[k], g3);
        xcenters[nextcenter] = sdisk_xc; ycenters[nextcenter] = sdisk_yc;
@@ -1451,7 +1434,7 @@ int limbcompute(float *x, int nx, int ny, float xcguess, float ycguess, float rg
    if (limbmode == 2 || limbmode == 4) {
      float drs[] = {3., 2., 1., 1., 1., 1., 1.};
      int ndr = sizeof(drs)/sizeof(float);
-     printf("ndr = %d,\n",ndr);
+     // printf("ndr = %d,\n",ndr);
      for (k=0;k<ndr;k++) {
        zeroinonlimb(xlimb, ylimb, n2use, drs[k], g3);
        xcenters[nextcenter] = sdisk_xc; ycenters[nextcenter] = sdisk_yc;
@@ -1495,7 +1478,7 @@ int limbcompute(float *x, int nx, int ny, float xcguess, float ycguess, float rg
      counts[k] = ncnew;  /* note that this could be 0 */
      n2use += ncnew;
    }
-   printf("new total after limbtolerance %d\n", n2use);
+   if (verbose > 2) printf("new total after limbtolerance %d\n", n2use);
 
    /* now have a new set in counts and in4annulus that are within limbtolerance, now work on g similarly */
 
@@ -1528,10 +1511,10 @@ int limbcompute(float *x, int nx, int ny, float xcguess, float ycguess, float rg
      counts[k] = ncnew;  /* note that this could be 0 */
      n2use += ncnew;
    }
-   printf("new total after g check %d\n", n2use);
+   if (verbose > 2) printf("new total after g check %d\n", n2use);
 
    /* we need arrays of the remaining ix and iy values */
-   printf("next new total (n2use) = %d,\n",n2use);
+   if (verbose > 2) printf("next new total (n2use) = %d,\n",n2use);
    xlimb = xlimbptr = malloc(sizeof(float) * n2use);
    ylimb = ylimbptr = malloc(sizeof(float) * n2use);
    /* load them */
@@ -1553,21 +1536,20 @@ int limbcompute(float *x, int nx, int ny, float xcguess, float ycguess, float rg
 
    /* so we have nc coordinate pairs, do the Hough iterations */
    t3 = systime();
-   printf("time for pre fit %8.3f\n", t3-t2);
+   if (verbose > 0) printf("time for pre fit %8.3f\n", t3-t2);
    minihough(n2use, xlimb, ylimb, 30);
    free(xlimb);  free(ylimb);
    /* result */
-   printf("final sdisk_xc, sdisk_yc, sdisk_r = %g, %g, %g\n",sdisk_xc, sdisk_yc, sdisk_r);
+   if (verbose > 0)
+     printf("final sdisk_xc, sdisk_yc, sdisk_r = %g, %g, %g\n",sdisk_xc, sdisk_yc, sdisk_r);
  }
  t4 = systime();
- printf("time for Hough %8.3f\n", t4-t3);
+ if (verbose > 0) printf("time for Hough %8.3f\n", t4-t3);
  free(theta3);
  free(indx);
  }
  free(grad);  free(ang);
  tend = systime();
- printf("total time %8.3f\n", tend-tstart);
+ if (verbose > 0) printf("total time %8.3f\n", tend-tstart);
  return 0;  /* success return */   
  }
-  
-  
