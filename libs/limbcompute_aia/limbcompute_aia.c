@@ -194,9 +194,9 @@ void  minihough(int nc, float *xlimb, float *ylimb, int niter)
    //printf("ix, iy, dx, dy = %d, %d, %g, %g\n", ix, iy, dx, dy);
    /* check if on the edge and bail out if so */
    if (ix <= 0 || ix >= (NXC-1)) {
-      if (verbose > -1) printf("x center max at edge, ix = %d\n", ix); return;   }
+      fprintf(stderr, "x center max at edge, ix = %d\n", ix); return;   }
    if (iy <= 0 || iy >= (NYC-1)) {
-      if (verbose > -1) printf("y center max at edge, iy = %d\n", iy); return;   }
+      fprintf(stderr, "y center max at edge, iy = %d\n", iy); return;   }
    /* get the new center in the image from these */
    /* call getmin9 */
    getmin9(mhcount, ix, iy, NXC, &xc1, &yc1);
