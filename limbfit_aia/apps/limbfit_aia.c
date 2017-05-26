@@ -106,6 +106,7 @@ int DoIt ()
       ut = t_obs + 220924763;
       printf("%.2f\t%.2f\t%.2f\t%d\t%s\t%.2f\n", 
              sdisk_xc, sdisk_yc, sdisk_r, ut, date_obs, rguess);
+      if (inparr) drms_free_array(inparr);
     }
   }
 
