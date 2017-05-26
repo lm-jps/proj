@@ -17,6 +17,8 @@
 int limbcompute(float *x, int nx, int ny, float xcguess, float ycguess, float rguess, float rrange,
   int limbmode, int useprevflag, float fwhm);
 
+float rsun_offset(int wavelength);
+
 ModuleArgs_t module_args[] =
 {
   {ARG_STRING, "dsinp", NOT_SPECIFIED, "Series name w/optional record spec"},
@@ -54,7 +56,7 @@ int DoIt ()
   int fsn, good_rec, irec, nfits=0, nrecs, segment, status=0, wl;
   int nx, ny;
   int yr, mo, da, hr, mn, sc, ss;
-  float rguess=1600.0, xcguess, ycguess, rrange=100.0, fwhm=3.0, rsun;
+  float rguess, xcguess, ycguess, rrange=100.0, fwhm=3.0;
   DRMS_Record_t *inprec;
   DRMS_RecordSet_t *inprs;
   DRMS_Segment_t *inpseg;
@@ -83,7 +85,8 @@ int DoIt ()
                irec, inpseg->info->protocol, inpsegname, filename);
       wl = drms_getkey_int(inprec, "WAVELNTH", &status);
       fsn = drms_getkey_int(inprec, "FSN", &status);
-      rsun = drms_getkey_float(inprec, "R_SUN", &status);
+      rguess = drms_getkey_float(inprec, "R_SUN", &status);
+      rguess += rsun_offset(wl);
       xcguess = drms_getkey_float(inprec, "CRPIX1", &status);
       ycguess = drms_getkey_float(inprec, "CRPIX2", &status);
       t_obs = drms_getkey_time(inprec, "T_OBS", &status);
@@ -102,7 +105,7 @@ int DoIt ()
                   limbmode, useprevflag, fwhm);
       ut = t_obs + 220924763;
       printf("%.2f\t%.2f\t%.2f\t%d\t%s\t%.2f\n", 
-             sdisk_xc, sdisk_yc, sdisk_r, ut, date_obs, rsun);
+             sdisk_xc, sdisk_yc, sdisk_r, ut, date_obs, rguess);
     }
   }
 

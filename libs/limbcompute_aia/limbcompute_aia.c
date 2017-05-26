@@ -66,6 +66,23 @@ double systime()				/* internal systime */
   t = (double) tp.tv_sec + .000001* (double) tp.tv_usec;
   return t;
 }
+
+float rsun_offset(int wavelength)
+{
+  switch (wavelength) {
+    case  94: return 7.3;
+    case 131: return 7.6;
+    case 171: return 9.3;
+    case 193: return 9.9;
+    case 211: return 10.4;
+    case 304: return 18.5;
+    case 335: return 11.0;
+    case 1600: return 1.4;
+    case 1700: return 0.2;
+    case 4500: return -1.2;
+    default: return FP_NAN;
+  }
+}
 /*--------------------------------------------------------------------------*/
 void getmin9(int *p, int ix, int iy, int nx, float *x0, float *y0)
  {
