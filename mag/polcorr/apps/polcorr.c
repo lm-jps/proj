@@ -112,7 +112,8 @@ struct attrib {
 };
 
 // Polar data base series
-static const char poldb_name[] = "su_xudong.hmi_poldb";
+// static const char poldb_name[] = "su_xudong.hmi_poldb";
+char poldb_name[100];
 
 /* ############# Function templates ############# */
 
@@ -151,6 +152,7 @@ ModuleArgs_t module_args[] =
 {
     {ARG_STRING, "in", NULL, "Input data series."},
     {ARG_STRING, "out", NULL, "Output data series, name only."},
+    {ARG_STRING, "poldb", "su_xudong.hmi_poldb", "Polar field database, name only."},
     {ARG_NUME, "method", "TEMP_SPAT", "Correction scheme.", "TEMP_SPAT, SPAT_2D"},
     {ARG_DOUBLE, "lat0", "60.", "Start latitude used for fitting."},
     {ARG_DOUBLE, "latfil", "75.", "Start latitude for filling in, no lower than 75."},
@@ -175,6 +177,7 @@ int DoIt(void)
     
     char *inQuery = (char *)params_get_str(&cmdparams, "in");
     char *outQuery = (char *)params_get_str(&cmdparams, "out");
+    strcpy(poldb_name, (char *)params_get_str(&cmdparams, "poldb"));
     
     opt.method = params_get_int(&cmdparams, "method");
     opt.lat0 = fabs(params_get_double(&cmdparams, "lat0"));
@@ -407,7 +410,7 @@ int checkPoldb(struct attrib *att, struct option *opt)
     }
     
     //
-    
+
     return 0;
     
 }
@@ -443,7 +446,7 @@ int findYearInPoldb(struct attrib *att, int y, TIME t, int ns)
         if (inRS) drms_close_records(inRS, DRMS_FREE_RECORD);
         return 1;
     }
-    
+
     // Treat extrapolation as interpolation
     // For now, backward extrapolation uses the first two years
     // and a linear extrapolation
@@ -452,6 +455,7 @@ int findYearInPoldb(struct attrib *att, int y, TIME t, int ns)
     
     t0 = drms_getkey_time(inRS->records[0], "T_OBS", &status);
     y0 = drms_getkey_int(inRS->records[0], "YEAR", &status);
+    printf("inQuery=%s, n=%d\n", inQuery, inRS->n);
     switch (inRS->n) {
         case 1:
             if (t <= t0) {
@@ -473,7 +477,7 @@ int findYearInPoldb(struct attrib *att, int y, TIME t, int ns)
             t1 = drms_getkey_time(inRS->records[1], "T_OBS", &status);
             y1 = drms_getkey_int(inRS->records[1], "YEAR", &status);
             if (t1 < t0) {tt = t1; t1 = t0; t0 = tt; yy = y1; y1 = y0; y0 = yy;}
-            if (fabs(t1 - t0) >= (1.5 * SECSINYEAR)) break;
+            if (fabs(t1 - t0) >= (2.1 * SECSINYEAR)) { status = 1; break; }
             if (t <= t0) {      // backward extrap
                 year[0] = y0; year[1] = y1; *extrap = -1;
             } else if (t >= t1) {       // forward extrap
@@ -504,7 +508,7 @@ int findYearInPoldb(struct attrib *att, int y, TIME t, int ns)
 
     //
     
-    return 0;
+    return status;
 }
 
 // =============================================
@@ -802,7 +806,8 @@ int interpPoldb(int ns, int rowfil, double *map, struct attrib *att, struct opti
     
     snprintf(inQuery, 100, "%s[%4d][%d]", poldb_name, year[0], ns);     // already checked
     inRS0 = drms_open_records(drms_env, inQuery, &status);
-    if (status) {
+//    printf("%s, %d, %d\n", inQuery, status, inRS0->n);
+    if (status || inRS0->n < 1) {
         SHOW("  Open polar record error, ");
         return 1;
     }
