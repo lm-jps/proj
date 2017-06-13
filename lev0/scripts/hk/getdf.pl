@@ -26,7 +26,9 @@ $ENV{'SUMSERVER'}="k1";
 #$hm=$ENV{'HOME'};
 $hm="/home/jsoc/cvs/Development";
 $ENV{'MAILTO'}="";
-$ENV{'DF_DRMS_EXECUTABLES'}="$hm/JSOC/bin/linux_x86_64";
+#$ENV{'DF_DRMS_EXECUTABLES'}="$hm/JSOC/bin/linux_x86_64";
+$mach=$ENV{'MACHINE'};
+$exec_dir=$ENV{'DF_EXEC_PATH'}="$hm/JSOC/bin/$mach";
 $script_dir="$hm/JSOC/proj/lev0/scripts/hk";
 $log_dir="/home/jsocprod/hk/logs";
 $ENV{'PATH'}="/usr/local/bin:/bin:/usr/bin:.:$script_dir:$ENV{'DF_DRMS_EXECUTABLES'}";
@@ -79,7 +81,8 @@ print LF "--->Processing day files at directory:$doff_dir\n";
 if  ($src eq "hsb")
 {
   # get today's dayfile and avoid picking up next days dayfile
-  ($today_date)=get_today_date(); #since process at 9PM Nightly use PDT
+  #($today_date)=get_today_date(); #since process at 9PM Nightly use PDT
+  ($today_date)=20170414;
   $enddate=$startdate=$today_date;
 
   #log status to logfile
