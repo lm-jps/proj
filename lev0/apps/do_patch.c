@@ -93,3 +93,21 @@ void do_patch3(short *adata0)
 	for (j=0; j<2048; ++j)
 	    adata0[4096*i+j] = -32768;
 }
+
+
+
+
+// Camera 2 crop table corruption 2017.06.12
+// skip value for row 2354 in quadrant G (upper right)
+// was 16 pixels too large.  Need to shift whole row
+// left by 16 pixels and fill in MISSING on the right
+
+void do_patch4(short *adata0)
+{
+    int i;
+    short *p = adata0+4096*2354;
+    for (i=2048; i<4080; ++i)
+	p[i] = p[i+16];
+    for (i=4080; i<4096; ++i)
+	p[i] = -32768;
+}

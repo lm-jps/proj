@@ -627,6 +627,9 @@ int do_ingest(long long bbrec, long long eerec, const char *dpath)
 	// Patch 3 - camera 2 crop table corruption 31 Dec 2016
 	if (NEED_PATCH3(fsnx))
 	    do_patch3(l0l1->adata0);
+	// Patch 4 - camera 2 crop table corruption 12 Jun 2017
+	if (NEED_PATCH4(fsnx))
+	    do_patch4(l0l1->adata0);
 
         l0l1->dat1.adata1 = &data1;
         l0l1->himgcfid = drms_getkey_int(rs0, "HIMGCFID", &rstatus);
