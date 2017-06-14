@@ -81,8 +81,8 @@ print LF "--->Processing day files at directory:$doff_dir\n";
 if  ($src eq "hsb")
 {
   # get today's dayfile and avoid picking up next days dayfile
-  #($today_date)=get_today_date(); #since process at 9PM Nightly use PDT
-  ($today_date)=20170414;
+  ($today_date)=get_today_date(); #since process at 9PM Nightly use PDT
+  #($today_date)=20170414;
   $enddate=$startdate=$today_date;
 
   #log status to logfile
