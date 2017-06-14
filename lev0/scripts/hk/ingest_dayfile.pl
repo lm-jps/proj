@@ -37,13 +37,15 @@
   $ENV{'SUMSERVER'}="k1";
   $hm="/home/jsoc/cvs/Development";
   $ENV{'MAILTO'}="";
-  $exec_dir=$ENV{'DF_DRMS_EXECUTABLES'}="$hm/JSOC/bin/linux_x86_64";
+  #$exec_dir=$ENV{'DF_DRMS_EXECUTABLES'}="$hm/JSOC/bin/linux_x86_64";
+  $mach=$ENV{'MACHINE'};
+  $exec_dir=$ENV{'DF_DRMS_EXECUTABLES'}="$hm/JSOC/bin/$mach";
   $script_dir="$hm/JSOC/proj/lev0/scripts/hk";
   $log_dir="/home/jsocprod/hk/logs";
   $ENV{'PATH'}="/usr/local/bin:/bin:/usr/bin:.:$script_dir:$ENV{'DF_DRMS_EXECUTABLES'}";
 
   # set debug flag 1 to turn on and 0 to turn off
-  $dflg=$ENV{'DF_INGEST_DAYFILE_DEBUG'}=0;
+  $dflg=$ENV{'DF_INGEST_DAYFILE_DEBUG'}=1;
 
   #check for any arguments passed in command
   &check_arguments();
