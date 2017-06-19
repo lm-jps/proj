@@ -10,7 +10,9 @@ d := $(dir)
 # module name(s) to be generated and file name(s) to be compiled
 
 ## C-wrapper name (name must end with .c)
+ifeq ($(JSOC_MACHINE), linux_avx) 
 MODEXE_USEF_$(d) := $(addprefix $(d)/, qmap4pfss pfss_q)
+endif
 MODEXE_USEF := $(MODEXE_USEF) $(MODEXE_USEF_$(d))
 
 ## wrapped Fortran codes
