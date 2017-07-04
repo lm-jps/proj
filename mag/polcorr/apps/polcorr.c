@@ -42,7 +42,7 @@
 // Image size
 #define IMGDIM	(600)
 
-#define K_TRANS (1.17)       // Scaling factor to be multiplied on low-lat field
+#define K_TRANS (1.21)       // Scaling factor to be multiplied on low-lat field
 
 #define SECSINDAY ((double)86400.0)
 #define SECSINYEAR    ((double)31536000.)
