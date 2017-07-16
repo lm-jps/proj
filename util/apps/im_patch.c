@@ -1341,7 +1341,7 @@ fprintf(stderr,"$$$$$$$ outArray bzero, bscale are %f, %f\n", outArray->bzero, o
                 }
             }
         
-            if ((nx & 1) != 0)
+            if ((ny & 1) != 0)
             {
                 for (i=0; i<midcol; i++)
                 {
