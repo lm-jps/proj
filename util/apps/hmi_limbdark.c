@@ -1,4 +1,4 @@
-#define CVSVERSION "$Id: hmi_limbdark.c,v 1.10 2017/07/17 16:45:23 kehcheng Exp $"
+#define CVSVERSION "$Id: hmi_limbdark.c,v 1.11 2017/07/17 16:56:21 kehcheng Exp $"
 /**
    @defgroup analysis
    @ingroup su_util
@@ -573,8 +573,8 @@ int upNcenter(DRMS_Array_t *arr, ObsInfo_t *ObsLoc)
     {
     // rotate image by 180 degrees by a flip flip
     float val;
-    int half = nx / 2;
-    int odd = nx & 1;
+    int half = ny / 2;
+    int odd = ny & 1;
     for (iy=0; iy<half; iy++)
       {
       for (ix=0; ix<nx; ix++)
