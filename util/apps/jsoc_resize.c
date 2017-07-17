@@ -434,7 +434,6 @@ int upNcenter(DRMS_Array_t *arr, ObsInfo_t *ObsLoc)
     float val;
     int half = ny / 2;
     int odd = ny & 1;
-    if (odd) half++;
     for (iy=0; iy<half; iy++)
       {
       for (ix=0; ix<nx; ix++)
@@ -446,6 +445,16 @@ int upNcenter(DRMS_Array_t *arr, ObsInfo_t *ObsLoc)
         data[j] = val;
         }
       }
+    // reverse middle row if ny is odd
+    if (odd) {
+        for (ix=0; ix<nx/2; ++ix) {
+            i = nx*half + ix;
+            j = nx*half + nx - ix - 1;
+            val = data[i];
+            data[i] = data[j];
+            data[j] = val;
+        }
+    }
     x0 = nx - 1 - x0;
     y0 = ny - 1 - y0;
     rot = ObsLoc->crota2 - 180.0;

@@ -1,4 +1,4 @@
-#define CVSVERSION "$Id: hmi_limbdark.c,v 1.9 2012/07/27 23:07:57 phil Exp $"
+#define CVSVERSION "$Id: hmi_limbdark.c,v 1.10 2017/07/17 16:45:23 kehcheng Exp $"
 /**
    @defgroup analysis
    @ingroup su_util
@@ -575,7 +575,6 @@ int upNcenter(DRMS_Array_t *arr, ObsInfo_t *ObsLoc)
     float val;
     int half = nx / 2;
     int odd = nx & 1;
-    if (odd) half++;
     for (iy=0; iy<half; iy++)
       {
       for (ix=0; ix<nx; ix++)
@@ -587,6 +586,16 @@ int upNcenter(DRMS_Array_t *arr, ObsInfo_t *ObsLoc)
         data[j] = val;
         }
       }
+    // reverse middle row if ny is odd
+    if (odd) {
+        for (ix=0; ix<nx/2; ++ix) {
+            i = nx*half + ix;
+            j = nx*half + nx - ix - 1;
+            val = data[i];
+            data[i] = data[j];
+            data[j] = val;
+        }
+    }
     x0 = nx - x0;
     y0 = ny - y0;
     rot = ObsLoc->crota2 - 180.0;
