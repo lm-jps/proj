@@ -485,7 +485,7 @@ int DoIt(void)
   if (do_reftime) // Arc-sec, pixel, or Stonyhurst specification, get ref image information
     { // the image for ref_time is supposed to be present in the series.
 fprintf(stderr,"doing reftime\n");
-    int okrec;
+    int okrec = -1;
     char t_ref_pre[100];
     char t_ref_post[100];
     TIME search_width = 15;
