@@ -25,7 +25,7 @@ CEXE_$(d)	:= $(addprefix $(d)/, gentargs)
 CEXE		:= $(CEXE) $(CEXE_$(d))
 
 EXE_$(d)        := $(MODEXE_$(d)) $(MODEXE_USEF_$(d) $(CEXE_$(d))
-OBJ_OLAXY_$(d)	:= $(addprefix $(d)/, ola_xy_v10.o ola_subs.o)
+OBJ_OLAXY_$(d)	:= $(addprefix $(d)/, ola_xy_v12.o ola_subs.o)
 OBJ_$(d)	:= $(EXE_$(d):%=%.o) $(OBJ_OLAXY_$(d))
 DEP_$(d)	:= $(OBJ_$(d):%=%.d)
 CLEAN		:= $(CLEAN) \
