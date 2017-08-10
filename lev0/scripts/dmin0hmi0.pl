@@ -29,6 +29,7 @@ $to_list = join ",", $to_list, 'green@lmsal.com',
         unless $test;
 
 $msg_file = "$ENV{HOME}/hmi_cam_anomaly.txt";
+$mach = "$ENV{JSOC_MACHINE}";
 if (-e $msg_file) {
   $subj = "Stale HMI $msg_file during camera anomaly test";
   `echo "$subj" | mail -s "$subj" $to_list` if $test;
@@ -39,7 +40,7 @@ my ($sc, $mn, $hr, $da, $mo, $yr) = gmtime($t);
 $ts = sprintf '$(%d.%2.2d.%2.2d_00:00)', $yr+1900, $mo+1, $da;
 $cname[1] = "1=vector=side";
 $cname[2] = "2=Doppler=front";
-$cmd = "/home/jsoc/cvs/Development/JSOC/bin/linux_x86_64/show_info";
+$cmd = "/home/jsoc/cvs/Development/JSOC/bin/$mach/show_info";
 for ($cam=1; $cam<3; $cam++) {
   $fsn0 = `$cmd -q key=fsn 'hmi.lev0a[:#\$]'` - 399;
   $qs = "hmi.lev0a[$fsn0/400][?datamin=0?][?camera=$cam?][?T_OBS>$ts?]";
