@@ -9,8 +9,6 @@
 #define NBINS 1048576
 static int hist[NBINS];
 
-typedef enum { WL94A, WL131A, WL171A, WL193A, WL211A, WL304A, WL335A,
-               WL1600A, WL1700A, WL4500A } wl_type;
 int image_magrotate(void *, int, int, int, float, float, float, float,
                     void **, int *, int *, int, int);
 
@@ -18,7 +16,6 @@ ModuleArgs_t module_args[] =
 {
   {ARG_STRING, "dsinp", NOT_SPECIFIED, "Input series query"},
   {ARG_STRING, "dsout", NOT_SPECIFIED, "Output series"},
-  {ARG_STRING, "mpt", NOT_SPECIFIED, "Master Pointing Table series"},
   {ARG_STRING, "despike", "1", "remove cosmic ray hits"},
   {ARG_STRING, "rescale", "1", "rescale to fixed plate scale"},
   {ARG_STRING, "regrid", "1", "regrid type 0: nearest neighbor, 1: bicubic"},
@@ -50,14 +47,13 @@ int nice_intro(int help)
         "scale_to=0.6, rescale to fixed plate scale, default=0.6\n"
         "do_stretchmarks=1, fill in empty pixels created, default=0\n"
         "with_keys=1, write segment with all FITS keywords, default=0\n"
-        "mpt=<master pointing table series>, default=NULL (use WCS keywords)\n"
         "dsinp=<recordset query> as <series>{[record specifier]} - required\n"
         "dsout=<series> - required\n");
     return(1);
   }
   return(0);
 }
-   
+    
 void sprint_time_ISO (char *tstring, TIME t)
 { 
   sprint_at(tstring,t);
@@ -115,43 +111,19 @@ static void FreeRecSpecParts(char ***snames, char ***filts, int nitems)
     }
 }
 
-int ndx2wl(int ndx)
-{
-  static int wl[] = { 94, 131, 171, 193, 211, 304, 335, 1600, 1700, 4500 };
-  if (-1 < ndx && ndx < 10) return wl[ndx];
-  return -1;
-}
-
-int wl2ndx(int wl)
-{
-  switch (wl) {
-    case   94: return WL94A;
-    case  131: return WL131A;
-    case  171: return WL171A;
-    case  193: return WL193A;
-    case  211: return WL211A;
-    case  304: return WL304A;
-    case  335: return WL335A;
-    case 1600: return WL1600A;
-    case 1700: return WL1700A;
-    case 4500: return WL4500A;
-    default: return -1;
-  }
-}
-
 int DoIt ()
 {
   int irec, iseg, nrecs, nsegs, status, is_aia=0;
   char *dsinp, *dsout, now_str[100];
-  float crpix1, crpix2, cdelt1, cdelt2, crota2;
+  float crpix1, crpix2, cdelt1, cdelt2, crota2, x0, y0;
   float mag = 1.0, dx, dy;
-  DRMS_Record_t *inprec, *outrec, *mptrec=NULL;
-  DRMS_RecordSet_t *inprs, *mptrs=NULL;
+  DRMS_Record_t *inprec, *outrec;
+  DRMS_RecordSet_t *inprs;
+  DRMS_Keyword_t *inpkey = NULL, *outkey = NULL;
   DRMS_Array_t *inparr=NULL, *outarr=NULL;
   DRMS_Segment_t *inpseg, *outseg;
   const char *reqid = NULL;
-  const char *mpt = NULL;
-  char seriesout[DRMS_MAXSERIESNAMELEN], mpr_str[256];
+  char seriesout[DRMS_MAXSERIESNAMELEN];
   char *allvers = NULL;
   char **sets = NULL;
   DRMS_RecordSetType_t *settypes = NULL; /* a maximum doesn't make sense */
@@ -159,22 +131,13 @@ int DoIt ()
   char **filts = NULL;
   int nsets = 0;
   DRMS_RecQueryInfo_t rsinfo;
-  TIME tstart, tstop;
-  char mptqs[256];
-  const char *x0names[] = { "A_094_X0", "A_131_X0", "A_171_X0", "A_193_X0",
-    "A_211_X0", "A_304_X0", "A_335_X0", "A_1600_X0", "A1700_X0", "A_4500_X0"
-  };
-  const char *y0names[] = { "A_094_Y0", "A_131_Y0", "A_171_Y0", "A_193_Y0",
-    "A_211_Y0", "A_304_Y0", "A_335_Y0", "A_1600_Y0", "A1700_Y0", "A_4500_Y0"
-  };
+    
   if (nice_intro(0)) return(0);
 
   dsinp = strdup(cmdparams_get_str(&cmdparams, "dsinp", NULL));
   dsout = strdup(cmdparams_get_str(&cmdparams, "dsout", NULL));
-  mpt = strdup(cmdparams_get_str(&cmdparams, "mpt", NULL));
   if (strcmp(dsinp, NOT_SPECIFIED)==0) DIE("dsinp argument is required");
   if (strcmp(dsout, NOT_SPECIFIED)==0) DIE("dsout argument is required");
-  if (strcmp(mpt, NOT_SPECIFIED)==0) mpt = NULL; 
   despike = cmdparams_get_int(&cmdparams, "despike", NULL);
   rescale = cmdparams_get_int(&cmdparams, "rescale", NULL);
   scale_to = cmdparams_get_float(&cmdparams, "scale_to", NULL);
@@ -182,7 +145,7 @@ int DoIt ()
   do_stretchmarks = cmdparams_get_int(&cmdparams, "do_stretchmarks", NULL);
   withkeys = cmdparams_get_int(&cmdparams, "with_keys", NULL);
   reqid = cmdparams_get_str(&cmdparams, "requestid", NULL);
-   
+    
     if (strcmp(reqid, NOT_SPECIFIED) == 0)
     {
         reqid = NULL;
@@ -283,40 +246,10 @@ int DoIt ()
         }
         
        if (t_obs < 0) save_rec = 0;
-       if (mpt) {
-         int wi, wl;
-         if (mptrs == NULL) {
-           snprintf(mptqs, 256, "%s[?%f BETWEEN T_START and T_STOP?]", 
-                   mpt, t_obs);
-           mptrs = drms_open_records(drms_env, mptqs, &status);
-           if (status) DIE("Can't open MPT recordset");
-           if(mptrs->n) mptrec = mptrs->records[0];
-           else DIE("No MPT record found for T_OBS");
-           tstart = drms_getkey_time(mptrec, "T_START", &status);
-           tstop = drms_getkey_time(mptrec, "T_STOP", &status);
-         } else if (tstart > t_obs || t_obs > tstop) {
-           drms_close_records(mptrs, DRMS_FREE_RECORD);
-           snprintf(mptqs, 256, "%s[?%f BETWEEN T_START and T_STOP?]",
-                   mpt, t_obs);
-           mptrs = drms_open_records(drms_env, mptqs, &status);
-           if (status) DIE("Can't open MPT recordset");
-           if(mptrs->n) mptrec = mptrs->records[0];
-           else DIE("No MPT record found for T_OBS");
-           tstart = drms_getkey_time(mptrec, "T_START", &status);
-           tstop = drms_getkey_time(mptrec, "T_STOP", &status);
-         }
-         wl = drms_getkey_int(inprec, "WAVELNTH", &status);
-         wi = wl2ndx(wl);
-         crpix1 = drms_getkey_float(mptrec, x0names[wi], &status);
-         crpix2 = drms_getkey_float(mptrec, y0names[wi], &status);
-         sprintf(mpr_str, "%s[:#%lld]", mpt, mptrec->recnum);
-         drms_setkey_string(outrec, "MPO_REC", mpr_str);
-       } else {
-         crpix1 = drms_getkey_float(inprec, "CRPIX1", &status);
-         if (status) DIE("CRPIX1 not found!");
-         crpix2 = drms_getkey_float(inprec, "CRPIX2", &status);
-         if (status) DIE("CRPIX2 not found!");
-       }
+       crpix1 = drms_getkey_float(inprec, "CRPIX1", &status);
+       if (status) DIE("CRPIX1 not found!");
+       crpix2 = drms_getkey_float(inprec, "CRPIX2", &status);
+       if (status) DIE("CRPIX2 not found!");
        cdelt1 = drms_getkey_float(inprec, "CDELT1", &status);
        if (status) DIE("CDELT1 not found!");
        cdelt2 = drms_getkey_float(inprec, "CDELT2", &status);
@@ -330,6 +263,10 @@ int DoIt ()
        }
        crota2 = drms_getkey_float(inprec, "CROTA2", &status);
        if (status) DIE("CROTA2 not found!");
+       x0 = drms_getkey_float(inprec, "X0", &status);
+//     if (status) DIE("X0 not found!");
+       y0 = drms_getkey_float(inprec, "Y0", &status);
+//     if (status) DIE("Y0 not found!");
        if (is_aia) {
          quallev0 = drms_getkey_int(inprec, "QUALLEV0", &status);
          if (status) DIE("QUALLEV0 not found!");

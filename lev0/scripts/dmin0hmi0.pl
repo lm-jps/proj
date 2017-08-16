@@ -39,7 +39,7 @@ my ($sc, $mn, $hr, $da, $mo, $yr) = gmtime($t);
 $ts = sprintf '$(%d.%2.2d.%2.2d_00:00)', $yr+1900, $mo+1, $da;
 $cname[1] = "1=vector=side";
 $cname[2] = "2=Doppler=front";
-$cmd = "/home/jsoc/cvs/Development/JSOC/bin/linux_avx/show_info";
+$cmd = "/home/jsoc/cvs/Development/JSOC/bin/linux_x86_64/show_info";
 for ($cam=1; $cam<3; $cam++) {
   $fsn0 = `$cmd -q key=fsn 'hmi.lev0a[:#\$]'` - 399;
   $qs = "hmi.lev0a[$fsn0/400][?datamin=0?][?camera=$cam?][?T_OBS>$ts?]";

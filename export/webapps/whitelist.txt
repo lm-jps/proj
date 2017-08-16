@@ -192,8 +192,6 @@ su_mbobra.sharp_720s_clean_v2
 su_mbobra.sharp_cea_720s_clean_v2
 su_mbobra.sharp_cea_flux_720s
 su_mbobra.sharp_flux_720s
-su_mbobra.smarp_96m
-su_mbobra.smarp_cea_96m
 su_phil.hmi_M_1k_720s
 su_phil.hmi_M_remap_720s
 su_phil.mdi_lowl_gf
