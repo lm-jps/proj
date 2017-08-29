@@ -3,7 +3,7 @@ sp 		:= $(sp).x
 dirstack_$(sp)	:= $(d)
 d		:= $(dir)
 
-MODEXE_$(d)	:= $(addprefix $(d)/, update_poldb polcorr polar_remap)
+MODEXE_$(d)	:= $(addprefix $(d)/, update_poldb polcorr)
 MODEXE		:= $(MODEXE) $(MODEXE_$(d))
 
 MODEXE_SOCK_$(d):= $(MODEXE_$(d):%=%_sock)
