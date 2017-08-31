@@ -433,6 +433,11 @@ int do_interpolate(float **images, char **ierrors, float *image_out, struct keyw
   if ((rsmax-rsmin) > limrsun) derot_status=1;
   if ((x0max-x0min) > limx0) derot_status=1;
   if ((y0max-y0min) > limy0) derot_status=1;
+  
+    // -- additional conditions -- YLiu
+    if (fabs(p0max-p0) > limp0) derot_status=1;
+    if (fabs(p0-p0min) > limp0) derot_status=1;
+    // --- YLiu 
 
   printf("derot status %d\n", derot_status);
   ///////////
@@ -1132,7 +1137,7 @@ float intsincos(unsigned int n, unsigned int m)
 
 char *interpol_version() // Returns CVS version
 {
-  return strdup("$Id: interpol_code.c,v 1.5 2016/03/14 21:46:52 arta Exp $");
+  return strdup("$Id: interpol_code.c,v 1.6 2017/08/31 22:17:13 arta Exp $");
 }
 
 

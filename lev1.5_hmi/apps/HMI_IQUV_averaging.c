@@ -181,7 +181,7 @@ char *module_name    = "HMI_IQUV_averaging"; //name of the module
 //#define CALVER_LINEARITY 0x1000       //bitmask for CALVER64 to indicate the use of non-linearity correction //VALUE USED BEFORE JANUARY 15, 2014
 #define CALVER_LINEARITY 0x2000       //bitmask for CALVER64 to indicate the use of non-linearity correction //VALUE USED AFTER JANUARY 15, 2014
 #define CALVER_ROTATIONAL 0x10000      //bitmask for CALVER64 to indicate the use of rotational flat fields 
-#define CALVER_MODL 0x20000           //bitmask for CALVER64 to indicate the use of a mod L observables sequence
+#define CALVER_MODL 0x30000           //bitmask for CALVER64 to indicate the use of a mod L observables sequence
 #define CALVER_NOMODL 0xFFFFFFFFFFF1FFFF //to reset the mask
 
  //definitions for the QUALITY keyword for the lev1.5 records
@@ -1089,7 +1089,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.52 2017/02/02 00:11:33 baldner Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.53 2017/08/31 22:17:13 arta Exp $");
 }
 
 
