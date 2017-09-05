@@ -468,7 +468,7 @@ int DoIt (void)
 #if NLEVPIXL == 1
         if (cameraID == 3)
            {
-            NOISE_LEVELFIc = 0.118;
+            NOISE_LEVELFIc = 0.088; // adjusted on Sept. 1 2017 based on Jesper's suggestion -- YL
             NOISE_LEVELFQc = 0.167;
             NOISE_LEVELFUc = 0.167;
             NOISE_LEVELFVc = 0.118;
@@ -3208,13 +3208,32 @@ This is done inside the FORTRAN code, in invert.f90
 #define missCode0 0x0000 // Not A missing data
 #define missCode1 0x0080 // Missing data
 #define pixThreshold 500.0 // Threshold value for determining bad pixels
-#define quvScale 0.204 // scaling factor for the Stokes quv noise; sigma(Q,U,V) = 0.204 * sqrt(I)
-#define iScale   0.118 // scaling factor for Stokes I noise; sigma(I) = 0.118 * sqrt(I)
+//#define vScale 0.204 // scaling factor for the Stokes quv noise; sigma(V) = 0.204 * sqrt(I)
+//#define quScale 0.204 // scaling factor for the Stokes quv noise; sigma(Q,U) = 0.204 * sqrt(I)
+//#define iScale   0.118 // scaling factor for Stokes I noise; sigma(I) = 0.118 * sqrt(I)
 //#define quThreshold  132.0 // The median of qu in a quiet Sun area near the disk center, where
                            // qu = sqrt((sum[i=0, ..., 5] q_i)^2 + (sum[i=0, ..., 5] u_i)^2))
 //#define vThreshold 153.0 // The median of v in a quiet Sun area near the disk center, where v = sum[i =0, .., 5] stokesV_i
 #define losThreshold 1.0 * 6.7 // 1 * sigma of 720s los mags.
 #define RADSINDEG 3.14159265358979 / 180.0
+
+
+// -- Noise level adjustment for  mod-L mode -- YL
+
+float vScale=0.204, quScale=0.204, iScale=0.118; // scaling factor for the Stokes 
+
+if (cameraID == 3)
+ { 
+     vScale = 0.118; // adjusted on Sept. 1 2017 based on Jesper's suggestion -- YL
+     quScale = 0.167;
+     iScale = 0.088;
+ }
+ 
+//printf("New module at 2017 Sept. 01\n");
+ 
+// -- end of mod-L adjustment -- YL
+
+
     int yOff = 0, iData = 0;
     int invQual, pixQual, quQual, vQual, blosQual, missQual;
     int nx = cols;
@@ -3262,14 +3281,15 @@ This is done inside the FORTRAN code, in invert.f90
       {
 // compute the noise level
         float sigmaLP = 0.0, sigmaV = 0.0;
-        float Qall = 0.0, Uall = 0.0, varQUVall = 0.0, LP = 0.0, Vall = 0.0;
+        float Qall = 0.0, Uall = 0.0, varQUall = 0.0, varVall = 0.0, LP = 0.0, Vall = 0.0; // add varVall = 0.0 YLiu
         Qall = stokesQ;
         Uall = stokesU;
         Vall = stokesV;
         LP = sqrt(Qall * Qall + Uall * Uall);
-        varQUVall = quvScale * quvScale * stokesI;
-        sigmaLP = sqrt(varQUVall);
-        sigmaV = sqrt(varQUVall);
+        varQUall = quScale * quScale * stokesI; // -- YLiu
+        varVall = vScale * vScale * stokesI; // -- YLiu
+        sigmaLP = sqrt(varQUall);  // -- YLiu
+        sigmaV = sqrt(varVall);    // -- YLiu
 //end of noise computation
         if (bInvFlag == 2) invQual = invCode2;
         if (bInvFlag == 3) invQual = invCode3;
@@ -4410,7 +4430,7 @@ int vfisv_filter(int Num_lambda_filter,int Num_lambda,double filters[Num_lambda_
 
 /* ----------------------------- by Sebastien (2), CVS version info. ----------------------------- */
 
-char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.34 2016/04/18 17:26:29 yliu Exp $");}
+char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.35 2017/09/05 18:21:45 yliu Exp $");}
 
 /* Maybe some other Fortran version be included, here OR at bottom of this file. Maybe at bottom. */
 
