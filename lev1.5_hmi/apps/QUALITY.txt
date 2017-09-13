@@ -30,8 +30,9 @@ QUAL_NOGAPFILL               (0x00001000)  //the code could not properly gap-fil
 QUAL_LIMBFITISSUE            (0x00000800)  //some lev1 records were discarded because R_SUN, and/or CRPIX1/CRPIX2 were missing or were too different from the median value of the other lev1 records (too much jitter for instance)
 QUAL_NOCOSMICRAY             (0x00000400)  //some cosmic-ray hit lists could not be read for the level 1 filtergrams
 QUAL_ECLIPSE                 (0x00000100)  //at least one lev1 record was taken during an eclipse
+QUAL_TEMPERROR               (0x00000080)  //Code error discovered, will be corrected in later versions, see notes at http://jsoc2.stanford.edu/doc/data/hmi/Quality_Bits
 QUAL_LARGEFTSID              (0x00000040)  //HFTSACID of target filtergram > 4000, which adds noise to observables
-QUAL_POORQUALITY             (0x20)        //poor quality: careful when using these observables due to eclipse, or lunar transit, or thermal recovery, or open ISS, or other issues...
+QUAL_POORQUALITY             (0x00000020)  //poor quality: careful when using these observables due to eclipse, or lunar transit, or thermal recovery, or open ISS, or other issues...
 
 Here is the current meaning of the QUALITY keyword for the 12-min averaged IQUV:
 
@@ -62,5 +63,6 @@ QUAL_LIMBFITISSUE            (0x00000800)  //some lev1 records were discarded be
 QUAL_NOCOSMICRAY             (0x00000400)  //some cosmic-ray hit lists could not be read for the level 1 filtergrams
 QUAL_ECLIPSE                 (0x00000200)  //at least one lev1 record was taken during an eclipse
 QUAL_LARGEFTSID              (0x00000100)  //HFTSACID of target filtergram > 4000, which adds noise to observables
-QUAL_POORQUALITY             (0x20)        //poor quality: careful when using these observables due to eclipse, or lunar transit, or thermal recovery, or open ISS, or other issues...
+QUAL_TEMPERROR               (0x00000080)  //Code error discovered, will be corrected in later versions, see notes at http://jsoc2.stanford.edu/doc/data/hmi/Quality_Bits
+QUAL_POORQUALITY             (0xi0000020)  //poor quality: careful when using these observables due to eclipse, or lunar transit, or thermal recovery, or open ISS, or other issues...
 
