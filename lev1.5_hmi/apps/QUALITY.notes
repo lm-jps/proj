@@ -1,0 +1,12 @@
+Notes to detail some QUALITY bits.
+
+In cases where 45s or 720s data exists and there is a code error detected
+we will set bit 0x80 for existing records while they are waiting replacement
+with reprocesed data.  the cases where this has happened include:
+  1.  Sept 2017.  for CALVER64 masked with 0xF0000 leaves 0x20000 for the initial
+      year+ of modL data, we set QUALITY 0x80 while waiting for reprocessing
+      of hmi.S_720s and all of its derived products.  The records with this
+      QUALITY bit set should not be visible once the reprocessing is done.
+      It is expected to take several months.
+
+
