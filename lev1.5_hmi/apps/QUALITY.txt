@@ -1,8 +1,10 @@
 NB: UPDATED ON MAY 24, 2013
 
-Here is the current meaning of the QUALITY keyword for the line-of-sight observables:
+Here is the current meaning of the HMI QUALITY keyword for processing level 1.5.
 
-//NO OBSERVABLES PRODUCED AND THE REASON WHY
+
+//NO Line-of-Sight OBSERVABLES PRODUCED AND THE REASON WHY, QUALITY < 0
+
 QUAL_NODATA                  (0x80000000)  //no l.o.s. observables image was produced (empty record created, with NO DATA SEGMENT. Most keywords have default value)
 QUAL_TARGETFILTERGRAMMISSING (0x40000000)  //no target filtergram was found near target time (target filtergram=filtergram used to identify the framelist): due either to missing filtergrams or because no observable sequence was run
 QUAL_NOINTERPOLATEDKEYWORDS  (0x20000000)  //could not interpolate some keywords at target time (CROTA2, DSUN_OBS, and CRLT_OBS are required by do_interpolate()), because several lev 1 records are missing/corrupted
@@ -21,22 +23,9 @@ QUAL_MISSINGLEV1P            (0x00020000)  //not enough lev1p records to produce
 QUAL_NOCOEFFKEYWORD          (0x00000200)  //could not read the keywords of the polynomial coefficient series for the correction of the MDI-like algorithm
 QUAL_NOCOEFFPRECORD          (0x00000080)  //could not find a record for the polynomial coefficient for the correction of the MDI-like algorithm, or could not access the keywords of a specific record
 
-//OBSERVABLES CREATED BUT IN SUB-OPTIMAL CONDITIONS
-QUAL_LOWINTERPNUM            (0x00010000)  //the number of interpolation points (for temporal interpolation) was not always as high as expected, AND/OR 2 interpolation points were separated by more than the cadence
-QUAL_LOWKEYWORDNUM           (0x00008000)  //some keywords (especially CROTA2, DSUN_OBS, and CRLT_OBS) could not be interpolated properly at target time, but a closest-neighbour approximation was used
-QUAL_ISSTARGET               (0x00004000)  //the ISS loop was OPEN for one or several filtergrams used to produce the observable
-QUAL_NOTEMP                  (0x00002000)  //cannot read the temperatures needed for polarization calibration (default temperature used)
-QUAL_NOGAPFILL               (0x00001000)  //the code could not properly gap-fill all the lev 1 filtergrams
-QUAL_LIMBFITISSUE            (0x00000800)  //some lev1 records were discarded because R_SUN, and/or CRPIX1/CRPIX2 were missing or were too different from the median value of the other lev1 records (too much jitter for instance)
-QUAL_NOCOSMICRAY             (0x00000400)  //some cosmic-ray hit lists could not be read for the level 1 filtergrams
-QUAL_ECLIPSE                 (0x00000100)  //at least one lev1 record was taken during an eclipse
-QUAL_TEMPERROR               (0x00000080)  //Code error discovered, will be corrected in later versions, see notes at http://jsoc2.stanford.edu/doc/data/hmi/Quality_Bits
-QUAL_LARGEFTSID              (0x00000040)  //HFTSACID of target filtergram > 4000, which adds noise to observables
-QUAL_POORQUALITY             (0x00000020)  //poor quality: careful when using these observables due to eclipse, or lunar transit, or thermal recovery, or open ISS, or other issues...
 
-Here is the current meaning of the QUALITY keyword for the 12-min averaged IQUV:
+//SOME (OR ALL) IQUV and derived product DATA SEGMENTS WERE NOT PRODUCED AND //THE REASON WHY (any cadence)
 
-//SOME (OR ALL) IQUV DATA SEGMENTS WERE NOT PRODUCED AND THE REASON WHY
 QUAL_NODATA                  (0x80000000)  //not all the IQUV images were produced (SOME OR ALL DATA SEGMENTS ARE MISSING)
 QUAL_TARGETFILTERGRAMMISSING (0x40000000)  //no target filtergram was found near target time (target filtergram=filtergram used to identify the framelist): due either to missing filtergrams or because no observable sequence was run
 QUAL_NOINTERPOLATEDKEYWORDS  (0x20000000)  //could not interpolate some keywords at target time (CROTA2, DSUN_OBS, and CRLT_OBS are required by do_interpolate()), because several level 1 records are missing/corrupted
@@ -53,7 +42,8 @@ QUAL_NOLOOKUPKEYWORD         (0x00080000)  //could not read the keywords of the 
 QUAL_NOTENOUGHINTERPOLANTS   (0x00040000)  //not enough interpolation points for the temporal interpolation at a given wavelength and polarization (too many lev 1 records were missing or corrupted)
 QUAL_INTERPOLATIONFAILED     (0x00020000)  //the temporal interpolation routine failed
 
-//OBSERVABLES CREATED BUT IN SUB-OPTIMAL CONDITIONS
+//Line-of-Sight and Vector field data products CREATED BUT IN SUB-OPTIMAL CONDITIONS, QUALITY > 0
+
 QUAL_LOWINTERPNUM            (0x00010000)  //the number of averaging points is lower than TempIntNum, AND/OR 2 interpolation points were separated by more than the cadence
 QUAL_LOWKEYWORDNUM           (0x00008000)  //some keywords (especially CROTA2, DSUN_OBS, and CRLT_OBS) could not be interpolated properly at target time, but a closest-neighbour approximation was used
 QUAL_ISSTARGET               (0x00004000)  //the ISS loop was OPEN for one or several filtergrams used to produce the observable
@@ -64,5 +54,10 @@ QUAL_NOCOSMICRAY             (0x00000400)  //some cosmic-ray hit lists could not
 QUAL_ECLIPSE                 (0x00000200)  //at least one lev1 record was taken during an eclipse
 QUAL_LARGEFTSID              (0x00000100)  //HFTSACID of target filtergram > 4000, which adds noise to observables
 QUAL_TEMPERROR               (0x00000080)  //Code error discovered, will be corrected in later versions, see notes at http://jsoc2.stanford.edu/doc/data/hmi/Quality_Bits
-QUAL_POORQUALITY             (0xi0000020)  //poor quality: careful when using these observables due to eclipse, or lunar transit, or thermal recovery, or open ISS, or other issues...
+QUAL_POORQUALITY             (0x00000020)  //poor quality: careful when using these observables due to eclipse, or lunar transit, or thermal recovery, or open ISS, or other issues...
 
+//OBSERVABLES CREATED AND QUALITY == 0
+
+None of the above problems were detected in the process of generating the data product.
+
+Bits 0x1F are reserved for future use.

@@ -1,5 +1,9 @@
 Notes to detail some QUALITY bits.
 
+Note that the bit assignments for lev1.5 and above for records with no actual data
+present (QUALITY < 0) may overlap with bits for cases where QUALITY > 0. 
+When interpreting QUALITY bits be sure to note which section of QUALITY.txt applies.
+
 In cases where 45s or 720s data exists and there is a code error detected
 we will set bit 0x80 for existing records while they are waiting replacement
 with reprocesed data.  the cases where this has happened include:
