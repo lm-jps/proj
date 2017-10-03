@@ -46,7 +46,7 @@ function [status,fn2] = avi2mp4(fn1, opts, varargin)
 
 % default path to command
 % (can be overridden)
-cmds = {'ffmpeg', '/usr/local/bin/ffmpeg', 'qt-avi2mp4'};
+cmds = {'ffmpeg', '/usr/local/bin/ffmpeg.n02', 'qt-avi2mp4'};
 cmdpath_def = '';
 for cmd1 = cmds,
   [s,r] = unix(sprintf('which %s', cmd1{1}));
