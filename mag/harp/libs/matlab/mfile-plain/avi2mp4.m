@@ -46,7 +46,7 @@ function [status,fn2] = avi2mp4(fn1, opts, varargin)
 
 % default path to command
 % (can be overridden)
-cmds = {'ffmpeg.n02', '/usr/local/bin/ffmpeg.n02', 'qt-avi2mp4'};
+cmds = {'ffmpeg_n02', '/usr/local/bin/ffmpeg_n02', 'qt-avi2mp4'};
 cmdpath_def = '';
 for cmd1 = cmds,
   [s,r] = unix(sprintf('which %s', cmd1{1}));
@@ -95,7 +95,7 @@ end;
 
 % opts, based on path
 [junk,cmdname]=fileparts(cmdpath);
-if strcmp(cmdname, 'ffmpeg.n02'),
+if strcmp(cmdname, 'ffmpeg_n02'),
   opts.i = fn1;
   opts.qscale = 5;
   opts.y = '';  % overwrite output if present, just a flag
@@ -143,7 +143,7 @@ for tag1 = fieldnames(opts)',
 end;
 
 % did not bother to generalize this one -- for ffmpeg, outfile has to be last
-if strcmp(cmdname, 'ffmpeg.n02'),
+if strcmp(cmdname, 'ffmpeg_n02'),
   argstr = [argstr ' ' fn2 ];
 end
 
