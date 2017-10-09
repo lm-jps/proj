@@ -141,7 +141,7 @@ on May 14, 2015: RSUNerr changed from 1.0 to 5.0 pixels (I'M TIRED OF INCREASING
 
 #undef I                              //I is the complex number (0,1) in complex.h. We un-define it to avoid confusion with the loop iterative variable i
 
-char *module_name    = "HMI_IQUV_averaging"; //name of the module
+char *module_name    = "HMI_IQUV_averaging_YL"; //name of the module
 
 #define kRecSetIn      "begin"        //beginning time for which an output is wanted. MANDATORY PARAMETER.
 #define kRecSetIn2     "end"          //end time for which an output is wanted. MANDATORY PARAMETER.
@@ -181,7 +181,7 @@ char *module_name    = "HMI_IQUV_averaging"; //name of the module
 //#define CALVER_LINEARITY 0x1000       //bitmask for CALVER64 to indicate the use of non-linearity correction //VALUE USED BEFORE JANUARY 15, 2014
 #define CALVER_LINEARITY 0x2000       //bitmask for CALVER64 to indicate the use of non-linearity correction //VALUE USED AFTER JANUARY 15, 2014
 #define CALVER_ROTATIONAL 0x10000      //bitmask for CALVER64 to indicate the use of rotational flat fields 
-#define CALVER_MODL 0x30000           //bitmask for CALVER64 to indicate the use of a mod L observables sequence
+#define CALVER_MODL 0x40000           //bitmask for CALVER64 to indicate the use of a mod L observables sequence
 #define CALVER_NOMODL 0xFFFFFFFFFFF1FFFF //to reset the mask
 
  //definitions for the QUALITY keyword for the lev1.5 records
@@ -261,6 +261,28 @@ int needtochangeFID(int HFLID)
       break;
     case 1022: need=1;
       break;
+//--YLiu
+    case 2042: need=1;
+      break;
+//--YLiu
+    case 2043: need=1;
+      break;
+//--YLiu
+    case 1002: need=1;
+      break;
+// -- YLiu
+    case 3042: need=1;
+      break;
+// -- YLiu
+    case 3040: need=1;
+      break;
+// -- YLiu
+    case 3041: need=1;
+      break;
+// -- YLiu
+    case 3043: need=1;
+      break;
+// -- YLiu
     default: need=0;
     }
 
@@ -384,7 +406,6 @@ int framelistCombine(int HFLID, int CamIdIn,int *Pcombine, char *dpath)
       filename3=NULL;
       return 1;//exit(EXIT_FAILURE);
     }
-
   while (fgets(line,256,sequencefile) != NULL)
     {
       sscanf(line,"%d %d %d %f %f %d %d %d %d %d %d %d %d",&HFLIDread,&PolarizationTypef,&PolarizationTypes,&DataCadencef,&DataCadences,&npolf,&npols,&combinef,&combines,&framelistSizef,&framelistSizes,&j,&CAMERA);
@@ -429,7 +450,7 @@ int framelistCombine(int HFLID, int CamIdIn,int *Pcombine, char *dpath)
 
 int framelistInfo(int HFLID,int HPLTID,int HWLTID,int WavelengthID,int *PHWPLPOS,int *WavelengthIndex,int *WavelengthLocation, int *PPolarizationType,int CamIdIn,int *Pcombine,int *Pnpol,int MaxNumFiltergrams,TIME *PDataCadence,int *CameraValues,int *FID,char *dpath)
 {
-  int framelistSize=0,HFLIDread,FIDread,i,j,compteur;
+  int framelistSize=0,HFLIDread,FIDread,i,j,compteur, ij;
   int PLINDEX,WLINDEX;
   FILE *sequencefile;
 
@@ -519,6 +540,18 @@ int framelistInfo(int HFLID,int HPLTID,int HWLTID,int WavelengthID,int *PHWPLPOS
 	      *PDataCadence=DataCadences;
 	      *PPolarizationType=PolarizationTypes;
 	      framelistSize=framelistSizes;
+//--YLiu
+              ij = needtochangeFID(HFLID); //Do we need to change the FID?
+              if(ij == 1 && CAMERA == 3)
+                {
+                  if( (i%72)/24 == 1)
+                    {
+                     j=j+100000;
+//printf("change i= %d, FID=%d\n", i, j);
+                    }
+                }
+
+//--YLiu
 	      if(combines == 0)
 		{
 		  if(CAMERA == 2)
@@ -544,7 +577,6 @@ int framelistInfo(int HFLID,int HPLTID,int HWLTID,int WavelengthID,int *PHWPLPOS
 	}
     }
   fclose(sequencefile);
-
 
   //ASSIGN THE WL_Index AND PL_Index AS A FUNCTION OF FID
   //------------------------------------------------------------------------------------------------------------------
@@ -1089,7 +1121,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.53 2017/08/31 22:17:13 arta Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.54 2017/10/09 18:04:05 yliu Exp $");
 }
 
 
@@ -1226,7 +1258,7 @@ int DoIt(void)
   TempIntNum=ceil((AverageTime*1.5+90.)/DataCadence);
 
   if(TempIntNum % 2 != 0) TempIntNum+=1;                             //We want an even number (really, why?)
-  printf("TEMPINTNUM = %d\n",TempIntNum);
+//  printf("TEMPINTNUM = %d\n",TempIntNum);
   //following examples are for a 12 minute average:
   //example: for a cadence of 45  seconds, 26 points will be used for the temporal interpolation
   //example: for a cadence of 90  seconds, 14 points will be used for the temporal interpolation
@@ -1298,6 +1330,7 @@ int DoIt(void)
   int   TargetHWLPOS[4];			                     
   int   TargetHPLPOS[3];			                     
   int   TargetCFINDEX;
+  int   TargetFID;                                                   // define target FID -- YLiu
   int   nRecs1;                                                      //number of records read for the level 1 data
   int   ActualTempIntNum;                                            //actual number of filtergrams used for temporal interpolation (ActualTempIntNum < TempIntNum)
   int   framelistSize=Framelistsizein;                               //size of the sequence (in filtergram number) for level 1 data
@@ -1980,6 +2013,8 @@ int DoIt(void)
       //***********************************************************************************************************************
       
       k=0;
+      int CamYesNo=0, FIDshow;
+
       for(i=0;i<nRecs1;++i)  //loop over all the opened level 1 records
 	{	  
 	  FSN[i]        = drms_getkey_int(recLev1->records[i] ,FSNS            ,&statusA[0]); //not actually needed, just for debugging purpose
@@ -1993,11 +2028,15 @@ int DoIt(void)
 	  HPL3POS[i]    = drms_getkey_int(recLev1->records[i] ,HPL3POSS        ,&statusA[8]);
 	  FID[i]        = drms_getkey_int(recLev1->records[i] ,FIDS            ,&statusA[9]);
 	  HFLID[i]      = drms_getkey_int(recLev1->records[i] ,"HFTSACID"      ,&statusA[10]);
-
+// --YLiu
+          CamYesNo = drms_getkey_int(recLev1->records[i] ,"CAMERA"      ,&status); // Front = 2, Side = 1
+          FIDshow =  drms_getkey_int(recLev1->records[i] ,"FID"      ,&status);
+// --YLiu
 	  //SOME SEQUENCES NEED TO COMBINE FRONT AND SIDE CAMERAS TO PRODUCE I,Q,U,V BUT TAKE TWICE THE SAME SEQUENCE ON THE
 	  //FRONT CAMERA. IN THESE CASES, THE FID OF THE SECOND HALF OF THE SEQUENCE NEEDS TO BE CHANGED FOR THE CODE
 	  //CURRENTLY, THIS PART OF THE CODE WORKS ONLY FOR SEQUENCES OF THE TYPE Obs_6LXXf
-	  if(CamId == LIGHT_SIDE)
+//	  if(CamId == LIGHT_SIDE)
+          if (CamYesNo == 2)
 	    {
 	      iii=needtochangeFID(HFLID[i]); //Do we need to change the FID?
 	      if(iii == 1)
@@ -2006,6 +2045,7 @@ int DoIt(void)
 		  if( (ii%72)/24 == 1)
 		    {
 		      FID[i]=FID[i]+100000;
+//printf("HFLPSITN=%d, change FID=%d, FIDshow=%d\n", ii, FID[i], FIDshow);
 		    }
 		}
 	      
@@ -2219,7 +2259,7 @@ int DoIt(void)
       totalfront = totalfront/(float)countfront; //average DATAMEAN over all the front-camera records
       totalside = totalside/(float)countside; //average DATAMEAN over all of the side-camera records
       iratio = totalfront/totalside;
-      printf("INTENSITY RATIO FRONT/SIDE CAMERAS = %f BASED ON %d FRONT and %d SIDE IMAGES \n",iratio,countfront,countside);
+//      printf("INTENSITY RATIO FRONT/SIDE CAMERAS = %f BASED ON %d FRONT and %d SIDE IMAGES \n",iratio,countfront,countside);
     } 
   else
     {
@@ -2804,6 +2844,8 @@ int DoIt(void)
   initialrun=1;
 
   for(it=0;it<nWavelengths;++it) //nWavelengths=5, 6, 8, or 10
+//for(it=0;it<1;++it) //nWavelengths=5, 6, 8, or 10 -- YLiu test
+
     {
       printf("----------------------------------------------------------------------------------------\n");
       printf("CURRENT WAVELENGTH/FILTER NUMBER = %d\n",it);
@@ -2890,6 +2932,7 @@ int DoIt(void)
 	  
 // -- define variable to denote Camera ID -- YL
           int *CameraID;
+// -- YLiu
           CameraID = (int *)malloc(Npolin * sizeof(int *));
 
 	  for(it2=0;it2<Npolin;++it2) //npol=4 or 6
@@ -2974,6 +3017,7 @@ int DoIt(void)
 	      TargetHWLTID    = HWLTID[temp];
 	      TargetHPLTID    = HPLTID[temp];
 	      TargetCFINDEX   = CFINDEX[temp];
+              TargetFID       = FID[temp];  // define target FID -- YLiu
 
 // -- to get infomation of combine or not. for empty record purpose only  -- YLiu
               combineornot  = framelistCombine(TargetHFLID, CamId, &combineYesNo, dpath);
@@ -3188,7 +3232,10 @@ printf("combineornot=%d, combine=%d\n", combineornot, combineYesNo);
 
 	      //we locate the target filtergram in the framelist
 	      ii=-1;
-	      for(i=0;i<framelistSize;++i) if(PHWPLPOS[i*7+0] == TargetHWLPOS[0] && PHWPLPOS[i*7+1] == TargetHWLPOS[1] && PHWPLPOS[i*7+2] == TargetHWLPOS[2] && PHWPLPOS[i*7+3] == TargetHWLPOS[3] && PHWPLPOS[i*7+4] == TargetHPLPOS[0] && PHWPLPOS[i*7+5] == TargetHPLPOS[1] && PHWPLPOS[i*7+6] == TargetHPLPOS[2]) ii=i; //temp is the index of WavelengthIndex corresponding to the target filtergram
+	      for(i=0;i<framelistSize;++i) if(PHWPLPOS[i*7+0] == TargetHWLPOS[0] && PHWPLPOS[i*7+1] == TargetHWLPOS[1] && PHWPLPOS[i*7+2] == TargetHWLPOS[2] && PHWPLPOS[i*7+3] == TargetHWLPOS[3] && PHWPLPOS[i*7+4] == TargetHPLPOS[0] && PHWPLPOS[i*7+5] == TargetHPLPOS[1] && PHWPLPOS[i*7+6] == TargetHPLPOS[2] && FIDValues[i] == TargetFID) ii=i; //temp is the index of WavelengthIndex corresponding to the target filtergram -- --YLiu
+
+//              for(i=0;i<framelistSize;++i) if(PHWPLPOS[i*7+0] == TargetHWLPOS[0] && PHWPLPOS[i*7+1] == TargetHWLPOS[1] && PHWPLPOS[i*7+2] == TargetHWLPOS[2] && PHWPLPOS[i*7+3] == TargetHWLPOS[3] && PHWPLPOS[i*7+4] == TargetHPLPOS[0] && PHWPLPOS[i*7+5] == TargetHPLPOS[1] && PHWPLPOS[i*7+6] == TargetHPLPOS[2]) ii=i; //temp is the index of WavelengthIndex corresponding to the target filtergram
+
 	      if(ii == -1)    //there is a problem: the target filtergram does not exist according to the corresponding framelist 
 		{
 		  printf("Error: the target filtergram %d %d %d %d does not match any frame of the corresponding framelist\n",WavelengthID,TargetHPLPOS[0],TargetHPLPOS[1],TargetHPLPOS[2]);
@@ -3197,12 +3244,36 @@ printf("combineornot=%d, combine=%d\n", combineornot, combineYesNo);
 		}
 	      IndexTargetFiltergramId=WavelengthLocation[ii];
 	      //we locate the filtergrams with the wavelength it and polarization it2 in the framelist
-	      for(i=0;i<framelistSize;++i) if(WavelengthIndex[i] == it && PHWPLPOS[i*7+4] == PolarizationArray[0][it2] && PHWPLPOS[i*7+5] == PolarizationArray[1][it2] && PHWPLPOS[i*7+6] == PolarizationArray[2][it2])
-		{
-		  OrganizeFramelist    = WavelengthLocation[i]-IndexTargetFiltergramId;
-		  OrganizeFramelist2   = signj(OrganizeFramelist);
-		  break;
-		}
+
+// --YLiu
+
+              if (combineYesNo == 1 && (it2 == 4 || it2 == 6)) {
+                 for(i=0;i<framelistSize;++i) if(WavelengthIndex[i] == it && PHWPLPOS[i*7+4] == PolarizationArray[0][it2] && PHWPLPOS[i*7+5] == PolarizationArray[1][it2] && PHWPLPOS[i*7+6] == PolarizationArray[2][it2] && FIDValues[i]/100000 == 1) 
+                   {
+                    OrganizeFramelist    = WavelengthLocation[i]-IndexTargetFiltergramId;
+                    OrganizeFramelist2   = signj(OrganizeFramelist);
+                  break;
+                   }
+                }
+              else {
+                 for(i=0;i<framelistSize;++i) if(WavelengthIndex[i] == it && PHWPLPOS[i*7+4] == PolarizationArray[0][it2] && PHWPLPOS[i*7+5] == PolarizationArray[1][it2] && PHWPLPOS[i*7+6] == PolarizationArray[2][it2] && FIDValues[i]/100000 != 1)
+                   {
+		     OrganizeFramelist    = WavelengthLocation[i]-IndexTargetFiltergramId;
+		     OrganizeFramelist2   = signj(OrganizeFramelist);
+		     break;
+                   }
+               }
+
+// -- YLiu
+/*
+            for(i=0;i<framelistSize;++i) if(WavelengthIndex[i] == it && PHWPLPOS[i*7+4] == PolarizationArray[0][it2] && PHWPLPOS[i*7+5] == PolarizationArray[1][it2] && PHWPLPOS[i*7+6] == PolarizationArray[2][it2] )
+                {
+                  OrganizeFramelist    = WavelengthLocation[i]-IndexTargetFiltergramId;
+                  OrganizeFramelist2   = signj(OrganizeFramelist);
+                  break;
+                }
+
+*/
 	      if(WavelengthIndex[i] == WavelengthID)
 		{
 		  if(PHWPLPOS[i*7+4] == TargetHPLPOS[0] && PHWPLPOS[i*7+5] == TargetHPLPOS[1] && PHWPLPOS[i*7+6] == TargetHPLPOS[2])
@@ -3216,10 +3287,8 @@ printf("combineornot=%d, combine=%d\n", combineornot, combineYesNo);
 		      OrganizeFramelist2   = 0;
 		    }
 		}
-	      printf("GROUPING OF FILTERGRAMS: %d %d\n",OrganizeFramelist,OrganizeFramelist2);
+	      printf("GROUPING OF FILTERGRAMS: %d %d FID=%d,FIDTarget=%d, ii=%d\n",OrganizeFramelist,OrganizeFramelist2,FIDValues[ii], TargetFID, ii);
 
-
-	      
 	      //We fill the first framelistSize memory blocks of FramelistArray with 
 	      //IndexFiltergram[TargetWavelength]+OrganizeFramelist[i]
 	      //*************************************************************************************
@@ -3228,7 +3297,20 @@ printf("combineornot=%d, combine=%d\n", combineornot, combineYesNo);
 
 	      //we locate the filtergrams with the wavelength it and polarization it2 in the framelist
 	      ii=-1;
-	      for(i=0;i<framelistSize;++i) if(WavelengthIndex[i] == it && PHWPLPOS[i*7+4] == PolarizationArray[0][it2] && PHWPLPOS[i*7+5] == PolarizationArray[1][it2] && PHWPLPOS[i*7+6] == PolarizationArray[2][it2] ) ii=i;
+
+// -- YLiu
+
+              if (combineYesNo == 1 && (it2 == 4 || it2 == 6)) {
+                  for(i=0;i<framelistSize;++i) if(WavelengthIndex[i] == it && PHWPLPOS[i*7+4] == PolarizationArray[0][it2] && PHWPLPOS[i*7+5] == PolarizationArray[1][it2] && PHWPLPOS[i*7+6] == PolarizationArray[2][it2] && FIDValues[i]/100000 == 1) ii=i;}
+
+              else {
+                  for(i=0;i<framelistSize;++i) if(WavelengthIndex[i] == it && PHWPLPOS[i*7+4] == PolarizationArray[0][it2] && PHWPLPOS[i*7+5] == PolarizationArray[1][it2] && PHWPLPOS[i*7+6] == PolarizationArray[2][it2] && FIDValues[i]/100000 != 1) ii=i;}
+
+// -- YLiu
+
+
+//              for(i=0;i<framelistSize;++i) if(WavelengthIndex[i] == it && PHWPLPOS[i*7+4] == PolarizationArray[0][it2] && PHWPLPOS[i*7+5] == PolarizationArray[1][it2] && PHWPLPOS[i*7+6] == PolarizationArray[2][it2] ) ii=i;
+
 	      if(ii == -1)    //there is a problem: the target filtergram does not exist according to the corresponding framelist 
 		{
 		  printf("Error: the filtergram %d %d %d %d does not match any frame of the corresponding framelist\n",WavelengthID,PolarizationArray[0][it2],PolarizationArray[1][it2],PolarizationArray[2][it2]);
@@ -3244,15 +3326,21 @@ printf("combineornot=%d, combine=%d\n", combineornot, combineYesNo);
 	      FramelistArray[0] =WavelengthLocation[ii]-IndexTargetFiltergramId+temp; //theoretical location of the filtergram with wavelength it and polarization it2 the closest to the target wavelength
 	      FiltergramLocation=FramelistArray[0];
 
+//printf("FiltergramLocation=%d temp=%d ii = %d\n", FiltergramLocation, temp, ii);
+//printf("HWL1POS != WavelengthArray %d %d HWL2POS != WavelengthArray %d %d HWL3POS != WavelengthArray %d %d HWL4POS != WavelengthArray %d %d HPL1POS != PolarizationArray= %d %d HPL2POS PolarizationArray=%d %d HPL3POS PolarizationArray=%d %d CFINDEX TargetCFINDEX=%d %d, HCAMID camera=%d %d, FID, fidfilt %d %d\n", HWL1POS[FiltergramLocation], WavelengthArray[0], HWL2POS[FiltergramLocation], WavelengthArray[1], HWL3POS[FiltergramLocation], WavelengthArray[2], HWL4POS[FiltergramLocation], WavelengthArray[3], HPL1POS[FiltergramLocation], PolarizationArray[0][it2], HPL2POS[FiltergramLocation], PolarizationArray[1][it2], HPL3POS[FiltergramLocation], PolarizationArray[2][it2], CFINDEX[FiltergramLocation], TargetCFINDEX, HCAMID[FiltergramLocation], camera, FID[FiltergramLocation], fidfilt);
+
 
 	      if(KeywordMissing[FiltergramLocation] == 1)
 		{
 		  FramelistArray[0]=-1;
 		  printf("Error: the filtergram index %d has missing keywords and the code cannot identify it",FiltergramLocation);
 		}
+
 	      else
 		{
-		  if(HWL1POS[FiltergramLocation] != WavelengthArray[0] || HWL2POS[FiltergramLocation] != WavelengthArray[1] || HWL3POS[FiltergramLocation] != WavelengthArray[2] || HWL4POS[FiltergramLocation] != WavelengthArray[3] || HPL1POS[FiltergramLocation] != PolarizationArray[0][it2] || HPL2POS[FiltergramLocation] != PolarizationArray[1][it2] || HPL3POS[FiltergramLocation] !=  PolarizationArray[2][it2] || CFINDEX[FiltergramLocation] != TargetCFINDEX || HCAMID[FiltergramLocation] != camera)
+//		  if(HWL1POS[FiltergramLocation] != WavelengthArray[0] || HWL2POS[FiltergramLocation] != WavelengthArray[1] || HWL3POS[FiltergramLocation] != WavelengthArray[2] || HWL4POS[FiltergramLocation] != WavelengthArray[3] || HPL1POS[FiltergramLocation] != PolarizationArray[0][it2] || HPL2POS[FiltergramLocation] != PolarizationArray[1][it2] || HPL3POS[FiltergramLocation] !=  PolarizationArray[2][it2] || CFINDEX[FiltergramLocation] != TargetCFINDEX || HCAMID[FiltergramLocation] != camera)
+
+                if(HWL1POS[FiltergramLocation] != WavelengthArray[0] || HWL2POS[FiltergramLocation] != WavelengthArray[1] || HWL3POS[FiltergramLocation] != WavelengthArray[2] || HWL4POS[FiltergramLocation] != WavelengthArray[3] || HPL1POS[FiltergramLocation] != PolarizationArray[0][it2] || HPL2POS[FiltergramLocation] != PolarizationArray[1][it2] || HPL3POS[FiltergramLocation] !=  PolarizationArray[2][it2] || CFINDEX[FiltergramLocation] != TargetCFINDEX || HCAMID[FiltergramLocation] != camera || FID[FiltergramLocation] != fidfilt) // -- YLiu
 		    {
 		      printf("Warning: filtergram FSN= %d near the target location is not what it should be. Looking for the correct filtergram\n",FSN[FiltergramLocation]);
 		      FiltergramLocation=temp;
@@ -3263,7 +3351,8 @@ printf("combineornot=%d, combine=%d\n", combineornot, combineYesNo);
 			      k=FiltergramLocation+ii;
 			      if(k < nRecs1 && KeywordMissing[k] != 1)
 				{
-				  if(HWL1POS[k] == WavelengthArray[0] && HWL2POS[k] == WavelengthArray[1] && HWL3POS[k] == WavelengthArray[2] && HWL4POS[k] == WavelengthArray[3] && HPL1POS[k] == PolarizationArray[0][it2] && HPL2POS[k] == PolarizationArray[1][it2] && HPL3POS[k] ==  PolarizationArray[2][it2] && CFINDEX[k] == TargetCFINDEX && HCAMID[k] == camera) break;
+//--YLiu				  if(HWL1POS[k] == WavelengthArray[0] && HWL2POS[k] == WavelengthArray[1] && HWL3POS[k] == WavelengthArray[2] && HWL4POS[k] == WavelengthArray[3] && HPL1POS[k] == PolarizationArray[0][it2] && HPL2POS[k] == PolarizationArray[1][it2] && HPL3POS[k] ==  PolarizationArray[2][it2] && CFINDEX[k] == TargetCFINDEX && HCAMID[k] == camera) break;
+                                if(HWL1POS[k] == WavelengthArray[0] && HWL2POS[k] == WavelengthArray[1] && HWL3POS[k] == WavelengthArray[2] && HWL4POS[k] == WavelengthArray[3] && HPL1POS[k] == PolarizationArray[0][it2] && HPL2POS[k] == PolarizationArray[1][it2] && HPL3POS[k] ==  PolarizationArray[2][it2] && CFINDEX[k] == TargetCFINDEX && HCAMID[k] == camera && FID[k] == fidfilt) break; // YLiu
 				}
 			    }
 			  else                         //we look for filtergrams BEFORE the target filtergram
@@ -3271,7 +3360,9 @@ printf("combineornot=%d, combine=%d\n", combineornot, combineYesNo);
 			      k=FiltergramLocation-ii;
 			      if(k > 0 && KeywordMissing[k] != 1)
 				{
-				  if(HWL1POS[k] == WavelengthArray[0] && HWL2POS[k] == WavelengthArray[1] && HWL3POS[k] == WavelengthArray[2] && HWL4POS[k] == WavelengthArray[3] && HPL1POS[k] == PolarizationArray[0][it2] && HPL2POS[k] == PolarizationArray[1][it2] && HPL3POS[k] ==  PolarizationArray[2][it2] && CFINDEX[k] == TargetCFINDEX && HCAMID[k] == camera) break;
+// -- YLiu                      if(HWL1POS[k] == WavelengthArray[0] && HWL2POS[k] == WavelengthArray[1] && HWL3POS[k] == WavelengthArray[2] && HWL4POS[k] == WavelengthArray[3] && HPL1POS[k] == PolarizationArray[0][it2] && HPL2POS[k] == PolarizationArray[1][it2] && HPL3POS[k] ==  PolarizationArray[2][it2] && CFINDEX[k] == TargetCFINDEX && HCAMID[k] == camera) break;
+
+				  if(HWL1POS[k] == WavelengthArray[0] && HWL2POS[k] == WavelengthArray[1] && HWL3POS[k] == WavelengthArray[2] && HWL4POS[k] == WavelengthArray[3] && HPL1POS[k] == PolarizationArray[0][it2] && HPL2POS[k] == PolarizationArray[1][it2] && HPL3POS[k] ==  PolarizationArray[2][it2] && CFINDEX[k] == TargetCFINDEX && HCAMID[k] == camera && FID[k] == fidfilt) break; // YLiu
 				}
 			    }
 			}
@@ -3280,6 +3371,7 @@ printf("combineornot=%d, combine=%d\n", combineornot, combineYesNo);
 			  FramelistArray[0]=-1;
 			  //we locate the filtergrams with the wavelength it and polarization it2 in the framelist
 			  ii=-1;
+
 			  for(i=0;i<framelistSize;++i) if(WavelengthIndex[i] == it && PHWPLPOS[i*7+4] == PolarizationArray[0][it2] && PHWPLPOS[i*7+5] == PolarizationArray[1][it2] && PHWPLPOS[i*7+6] == PolarizationArray[2][it2] ) ii=i;
 			  FiltergramLocation=WavelengthLocation[ii]-IndexTargetFiltergramId+temp;//theoretical location 
 			  printf("Error: the filtergram FSN = %d is not what it should be\n",FSN[FiltergramLocation]);
@@ -3306,7 +3398,7 @@ printf("combineornot=%d, combine=%d\n", combineornot, combineYesNo);
 			{
 			  if(KeywordMissing[k] != 1)
 			    {
-			      if(HWL1POS[k] != WavelengthArray[0] || HWL2POS[k] != WavelengthArray[1] || HWL3POS[k] != WavelengthArray[2] || HWL4POS[k] != WavelengthArray[3] || HPL1POS[k] != PolarizationArray[0][it2] || HPL2POS[k] != PolarizationArray[1][it2] || HPL3POS[k] !=  PolarizationArray[2][it2] || HCAMID[k] != camera || CFINDEX[k] != TargetCFINDEX)
+			      if(HWL1POS[k] != WavelengthArray[0] || HWL2POS[k] != WavelengthArray[1] || HWL3POS[k] != WavelengthArray[2] || HWL4POS[k] != WavelengthArray[3] || HPL1POS[k] != PolarizationArray[0][it2] || HPL2POS[k] != PolarizationArray[1][it2] || HPL3POS[k] !=  PolarizationArray[2][it2] || HCAMID[k] != camera || CFINDEX[k] != TargetCFINDEX || FID[k] != fidfilt) // --YLiu
 				{
 				  if ((internTOBS[k]-TargetTime) >= -MaxSearchDistanceL) --k; 
 				  else break;
@@ -3322,7 +3414,10 @@ printf("combineornot=%d, combine=%d\n", combineornot, combineYesNo);
 			}
 		      if(KeywordMissing[k] != 1)
 			{
-			  if(HWL1POS[k] == WavelengthArray[0] && HWL2POS[k] == WavelengthArray[1] && HWL3POS[k] == WavelengthArray[2] && HWL4POS[k] == WavelengthArray[3] && HPL1POS[k] == PolarizationArray[0][it2] && HPL2POS[k] == PolarizationArray[1][it2] && HPL3POS[k] ==  PolarizationArray[2][it2] && HCAMID[k] == camera && CFINDEX[k] == TargetCFINDEX && (internTOBS[k]-TargetTime) >= -MaxSearchDistanceL)
+// -- YLiu                        
+                      if(HWL1POS[k] == WavelengthArray[0] && HWL2POS[k] == WavelengthArray[1] && HWL3POS[k] == WavelengthArray[2] && HWL4POS[k] == WavelengthArray[3] && HPL1POS[k] == PolarizationArray[0][it2] && HPL2POS[k] == PolarizationArray[1][it2] && HPL3POS[k] ==  PolarizationArray[2][it2] && HCAMID[k] == camera && CFINDEX[k] == TargetCFINDEX && (internTOBS[k]-TargetTime) >= -MaxSearchDistanceL && FID[k] == fidfilt)
+
+// -- YLiu			  if(HWL1POS[k] == WavelengthArray[0] && HWL2POS[k] == WavelengthArray[1] && HWL3POS[k] == WavelengthArray[2] && HWL4POS[k] == WavelengthArray[3] && HPL1POS[k] == PolarizationArray[0][it2] && HPL2POS[k] == PolarizationArray[1][it2] && HPL3POS[k] ==  PolarizationArray[2][it2] && HCAMID[k] == camera && CFINDEX[k] == TargetCFINDEX && (internTOBS[k]-TargetTime) >= -MaxSearchDistanceL)
 			    {
 			      FramelistArray[ii]=k;
 			    }
@@ -3331,6 +3426,7 @@ printf("combineornot=%d, combine=%d\n", combineornot, combineYesNo);
 		      else  FramelistArray[ii]=-1; //missing filtergram
 		      --k;
 		    }
+
 		  k=FiltergramLocation+1;
 		  for(ii=TempIntNum/2;ii<TempIntNum;++ii)
 		    {
@@ -3338,7 +3434,7 @@ printf("combineornot=%d, combine=%d\n", combineornot, combineYesNo);
 			    {
 			      if(KeywordMissing[k] != 1)
 				{
-				  if(HWL1POS[k] != WavelengthArray[0] || HWL2POS[k] != WavelengthArray[1] || HWL3POS[k] != WavelengthArray[2] || HWL4POS[k] != WavelengthArray[3] || HPL1POS[k] != PolarizationArray[0][it2] || HPL2POS[k] != PolarizationArray[1][it2] || HPL3POS[k] !=  PolarizationArray[2][it2] || HCAMID[k] != camera || CFINDEX[k] != TargetCFINDEX)
+				  if(HWL1POS[k] != WavelengthArray[0] || HWL2POS[k] != WavelengthArray[1] || HWL3POS[k] != WavelengthArray[2] || HWL4POS[k] != WavelengthArray[3] || HPL1POS[k] != PolarizationArray[0][it2] || HPL2POS[k] != PolarizationArray[1][it2] || HPL3POS[k] !=  PolarizationArray[2][it2] || HCAMID[k] != camera || CFINDEX[k] != TargetCFINDEX || FID[k] != fidfilt) // --YLiu
 				    {
 				      if ((internTOBS[k]-TargetTime) <= MaxSearchDistanceR) ++k; 
 				      else break;
@@ -3354,7 +3450,11 @@ printf("combineornot=%d, combine=%d\n", combineornot, combineYesNo);
 			    }
 			  if(KeywordMissing[k] != 1)
 			    {
-			      if(HWL1POS[k] == WavelengthArray[0] && HWL2POS[k] == WavelengthArray[1] && HWL3POS[k] == WavelengthArray[2] && HWL4POS[k] == WavelengthArray[3] && HPL1POS[k] == PolarizationArray[0][it2] && HPL2POS[k] == PolarizationArray[1][it2] && HPL3POS[k] ==  PolarizationArray[2][it2] && HCAMID[k] == camera && CFINDEX[k] == TargetCFINDEX && (internTOBS[k]-TargetTime) <= MaxSearchDistanceR)
+//--YLiu
+
+                          if(HWL1POS[k] == WavelengthArray[0] && HWL2POS[k] == WavelengthArray[1] && HWL3POS[k] == WavelengthArray[2] && HWL4POS[k] == WavelengthArray[3] && HPL1POS[k] == PolarizationArray[0][it2] && HPL2POS[k] == PolarizationArray[1][it2] && HPL3POS[k] ==  PolarizationArray[2][it2] && HCAMID[k] == camera && CFINDEX[k] == TargetCFINDEX && (internTOBS[k]-TargetTime) <= MaxSearchDistanceR && FID[k] == fidfilt)
+
+// -- YLiu			      if(HWL1POS[k] == WavelengthArray[0] && HWL2POS[k] == WavelengthArray[1] && HWL3POS[k] == WavelengthArray[2] && HWL4POS[k] == WavelengthArray[3] && HPL1POS[k] == PolarizationArray[0][it2] && HPL2POS[k] == PolarizationArray[1][it2] && HPL3POS[k] ==  PolarizationArray[2][it2] && HCAMID[k] == camera && CFINDEX[k] == TargetCFINDEX && (internTOBS[k]-TargetTime) <= MaxSearchDistanceR)
 				{
 				  FramelistArray[ii]=k;
 				}
@@ -3374,7 +3474,7 @@ printf("combineornot=%d, combine=%d\n", combineornot, combineYesNo);
 			{
 			  if(KeywordMissing[k] != 1)
 			    {
-			      if(HWL1POS[k] != WavelengthArray[0] || HWL2POS[k] != WavelengthArray[1] || HWL3POS[k] != WavelengthArray[2] || HWL4POS[k] != WavelengthArray[3] || HPL1POS[k] != PolarizationArray[0][it2] || HPL2POS[k] != PolarizationArray[1][it2] || HPL3POS[k] !=  PolarizationArray[2][it2] || HCAMID[k] != camera || CFINDEX[k] != TargetCFINDEX)
+			      if(HWL1POS[k] != WavelengthArray[0] || HWL2POS[k] != WavelengthArray[1] || HWL3POS[k] != WavelengthArray[2] || HWL4POS[k] != WavelengthArray[3] || HPL1POS[k] != PolarizationArray[0][it2] || HPL2POS[k] != PolarizationArray[1][it2] || HPL3POS[k] !=  PolarizationArray[2][it2] || HCAMID[k] != camera || CFINDEX[k] != TargetCFINDEX || FID[k] != fidfilt) //--YLiu
 				{
 				  if ((internTOBS[k]-TargetTime) >= -MaxSearchDistanceR) --k; 
 				  else break;
@@ -3390,7 +3490,7 @@ printf("combineornot=%d, combine=%d\n", combineornot, combineYesNo);
 			}
 		      if(KeywordMissing[k] != 1)
 			{
-			  if(HWL1POS[k] == WavelengthArray[0] && HWL2POS[k] == WavelengthArray[1] && HWL3POS[k] == WavelengthArray[2] && HWL4POS[k] == WavelengthArray[3] && HPL1POS[k] == PolarizationArray[0][it2] && HPL2POS[k] == PolarizationArray[1][it2] && HPL3POS[k] ==  PolarizationArray[2][it2] && HCAMID[k] == camera && CFINDEX[k] == TargetCFINDEX && (internTOBS[k]-TargetTime) >= -MaxSearchDistanceR)
+			  if(HWL1POS[k] == WavelengthArray[0] && HWL2POS[k] == WavelengthArray[1] && HWL3POS[k] == WavelengthArray[2] && HWL4POS[k] == WavelengthArray[3] && HPL1POS[k] == PolarizationArray[0][it2] && HPL2POS[k] == PolarizationArray[1][it2] && HPL3POS[k] ==  PolarizationArray[2][it2] && HCAMID[k] == camera && CFINDEX[k] == TargetCFINDEX && (internTOBS[k]-TargetTime) >= -MaxSearchDistanceR && FID[k] == fidfilt) // --YLiu
 			    {
 			      FramelistArray[ii]=k;
 			    }
@@ -3400,13 +3500,13 @@ printf("combineornot=%d, combine=%d\n", combineornot, combineYesNo);
 		      --k;
 		    }
 		  k=FiltergramLocation+1;
-		  for(ii=TempIntNum/2+1;ii<TempIntNum;++ii)
+		  for(ii=TempIntNum/2+1;ii<TempIntNum;++ii) 
 		    {
 		      while(k < nRecs1-1)
 			{
 			  if(KeywordMissing[k] != 1)
 			    {
-			      if(HWL1POS[k] != WavelengthArray[0] || HWL2POS[k] != WavelengthArray[1] || HWL3POS[k] != WavelengthArray[2] || HWL4POS[k] != WavelengthArray[3] || HPL1POS[k] != PolarizationArray[0][it2] || HPL2POS[k] != PolarizationArray[1][it2] || HPL3POS[k] !=  PolarizationArray[2][it2] || HCAMID[k] != camera || CFINDEX[k] != TargetCFINDEX)
+			      if(HWL1POS[k] != WavelengthArray[0] || HWL2POS[k] != WavelengthArray[1] || HWL3POS[k] != WavelengthArray[2] || HWL4POS[k] != WavelengthArray[3] || HPL1POS[k] != PolarizationArray[0][it2] || HPL2POS[k] != PolarizationArray[1][it2] || HPL3POS[k] !=  PolarizationArray[2][it2] || HCAMID[k] != camera || CFINDEX[k] != TargetCFINDEX || FID[k] != fidfilt) // --YLiu
 				{
 				  if ((internTOBS[k]-TargetTime) <= MaxSearchDistanceL) ++k; 
 				  else break;
@@ -3422,7 +3522,7 @@ printf("combineornot=%d, combine=%d\n", combineornot, combineYesNo);
 			}
 		      if(KeywordMissing[k] != 1)
 			{
-			  if(HWL1POS[k] == WavelengthArray[0] && HWL2POS[k] == WavelengthArray[1] && HWL3POS[k] == WavelengthArray[2] && HWL4POS[k] == WavelengthArray[3] && HPL1POS[k] == PolarizationArray[0][it2] && HPL2POS[k] == PolarizationArray[1][it2] && HPL3POS[k] ==  PolarizationArray[2][it2] && HCAMID[k] == camera && CFINDEX[k] == TargetCFINDEX && (internTOBS[k]-TargetTime) <= MaxSearchDistanceL)
+			  if(HWL1POS[k] == WavelengthArray[0] && HWL2POS[k] == WavelengthArray[1] && HWL3POS[k] == WavelengthArray[2] && HWL4POS[k] == WavelengthArray[3] && HPL1POS[k] == PolarizationArray[0][it2] && HPL2POS[k] == PolarizationArray[1][it2] && HPL3POS[k] ==  PolarizationArray[2][it2] && HCAMID[k] == camera && CFINDEX[k] == TargetCFINDEX && (internTOBS[k]-TargetTime) <= MaxSearchDistanceL && FID[k] == fidfilt) // -- YLiu
 			    {
 			      FramelistArray[ii]=k;
 			    }
@@ -3432,7 +3532,6 @@ printf("combineornot=%d, combine=%d\n", combineornot, combineYesNo);
 		      ++k;
 		    }
 		}//if(OrganizeFramelist2 <= 0)		 
-
 	      printf("FRAMELIST = %d",FramelistArray[0]);
 	      for(ii=1;ii<TempIntNum;++ii)printf(" %d ",FramelistArray[ii]);
 	      printf("\n");
@@ -3626,13 +3725,13 @@ printf("combineornot=%d, combine=%d\n", combineornot, combineYesNo);
 		  
 		  //call Keh-Cheng's functions for the statistics (NB: this function avoids NANs, but other than that calculates the different quantities on the ENTIRE image)
 		  status=fstats(TempIntNum,X0ARR,&minimum,&maximum,&median,&mean,&sigma,&skewness,&kurtosis,&ngood); //ngood is the number of points that are not NANs
-		  X0AVG[timeindex]=median;
+		  X0AVG[timeindex]=median; //2041.181641-1.0; //median; --YLiu
 		  X0RMS[timeindex]=sigma;
 		  status=fstats(TempIntNum,Y0ARR,&minimum,&maximum,&median,&mean,&sigma,&skewness,&kurtosis,&ngood); //ngood is the number of points that are not NANs
-		  Y0AVG[timeindex]=median;
+		  Y0AVG[timeindex]=median; //2049.307129-1.0; //median; --YLiu
 		  Y0RMS[timeindex]=sigma;
 		  status=fstats(TempIntNum,RSUNARR,&minimum,&maximum,&median,&mean,&sigma,&skewness,&kurtosis,&ngood); //ngood is the number of points that are not NANs
-		  RSUNAVG[timeindex]=median;
+		  RSUNAVG[timeindex]=median; //955.214417/0.504329; //median;
 		  RSUNRMS[timeindex]=sigma;
 		 
 		  free(X0ARR);
@@ -3664,7 +3763,7 @@ printf("combineornot=%d, combine=%d\n", combineornot, combineYesNo);
 			  
 			  if(SegmentRead[temp] == 0)      //if a keyword needed by do_interpolate is not missing, or the segment is not corrupted
 			    {
-			      printf("segment needs to be read for FSN %d \n",FSN[temp]);
+//			      printf("segment needs to be read for FSN %d \n",FSN[temp]);
 			      segin   = drms_segment_lookupnum(recLev1->records[temp], 0);
 			      Segments[temp] = drms_segment_read(segin,type1d, &status); //pointer toward the segment (convert the data into type1d)
 			      if (status != DRMS_SUCCESS || Segments[temp] == NULL)
@@ -3830,7 +3929,7 @@ printf("combineornot=%d, combine=%d\n", combineornot, combineYesNo);
 						  
 						  if(inLinearity == 1)
 						    {
-						      printf("applying rotational flat field and correcting for non-linearity of camera on record FSN=%d\n",FSN[temp]);
+//						      printf("applying rotational flat field and correcting for non-linearity of camera on record FSN=%d\n",FSN[temp]);
 						      for(iii=0;iii<axisin[0]*axisin[1];++iii)
 							{
 							  //removing the pzt flat field and applying the rotational flat field
@@ -3844,7 +3943,7 @@ printf("combineornot=%d, combine=%d\n", combineornot, combineYesNo);
 						    }
 						  else
 						    {
-						      printf("applying rotational flat field on record FSN=%d\n",FSN[temp]);
+//						      printf("applying rotational flat field on record FSN=%d\n",FSN[temp]);
 						      for(iii=0;iii<axisin[0]*axisin[1];++iii)
 							{
 							  //removing the pzt flat field and applying the rotational flat field
@@ -3859,7 +3958,7 @@ printf("combineornot=%d, combine=%d\n", combineornot, combineYesNo);
 						{
 						  if(inLinearity == 1)
 						    {
-						      printf("correcting for non-linearity of camera on record FSN=%d\n",FSN[temp]);
+//						      printf("correcting for non-linearity of camera on record FSN=%d\n",FSN[temp]);
 						      for(iii=0;iii<axisin[0]*axisin[1];++iii)
 							{
 							  //remove non-linearity of cameras
@@ -4067,6 +4166,9 @@ printf("combineornot=%d, combine=%d\n", combineornot, combineYesNo);
 		  KeyInterpOut.dist=(float)DSUNOBSint[timeindex];
 		  KeyInterpOut.b0=CRLTOBSint[timeindex]/180.*M_PI;
 		  KeyInterpOut.p0=CROTA2int[timeindex]/180.*M_PI;
+
+//printf("+++++++++++++ YLiu 04/08 X0AVG= %f, Y0AVG=%f, RSUNint=%f, B0-input=%f, B0-out=%f, P-input=%f, P-out=%f\n", X0AVG[timeindex], Y0AVG[timeindex],RSUNint[timeindex],CRLTOBS[temp]/180.*M_PI,KeyInterpOut.b0,CROTA2[temp]/180.*M_PI,KeyInterpOut.p0); // --YLiu
+
 		  tobs = TargetTime+(DSUNOBSint[timeindex]-1.0)/2.00398880422056639358e-03;        //observation time, which is equal to the slot time for level 1.5 data corrected for the SDO distance from 1 AU, the speed of light is given in AU/s
 		  KeyInterpOut.time=tobs; //TIME AT WHICH THE TEMPORAL INTERPOLATION IS PERFORMED (NOT THE SLOTTED TIME)
 		  KeyInterpOut.focus=TargetCFINDEX;
