@@ -141,7 +141,7 @@ on May 14, 2015: RSUNerr changed from 1.0 to 5.0 pixels (I'M TIRED OF INCREASING
 
 #undef I                              //I is the complex number (0,1) in complex.h. We un-define it to avoid confusion with the loop iterative variable i
 
-char *module_name    = "HMI_IQUV_averaging_YL"; //name of the module
+char *module_name    = "HMI_IQUV_averaging"; //name of the module
 
 #define kRecSetIn      "begin"        //beginning time for which an output is wanted. MANDATORY PARAMETER.
 #define kRecSetIn2     "end"          //end time for which an output is wanted. MANDATORY PARAMETER.
@@ -1121,7 +1121,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.54 2017/10/09 18:04:05 yliu Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.55 2017/10/11 16:40:58 yliu Exp $");
 }
 
 
