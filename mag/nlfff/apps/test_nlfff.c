@@ -16,6 +16,7 @@
  *			v2.1		Apr 22 2010
  *			v2.2		Oct 06 2010
  *			v2.3		Feb 13 2011
+ *          v3.0        Oct 19 2017
  *
  *
  * Issues:
@@ -37,6 +38,11 @@
  *			Added input for test version
  *			v2.3
  *			Added T_OBS and energy = total(Bx^2+By^2+Bz^2)
+ *          v3.0
+ *          exclude nd layer from energy calculation
+ *          add -n flag to suppress output
+ *          add RUNNUM keyword for multiple runs
+ *          save ND keyword
  *
  * Example:
  *			test_nlfff "in=su_xudong.lambert_vec_S5[2010.08.01_12:00:00_TAI][2]" "out=su_xudong.nlfff_S5" "PREP=1" "MULTI=3" "nz=256"
@@ -110,6 +116,7 @@ ModuleArgs_t module_args[] =
     {ARG_INT, "nz", "256", "Number of grids in z axis."},
     {ARG_INT, "nd", "16", "Number of grids at boundary."},
     {ARG_INT, "PREP", "0", "Preprocess vector magnetogram?"},
+    {ARG_INT, "RUNNUM", "0", "ID of run"},
     {ARG_DOUBLE, "mu1", "1.0", "For vector magnetogram preprocessing."},
     {ARG_DOUBLE, "mu2", "1.0", "For vector magnetogram preprocessing."},
     {ARG_DOUBLE, "mu3", "0.001", "For vector magnetogram preprocessing."},
@@ -118,6 +125,7 @@ ModuleArgs_t module_args[] =
     {ARG_INT, "test", "0", "1 for test data with 3 layer input cube rather than 3 images."},
     {ARG_INT, "MULTI", "1", "Levels of multigrid algorithm, 0 and 1 with no multigrid."},
     {ARG_INT, "VERB", "2", "Level of verbosity: 0=errors/warnings; 1=status; 2=all"},
+    {ARG_FLAG, "n", "", "Suppress output"},
     {ARG_STRING, "COMMENT", " ", "Comments."}, 
     {ARG_END}
 };
@@ -149,7 +157,7 @@ int DoIt(void)
     double *Bx, *By, *Bz, *Bx_tmp, *By_tmp, *Bz_tmp;
     double energy;
 
-    int verbflag, prepflag;
+    int verbflag, prepflag, noOutput;
     int outDims[3];
 
     int i, j, k, itest, dpt, dpt0;
@@ -158,7 +166,7 @@ int DoIt(void)
     double mu1, mu2, mu3, mu4;
     int multi, multi_now;
     int nx_now, ny_now, nz_now, nxny_now, nynz_now, nxnynz_now;
-    int test;
+    int test, runnum;
     char *comment;
 
     // Time measuring
@@ -183,8 +191,12 @@ int DoIt(void)
     mu3 = params_get_double(&cmdparams, "mu3");
     mu4 = params_get_double(&cmdparams, "mu4");
     test = params_get_int(&cmdparams, "test");
+    runnum = params_get_int(&cmdparams, "RUNNUM");
     multi = params_get_int(&cmdparams, "MULTI");
     if (multi < 1) multi = 1;
+    
+    noOutput = params_isflagset(&cmdparams, "n");
+    printf("runnum=%d, noOutput=%d\n", runnum, noOutput);
 
     /* Open input */
     inRS = drms_open_records(drms_env, inQuery, &status);
@@ -345,7 +357,6 @@ printf("preproc"); fflush(stdout);
         }	// end of multi
      
         // Copy out result -------------- CHECKED AGAINST WIEGELMANN'S CODE
-        energy = 0.;		// Feb 13 2011
         dpt = 0;
         for (k = 0; k < nz; k++) {
         for (j = 0; j < ny; j++) {
@@ -355,35 +366,48 @@ printf("preproc"); fflush(stdout);
             outDataBy[dpt] = By[dpt0];
             outDataBz[dpt] = Bz[dpt0];
             dpt++;
+        }}}
+        
+        // no checking of nd    // Oct 19 2017
+        energy = 0.;        // Feb 13 2011
+        for (k = 0; k < nz - nd; k++) {
+        for (j = nd; j < ny - nd; j++) {
+        for (i = nd; i < nx - nd; i++) {
+            dpt0 = i * nynz + j * nz + k;
             energy += (Bx[dpt0] * Bx[dpt0] + By[dpt0] * By[dpt0] + Bz[dpt0] * Bz[dpt0]);
         }}}
-
+        
         /* Output record */
         outRec = outRS->records[irec];
-        outSegBx = drms_segment_lookupnum(outRec, 0);
-        outSegBy = drms_segment_lookupnum(outRec, 1);
-        outSegBz = drms_segment_lookupnum(outRec, 2);
-
-        for (i = 0; i < 3; i++) {	// For variable dimensions
-            outSegBx->axis[i] = outArrayBx->axis[i];
-            outSegBy->axis[i] = outArrayBy->axis[i];
-            outSegBz->axis[i] = outArrayBz->axis[i];
+        
+        if (!noOutput) {
+            
+            outSegBx = drms_segment_lookupnum(outRec, 0);
+            outSegBy = drms_segment_lookupnum(outRec, 1);
+            outSegBz = drms_segment_lookupnum(outRec, 2);
+            
+            for (i = 0; i < 3; i++) {    // For variable dimensions
+                outSegBx->axis[i] = outArrayBx->axis[i];
+                outSegBy->axis[i] = outArrayBy->axis[i];
+                outSegBz->axis[i] = outArrayBz->axis[i];
+            }
+            
+            outArrayBx->parent_segment = outSegBx;
+            outArrayBy->parent_segment = outSegBy;
+            outArrayBz->parent_segment = outSegBz;
+            
+            /* Result writing */
+            status = drms_segment_write(outSegBx, outArrayBx, 0);
+            if (status) DIE("Problem writing file Bx");
+            drms_free_array(outArrayBx);
+            status = drms_segment_write(outSegBy, outArrayBy, 0);
+            if (status) DIE("Problem writing file By");
+            drms_free_array(outArrayBy);
+            status = drms_segment_write(outSegBz, outArrayBz, 0);
+            if (status) DIE("Problem writing file Bz");
+            drms_free_array(outArrayBz);
+            
         }
-
-        outArrayBx->parent_segment = outSegBx;
-        outArrayBy->parent_segment = outSegBy;
-        outArrayBz->parent_segment = outSegBz;
-
-        /* Result writing */
-        status = drms_segment_write(outSegBx, outArrayBx, 0);
-        if (status) DIE("Problem writing file Bx");
-        drms_free_array(outArrayBx);
-        status = drms_segment_write(outSegBy, outArrayBy, 0);
-        if (status) DIE("Problem writing file By");
-        drms_free_array(outArrayBy);
-        status = drms_segment_write(outSegBz, outArrayBz, 0);
-        if (status) DIE("Problem writing file Bz");
-        drms_free_array(outArrayBz);
 
         /* Set keywords */
         drms_setkey_string(outRec, "COMMENT", comment);
@@ -399,9 +423,10 @@ printf("preproc"); fflush(stdout);
             drms_copykey(outRec, inRec, "T_REC");
             drms_copykey(outRec, inRec, "T_OBS");
             drms_copykey(outRec, inRec, "HARPNUM");
-            drms_copykey(outRec, inRec, "RUNNUM");
             drms_setkey_string(outRec, "COMMENT", comment);
         }
+        drms_setkey_int(outRec, "RUNNUM", runnum);
+        drms_setkey_int(outRec, "ND", nd);
 
         /* Clean up */
         if (!test) {
