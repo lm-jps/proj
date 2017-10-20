@@ -468,7 +468,7 @@ int DoIt (void)
 #if NLEVPIXL == 1
         if (cameraID == 3)
            {
-            NOISE_LEVELFIc = 0.088; // adjusted on Sept. 1 2017 based on Jesper's suggestion -- YL
+            NOISE_LEVELFIc = 0.083; // updated on Oct 20, 2017  //0.088; // adjusted on Sept. 1 2017 based on Jesper's suggestion -- YL
             NOISE_LEVELFQc = 0.167;
             NOISE_LEVELFUc = 0.167;
             NOISE_LEVELFVc = 0.118;
@@ -3226,7 +3226,7 @@ if (cameraID == 3)
  { 
      vScale = 0.118; // adjusted on Sept. 1 2017 based on Jesper's suggestion -- YL
      quScale = 0.167;
-     iScale = 0.088;
+     iScale = 0.083; // updated on Oct 20, 2017; 0.088;
  }
  
 //printf("New module at 2017 Sept. 01\n");
@@ -4430,7 +4430,7 @@ int vfisv_filter(int Num_lambda_filter,int Num_lambda,double filters[Num_lambda_
 
 /* ----------------------------- by Sebastien (2), CVS version info. ----------------------------- */
 
-char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.35 2017/09/05 18:21:45 yliu Exp $");}
+char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.36 2017/10/20 16:36:12 yliu Exp $");}
 
 /* Maybe some other Fortran version be included, here OR at bottom of this file. Maybe at bottom. */
 
