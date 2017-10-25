@@ -20,6 +20,7 @@ hmi.flatfield
 hmi.fsi_phase_lon_lat
 hmi.fsi_phase_lon_lat_5d
 hmi.gcvbinned_nrt
+hmi.hskernels
 hmi.Ic_45s_dcon
 hmi.Ic_720s_dcon
 hmi.Ic_720s_dconS
