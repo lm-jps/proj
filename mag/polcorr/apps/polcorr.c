@@ -152,7 +152,7 @@ ModuleArgs_t module_args[] =
 {
     {ARG_STRING, "in", NULL, "Input data series."},
     {ARG_STRING, "out", NULL, "Output data series, name only."},
-    {ARG_STRING, "poldb", "su_xudong.hmi_poldb", "Polar field database, name only."},
+    {ARG_STRING, "poldb", "hmi.polar_db", "Polar field database, name only."},
     {ARG_NUME, "method", "TEMP_SPAT", "Correction scheme.", "TEMP_SPAT, SPAT_2D"},
     {ARG_DOUBLE, "lat0", "60.", "Start latitude used for fitting."},
     {ARG_DOUBLE, "latfil", "75.", "Start latitude for filling in, no lower than 75."},
