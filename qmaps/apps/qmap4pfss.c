@@ -239,13 +239,37 @@ int DoIt(void)
             
         }
         
-        // Write out
+        // logQ
         
         int npix_q = np_q * nt_q * nr_q;
         for (int idx = 0; idx < npix_q; idx++) {
             qmap_cube[idx] = log10(qmap_cube[idx]);
         }
-        DRMS_Segment_t *outSeg_q = drms_segment_lookup(outRec, "logq");
+        
+        // No longer using slogQ
+        /*
+        DRMS_Segment_t *inSeg_brq = drms_segment_lookup(inRec, "Brq");
+        DRMS_Array_t *inArray_brq = drms_segment_read(inSeg_brq, DRMS_TYPE_DOUBLE, &status);
+        if (status || inSeg_brq->axis[0] != np_q ||
+            inSeg_brq->axis[1] != nt_q || inSeg_brq->axis[2] != nr_q) {
+            SHOW("input brq error"); continue;
+        }
+        double *brq = (double *) inArray_brq->data;
+        
+        double slogq, sign_br;
+        for (int idx = 0; idx < npix_q; idx++) {
+            slogq = qmap_cube[idx];
+            sign_br = (brq[idx] < 0.) ? (-1.) : 1.;
+//            if (isnan(slogq) || slogq < 2.) slogq = 2.;
+            qmap_cube[idx] = sign_br * log10(slogq / 2. + sqrt(slogq * slogq / 4. - 1.));
+        }
+        
+        drms_free_array(inArray_brq);
+        */
+        
+        // Write out
+        
+        DRMS_Segment_t *outSeg_q = drms_segment_lookup(outRec, "logQ");
         int dims_q[3] = {np_q, nt_q, nr_q};
         DRMS_Array_t *outArray_q = drms_array_create(DRMS_TYPE_DOUBLE, 3, dims_q, qmap_cube, &status);
         for (idx = 0; idx < 3; idx++) {
@@ -269,9 +293,42 @@ int DoIt(void)
         
         // Keywords
         
+        int car_rot = drms_getkey_int(inRec, "CAR_ROT", &status);
+        double crval1 = drms_getkey_double(inRec, "CRVAL1", &status);
+        double crpix1 = drms_getkey_double(inRec, "CRPIX1", &status);
+        double cdelt1 = drms_getkey_double(inRec, "CDELT1", &status);
+        
         drms_copykeys(outRec, inRec, 0, 0);     // copy all keys
+        
+        drms_setkey_int(outRec, "CAR_ROT", car_rot);
+        
         drms_setkey_int(outRec, "CUBIC", do_cubic);
-        drms_setkey_float(outRec, "R_CHMAP", r_out[0]);
+        drms_setkey_double(outRec, "R_CHMAP", r_out[0]);
+        
+        drms_setkey_double(outRec, "CRPIX1", 1.);
+        // New *grid center* of 1s pixel identical with original map
+        drms_setkey_double(outRec, "CRVAL1",
+                          crval1 + (1. - crpix1) * cdelt1);
+        drms_setkey_double(outRec, "CDELT1", (-1.) * 360. / (np_q - 1.));
+        drms_setkey_string(outRec, "CUNIT1", "degree");
+        drms_setkey_string(outRec, "CTYPE1", "CRLN-CAR");
+        
+        drms_setkey_double(outRec, "CRPIX2", (1. + nt_q) / 2.);
+        drms_setkey_double(outRec, "CRVAL2", 0.0);
+        drms_setkey_double(outRec, "CDELT2", 180. / (nt_q - 1.));
+        drms_setkey_string(outRec, "CUNIT2", "degree");
+        drms_setkey_string(outRec, "CTYPE2", "CRLT-CAR");
+        
+        TIME val, trec, tnow, UNIX_epoch = -220924792.000; /* 1970.01.01_00:00:00_UTC */
+        tnow = (double)time(NULL);
+        tnow += UNIX_epoch;
+        drms_setkey_time(outRec, "DATE", tnow);
+        
+        // Link
+        
+        DRMS_Link_t *link = NULL;
+		link = hcon_lookup_lower(&outRec->links, "PFSS");
+        if (link) drms_link_set("PFSS", outRec, inRec);
         
         // Clean up
         drms_free_array(inArray_bp); drms_free_array(inArray_bt); drms_free_array(inArray_br);

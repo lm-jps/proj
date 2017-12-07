@@ -231,8 +231,11 @@ int DoIt(void)
         
         // Write out
         
+        /*
         int dims0[2] = {np, nt};
         writeOutput (outRec, br_sm, dims0, 2, "Br0");       // arrays freed in subroutine
+         */
+        free(br_sm);
         
         int dims[3] = {np, nt, nr};
         writeOutput (outRec, Br, dims, 3, "Br");
@@ -244,7 +247,37 @@ int DoIt(void)
         
         // Keywords
         
+        int car_rot = drms_getkey_int(inRec, "CAR_ROT", &status);
+        double crval1 = drms_getkey_double(inRec, "CRVAL1", &status);
+        double crpix1 = drms_getkey_double(inRec, "CRPIX1", &status);
+        double cdelt1 = drms_getkey_double(inRec, "CDELT1", &status);
+        // New *grid center* of 1s pixel identical with original map
+        double crval1_n = crval1 + (1. - crpix1) * cdelt1;
+        
         drms_copykeys(outRec, inRec, 0, 0);     // copy all keys
+        
+        drms_setkey_int(outRec, "CAR_ROT", car_rot);
+        
+        drms_setkey_int(outRec, "LMAX", lmax);
+        drms_setkey_double(outRec, "SIGMA", sig);
+        
+        drms_setkey_double(outRec, "CRPIX1", 1.);
+        printf("crval1=%f, crpix1=%f, cdelt1=%f, crva11_n=%f\n", crval1, crpix1, cdelt1, crval1_n);
+        drms_setkey_double(outRec, "CRVAL1", crval1_n);
+        drms_setkey_double(outRec, "CDELT1", (-1.) * 360. / (np - 1.));
+        drms_setkey_string(outRec, "CUNIT1", "degree");
+        drms_setkey_string(outRec, "CTYPE1", "CRLN-CAR");
+        
+        drms_setkey_double(outRec, "CRPIX2", (1. + nt) / 2.);
+        drms_setkey_double(outRec, "CRVAL2", 0.0);
+        drms_setkey_double(outRec, "CDELT2", 180. / (nt - 1.));
+        drms_setkey_string(outRec, "CUNIT2", "degree");
+        drms_setkey_string(outRec, "CTYPE2", "CRLT-CAR");
+        
+        TIME val, trec, tnow, UNIX_epoch = -220924792.000; /* 1970.01.01_00:00:00_UTC */
+        tnow = (double)time(NULL);
+        tnow += UNIX_epoch;
+        drms_setkey_time(outRec, "DATE", tnow);
 
         // Clean up
         
