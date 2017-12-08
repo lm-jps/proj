@@ -133,7 +133,7 @@ float nnb (float *f, int nx, int ny, float x, float y);
 
 /* ========================================================================================================== */
 
-char *module_name = "cgem_map";
+char *module_name = "cgem_flct";
 
 ModuleArgs_t module_args[] =
 {
