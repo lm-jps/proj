@@ -17,7 +17,7 @@
  *		v0.0
  *
  *	Example Calls:
- *      > cgem_cutout "b=hmi.B_720s[2011.02.15_12:00/2h]" "dop=hmi.V_720s[2011.02.15_12:00/2h]" "out=hmi_test.bvcutout_720s" "tref=2011.02.14_12:00:00_TAI" "cols=960" "rows=960" "lonref=5.6" "latref=-20.4" "cgemnum=11158"
+ *      > cgem_cutout "b=hmi.B_720s[2011.02.15_12:00/2h]" "dop=hmi_test.doppcal_720s[2011.02.15_12:00/2h]" "out=hmi_test.bvcutout_720s" "tref=2011.02.14_12:00:00_TAI" "cols=960" "rows=960" "lonref=5.6" "latref=-20.4" "cgemnum=11158"
  *
  */
 
@@ -81,9 +81,8 @@ struct patchInfo {
 };
 
 /* Cutout segment names, input identical to output */
-char *BSegs[] = {"inclination", "azimuth", "field", "disambig", "conf_disambig"};
-char *CutSegs[] = {"Dopplergram",
-	"inclination", "azimuth", "field", "disambig", "conf_disambig"};
+char *BSegs[] = {"vlos_mag", "inclination", "azimuth", "field", "disambig", "conf_disambig"};
+char *CutSegs[] = {"vlos_mag", "inclination", "azimuth", "field", "disambig", "conf_disambig"};
 char *CutBunits[] = {"cm/s",
     "degree", "degree", "Mx/cm^2", " ", " "};
 
@@ -91,11 +90,11 @@ char *CutBunits[] = {"cm/s",
 
 /* Get all input data series */
 int getInputRS(DRMS_RecordSet_t **bRS_ptr, DRMS_RecordSet_t **dopRS_ptr,
-               char *bQuery, char *dopQuery, struct patchInfo *pInfo);
+			   char *bQuery, char *dopQuery, struct patchInfo *pInfo);
 
 /* Create Cutout record */
 int createCutRecord(DRMS_Record_t *bRec, DRMS_Record_t *dopRec,
-                    DRMS_Record_t *outRec, struct patchInfo *pInfo);
+					DRMS_Record_t *outRec, struct patchInfo *pInfo);
 
 /* Determine location of cutout */
 int findCoord(DRMS_Record_t *inRec, struct patchInfo *pInfo, int *ll, int *ur);
@@ -118,7 +117,8 @@ char *module_name = "cgem_cutout";
 ModuleArgs_t module_args[] =
 {
     {ARG_STRING, "b", kNotSpecified, "Input B series."},
-	{ARG_STRING, "dop", kNotSpecified, "Input Doppler series."},
+//	{ARG_STRING, "dop", kNotSpecified, "Input Doppler series."},
+	{ARG_STRING, "dop", kNotSpecified, "Data sereis containing Doppler bias correction"},
 	{ARG_STRING, "out", kNotSpecified, "Output Sharp cutout series."},
 	{ARG_INT, "cgemnum", "-1", "CGEM dataset ID."},
 	{ARG_FLOAT, "lonref", "0", "Reference patch center Stonyhurst lon, in deg."},
@@ -172,7 +172,7 @@ int DoIt(void)
         DRMS_Record_t *bRec = NULL, *dopRec = NULL;
         
         bRec = bRS->records[irec];
-        dopRec = dopRS->records[irec];         // already checked in getInputRS
+		dopRec = dopRS->records[irec];         // already checked in getInputRS
         
         TIME trec = drms_getkey_time(bRec, "T_REC", &status);
         
@@ -209,7 +209,7 @@ int DoIt(void)
     /* Clean up */
     
     drms_close_records(bRS, DRMS_FREE_RECORD);
-    drms_close_records(dopRS, DRMS_FREE_RECORD);
+//    drms_close_records(dopRS, DRMS_FREE_RECORD);
     
 	return 0;
 	
@@ -227,8 +227,8 @@ int DoIt(void)
  *
  */
 
-int getInputRS(DRMS_RecordSet_t **bRS_ptr, DRMS_RecordSet_t **dopRS_ptr,
-               char *bQuery, char *dopQuery, struct patchInfo *pInfo)
+int getInputRS(DRMS_RecordSet_t **bRS_ptr, DRMS_RecordSet_t **dopRS_ptr, 
+			   char *bQuery, char *dopQuery, struct patchInfo *pInfo)
 {
     
     int status = 0;
@@ -240,6 +240,7 @@ int getInputRS(DRMS_RecordSet_t **bRS_ptr, DRMS_RecordSet_t **dopRS_ptr,
     if (status || (*dopRS_ptr)->n == 0) return 1;
     
     // Compare T_REC for b and dop, must be identical
+
     
     if ((*bRS_ptr)->n != (*dopRS_ptr)->n) return 1;
     int nrecs = (*bRS_ptr)->n;
@@ -273,7 +274,7 @@ int getInputRS(DRMS_RecordSet_t **bRS_ptr, DRMS_RecordSet_t **dopRS_ptr,
  */
 
 int createCutRecord(DRMS_Record_t *bRec, DRMS_Record_t *dopRec,
-                    DRMS_Record_t *outRec, struct patchInfo *pInfo)
+					DRMS_Record_t *outRec, struct patchInfo *pInfo)
 {
     
     int status = 0;
@@ -289,11 +290,13 @@ int createCutRecord(DRMS_Record_t *bRec, DRMS_Record_t *dopRec,
     
     // Cutout Doppler
     
+    /*
     if (writeCutout(outRec, dopRec, ll, ur, "Dopplergram")) {
         printf("Doppler cutout failed\n");
         return 1;
     }
     printf("Dopplergram cutout done.\n");
+    */
     
     // Coutout B
     
@@ -311,6 +314,7 @@ int createCutRecord(DRMS_Record_t *bRec, DRMS_Record_t *dopRec,
     // Keywords & Links
     
     setKeys(outRec, bRec, pInfo, ll);      // set keywords
+	drms_copykey(outRec, dopRec, "DOPPBIAS");     // doppler correction
     
     return 0;
     
@@ -496,9 +500,13 @@ void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *inRec, struct patchInfo *pInf
     // Defined as disk center's pixel address wrt lower-left of cutout
     drms_setkey_float(outRec, "CRPIX1", disk_xc - ll[0] + 1.);
     drms_setkey_float(outRec, "CRPIX2", disk_yc - ll[1] + 1.);
+    drms_setkey_float(outRec, "IMCRPIX1", disk_xc + 1.);
+    drms_setkey_float(outRec, "IMCRPIX2", disk_yc + 1.);
     // Always 0.
     drms_setkey_float(outRec, "CRVAL1", 0);
     drms_setkey_float(outRec, "CRVAL2", 0);
+    drms_setkey_float(outRec, "IMCRVAL1", 0);
+    drms_setkey_float(outRec, "IMCRVAL2", 0);
     
     // Jan 2 2014 XS
     int nSeg = ARRLENGTH(CutSegs);
