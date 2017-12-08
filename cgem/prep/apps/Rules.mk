@@ -10,11 +10,11 @@ d := $(dir)
 # module name(s) to be generated and file name(s) to be compiled
 
 ## C-wrapper name (name must end with .c)
-MODEXE_USEF_$(d) := $(addprefix $(d)/, cgem_prep cgem_cutout cgem_map cgem_flct)
+MODEXE_USEF_$(d) := $(addprefix $(d)/, cgem_prep cgem_cutout cgem_map cgem_flct correct_azim correct_azim_bharp cgem_doppcal cgem_doppcal_los vmap_flct)
 MODEXE_USEF := $(MODEXE_USEF) $(MODEXE_USEF_$(d))
 
 ## wrapped Fortran codes
-WRAPPEDF_OBJ_$(d)    := $(addprefix $(d)/, azim_mindiff_jsoc.o)
+WRAPPEDF_OBJ_$(d)    := $(addprefix $(d)/, azim_mindiff_jsoc.o dilate.o get_pils_los.o get_pils_rad.o median_sub.o pix2helio.o doppcal_estimate.o )
 
 # flags for compiling and linking
 MYCMPFLG_$(d) := -O2 -nofor-main -fp-model strict -fomit-frame-pointer
@@ -46,8 +46,8 @@ S_$(d) := $(notdir $(MODEXE_USEF_$(d)))
 $(OBJ_$(d)):	$(SRCDIR)/$(d)/Rules.mk
 $(OBJ_$(d)):	CF_TGT := $(CF_TGT) -fp-model strict -I$(SRCDIR)/$(d)/../../../libs/astro -I$(SRCDIR)/$(d)/../../../libs/stats -I$(SRCDIR)/$(d)/../../../libs/interpolate -I/home/jsoc/lib/$(JSOC_MACHINE) $(FFTWH) $(FFTW3LIBS) $(FMATHLIBSH) 
 
-$(WRAPPEDF_OBJ_$(d)): FF_TGT := $(FF_TGT) $(MYCMPFLG_$(d))
-$(MODEXE_USEF_$(d)): LL_TGT := $(LL_TGT) $(MYLNKFLG_$(d))
+$(WRAPPEDF_OBJ_$(d)): FF_TGT := $(FF_TGT) $(MYCMPFLG_$(d)) -free 
+$(MODEXE_USEF_$(d)): LL_TGT := $(LL_TGT) $(MYLNKFLG_$(d)) -free
 $(MODEXE_USEF_$(d)): $(WRAPPEDF_OBJ_$(d))
 
 ALL_$(d)	:= $(MODEXE_USEF_$(d))

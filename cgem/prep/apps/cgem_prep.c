@@ -337,7 +337,7 @@ int DoIt(void)
     
     // =============================================
     
-    /* Mapping and compute LOS vectors */
+    /* Mapping vector field and LOS vectors */
     
     // Do nothing for now
     

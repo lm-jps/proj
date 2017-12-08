@@ -582,7 +582,7 @@ void m2pc(int *dims_mer, float *map_mer, struct ephemeris *ephem,
     double dx = ephem->cdelt1 * RADSINDEG;
     double dy = ephem->cdelt2 * RADSINDEG;
     double colc = ephem->crpix1 - 1;
-    double rowc = ephem->crpix1 - 1;
+    double rowc = ephem->crpix2 - 1;
     
     double xc_mer = xc, yc_mer = yc, dx_mer = dx, dy_mer = dy;      // all identical
     double rowc_mer = (ny_mer - 1.) / 2., colc_mer = (nx_mer - 1.) / 2.;
