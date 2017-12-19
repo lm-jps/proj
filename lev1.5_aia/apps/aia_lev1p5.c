@@ -14,6 +14,13 @@ typedef enum { WL94A, WL131A, WL171A, WL193A, WL211A, WL304A, WL335A,
 int image_magrotate(void *, int, int, int, float, float, float, float,
                     void **, int *, int *, int, int);
 
+int image_cutout(void *, int, int, int, float, float, float, float,
+     void **, int, int,  float, float, int, int);
+
+int cutout_corners(int win, int hin, int wout, int hout, float rotang,
+                   float mag, float dx, float dy, float xco, float yco,
+                   float *cx, float *cy);
+
 ModuleArgs_t module_args[] =
 {
   {ARG_STRING, "dsinp", NOT_SPECIFIED, "Input series query"},
@@ -23,6 +30,10 @@ ModuleArgs_t module_args[] =
   {ARG_STRING, "rescale", "1", "rescale to fixed plate scale"},
   {ARG_STRING, "regrid", "1", "regrid type 0: nearest neighbor, 1: bicubic"},
   {ARG_STRING, "scale_to", "0.6", "rescale to fixed plate scale"},
+  {ARG_STRING, "xc", "0.0", "cutout x center WRT Sun Center in pixels"},
+  {ARG_STRING, "yc", "0.0", "cutout y center WRT Sun Center in  pixels"},
+  {ARG_STRING, "wide", "4096", "cutout width in pixels"},
+  {ARG_STRING, "high", "4096", "cutout height in pixels"},
   {ARG_STRING, "do_stretchmarks", "0", "fill in empty pixels created"},
   {ARG_STRING, "with_keys", "0", "write segment with all FITS keywords"},
   {ARG_STRING, "requestid", NOT_SPECIFIED, "Export request id if this program was invoked by the export system."},
@@ -48,6 +59,10 @@ int nice_intro(int help)
         "rescale=0, do not rescale to fixed plate scale, default=1\n"
         "regrid=0, nearest neighbor, default=1, bicubic\n"
         "scale_to=0.6, rescale to fixed plate scale, default=0.6\n"
+        "xc=0.0, cutout x center WRT Sun Center in pixels, default=0.0\n"
+        "yc=0.0, cutout y center WRT Sun Center in pixels, default=0.0\n"
+        "wide=4096, cutout width in pixels, default=4096\n"
+        "high=4096, cutout height in pixels, default=4096\n"
         "do_stretchmarks=1, fill in empty pixels created, default=0\n"
         "with_keys=1, write segment with all FITS keywords, default=0\n"
         "mpt=<master pointing table series>, default=NULL (use WCS keywords)\n"
@@ -141,10 +156,10 @@ int wl2ndx(int wl)
 
 int DoIt ()
 {
-  int irec, iseg, nrecs, nsegs, status, is_aia=0;
+  int irec, iseg, nrecs, nsegs, status, is_aia=0, wide = 4096, high = 4096;
   char *dsinp, *dsout, now_str[100];
   float crpix1, crpix2, cdelt1, cdelt2, crota2;
-  float mag = 1.0, dx, dy;
+  float mag = 1.0, dx, dy, xc, yc;
   DRMS_Record_t *inprec, *outrec, *mptrec=NULL;
   DRMS_RecordSet_t *inprs, *mptrs=NULL;
   DRMS_Array_t *inparr=NULL, *outarr=NULL;
@@ -179,6 +194,10 @@ int DoIt ()
   rescale = cmdparams_get_int(&cmdparams, "rescale", NULL);
   scale_to = cmdparams_get_float(&cmdparams, "scale_to", NULL);
   regridtype = cmdparams_get_int(&cmdparams, "regrid", NULL);
+  xc = cmdparams_get_float(&cmdparams, "xc", NULL);
+  yc = cmdparams_get_float(&cmdparams, "yc", NULL);
+  wide = cmdparams_get_int(&cmdparams, "wide", NULL);
+  high = cmdparams_get_int(&cmdparams, "high", NULL);
   do_stretchmarks = cmdparams_get_int(&cmdparams, "do_stretchmarks", NULL);
   withkeys = cmdparams_get_int(&cmdparams, "with_keys", NULL);
   reqid = cmdparams_get_str(&cmdparams, "requestid", NULL);
@@ -340,17 +359,38 @@ int DoIt ()
     for (iseg=0; iseg<1; iseg++) {
       void *output_array = NULL;
       int i, ix, iy, n, m, dtyp, nx, ny, npix;
+      axislen_t beg[2], end[2], out_axis[2];
       char *filename = NULL, *inpsegname = NULL;
-      float *fval, tmpval, z = 16383.5;
+      float *fval, tmpval, z = 16383.5, cx[4], cy[4];
       double s, s2, s3, s4, ss, datamin, datamax, datamedn, datamean;
       double data_rms, dataskew, datakurt, dtmp;
       inpseg = drms_segment_lookupnum(inprec, iseg);
       inpsegname = inpseg->info->name;
       filename = inpseg->filename;
       if (0 == iseg) {
+        n = nx = inpseg->axis[0]; m = ny = inpseg->axis[1];
+        dx = (n + 1.0)*0.5 - crpix1; dy = (m + 1.0)*0.5 - crpix2;
+        cutout_corners(n, m, wide, high, crota2, mag, dx, dy, xc, yc, cx, cy);
+        beg[0] = end[0] = cx[0]; beg[1] = end[1] = cy[0];
+        for (i=1; i<4; i++) {
+           if (cx[i] < beg[0]) beg[0] = cx[i];
+           if (cy[i] < beg[1]) beg[1] = cy[i];
+           if (cx[i] > end[0]) end[0] = cx[i];
+           if (cy[i] > end[1]) end[1] = cy[i];
+        } beg[0] -= 2; beg[1] -= 2; end[0] += 2; end[1] += 2;
+        if (beg[0] < 0) beg[0] = 0;
+        if (beg[0] > (nx-1)) beg[0] = nx - 1;
+        if (beg[1] < 0) beg[1] = 0;
+        if (beg[1] > (ny-1)) beg[1] = ny - 1;
+        if (end[0] > (nx-1)) end[0] = nx - 1;
+        if (end[0] < 0) end[0] = 0;
+        if (end[1] > (ny-1)) end[1] = ny - 1;
+        if (end[1] < 0) end[1] = 0;
+        crpix1 -= beg[0]; crpix2 -= beg[1];
         outseg = drms_segment_lookupnum(outrec, iseg);
         if (!outseg) DIE("Cant get output segment");
-        inparr = drms_segment_read(inpseg, DRMS_TYPE_FLOAT, &status);
+        inparr = drms_segment_readslice(inpseg, DRMS_TYPE_FLOAT,
+                                        beg, end, &status);
         if (status) DIE("drms_segment_read failed!");
         dtyp = 3;
         n = inparr->axis[0]; m = inparr->axis[1];
@@ -366,21 +406,22 @@ int DoIt ()
           fval[iy*n] = 0.0;
           fval[iy*n + n - 1] = 0.0;
         }
-        status = image_magrotate( inparr->data, n, m, dtyp, crota2,
-                 mag, dx, dy, &output_array, &nx, &ny,
+
+        status = image_cutout( inparr->data, n, m, dtyp, crota2,
+                 mag, dx, dy, &output_array, wide, high, xc, yc,
                  regridtype, do_stretchmarks);
         if (status) DIE("image_magrotate failed!");
-        /* if out dimen != inp dimen, inparr->axis below is incorrect */
+        out_axis[0] = wide; out_axis[1] = high;
         if (is_aia) {
-          outarr = drms_array_create(DRMS_TYPE_INT, 2, inparr->axis,
+          outarr = drms_array_create(DRMS_TYPE_INT, 2, out_axis,
                                    NULL, &status);
         } else {
-          outarr = drms_array_create(DRMS_TYPE_INT, 2, inparr->axis,
+          outarr = drms_array_create(DRMS_TYPE_INT, 2, out_axis,
                                    NULL, &status);
         }
         if (status) DIE("drms_array_create failed!");
         s = s2 = s3 = s4 = 0.0; datamin = 9.9e9; datamax = -9.9e9, npix = 0; 
-        for (i=0; i<nx*ny; i++) {
+        for (i=0; i<wide*high; i++) {
           if (is_aia) {
             if (*((float *)(output_array)+i)<0) *((float *)(output_array)+i)=0;
             if (*((float *)(output_array)+i)>z) *((float *)(output_array)+i)=z;
@@ -419,8 +460,8 @@ int DoIt ()
           }
         }
         drms_setkey_float(outrec, "CROTA2", 0.0);
-        drms_setkey_float(outrec, "CRPIX1", (n + 1.0)*0.5);
-        drms_setkey_float(outrec, "CRPIX2", (m + 1.0)*0.5);
+        drms_setkey_float(outrec, "CRPIX1", (wide + 1.0)*0.5 - xc);
+        drms_setkey_float(outrec, "CRPIX2", (high + 1.0)*0.5 - yc);
         drms_setkey_float(outrec, "X0", 0.0);
         drms_setkey_float(outrec, "Y0", 0.0);
         if (withkeys) {

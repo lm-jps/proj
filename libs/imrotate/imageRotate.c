@@ -21,22 +21,40 @@
  static	int	regridtypeflag = 0;
  static int regrid(void *, int , int ,float *, float *, int , int ,int , int ,void **, int *, int *);
  static void bicubic_f(), bicubic_fc();
+ /* resample_type controls whether we use a straight BI_CUBIC or a BI_CUBIC_SMOOTH, the
+ latter is generally better (less chance of bad ringing) */
  static int	resample_type = BI_CUBIC_SMOOTH;
- int image_magrotate(void *,int,int,int,float,float,float,float,void **,int *,int *,int,int);
+ int image_magrotate(void *,int,int,int,float,float,float,float,void **,int *,int *,int,int,int);
  /*------------------------------------------------------------------------- */
 int image_magrotate(
-     /* rotate about center, magnify (rescale) and then offset the input image
+     /* rotate about center, magnify (rescale) and then offset the input image,
      this is usually the preferred order for aligning to another image, order
      can be varied by constructing the final grid accordingly */
      /* theta is assumed in degrees */
      void *array, int nin, int min, int data_type_input,
      float theta, float mag, float dx, float dy,
      void **outarray, int *nx, int *ny,
-     int regridtype_input, int stretchmark_flag_input
+     int regridtype_input, int stretchmark_flag_input,
+     int convertnan2zero_flag
      )
+ /* call example:
+ short  array[4096*4096];  int n,m, data_type_input;  float theta, mag, dx, dy; int *nx, *ny;
+ int regridtype_input, stretchmark_flag_input, stat;
+ n = m = 4096;  theta = 1.2;  mag = 0.98; dx = dy = 0.0; regridtype_input = 1;
+ stretchmark_flag = 0; void *outarray;
+ stat = image_magrotate((void *)array,n,m,data_type_input,theta,mag,dx,dy,&outarray,&nx,&ny,
+   regridtypeflag, stretchmark_flag);
+ */
  {
  float cx[4], cy[4], xc, yc, cq, sq, cs, magr;
  int i, stat, m;
+ /* 4/9/2010 if flag set and we are I*4, convert I*4 "NAN's" to 0,
+ this is done as a separate step here, could be integrated into regrid */
+ if (convertnan2zero_flag && data_type_input == 2) {
+   int nn = nin * min;
+   int *p = (int *) array;
+   while (nn--)  { if (*p == 0x80000000) { *p = 0; } p++; }
+ }
  /* set some local "globals" that are used by several routines */
  regridtypeflag = regridtype_input;
  stretchmark_flag = stretchmark_flag_input;
@@ -62,8 +80,79 @@ int image_magrotate(
  /* and a final offset */
  for (i=0;i<4;i++) { cx[i] = cx[i] - dx;   cy[i] = cy[i] - dy; }
  /* note that nx and ny should be same as n and m for this case */
-
  stat = regrid(array, n, m, cx, cy, 2, 2, n, m, outarray, nx, ny);
+ if (stat) { printf("error in regrid\n"); *outarray = 0; nx = ny = 0; return -1; }
+ return 0;
+ }
+ /*------------------------------------------------------------------------- */
+int cutout_corners(int win, int hin, int wout, int hout, float rotang,
+                   float mag, float dx, float dy, float xco, float yco,
+                   float *cx, float *cy)
+{
+  int i; float cs, cq, sq, xc, yc, magr = 1.0/mag;
+  cx[0] = xco - 0.5*(wout - 1); cx[1] = cx[0] + wout;
+  cx[2] = cx[0]; cx[3] = cx[1];
+  cy[0] = yco - 0.5*(hout - 1); cy[2] = cy[0] + hout;
+  cy[1] = cy[0]; cy[3] = cy[2];
+  /* stretch or shrink */
+  for (i=0; i<4; i++) { cx[i] = cx[i]*magr; cy[i] = cy[i]*magr; }
+  /* rotate */
+  rotang *= 0.01745329252; /* deg to radians */
+  cq = cos(rotang); sq = sin(rotang);
+  for (i=0; i<4; i++) { cs = cx[i];
+    cx[i] = cq*cs    + sq*cy[i];
+    cy[i] = cq*cy[i] - sq*cs;
+  }
+  /* translate */
+  xc = 0.5*(win - 1); yc = 0.5*(hin - 1);
+  for (i=0; i<4; i++) { cx[i] = cx[i] - dx + xc;  cy[i] = cy[i] - dy + yc; }
+
+  return 0;
+}
+ /*------------------------------------------------------------------------- */
+int image_cutout(
+     /* uses theta and mag of source image */
+     void *array, int nin, int min, int data_type_input, /* source array, dims, type */
+     float theta, float mag, float dx, float dy,  /* theta, mag, center offset - be careful of signs! */
+     void **outarray, int nout, int mout,  /* size of result in 0.6" pixels */
+     float xcout, float ycout,  /* center of cutout in pixels, from sun center */
+     int regridtype_input, int stretchmark_flag_input  /* interpolation style and out of limits behavior */
+     )
+ {
+ float cx[4], cy[4], cq, sq, cs, magr, xc, yc;
+ int i, stat, nx, ny;
+ regridtypeflag = regridtype_input;
+ stretchmark_flag = stretchmark_flag_input;
+ data_type = data_type_input;
+ n = nin;
+ /* note that nin, min are different from n,m here as opposed to image_magrotate */ 
+ /* we normally expect nin, min to be 4096, 4096 for AIA and the final pixels to be 0.6" */ 
+ /* setup the x and y grid, note that n,m are generally smaller then nin, min */
+ /* the cutout is wrt sun center */
+ cx[0] = xcout - 0.5*(float) (nout-1); cx[1] = (float) nout + cx[0]; cx[2] = cx[0]; cx[3] = cx[1];
+ cy[0] = ycout - 0.5*(float) (mout-1); cy[2] = (float) mout + cy[0]; cy[1] = cy[0]; cy[3] = cy[2];
+ magr = 1./mag;
+//  printf("cx[0], cx[1],cx[2], cx[3] = %f, %f, %f, %f\n", cx[0], cx[1],cx[2], cx[3]);
+//  printf("cy[0], cy[1],cy[2], cy[3] = %f, %f, %f, %f\n", cy[0], cy[1],cy[2], cy[3]);
+ /* cx cy are the corners in the result AIA space wrt sun center */
+ /* note that the cx[1,3] and cy[1,3] values are 1 pixel outside the cutout */
+ /* the rotation and mag operations commute as long as mag is scalar (same for x and y) */
+ for (i=0;i<4;i++) { cx[i] = cx[i]*magr; cy[i] = cy[i]*magr; }
+ theta = theta * 0.01745329252;   /* remove if theta already in radians */
+ cq = cos(theta);   sq = sin(theta);
+ 
+ /* rotate grid */
+ for (i=0;i<4;i++) {
+   cs = cx[i]; cx[i] =    cs*cq + cy[i]*sq;
+               cy[i] = cy[i]*cq -   cs *sq;
+ }
+ /* still wrt sun center, add offset of level 1 (or whatever) for final result */
+ xc = 0.5 * (float) (nin-1);
+ yc = 0.5 * (float) (min-1);
+ for (i=0;i<4;i++) { cx[i] = cx[i] - dx + xc;   cy[i] = cy[i] - dy + yc; }
+ /* note that regrid will compute nx and ny but as long as ng,mg are 2,2, the result will be
+ the same as n and m */
+ stat = regrid(array, nin, min, cx, cy, 2, 2, nout, mout, outarray, &nx, &ny);
  
  if (stat) { printf("error in regrid\n"); *outarray = 0; nx = ny = 0; return -1; }
  return 0;
@@ -110,7 +199,7 @@ int regrid(
  /* before any looping, branch on the type of regrid we are doing */
  switch (regridtypeflag) {
  case 0:	/* nearest neighbor regrid */
- /* start 4 level loop */
+ /* start 4 level loop, the outer (mg, ng) is usually just a 2x2 */
  while (mg--) 	{					/* outer mg loop */
    ipbase.b = jpbase.b;	jpbase.b = ipbase.b + jprun;
    ig = ng;	j = ind;
