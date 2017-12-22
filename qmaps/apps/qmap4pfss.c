@@ -24,7 +24,7 @@
  *
  *
  *  Example calls:
- *      qmap4pfss "in=su_xudong.pfss[2099][0]" "out=su_xudong.qmap_pfss" -v -c "np=1441" "nt=721"
+ *      qmap4pfss "in=hmi_test.pfss_synop[2099]" "out=hmi_test.Q_synop" -v -c "np=1441" "nt=721"
 
  *
  *
@@ -239,15 +239,15 @@ int DoIt(void)
             
         }
         
-        // logQ
+        // slogQ
         
         int npix_q = np_q * nt_q * nr_q;
+        /*
         for (int idx = 0; idx < npix_q; idx++) {
             qmap_cube[idx] = log10(qmap_cube[idx]);
         }
+         */
         
-        // No longer using slogQ
-        /*
         DRMS_Segment_t *inSeg_brq = drms_segment_lookup(inRec, "Brq");
         DRMS_Array_t *inArray_brq = drms_segment_read(inSeg_brq, DRMS_TYPE_DOUBLE, &status);
         if (status || inSeg_brq->axis[0] != np_q ||
@@ -260,16 +260,18 @@ int DoIt(void)
         for (int idx = 0; idx < npix_q; idx++) {
             slogq = qmap_cube[idx];
             sign_br = (brq[idx] < 0.) ? (-1.) : 1.;
-//            if (isnan(slogq) || slogq < 2.) slogq = 2.;
-            qmap_cube[idx] = sign_br * log10(slogq / 2. + sqrt(slogq * slogq / 4. - 1.));
+            if (isnan(slogq) || slogq < 2.) {
+                qmap_cube[idx] = 0.;
+            } else {
+                qmap_cube[idx] = sign_br * log10(slogq / 2. + sqrt(slogq * slogq / 4. - 1.));
+            }
         }
         
         drms_free_array(inArray_brq);
-        */
         
         // Write out
         
-        DRMS_Segment_t *outSeg_q = drms_segment_lookup(outRec, "logQ");
+        DRMS_Segment_t *outSeg_q = drms_segment_lookup(outRec, "slogQ");
         int dims_q[3] = {np_q, nt_q, nr_q};
         DRMS_Array_t *outArray_q = drms_array_create(DRMS_TYPE_DOUBLE, 3, dims_q, qmap_cube, &status);
         for (idx = 0; idx < 3; idx++) {

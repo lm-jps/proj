@@ -19,7 +19,7 @@
  *
  *
  *  Example call:
- *      pfss_q "in=su_xudong.synop_polfil[2099]" "out=su_xudong.pfss_q_rice"
+ *      pfss_q "in=hmi.synoptic_mr_polfil_720s[2099]" "out=hmi_test.pfss_synop"
  *
  */
 
