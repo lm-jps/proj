@@ -231,11 +231,9 @@ int DoIt(void)
         
         // Write out
         
-        /*
         int dims0[2] = {np, nt};
         writeOutput (outRec, br_sm, dims0, 2, "Br0");       // arrays freed in subroutine
-         */
-        free(br_sm);
+//        free(br_sm);
         
         int dims[3] = {np, nt, nr};
         writeOutput (outRec, Br, dims, 3, "Br");
