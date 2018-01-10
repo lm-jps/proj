@@ -997,7 +997,7 @@ int writeOutput(char *outQuery, DRMS_Record_t *inRec, float **outMap,
     
     // Keywords
     
-    drms_copykeys(outRec, inRec, 0, kDRMS_KeyClass_All);    // copy all relevant keys?
+    drms_copykeys(outRec, inRec, 0, kDRMS_KeyClass_Explicit);    // copy all relevant keys?
     
     drms_copykey(outRec, inRec, "CAR_ROT");
     drms_copykey(outRec, inRec, "T_OBS");
