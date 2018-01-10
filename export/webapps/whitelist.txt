@@ -172,6 +172,10 @@ mdi.rwbin_ic
 mdi.rwbin_ld
 mdi.scale_corrections
 mdi.sinrho_table
+mdi.synoptic_Ml_96m
+mdi.synoptic_Ml_small_96m
+mdi.synoptic_Mr_96m
+mdi.synoptic_Mr_small_96m
 mdi.vw_v
 mdi.vw_v_sht_72d
 mdi.vw_V_sht_gaps_72d
