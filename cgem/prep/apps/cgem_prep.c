@@ -439,7 +439,7 @@ int correct_dop(DRMS_Record_t *inRec, DRMS_Record_t *outRec)
     
     // Links and keywords
     
-    drms_copykeys(outRec, inRec, 0, 0);     // copy all keys
+    drms_copykeys(outRec, inRec, 0, kDRMS_KeyClass_Explicit);     // copy all keys
     drms_setkey_float(outRec, "DDOP", ddop);		// correction
     
     TIME val, trec, tnow, UNIX_epoch = -220924792.000; /* 1970.01.01_00:00:00_UTC */
@@ -508,7 +508,7 @@ int correct_azi(DRMS_Record_t *inRec, DRMS_Record_t *outRec, float *azi_work,
     
     // Links and keywords
     
-    drms_copykeys(outRec, inRec, 0, 0);     // copy all keys
+    drms_copykeys(outRec, inRec, 0, kDRMS_KeyClass_Explicit);     // copy all keys
     
     TIME val, trec, tnow, UNIX_epoch = -220924792.000; /* 1970.01.01_00:00:00_UTC */
     tnow = (double)time(NULL);
@@ -694,7 +694,7 @@ int cgem_mapping(DRMS_Record_t *inRec, DRMS_Record_t *outRec, struct reqInfo *re
 
 	// keys
 
-    drms_copykeys(outRec, inRec, 0, 0);     // copy all keys
+    drms_copykeys(outRec, inRec, 0, kDRMS_KeyClass_Explicit);     // copy all keys
     
     drms_setkey_float(outRec, "CRPIX1", req->ncol/2. + 0.5);
 	drms_setkey_float(outRec, "CRPIX2", req->nrow/2. + 0.5);

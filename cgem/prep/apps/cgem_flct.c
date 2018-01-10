@@ -711,7 +711,7 @@ int writeV(DRMS_Record_t *inRec, DRMS_Record_t *outRec,
     
     // Keywords
     
-    drms_copykeys(outRec, inRec, 0, 0);     // copy all keys
+    drms_copykeys(outRec, inRec, 0, kDRMS_KeyClass_Explicit);     // copy all keys
     
     TIME val, trec, tnow, UNIX_epoch = -220924792.000; /* 1970.01.01_00:00:00_UTC */
     tnow = (double)time(NULL);

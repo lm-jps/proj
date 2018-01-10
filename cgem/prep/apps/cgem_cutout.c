@@ -83,8 +83,7 @@ struct patchInfo {
 /* Cutout segment names, input identical to output */
 char *BSegs[] = {"vlos_mag", "inclination", "azimuth", "field", "disambig", "conf_disambig"};
 char *CutSegs[] = {"vlos_mag", "inclination", "azimuth", "field", "disambig", "conf_disambig"};
-char *CutBunits[] = {"cm/s",
-    "degree", "degree", "Mx/cm^2", " ", " "};
+char *CutBunits[] = {"cm/s", "degree", "degree", "Mx/cm^2", " ", " "};
 
 /* ========================================================================================================== */
 
@@ -483,7 +482,7 @@ int writeCutout(DRMS_Record_t *outRec, DRMS_Record_t *inRec,
 void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *inRec, struct patchInfo *pInfo, int *ll)
 {
     
-    drms_copykeys(outRec, inRec, 0, 0);     // copy all keys
+    drms_copykeys(outRec, inRec, 0, kDRMS_KeyClass_Explicit);     // copy all keys
     drms_setkey_int(outRec, "CGEMNUM",  pInfo->cgemnum);
     
     TIME val, trec, tnow, UNIX_epoch = -220924792.000; /* 1970.01.01_00:00:00_UTC */

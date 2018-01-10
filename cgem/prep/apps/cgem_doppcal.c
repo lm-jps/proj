@@ -392,7 +392,7 @@ int writeOutput(DRMS_Record_t *inRec, DRMS_Record_t *outRec, int writeImg,
     
     // Keywords
     
-    drms_copykeys(outRec, inRec, 0, 0);     // copy all keys
+    drms_copykeys(outRec, inRec, 0, kDRMS_KeyClass_Explicit);     // copy all keys
     
     drms_setkey_float(outRec, "DOPPBIAS", doppcal_bias);
     drms_setkey_string(outRec, "BUNIT_000", "cm/s");
