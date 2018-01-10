@@ -254,7 +254,7 @@ int DoIt(void)
         // New *grid center* of 1s pixel identical with original map
         double crval1_n = crval1 + (1. - crpix1) * cdelt1;
         
-        drms_copykeys(outRec, inRec, 0, 0);     // copy all keys
+        drms_copykeys(outRec, inRec, 0, kDRMS_KeyClass_Explicit);     // copy all keys
         
         drms_setkey_int(outRec, "CAR_ROT", car_rot);
         

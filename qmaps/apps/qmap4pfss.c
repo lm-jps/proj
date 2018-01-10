@@ -300,7 +300,7 @@ int DoIt(void)
         double crpix1 = drms_getkey_double(inRec, "CRPIX1", &status);
         double cdelt1 = drms_getkey_double(inRec, "CDELT1", &status);
         
-        drms_copykeys(outRec, inRec, 0, 0);     // copy all keys
+        drms_copykeys(outRec, inRec, 0, kDRMS_KeyClass_Explicit);     // copy all keys
         
         drms_setkey_int(outRec, "CAR_ROT", car_rot);
         
