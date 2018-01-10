@@ -37,6 +37,9 @@
 
 #define TESTMODE    (1)
 
+// Adjust padding sizes such that m, n are dividable by UPADDING, must be even
+#define UPADDING	(12)
+
 // Constants
 // Blon equivalent to Bx, Blat equivalent to By
 
@@ -60,8 +63,9 @@ char *outSegBNames[] = {"Bx0", "By0", "Bz0",
 
 struct reqInfo {
     int n, m;       // input already has padding, n: cols; m: rows
-    int npad, mpad; // padding on each side
-    int n_o, m_o;   // n = npad * 2 + n_o; m = mpad * 2 + m_o
+    int npad0, mpad0;		// Initial guess of padding on each side
+    int npadl, npadr, mpadb, mpadt;		// padding on left/right, bottom/top
+    int n_o, m_o;   // n = npadl + n_o + npadr; m = mpadb + m_o + npadt
     double a, b, c, d;
     TIME t, trec;   // use T_OBS for time, trec for prime key
 };
@@ -97,6 +101,9 @@ int writeOutputArr(DRMS_Record_t *inRec0, DRMS_Record_t *inRec1, DRMS_Record_t *
                    double *blon0, double *blat0, double *brll0,
                    double *blon1, double *blat1, double *brll1);
 
+// Figure out padding sizes
+void pad_int_gen_ss(struct reqInfo *rInfo);
+
 // =====================================
 
 char *module_name = "cgem_pdfi";
@@ -105,11 +112,11 @@ ModuleArgs_t module_args[] =
 {
     {ARG_STRING, "in", kNotSpecified, "Input data series."},
     {ARG_STRING, "out", kNotSpecified, "Output data series."},
-    {ARG_INT, "npad", "50", "Padding in column."},
-    {ARG_INT, "mpad", "50", "Padding in row."},
+    {ARG_INT, "npad", "50", "Initial guess of padding in column."},
+    {ARG_INT, "mpad", "50", "Initial guess of padding in row."},
 //    {ARG_DOUBLE, "bthr", "200.", "Threshold for masking."},
 //    {ARG_DOUBLE, "bthr_r", "0.", "Threshold for relaxation."},
-    {ARG_FLAG, "n", "", "No padding, overrides npad & mpad."},
+//    {ARG_FLAG, "n", "", "No padding, overrides npad & mpad."},
     {ARG_END}
 };
 
@@ -125,11 +132,9 @@ int DoIt(void)
     inQuery = (char *) params_get_str(&cmdparams, "in");
     outQuery = (char *) params_get_str(&cmdparams, "out");
     int noPadding = params_isflagset(&cmdparams, "n");
-    int mpad = params_get_int(&cmdparams, "mpad");
-    int npad = params_get_int(&cmdparams, "npad");
-    if (noPadding) {
-        mpad = npad = 0;
-    }
+    int mpad = params_get_int(&cmdparams, "mpad"); if (mpad < 0) mpad = 0;
+    int npad = params_get_int(&cmdparams, "npad"); if (npad < 0) npad = 0;
+//    if (noPadding) mpad = npad = 0;
 //    double bthr = params_get_double(&cmdparams, "bthr");
 //    double bthr_relax = params_get_double(&cmdparams, "bthr_r");
     
@@ -189,8 +194,8 @@ int DoIt(void)
         DRMS_Record_t *inRec1 = inRS->records[irec+1];
         
         struct reqInfo rInfo0, rInfo1;
-        rInfo0.npad = rInfo1.npad = npad;
-        rInfo0.mpad = rInfo1.mpad = mpad;
+        rInfo0.npad0 = rInfo1.npad0 = npad;
+        rInfo0.mpad0 = rInfo1.mpad0 = mpad;
         
         if (getInputArr(inRec0, &rInfo0,
                         &bloncoe0, &blatcoe0, &brllcoe0,
@@ -323,7 +328,7 @@ int getInputArr(DRMS_Record_t *inRec, struct reqInfo *rInfo,
     rInfo->t = drms_getkey_time(inRec, "T_OBS", &status); if (status) return 1;
     rInfo->trec = drms_getkey_time(inRec, "T_REC", &status); if (status) return 1;
     
-    // Segments & check
+    // Segments & padding
     
     double *data_ptr[9];        // holder for pointers
     DRMS_Segment_t *inSeg[9];   // 9 segments
@@ -331,10 +336,15 @@ int getInputArr(DRMS_Record_t *inRec, struct reqInfo *rInfo,
     inSeg[0] = drms_segment_lookup(inRec, inSegNames[0]);
     rInfo->n_o = inSeg[0]->axis[0] - 1; rInfo->m_o = inSeg[0]->axis[1] - 1;     // n + 1 cols, m + 1 rows
     
-    rInfo->n = rInfo->n_o + 2 * rInfo->npad;
-    rInfo->m = rInfo->m_o + 2 * rInfo->mpad;
+    pad_int_gen_ss(rInfo);		// find out the right padding size, adapted from George's code
     
-    if (rInfo->n <=0 || rInfo->m <=0) {return 1;}
+    rInfo->n = rInfo->n_o + rInfo->npadl + rInfo->npadr;
+    rInfo->m = rInfo->m_o + rInfo->mpadb + rInfo->mpadt;
+    
+    printf("m_o=%d, m=%d, mpadb=%d, mpadt=%d\n", rInfo->m_o, rInfo->m, rInfo->mpadb, rInfo->mpadt);
+    printf("n_o=%d, n=%d, npadl=%d, npadr=%d\n", rInfo->n_o, rInfo->n, rInfo->npadl, rInfo->npadr);
+    
+    if (rInfo->n <= 0 || rInfo->m <= 0) {return 1;}
     for (int i = 1; i < 9; i++) {
         inSeg[i] = drms_segment_lookup(inRec, inSegNames[i]);
         if (inSeg[i]->axis[0] != (rInfo->n_o + 1) || inSeg[i]->axis[1] != (rInfo->m_o + 1)) {
@@ -343,7 +353,7 @@ int getInputArr(DRMS_Record_t *inRec, struct reqInfo *rInfo,
     }
     
     // Compute a/b/c/d
-    // Assuming CRLN-CAR or CRLN-HG
+    // Assuming CRLN-CAR or HGLN-CAR
     
     double crpix1 = drms_getkey_double(inRec, "CRPIX1", &status); if (status) return 1;
     double crpix2 = drms_getkey_double(inRec, "CRPIX2", &status); if (status) return 1;
@@ -352,10 +362,10 @@ int getInputArr(DRMS_Record_t *inRec, struct reqInfo *rInfo,
     double cdelt1 = drms_getkey_double(inRec, "CDELT1", &status); if (status) return 1;
     double cdelt2 = drms_getkey_double(inRec, "CDELT2", &status); if (status) return 1;
     
-    rInfo->c = (crval1 + (1. - rInfo->npad - crpix1) * cdelt1) * RADSINDEG;
-    rInfo->d = (crval1 + (rInfo->n_o + rInfo->npad - crpix1) * cdelt1) * RADSINDEG;
-    rInfo->a = (90. - (crval2 + (rInfo->m_o + rInfo->mpad - crpix2) * cdelt2)) * RADSINDEG;
-    rInfo->b = (90. - (crval2 + (1. - rInfo->mpad - crpix2) * cdelt2)) * RADSINDEG;
+    rInfo->c = (crval1 + (1. - rInfo->npadl - crpix1) * cdelt1) * RADSINDEG;						// min lon
+    rInfo->d = (crval1 + (rInfo->n_o + rInfo->npadr - crpix1) * cdelt1) * RADSINDEG;				// max lon
+    rInfo->a = (90. - (crval2 + (rInfo->m_o + rInfo->mpadt - crpix2) * cdelt2)) * RADSINDEG;		// min co-lat
+    rInfo->b = (90. - (crval2 + (1. - rInfo->mpadb - crpix2) * cdelt2)) * RADSINDEG;				// max co-lat
     
     printf("n=%d, m=%d\n", rInfo->n, rInfo->m);
     printf("n_o=%d, m_o=%d\n", rInfo->n_o, rInfo->m_o);
@@ -397,11 +407,11 @@ int getInputArr(DRMS_Record_t *inRec, struct reqInfo *rInfo,
     
     int col, col_o, row, row_o, lead, lead_o, idx, idx_o;
     for (row_o = 0; row_o < rInfo->m_o + 1; row_o++) {
-        row = row_o + rInfo->mpad;
+        row = row_o + rInfo->mpadb;
         lead = row * (rInfo->n + 1);
         lead_o = row_o * (rInfo->n_o + 1);
         for (col_o = 0; col_o < rInfo->n_o + 1; col_o++) {
-            col = col_o + rInfo->npad;
+            col = col_o + rInfo->npadl;
             idx = lead + col;
             idx_o = lead_o + col_o;
             (*bloncoe_ptr)[idx] = (inData[0])[idx_o];
@@ -487,10 +497,12 @@ int writeOutputArr(DRMS_Record_t *inRec0, DRMS_Record_t *inRec1, DRMS_Record_t *
     
     // Keywords, T_REC/T_REC1 are both prime keys
     
-    drms_copykeys(outRec, inRec0, 0, 0);     // copy all keys, for now use t0
+    drms_copykeys(outRec, inRec0, 0, kDRMS_KeyClass_Explicit);     // copy all keys, for now use t0
     
-    drms_setkey_int(outRec, "NPAD", rInfo0->npad);
-    drms_setkey_int(outRec, "MPAD", rInfo0->mpad);
+    drms_setkey_int(outRec, "NPADL", rInfo0->npadl);		// padding sizes
+    drms_setkey_int(outRec, "NPADR", rInfo0->npadr);
+    drms_setkey_int(outRec, "MPADB", rInfo0->mpadb);
+    drms_setkey_int(outRec, "MPADT", rInfo0->mpadt);
     drms_setkey_time(outRec, "T_REC0", rInfo0->trec);
     drms_setkey_time(outRec, "T_REC1", rInfo1->trec);
     drms_setkey_time(outRec, "T_REC", (rInfo0->trec + rInfo1->trec) / 2.);
@@ -511,15 +523,22 @@ int writeOutputArr(DRMS_Record_t *inRec0, DRMS_Record_t *inRec1, DRMS_Record_t *
     double crval1_1 = drms_getkey_double(inRec1, "CRVAL1", &status);
     double crval2_0 = drms_getkey_double(inRec0, "CRVAL2", &status);
     double crval2_1 = drms_getkey_double(inRec1, "CRVAL2", &status);
-    
-    // Try wcs4pdfi functions
-    double cdelt1 = drms_getkey_double(inRec0, "CDELT1", &status);
+        
+    double cdelt1 = drms_getkey_double(inRec0, "CDELT1", &status);		// assuming two records have same pixel size
     double cdelt2 = drms_getkey_double(inRec0, "CDELT2", &status);
     double crpix1 = drms_getkey_double(inRec0, "CRPIX1", &status);
     double crpix2 = drms_getkey_double(inRec0, "CRPIX2", &status);
+    
+    crval1_0 += ((rInfo0->npadr - rInfo0->npadl) / 2. * cdelt1);		// modify if asymmetric
+    crval1_1 += ((rInfo1->npadr - rInfo1->npadl) / 2. * cdelt1);
+    crval2_0 += ((rInfo0->mpadt - rInfo0->mpadb) / 2. * cdelt2);
+    crval2_1 += ((rInfo1->mpadt - rInfo1->mpadb) / 2. * cdelt2);
+    
+    // Try wcs4pdfi functions
+    /*
     double a, b, c, d;
     double crval1 = crval1_0, crval2 = crval2_0;
-    int n_o = n - rInfo0->npad * 2, m_o = m - rInfo0->mpad * 2;
+    int n_o = n - rInfo0->npadl - rInfo0->npadr, m_o = m - rInfo0->mpadb -rInfo0->mpadt;
     printf("crval1=%f, crval2=%f, crpix1=%f, crpix2=%f, cdelt1=%f, cdelt2=%f\n",
            crval1, crval2, crpix1, crpix2, cdelt1, cdelt2);
     wcs2pdfi(n_o, m_o, COE, crval1, crval2, crpix1, crpix2, cdelt1, cdelt2,
@@ -529,6 +548,7 @@ int writeOutputArr(DRMS_Record_t *inRec0, DRMS_Record_t *inRec1, DRMS_Record_t *
              &crval1, &crval2, &crpix1, &crpix2, &cdelt1, &cdelt2);
     printf("crval1=%f, crval2=%f, crpix1=%f, crpix2=%f, cdelt1=%f, cdelt2=%f\n",
            crval1, crval2, crpix1, crpix2, cdelt1, cdelt2);
+     */
     
     drms_setkey_double(outRec, "CRVAL1", (crval1_0 + crval1_1) / 2.);
     drms_setkey_double(outRec, "CRVAL2", (crval2_0 + crval2_1) / 2.);
@@ -559,6 +579,8 @@ int writeOutputArr(DRMS_Record_t *inRec0, DRMS_Record_t *inRec1, DRMS_Record_t *
     // Bz1, CE grid, n*m
     drms_setkey_double(outRec, "CRPIX1_008", (1. + n) / 2.);
     drms_setkey_double(outRec, "CRPIX2_008", (1. + m) / 2.);
+    
+    SHOW("kk\n");
     
     // Supplementary output
     
@@ -594,3 +616,17 @@ int writeOutputArr(DRMS_Record_t *inRec0, DRMS_Record_t *inRec1, DRMS_Record_t *
     return 0;
 }
 
+// Compute padding sizes
+// Adapted from George's code
+
+void pad_int_gen_ss(struct reqInfo *rInfo)
+
+{
+
+	rInfo->mpadb = (((rInfo->m_o + 2 * rInfo->mpad0 + (rInfo->m_o % 2)) / UPADDING) * UPADDING - rInfo->m_o) / 2;
+	rInfo->mpadt = rInfo->mpadb + (rInfo->m_o % 2);
+	
+	rInfo->npadl = (((rInfo->n_o + 2 * rInfo->npad0 + (rInfo->n_o % 2)) / UPADDING) * UPADDING - rInfo->n_o) / 2;
+	rInfo->npadr = rInfo->npadl + (rInfo->n_o % 2);
+	
+}
