@@ -10,7 +10,7 @@ d := $(dir)
 # module name(s) to be generated and file name(s) to be compiled
 
 ## C-wrapper name (name must end with .c)
-MODEXE_USEF_$(d) := $(addprefix $(d)/, cgem_prep cgem_cutout cgem_map cgem_flct correct_azim correct_azim_bharp cgem_doppcal cgem_doppcal_los vmap_flct)
+MODEXE_USEF_$(d) := $(addprefix $(d)/, cgem_prep cgem_cutout cgem_map cgem_flct cgem_doppcal)
 MODEXE_USEF := $(MODEXE_USEF) $(MODEXE_USEF_$(d))
 
 ## wrapped Fortran codes
