@@ -61,6 +61,7 @@ hmi.mldailysynframe_small_720s
 hmi.mldailysynframe_small_720s_nrt
 hmi.mlsynop_small_720s
 hmi.mrdailysynframe_720s
+hmi.mrdailysynframe_polfil_720s
 hmi.mrdailysynframe_720s_nrt
 hmi.mrdailysynframe_small_720s
 hmi.mrdailysynframe_small_720s_nrt
@@ -82,6 +83,7 @@ hmi.synoptic_ml_720s
 hmi.synoptic_ml_720s_nrt
 hmi.synoptic_ml_small_720s_nrt
 hmi.synoptic_mr_720s
+hmi.synoptic_mr_polfil_720s
 hmi.synoptic_mr_720s_nrt
 hmi.synoptic_mr_small_720s_nrt
 hmi.TDKernels
