@@ -32,8 +32,10 @@ use constant kMaxAttempts => 4;
 use FindBin qw($Bin);
 
 $EXP = "sftpScript.exp";
-$RQARG = "hmiroboto\@129.165.8.6";
-$RDCMD = "scp hmiroboto\@129.165.8.6:";
+#$RQARG = "hmiroboto\@129.165.8.6";
+#$RDCMD = "scp hmiroboto\@129.165.8.6:";
+$RQARG = "hmiroboto\@sdomoc.nascom.nasa.gov";
+$RDCMD = "scp hmiroboto\@sdomoc.nascom.nasa.gov:";
 $kMAXSCPTRIES = 5;
 my(%STATMAP);
 $FSFILE = "fslist";
