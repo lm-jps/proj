@@ -60,6 +60,7 @@ char *module_name  = "module_flatfield_combine";    //name of the module
 ModuleArgs_t module_args[] =        
 {
      {ARG_STRING, kRecSetIn, "",  "Input data series."},
+  {ARG_STRING, "output_series", "hmi.cosmic_rays",  "Output data series"},
      {ARG_STRING, datumn, "yyyy.mm.dd", "Datum string"},
      {ARG_INT, "hour", "00", "Hour"},
      {ARG_INT, cameran, 0, "Camera"},
@@ -78,11 +79,12 @@ int DoIt(void)
 
 #include "module_flatfield_const.h"
 
-  //*********************
+  /*********************/
   //read input parameters
 
   const char *inRecQuery = cmdparams_get_str(&cmdparams, kRecSetIn, NULL); //cmdparams is defined in jsoc_main.h
   const char *datum =  cmdparams_get_str(&cmdparams, datumn, NULL);
+  const char *output_series = cmdparams_get_str (&cmdparams, "output_series", NULL);
  
  int cameraint = cmdparams_get_int(&cmdparams, cameran, NULL);
  int hour= cmdparams_get_int(&cmdparams, "hour", NULL);
@@ -90,7 +92,7 @@ int DoIt(void)
  int fsn_last=cmdparams_get_int(&cmdparams, fsnl_name, NULL);
 
 
- //**********************
+ /**********************/
  //define variables
 
 
@@ -124,14 +126,14 @@ int DoIt(void)
   int axisout[2]={nx,ny};
 
   
-  //**********************
+  /**********************/
   //*CHECK WHETHER THE FLATFIELD OUTPUT SERIES EXISTS                                                                    */
 
     
-       drms_series_exists(drms_env, filename_cosmic2_out, &status);
+       drms_series_exists(drms_env, output_series, &status);
       if (status == DRMS_ERROR_UNKNOWNSERIES)
 	{
-	  printf("Output series %s doesn't exist\n",filename_cosmic2_out);       //if the output series does not exit
+	  printf("Output series %s doesn't exist\n", output_series);       //if the output series does not exit
 	  exit(EXIT_FAILURE);                                        //we exit the program
 	} 
   
@@ -139,7 +141,7 @@ int DoIt(void)
       printf("START!\n");
       printtime();
 
-      //*****************************
+      /*****************************/
       //build query string
 
       char fnumb[2]={""};
@@ -220,7 +222,7 @@ int DoIt(void)
     }
 
   
-  //****************************
+  /****************************/
   //open records
 
  
@@ -235,7 +237,7 @@ int DoIt(void)
   printtime();
 
 
-  //******************************
+  /******************************/
   //read out keywords
 
 
@@ -257,11 +259,13 @@ if (stat == DRMS_SUCCESS && data != NULL && nRecs > 0)
   float *significance[nRecs], *level[nRecs];
   int new_count[nRecs];
   int npairs[nRecs];
+  float crrmax[nRecs];
 
 
   printtime();
   printf("create_records ...");
-  dataout = drms_create_records(drms_env,nRecs,filename_cosmic2_out,DRMS_PERMANENT,&stat);
+  dataout = drms_create_records (drms_env, nRecs, output_series,
+      DRMS_PERMANENT, &stat);
   printf("done\n");
   printtime();
 
@@ -286,13 +290,14 @@ for (k=0; k<nRecs; ++k)
     pol[k]=(keyvalue_fid[k] % 10);    
     
     keyvalue_recnum[k]=drms_getkey_int(rec0[k], recnumkey,&status);
+    crrmax[k] = drms_getkey_float (rec0[k], "CRRMAX", &status);
 
       }
  printtime();
 
  
 
- //***********************************
+ /***********************************/
  //data reading loop
 
 
@@ -318,7 +323,7 @@ printf("begin data  reading loop\n");
 
  printtime();
 
- //******************************
+ /******************************/
  //test loop
 
   int elem_prev, elem_next;
@@ -401,7 +406,7 @@ printf("begin test loop\n");
 	 new_count[k]=ctr;
        }
 
-	 //*************************
+	 /*************************/
 	 //set keywords
      
 
@@ -414,6 +419,7 @@ printf("begin test loop\n");
      status=drms_setkey_int(recout, keycamera, keyvalue_cam[k]);
      status=drms_setkey_int(recout, keyexmax, keyvalue_flag[k]);
      status=drms_setkey_float(recout, keylimit, keyvalue_factor[k]); 
+     drms_setkey_float (recout, "CRRMAX", crrmax[k]); 
 	
      drms_keyword_setdate(recout);
 
@@ -424,7 +430,7 @@ printf("begin test loop\n");
 	    
    	    
 	 
-     //************************************
+     /************************************/
      //write out data segments
 
 
@@ -460,7 +466,7 @@ printf("begin test loop\n");
     
    }
  
- //****************
+ /****************/
  //free arrays
 
  for (k=0; k<nRecs; ++k)
@@ -534,6 +540,15 @@ void printtime()
         for (i=0; i<24; ++i) printf("%c", *(timestring+i));
 	printf("\n");
 }
+
+/*
+ *  Revision history
+ *
+ *  2017.11.01	Added optional argument for output_series to replace previously
+ *	hard-coded value of "hmi.cosmic_rays" (defined as filename_cosmic2_out)
+ *	Added propagation of keyword CRRMAX if present from input_series
+ * 
+ */
 
 
 

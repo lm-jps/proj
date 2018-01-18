@@ -73,8 +73,7 @@ char *module_name  = "module_flatfield";    //name of the module
 #define minval(x,y) (((x) < (y)) ? (x) : (y))                                        
 #define maxval(x,y) (((x) < (y)) ? (y) : (x))
 
-ModuleArgs_t module_args[] =        
-{
+ModuleArgs_t module_args[] = {
      {ARG_STRING, kRecSetIn, "",  "Input data series."},
      {ARG_STRING, datumn, "", "datum string"},
      {ARG_INT, kDSCosmic, "", "Cosmic rays flag"},
@@ -84,6 +83,8 @@ ModuleArgs_t module_args[] =
      {ARG_INT, cam_name, "", "Camera"},
      {ARG_INT, fsnf_name, "0"},
      {ARG_INT, fsnl_name, "2147483647"},
+  {ARG_FLOAT, "rmax_crfix", "0.98",
+      "Maximum value of r/R for cosmic ray detection"},
      {ARG_STRING, kRecSetOut, "default",  "Cosmic ray output series."},
      
      {ARG_END}
@@ -156,6 +157,7 @@ int DoIt(void)
   int cam=cmdparams_get_int(&cmdparams, cam_name, NULL)-1;
   int fsn_first=cmdparams_get_int(&cmdparams, fsnf_name, NULL);
   int fsn_last=cmdparams_get_int(&cmdparams, fsnl_name, NULL);
+  float crrmax = cmdparams_get_float (&cmdparams, "rmax_crfix", NULL);
 
   const char *datum=cmdparams_get_str(&cmdparams, datumn, NULL);
  
@@ -198,9 +200,9 @@ int DoIt(void)
   int signid=0;
   int nfr;
  
- //********************************************************************************************************************************/
+  /********************************************************************************************************************************/
   //define and initialize quantities
-  //********************************************************************************************************************************/
+  /********************************************************************************************************************************/
 
 
 
@@ -328,7 +330,7 @@ int DoIt(void)
 	  printf("Output series %s exists.\n",filename_flatfield_fid);
 	}
 
-  //***********************************************************************************************************/
+  /***********************************************************************************************************/
   /*CHECK WHETHER THE COSMIC RAY OUTPUT SERIES EXIST                                                                    */
   /***********************************************************************************************************/
     
@@ -342,12 +344,12 @@ int DoIt(void)
 	{
 	  printf("Cosmic ray series %s exists.\n",cosmic_ray_series);
 	}
-  //**************************************************************************************************************/
+  /**************************************************************************************************************/
 
 
-      //**********************************
+      /**********************************/
       //parallelization
-      //**********************************
+      /**********************************/
 
 
       int nthreads; 
@@ -357,9 +359,9 @@ int DoIt(void)
       printf("Number of threads run in parallel = %d \n",nthreads);
 
   
-  //**************************************************************************************************************/
+  /**************************************************************************************************************/
   //built query strings
-  //**************************************************************************************************************/
+  /**************************************************************************************************************/
             
  char timefirst[256]="";
  strcat(timefirst, datum);
@@ -438,13 +440,13 @@ if (fsn_first == 0 || fsn_last == 2147483647)
       printf("query string: %s\n", query0);  
     }
 
-  //************************************************************************
+  /************************************************************************/
 
 
   
-  //*************************************************************************
+  /*************************************************************************/
   //open records and stage data
-  //*************************************************************************
+  /*************************************************************************/
 
 
   
@@ -454,9 +456,9 @@ if (fsn_first == 0 || fsn_last == 2147483647)
       drms_stage_records(data, 1, 0); // stage needed records from tape and wait until ready.
 
 
-      //************************************************************************
+      /************************************************************************/
       //define keyword arrays
-      //************************************************************************
+      /************************************************************************/
 
 
   int nRecs=data->n;
@@ -498,12 +500,12 @@ if (fsn_first == 0 || fsn_last == 2147483647)
   int index[nRecs];
   int statarr[nRecs];
 
-  //********************************************************************************
+  /********************************************************************************/
 
 
-  //****************************************************
+  /****************************************************/
   //get time reference
-  //****************************************************
+  /****************************************************/
 
    
  
@@ -518,15 +520,15 @@ if (fsn_first == 0 || fsn_last == 2147483647)
   t_stamp=sscan_time(tmstr)+24.0*60.0*60.0; 
 
  
-  //************************************************************
+  /************************************************************/
 
 
   int update_stat=2;   // 2: not enough data // 1: no update required // 0: flatfield updated 
     
 
-  //*************************************************************
+  /*************************************************************/
   //do camera test
-  //************************************************************
+  /************************************************************/
 
   if (stat == DRMS_SUCCESS && data != NULL && nRecs > 0)
     {
@@ -551,9 +553,9 @@ if (fsn_first == 0 || fsn_last == 2147483647)
   
       
 
-      //******************************************************** 
+      /********************************************************/
       //read records and test keyword range
-      //********************************************************
+      /********************************************************/
      
 
       for (k=0; k<nRecs; ++k){
@@ -606,9 +608,9 @@ if (fsn_first == 0 || fsn_last == 2147483647)
       }
   
 
-      //******************************/ 
+      /******************************/ 
       //calculate average for solar parameters /
-      //******************************/
+      /******************************/
 
 
       float R_SUN=0.0;
@@ -662,13 +664,13 @@ if (fsn_first == 0 || fsn_last == 2147483647)
       printf("disk center and radius: %f %f %f\n", XX0, YY0,R_SUN);	   	   	;
   
 
-      //**************************************************************
+      /**************************************************************/
       //Start flatfield calculations
-      //**************************************************************
+      /**************************************************************/
 
-      //************************
+      /************************/
       //get valid frames for flatfield calculation
-      //************************
+      /************************/
 
       if (cam ==0)camid=cam_id_side;
       if (cam ==1)camid=cam_id_front;
@@ -728,9 +730,9 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 
 
 
-	//*******************************************
+	/*******************************************/
 	///read relative flatfield
-	//********************************************
+	/********************************************/
 
 	status_flatfield_relative=get_latest_flat(t_stamp, cam+1, filename_offpoint, segmentname_offpoint, flat_relative, &recnum_offpoint, &focus);
 
@@ -753,9 +755,9 @@ if (fsn_first == 0 || fsn_last == 2147483647)
       
 
 
-	 //******************************************
+	 /******************************************/
 	 //calculate limit parameters for cosmic ray detection
-	 //******************************************
+	 /******************************************/
 
 
 #pragma omp parallel for private(jjj,iii)	   
@@ -777,9 +779,9 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 
 
 
-	  //**********************************************************************************
+	  /**********************************************************************************/
 	  //loop over filtergrams: obtain cosmic ray records and get input arrays for rotational flatfield calculations
-	  //**********************************************************************************
+	  /**********************************************************************************/
 
 	  printf("cosmic ray detection\n");
 
@@ -799,7 +801,7 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 
 		km1=kkk-1;
 
-		//**************************
+		/**************************/
 		//read in filtergram
 
 		if (kkk < count_filtergram)
@@ -835,7 +837,7 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 			arrinL0 = arrin0->data;
 
 
-			//**************************************
+			/**************************************/
 			//flatfield query
 
 			query_flat =keyvalue_flatnumb[kkk];
@@ -895,7 +897,7 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 	    
 		count=-1;
 
-		//**********************************************
+		/**********************************************/
 		//cosmic ray detection
 
 		if (kkk >= 2 && kkk < count_filtergram)
@@ -920,7 +922,8 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 			      for (jjj=0; jjj<ny; ++jjj) for (iii=0; iii<nx; ++iii)
 				{
 	
-				  if (rr[jjj*nx+iii] < rad_cosmic_ray)
+//				  if (rr[jjj*nx+iii] < rad_cosmic_ray)
+				  if (rr[jjj*nx+iii] < crrmax)
 				    {
 				      wlr=((float)(keyvalue_wl[km1] % 20)-5.0)/2.0*lambda_sep-keyvalue_vrad[km1]/v_c*lambda0-(cos(keyvalue_p0[km1]/180.*M_PI)*((float)iii-keyvalue_X0[km1])-sin(keyvalue_p0[km1]/180.*M_PI)*((float)jjj-keyvalue_Y0[km1]))*cos(keyvalue_b0[km1]/180.0*M_PI)/keyvalue_rsun[km1]*cpa.rotcoef0*radsun_mm/v_c*lambda0;
 				      limw[jjj*nx+iii]=a1[jjj*nx+iii]*exp(-(wlr-coef3[cam][0])*(wlr-coef3[cam][0])/2.0/w1[jjj*nx+iii]/w1[jjj*nx+iii])+a2[jjj*nx+iii]*exp(-(wlr-coef3[cam][1])*(wlr-coef3[cam][1])/2.0/w2[jjj*nx+iii]/w2[jjj*nx+iii])+cmc[jjj*nx+iii];
@@ -936,7 +939,8 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 				{
 				  cmarr[jjj*nx+iii]=1;
 	   
-				  if (rr[jjj*nx+iii] < rad_cosmic_ray)
+//				  if (rr[jjj*nx+iii] < rad_cosmic_ray)
+				  if (rr[jjj*nx+iii] < crrmax)
 				    {
 				      diff_backward=arrimg[current][jjj][iii]-arrimg[last][jjj][iii];
 				      diff_forward=arrimg[current][jjj][iii]-arrimg[next][jjj][iii];
@@ -1064,6 +1068,7 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 			status=drms_setkey_int(recout, keycamera, cam+1);
 			status=drms_setkey_int(recout, keyexmax, limit_flag);
 			status=drms_setkey_float(recout, keylimit, factor[cam][0]);
+			drms_setkey_float (recout, "CRRMAX", crrmax);
 	
 			drms_keyword_setdate(recout);
 	    
@@ -1107,7 +1112,7 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 
 
 	   
-	  //**************************************************************************************************
+	  /**************************************************************************************************/
 	  //permanent bad pixel calculation
 		
 
@@ -1155,7 +1160,7 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 	    
 	      }
 
-	    //**************************************************	 
+	    /**************************************************/	 
 	    //exchange indices
 
 	    holder=next;
@@ -1167,7 +1172,7 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 
 	  }//end loop over filtergrams of same type
 	  
-	  //************************************************************************************
+	  /************************************************************************************/
 
 
 
@@ -1179,7 +1184,7 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 	  printf("reference flatfield and limb darkening\n");
    
 
-	  //*********************************
+	  /*********************************/
 	  //calculate limb darkening function and correct for it
 
 	  limb_darkening((double)R_SUN, (double)XX0, (double)YY0, b_coef, b_order, limb_dark);
@@ -1210,9 +1215,9 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 	  //}
 
 
-      //*******************************************************************/
+      /*******************************************************************/
       //do flatfield calculations                                          /
-      //*******************************************************************/
+      /*******************************************************************/
 
 	  printf("forward / backwards pairs %d %d \n", ccount1, ccount2);
  
@@ -1240,12 +1245,12 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 
       if (status ==0)
 	{
-      //*********************************************************************//
+      /*********************************************************************/
       
 	  for (j=0; j<ny; ++j)  for (i=0; i<nx; ++i)flat[i][j]=exp(flati[j*nx+i]);
 	  update_stat=0;
    
-      //*********************************************************************//
+      /*********************************************************************/
 	}
 	  }
 	 
@@ -1256,9 +1261,9 @@ if (fsn_first == 0 || fsn_last == 2147483647)
     
      
 
-      //*********************************************************************
+      /*********************************************************************
       //write out  flatfield
-      //********************************************************************
+      /********************************************************************/
 
  
 
@@ -1271,14 +1276,14 @@ if (fsn_first == 0 || fsn_last == 2147483647)
   
  
 
-      //*************************
+      /*************************/
       //calculate apodization
              
        apod_circ(R_SUN*cpa.croprad*0.95, R_SUN*cpa.croprad*0.04, XX0-(float)nx/2.0, YY0-(float)ny/2.0, apod);
 
  
   
-       //************************************
+       /************************************/
        //copy and apodize flatfield
 
 for (j=0; j<ny; ++j){
@@ -1325,9 +1330,9 @@ for (j=0; j<ny; ++j){
     }
 
 
-  //************************************************************
+  /************************************************************/
   //free arrays
-  //****************************************************
+  /****************************************************/
 
 
   free(param);
@@ -1366,11 +1371,13 @@ for (j=0; j<ny; ++j){
 
 }
 
-
-
-
-
-
-
+/*
+ *  Revision history
+ *
+ *  2017.10.31	Added optional argument for rmax_crfix to replace previously
+ *	hard-coded value of 0.98
+ *	Added setting of keyword CRRMAX if present for value of rmax_crfix
+ * 
+ */
 
 //valgrind --leak-check=full --track-origins=yes --show-reachable=yes module_flatfield_256 input_series="su_production.lev1_hmi_test[986331-986430]" cosmic_rays=1
