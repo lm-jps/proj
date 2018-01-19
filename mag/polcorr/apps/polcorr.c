@@ -27,6 +27,7 @@
 #include <math.h>
 #include <sys/time.h>
 #include <sys/resource.h>
+#include "set_statistics.c"
 
 // Heliographic coord, lib function
 #include "heliographic_coords.c"
@@ -993,7 +994,6 @@ int writeOutput(char *outQuery, DRMS_Record_t *inRec, float **outMap,
         drms_close_record(outRec, DRMS_FREE_RECORD);
         return 1;
     }
-    drms_free_array(outArray);
     
     // Keywords
     
@@ -1003,6 +1003,8 @@ int writeOutput(char *outQuery, DRMS_Record_t *inRec, float **outMap,
     drms_copykey(outRec, inRec, "T_OBS");
     drms_copykey(outRec, inRec, "T_REC");
     drms_setkey_int(outRec, "AMB", opt->amb);
+    
+    set_statistics(outSeg, outArray, 1);        // Jan 18 2018
     
     switch (opt->method) {
         default:
@@ -1028,6 +1030,7 @@ int writeOutput(char *outQuery, DRMS_Record_t *inRec, float **outMap,
     
     //
     
+    drms_free_array(outArray);
     drms_close_record(outRec, DRMS_INSERT_RECORD);
     
     return 0;
