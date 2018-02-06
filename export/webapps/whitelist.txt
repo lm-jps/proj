@@ -195,7 +195,13 @@ mdi.vw_V_sht_gf_gaps_retile
 mdi.leakage
 mdi.eigenfunctions
 sdo.master_pointing
+sid_awe.awesome
+sid_awe.monitors
 sid_awe.sid
+sid_awe.sidarchive
+sid_awe.sites
+sid_awe.supersidarchive
+sid_awe.timezone
 su_mbobra.sharp_720s_clean_v2
 su_mbobra.sharp_cea_720s_clean_v2
 su_mbobra.sharp_cea_flux_720s
