@@ -87,6 +87,7 @@ if($instru eq "hmi") {
   $dodayUTC = $ordday;	#the date input
   $firstfsn = $ARGV[2];
   $lastfsn = $ARGV[3];
+  $crrmax = 1.01;
 print "Started on $orddayUTC to process day $dodayUTC\n";
 print "First fsn = $firstfsn  Last fsn = $lastfsn\n";
 if($firstfsn > $lastfsn) {
@@ -144,7 +145,7 @@ print LOG "or $xmitfile2\n";
 #  exit(0);
 #}
 
-$cmd = "module_flatfield_daily_qsub_48_PZT_FSN.pl $indata $firstfsn $lastfsn $mdate";
+$cmd = "module_flatfield_daily_qsub_48_PZT_FSN.pl $indata $firstfsn $lastfsn $mdate $crrmax";
 print "Calling: $cmd\n"; 
 print LOG "Calling: $cmd\n"; 
 #`$cmd`;
