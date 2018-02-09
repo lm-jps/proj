@@ -9,10 +9,11 @@
 #
 sub usage {
   print "Run daily to get a good cosmic rays and flatfield using the hmi.lev1.\n";
-  print "Usage: module_flatfield_daily_qsub_48_PZT_FSN.pl hmi.lev1 firstfsn lastfsn 2010.05.06\n";
+  print "Usage: module_flatfield_daily_qsub_48_PZT_FSN.pl hmi.lev1 firstfsn lastfsn 2010.05.06 1.01\n";
   print " args:  input ds name\n";
   print "        first and last fsn to do\n";
   print "        date for the FF\n";
+  print "        max radial diatance for cosmic ray detection\n";
   exit(0);
 }
 
@@ -53,11 +54,13 @@ $ENV{'OMP_NUM_THREADS'} = 1;
 
 $date = &get_date;
 print "Start module_flatfield_daily_qsub_48_PZT_FSN.pl on $date\n\n";
-if($#ARGV != 3) { &usage; }
+if($#ARGV < 3) { &usage; }
 $inds = $ARGV[0];
 $firstfsn = $ARGV[1];
 $lastfsn = $ARGV[2];
 $datum = $ARGV[3];
+$crrmax = 1.01
+if($#ARGV > 3) {$crrmax = $ARGV[4];}
 if($inds ne $IN1 && $inds ne $IN2) {
   print "Error: Currently the only accepted input ds are $IN1 or $IN2\n";
   exit;
@@ -73,54 +76,54 @@ if($pos != 10) { &usage; };
 
 #Here are the 48 command that we must run:
 @cmds = (
-"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10054 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10055 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10056 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10057 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-#"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10058 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-"module_flatfield input_series='$inds' cadence=45 cosmic_rays=1 flatfield=1 fid=10058 camera=2 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-#"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10059 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-"module_flatfield input_series='$inds' cadence=45 cosmic_rays=1 flatfield=1 fid=10059 camera=2 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10074 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10075 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10076 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10077 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-#"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10078 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-"module_flatfield input_series='$inds' cadence=45 cosmic_rays=1 flatfield=1 fid=10078 camera=2 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-#"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10079 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-"module_flatfield input_series='$inds' cadence=45 cosmic_rays=1 flatfield=1 fid=10079 camera=2 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10094 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10095 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10096 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10097 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-#"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10098 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-"module_flatfield input_series='$inds' cadence=45 cosmic_rays=1 flatfield=1 fid=10098 camera=2 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-#"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10099 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn  datum='$datum'",
-"module_flatfield input_series='$inds' cadence=45 cosmic_rays=1 flatfield=1 fid=10099 camera=2 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10114 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10115 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10116 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10117 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-#"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10118 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-"module_flatfield input_series='$inds' cadence=45 cosmic_rays=1 flatfield=1 fid=10118 camera=2 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-#"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10119 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-"module_flatfield input_series='$inds' cadence=45 cosmic_rays=1 flatfield=1 fid=10119 camera=2 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10134 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10135 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10136 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10137 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-#"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10138 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-"module_flatfield input_series='$inds' cadence=45 cosmic_rays=1 flatfield=1 fid=10138 camera=2 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-#"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10139 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-"module_flatfield input_series='$inds' cadence=45 cosmic_rays=1 flatfield=1 fid=10139 camera=2 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10154 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10155 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10156 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10157 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-#"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10158 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-"module_flatfield input_series='$inds' cadence=45 cosmic_rays=1 flatfield=1 fid=10158 camera=2 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-#"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10159 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'",
-"module_flatfield input_series='$inds' cadence=45 cosmic_rays=1 flatfield=1 fid=10159 camera=2 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum'");
+"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10054 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10055 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10056 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10057 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+#"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10058 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+"module_flatfield input_series='$inds' cadence=45 cosmic_rays=1 flatfield=1 fid=10058 camera=2 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+#"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10059 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+"module_flatfield input_series='$inds' cadence=45 cosmic_rays=1 flatfield=1 fid=10059 camera=2 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10074 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10075 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10076 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10077 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+#"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10078 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+"module_flatfield input_series='$inds' cadence=45 cosmic_rays=1 flatfield=1 fid=10078 camera=2 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+#"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10079 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+"module_flatfield input_series='$inds' cadence=45 cosmic_rays=1 flatfield=1 fid=10079 camera=2 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10094 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10095 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10096 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10097 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+#"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10098 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+"module_flatfield input_series='$inds' cadence=45 cosmic_rays=1 flatfield=1 fid=10098 camera=2 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+#"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10099 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn  datum='$datum' rmax_crfix=$crrmax",
+"module_flatfield input_series='$inds' cadence=45 cosmic_rays=1 flatfield=1 fid=10099 camera=2 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10114 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10115 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10116 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10117 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+#"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10118 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+"module_flatfield input_series='$inds' cadence=45 cosmic_rays=1 flatfield=1 fid=10118 camera=2 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+#"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10119 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+"module_flatfield input_series='$inds' cadence=45 cosmic_rays=1 flatfield=1 fid=10119 camera=2 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10134 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10135 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10136 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10137 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+#"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10138 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+"module_flatfield input_series='$inds' cadence=45 cosmic_rays=1 flatfield=1 fid=10138 camera=2 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+#"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10139 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+"module_flatfield input_series='$inds' cadence=45 cosmic_rays=1 flatfield=1 fid=10139 camera=2 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10154 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10155 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10156 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10157 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+#"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10158 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+"module_flatfield input_series='$inds' cadence=45 cosmic_rays=1 flatfield=1 fid=10158 camera=2 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+#"module_flatfield input_series='$inds' cadence=90 cosmic_rays=1 flatfield=1 fid=10159 camera=1 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax",
+"module_flatfield input_series='$inds' cadence=45 cosmic_rays=1 flatfield=1 fid=10159 camera=2 fsn_first=$firstfsn fsn_last=$lastfsn datum='$datum' rmax_crfix=$crrmax");
 
 $j = 0;
   @jid = ();
