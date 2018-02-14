@@ -59,7 +59,7 @@ $inds = $ARGV[0];
 $firstfsn = $ARGV[1];
 $lastfsn = $ARGV[2];
 $datum = $ARGV[3];
-$crrmax = 1.01
+$crrmax = 1.01;
 if($#ARGV > 3) {$crrmax = $ARGV[4];}
 if($inds ne $IN1 && $inds ne $IN2) {
   print "Error: Currently the only accepted input ds are $IN1 or $IN2\n";
