@@ -136,9 +136,8 @@ int DoIt ()
     "A_211_Y0", "A_304_Y0", "A_335_Y0", "A_1600_Y0", "A1700_Y0", "A_4500_Y0"
   };
   if (nice_intro(0)) return(0);
-
   dsinp = strdup(cmdparams_get_str(&cmdparams, "dsinp", NULL));
-  seriesout = strdup(cmdparams_get_str(&cmdparams, "ddsoutsout", NULL));
+  seriesout = strdup(cmdparams_get_str(&cmdparams, "dsout", NULL));
   int crop = cmdparams_get_int(&cmdparams, "c", NULL) != 0;
   mpt = strdup(cmdparams_get_str(&cmdparams, "mpt", NULL));
   if (strcmp(dsinp, NOT_SPECIFIED)==0) DIE("dsinp argument is required");
@@ -302,7 +301,12 @@ int DoIt ()
     }
     nsegs = hcon_size(&inprec->segments);
     for (iseg=0; iseg<1; iseg++) {
+#define JPS_STATS
+#ifdef JPS_STATS
       void *output_array = NULL;
+#else
+      float *output_array = NULL;
+#endif
       int i, ix, iy, n, m, dtyp, nx, ny, npix;
       axislen_t beg[2], end[2], out_axis[2];
       char *filename = NULL, *inpsegname = NULL;
@@ -379,6 +383,8 @@ int DoIt ()
                  regridtype, do_stretchmarks);
         if (status) DIE("image_magrotate failed!");
         out_axis[0] = wide; out_axis[1] = high;
+// #define JPS_STATS
+#ifdef JPS_STATS
         if (is_aia) {
           outarr = drms_array_create(DRMS_TYPE_INT, 2, out_axis,
                                    NULL, &status);
@@ -386,6 +392,7 @@ int DoIt ()
           outarr = drms_array_create(DRMS_TYPE_FLOAT, 2, out_axis,
                                    NULL, &status);
         }
+
         if (status) DIE("drms_array_create failed!");
         s = s2 = s3 = s4 = 0.0; datamin = 9.9e9; datamax = -9.9e9, npix = 0; 
         for (i=0; i<wide*high; i++) {
@@ -411,6 +418,7 @@ int DoIt ()
         drms_setkey_int(outrec, "DATAMAX", (int) datamax);
         s /= npix;
         drms_setkey_float(outrec, "DATAMEAN", s);
+        drms_setkey_float(outrec, "DATAMEDN", DRMS_MISSING_FLOAT);
         ss = s*s;
         s2 /= npix;
         s3 /= npix;
@@ -426,16 +434,26 @@ int DoIt ()
             drms_setkey_float(outrec, "DATAKURT", (float) datakurt);
           }
         }
+#else
+        outarr = drms_array_create(DRMS_TYPE_FLOAT, 2, out_axis, NULL, &status);
+        if (status) DIE("drms_array_create failed!");
+        for (i=0; i<wide*high; i++) {
+          if (is_aia) {
+            if (*(output_array+i)<0) *(output_array+i)=0;
+            if (*(output_array+i)>z) *(output_array+i)=z;
+            }
+          *((float *)(outarr->data)+i) = *(output_array+i);
+          }
+        set_statistics(outseg, outarr, 1);
+#endif
         drms_setkey_float(outrec, "CROTA2", 0.0);
         drms_setkey_float(outrec, "CRPIX1", (wide + 1.0)*0.5 - xc);
         drms_setkey_float(outrec, "CRPIX2", (high + 1.0)*0.5 - yc);
         drms_setkey_float(outrec, "X0", 0.0);
         drms_setkey_float(outrec, "Y0", 0.0);
-	if (!is_aia) // Use the input array as the best guess for scale and zero
-	  {
-	  outarr->bzero = inparr->bzero;
-	  outarr->bscale = inparr->bscale;
-	  }
+	// Use the input array as the best guess for scale and zero
+	outarr->bzero = inparr->bzero;
+	outarr->bscale = inparr->bscale;
         if (withkeys) {
           drms_segment_writewithkeys(outseg, outarr, 0);
          } else {
