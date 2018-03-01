@@ -21,6 +21,8 @@ int cutout_corners(int win, int hin, int wout, int hout, float rotang,
                    float mag, float dx, float dy, float xco, float yco,
                    float *cx, float *cy);
 
+int set_statistics(DRMS_Segment_t *seg, DRMS_Array_t *arr, int mode);
+
 ModuleArgs_t module_args[] =
 {
   {ARG_STRING, "dsinp", NOT_SPECIFIED, "Input series query"},
@@ -301,11 +303,12 @@ int DoIt ()
     }
     nsegs = hcon_size(&inprec->segments);
     for (iseg=0; iseg<1; iseg++) {
-#define JPS_STATS
+// #define JPS_STATS
 #ifdef JPS_STATS
       void *output_array = NULL;
 #else
       float *output_array = NULL;
+      int seg0_nx, seg0_ny;
 #endif
       int i, ix, iy, n, m, dtyp, nx, ny, npix;
       axislen_t beg[2], end[2], out_axis[2];
@@ -316,8 +319,18 @@ int DoIt ()
       inpseg = drms_segment_lookupnum(inprec, iseg);
       inpsegname = inpseg->info->name;
       filename = inpseg->filename;
-      if (0 == iseg) {
+#ifdef JPS_STATS
+      if (0 == iseg) { // ONLY process first segment
         n = nx = inpseg->axis[0]; m = ny = inpseg->axis[1];
+#else
+      if (0 == iseg) { 
+	seg0_nx = inpseg->axis[0];
+	seg0_ny = inpseg->axis[1];
+        }
+      n = nx = inpseg->axis[0];
+      m = ny = inpseg->axis[1];
+      if (nx == seg0_nx && ny == seg0_ny) { // Check for same dimensions as first segment, i.e. first segment must have typical dims.
+#endif
         dx = (n + 1.0)*0.5 - crpix1; dy = (m + 1.0)*0.5 - crpix2;
         cutout_corners(n, m, wide, high, crota2, mag, dx, dy, xc, yc, cx, cy);
         beg[0] = end[0] = cx[0]; beg[1] = end[1] = cy[0];
@@ -379,12 +392,12 @@ int DoIt ()
           }
 
         status = image_cutout( inparr->data, n, m, dtyp, crota2,
-                 mag, dx, dy, &output_array, wide, high, xc, yc,
+                 mag, dx, dy, &(void *)output_array, wide, high, xc, yc,
                  regridtype, do_stretchmarks);
         if (status) DIE("image_magrotate failed!");
         out_axis[0] = wide; out_axis[1] = high;
-// #define JPS_STATS
 #ifdef JPS_STATS
+printf("using JPS_STATS section of code XXXXXX\n");
         if (is_aia) {
           outarr = drms_array_create(DRMS_TYPE_INT, 2, out_axis,
                                    NULL, &status);
@@ -411,8 +424,9 @@ int DoIt ()
             s += tmpval;
             s2 += tmpval*tmpval;
             s3 += tmpval*tmpval*tmpval;
-            s4 += tmpval*tmpval*tmpval;
-          }
+            // s4 += tmpval*tmpval*tmpval;  // original code
+            s4 += tmpval*tmpval*tmpval*tmpval;  // suggested code BUT worry about precision for 16M pixels
+          } 
         }
         drms_setkey_int(outrec, "DATAMIN", (int) datamin);
         drms_setkey_int(outrec, "DATAMAX", (int) datamax);
@@ -444,6 +458,7 @@ int DoIt ()
             }
           *((float *)(outarr->data)+i) = *(output_array+i);
           }
+printf("calling setstats XXXXX\n");
         set_statistics(outseg, outarr, 1);
 #endif
         drms_setkey_float(outrec, "CROTA2", 0.0);
@@ -451,7 +466,7 @@ int DoIt ()
         drms_setkey_float(outrec, "CRPIX2", (high + 1.0)*0.5 - yc);
         drms_setkey_float(outrec, "X0", 0.0);
         drms_setkey_float(outrec, "Y0", 0.0);
-	// Use the input array as the best guess for scale and zero
+	// Use the input array as the best guess for scale and zero, works for both AIA and HMI
 	outarr->bzero = inparr->bzero;
 	outarr->bscale = inparr->bscale;
         if (withkeys) {
@@ -463,6 +478,7 @@ int DoIt ()
         if (output_array) free(output_array);
         if (outarr) drms_free_array(outarr);
       }
+else printf("XXXXX skip segment %d since dims (%d,%d) do not match first segment of record.\n",iseg,ny,nx);
     }
     if (save_rec) drms_close_record(outrec, DRMS_INSERT_RECORD);
     else drms_close_record(outrec, DRMS_FREE_RECORD);
