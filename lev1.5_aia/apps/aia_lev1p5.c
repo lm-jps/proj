@@ -37,6 +37,7 @@ ModuleArgs_t module_args[] =
   {ARG_STRING, "do_stretchmarks", "0", "fill in empty pixels created"},
   {ARG_STRING, "with_keys", "0", "write segment with all FITS keywords"},
   {ARG_STRING, "requestid", NOT_SPECIFIED, "Export request id if this program was invoked by the export system."},
+  {ARG_FLAG, "c", "0", "crop input data at the limb, only for HMI"},
   {ARG_FLAG, "h", "0", "Print usage message and quit"},
   {ARG_FLAG, "v", "0", "verbose flag"},
   {ARG_END}
@@ -53,6 +54,7 @@ int nice_intro(int help)
   verbose = cmdparams_get_int(&cmdparams, "v", NULL) != 0;
   if (usage || help) {
     printf("aia_lev1p5 {-h} {-v} dsinp=series_record_spec dsout=output_series\n"
+        "  -c: crop input data at the limb, only for HMI\n"
         "  -h: print this message\n"
         "  -v: verbose\n"
         "despike=0, do not despike, default=1, despike\n"
@@ -81,55 +83,6 @@ void sprint_time_ISO (char *tstring, TIME t)
   tstring[19] = '\0';
 } 
 
-static void FreeRecSpecParts(char ***snames, char ***filts, int nitems)
-{
-    if (snames)
-    {
-        int iname;
-        char **snameArr = *snames;
-        
-        if (snameArr)
-        {
-            for (iname = 0; iname < nitems; iname++)
-            {
-                char *oneSname = snameArr[iname];
-                
-                if (oneSname)
-                {
-                    free(oneSname);
-                }
-            }
-            
-            free(snameArr);
-        }
-        
-        *snames = NULL;
-    }
-    
-    if (filts)
-    {
-        int ifilt;
-        char **filtArr = *filts;
-        
-        if (filtArr)
-        {
-            for (ifilt = 0; ifilt < nitems; ifilt++)
-            {
-                char *onefilt = filtArr[ifilt];
-                
-                if (onefilt)
-                {
-                    free(onefilt);
-                }
-            }
-            
-            free(filtArr);
-        }
-        
-        *filts = NULL;
-    }
-}
-
 int ndx2wl(int ndx)
 {
   static int wl[] = { 94, 131, 171, 193, 211, 304, 335, 1600, 1700, 4500 };
@@ -157,7 +110,7 @@ int wl2ndx(int wl)
 int DoIt ()
 {
   int irec, iseg, nrecs, nsegs, status, is_aia=0, wide = 4096, high = 4096;
-  char *dsinp, *dsout, now_str[100];
+  char *dsinp, *seriesout, now_str[100];
   float crpix1, crpix2, cdelt1, cdelt2, crota2;
   float mag = 1.0, dx, dy, xc, yc;
   DRMS_Record_t *inprec, *outrec, *mptrec=NULL;
@@ -166,7 +119,7 @@ int DoIt ()
   DRMS_Segment_t *inpseg, *outseg;
   const char *reqid = NULL;
   const char *mpt = NULL;
-  char seriesout[DRMS_MAXSERIESNAMELEN], mpr_str[256];
+  char mpr_str[256];
   char *allvers = NULL;
   char **sets = NULL;
   DRMS_RecordSetType_t *settypes = NULL; /* a maximum doesn't make sense */
@@ -185,10 +138,11 @@ int DoIt ()
   if (nice_intro(0)) return(0);
 
   dsinp = strdup(cmdparams_get_str(&cmdparams, "dsinp", NULL));
-  dsout = strdup(cmdparams_get_str(&cmdparams, "dsout", NULL));
+  seriesout = strdup(cmdparams_get_str(&cmdparams, "ddsoutsout", NULL));
+  int crop = cmdparams_get_int(&cmdparams, "c", NULL) != 0;
   mpt = strdup(cmdparams_get_str(&cmdparams, "mpt", NULL));
   if (strcmp(dsinp, NOT_SPECIFIED)==0) DIE("dsinp argument is required");
-  if (strcmp(dsout, NOT_SPECIFIED)==0) DIE("dsout argument is required");
+  if (strcmp(seriesout, NOT_SPECIFIED)==0) DIE("dsout argument is required");
   if (strcmp(mpt, NOT_SPECIFIED)==0) mpt = NULL; 
   despike = cmdparams_get_int(&cmdparams, "despike", NULL);
   rescale = cmdparams_get_int(&cmdparams, "rescale", NULL);
@@ -202,42 +156,33 @@ int DoIt ()
   withkeys = cmdparams_get_int(&cmdparams, "with_keys", NULL);
   reqid = cmdparams_get_str(&cmdparams, "requestid", NULL);
    
-    if (strcmp(reqid, NOT_SPECIFIED) == 0)
+  if (strcmp(reqid, NOT_SPECIFIED) == 0)
     {
         reqid = NULL;
     }
     
-    /* Parse output series name. */
-    if (DRMS_SUCCESS != drms_record_parserecsetspec(dsout, &allvers, &sets, &settypes, &snames, &filts, &nsets, &rsinfo))
+    /* Check output series name. ... for some reason ... */
+  if (strchr(seriesout, '[') || strchr(seriesout, ','))
     {
         DIE("Invalid output record-set specification.");
     }
     
-    if (nsets != 1)
-    {
-        FreeRecSpecParts(&snames, &filts, nsets);
-        DIE("aia_lev1p5 supports writing to a single output series.");
-    }
-    
-    snprintf(seriesout, sizeof(seriesout), "%s", snames[0]);
-    FreeRecSpecParts(&snames, &filts, nsets);
-
   if (strstr(dsinp, "aia")) is_aia = 1;
+  if (!is_aia && mpt) DIE("Master Pointing Table param only applicable to AIA data.");
   inprs = drms_open_records(drms_env, dsinp, &status);
   if (status) DIE("cant open recordset query");
   drms_stage_records(inprs, 1, 0);
   nrecs = inprs->n;
   printf("%d records\n", nrecs);
   for (irec=0; irec<nrecs; irec++) {
-    int save_rec = 1, qualmask = 0x800100f0;
+    int save_rec = 1, qualmask;
+    qualmask = (is_aia ? 0x800100f0 : 0x80000000);
     inprec = inprs->records[irec];
-    /* dsout isn't the correct argument to drms_create_record(). dsout is a record-set
-     * specification, but this call takes a seriesname.
-     outrec = drms_create_record(drms_env, dsout, DRMS_PERMANENT, &status); */
     outrec = drms_create_record(drms_env, seriesout, DRMS_PERMANENT, &status); 
     if (status) DIE("cant create recordset");
     status = drms_copykeys(outrec, inprec, 0, kDRMS_KeyClass_Explicit);
-    if (status) DIE("Error in drms_copykeys()");
+    if (status)
+	DIE("Error in drms_copykeys()");
     {
        int fsn, quallev0, trec_off=0;
        double tr_step;
@@ -397,15 +342,37 @@ int DoIt ()
 //      dx = crpix1 - (n + 1.0)*0.5; dy = crpix2 - (m + 1.0)*0.5;
         dx = (n + 1.0)*0.5 - crpix1; dy = (m + 1.0)*0.5 - crpix2;
 
-        fval = inparr->data;
-        for (ix = 0; ix<n; ix++) {
-          fval[ix] = 0.0;
-          fval[(m - 1)*n + ix] = 0.0;
-        }
-        for (iy = 0; iy<m; iy++) {
-          fval[iy*n] = 0.0;
-          fval[iy*n + n - 1] = 0.0;
-        }
+        if (is_aia)  // why zero edge of cutout image??
+          {
+          fval = inparr->data;
+          for (ix = 0; ix<n; ix++) {
+            fval[ix] = 0.0;
+            fval[(m - 1)*n + ix] = 0.0;
+          }
+          for (iy = 0; iy<m; iy++) {
+            fval[iy*n] = 0.0;
+            fval[iy*n + n - 1] = 0.0;
+          }
+          }
+        if (crop && !is_aia) // WARNING - if magrotate can not deal with nanx, then must make all nans some huge val then after cutout, convert all hugeish to nans.
+	  {
+          double crop_limit2 = 0.999; // square of 1 - 1/2000, 1/2 HMI pixel.
+          double rsun_obs = drms_getkey_double(inprec, "RSUN_OBS)", &status);
+          if (status) DIE("RSUN_OBS key value is required!");
+          double rsun2 = rsun_obs/cdelt1*rsun_obs/cdelt1;
+          for (iy = 0; iy<n; iy++)
+            for (ix = 0; ix<n; ix++)
+	      {
+              float *Ip = (float *)inparr->data + iy*nx + ix;
+              if (drms_ismissing_float(*Ip))
+                continue;
+              double y = iy - crpix2 + 1;
+              double x = ix - crpix1 + 1;
+              double dist2 = y*y + x*x;
+              if (dist2/rsun2 > crop_limit2)
+		 *Ip = DRMS_MISSING_FLOAT;
+              }
+          }
 
         status = image_cutout( inparr->data, n, m, dtyp, crota2,
                  mag, dx, dy, &output_array, wide, high, xc, yc,
@@ -416,7 +383,7 @@ int DoIt ()
           outarr = drms_array_create(DRMS_TYPE_INT, 2, out_axis,
                                    NULL, &status);
         } else {
-          outarr = drms_array_create(DRMS_TYPE_INT, 2, out_axis,
+          outarr = drms_array_create(DRMS_TYPE_FLOAT, 2, out_axis,
                                    NULL, &status);
         }
         if (status) DIE("drms_array_create failed!");
@@ -427,7 +394,7 @@ int DoIt ()
             if (*((float *)(output_array)+i)>z) *((float *)(output_array)+i)=z;
             *((int *)(outarr->data)+i) = *((float *)(output_array)+i);
           } else {
-            *((int *)(outarr->data)+i) = *((float *)(output_array)+i);
+            *((float *)(outarr->data)+i) = *((float *)(output_array)+i);
           }
           tmpval = *((float *)(output_array)+i);
           if (finite(tmpval)) {
@@ -464,6 +431,11 @@ int DoIt ()
         drms_setkey_float(outrec, "CRPIX2", (high + 1.0)*0.5 - yc);
         drms_setkey_float(outrec, "X0", 0.0);
         drms_setkey_float(outrec, "Y0", 0.0);
+	if (!is_aia) // Use the input array as the best guess for scale and zero
+	  {
+	  outarr->bzero = inparr->bzero;
+	  outarr->bscale = inparr->bscale;
+	  }
         if (withkeys) {
           drms_segment_writewithkeys(outseg, outarr, 0);
          } else {
