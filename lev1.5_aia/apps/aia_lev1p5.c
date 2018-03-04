@@ -397,7 +397,7 @@ int DoIt ()
         if (status) DIE("image_magrotate failed!");
         out_axis[0] = wide; out_axis[1] = high;
 #ifdef JPS_STATS
-printf("using JPS_STATS section of code XXXXXX\n");
+if (verbose) printf("using JPS_STATS section of code XXXXXX\n");
         if (is_aia) {
           outarr = drms_array_create(DRMS_TYPE_INT, 2, out_axis,
                                    NULL, &status);
@@ -458,7 +458,7 @@ printf("using JPS_STATS section of code XXXXXX\n");
             }
           *((float *)(outarr->data)+i) = *(output_array+i);
           }
-printf("calling setstats XXXXX\n");
+if (verbose) printf("calling setstats XXXXX\n");
         set_statistics(outseg, outarr, 1);
 #endif
         drms_setkey_float(outrec, "CROTA2", 0.0);
