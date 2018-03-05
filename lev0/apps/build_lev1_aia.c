@@ -174,13 +174,13 @@ char timetag[32];
 char tlmseriesname[128];	// e.g. hmi.tlm
 char lev0seriesname[128];	// e.g. hmi.lev0
 char *username;			// from getenv("USER") 
-char *logfile;			// optional log name passed in 
-char *instru;			// instument. hmi or aia 
-char *mode;			// given mode. recnum or fsn
-char *dsin;			// lev0 input dataset
-char *dsout;			// lev1 output dataset
-char *dsff;                     // flat field dataset
-char *dsaiabad;                 // AIA bad pixel dataset (kludge around bad ff)
+const char *logfile;			// optional log name passed in 
+const char *instru;		// instument. hmi or aia 
+const char *mode;		// given mode. recnum or fsn
+const char *dsin;		// lev0 input dataset
+const char *dsout;		// lev1 output dataset
+const char *dsff;               // flat field dataset
+const char *dsaiabad;           // AIA bad pixel dataset (kludge around bad ff)
 
 //!!TEMP
 typedef struct {
@@ -605,7 +605,7 @@ int do_ingest(long long bbrec, long long eerec, const char *dpath)
 		if (l0l1->adata0[i] == 16329) l0l1->adata0[i] = 714;
 	}
 
-        l0l1->dat1.adata1A = &data1A;
+        l0l1->dat1.adata1A = &data1A[0];
         //l0l1->himgcfid = drms_getkey_int(rs0, "AIFDBID", &rstatus);
 	l0l1->himgcfid = 90;	//!!TEMP force uncropped, no overscan
         aiftsid = drms_getkey_int(rs0, "AIFTSID", &rstatus);
@@ -613,7 +613,7 @@ int do_ingest(long long bbrec, long long eerec, const char *dpath)
         aiagp6 = drms_getkey_int(rs0, "AIAGP6", &rstatus);
       }
       else {
-        l0l1->dat1.adata1 = &data1;
+        l0l1->dat1.adata1 = &data1[0];
         l0l1->himgcfid = drms_getkey_int(rs0, "HIMGCFID", &rstatus);
       }
       if(rstatus) {
@@ -1505,7 +1505,7 @@ int DoIt(void)
     if(strstr(dsin, "hmi") || strstr(dsout, "hmi")) {
       printf("Warning: You said instru=aia but have 'hmi' in ds name?\n");
       printf("Do you want to abort this [y/n]? ");
-      if(gets(line) == NULL) { return(0); }
+      if(fgets(line, 4, stdin) == NULL) { return(0); }
       if(strcmp(line, "n")) { return(0); }
     }
   }
@@ -1514,7 +1514,7 @@ int DoIt(void)
     if(strstr(dsin, "aia") || strstr(dsout, "aia")) {
       printf("Warning: You said instru=hmi but have 'aia' in ds name?\n");
       printf("Do you want to abort this [y/n]? ");
-      if(gets(line) == NULL) { return(0); }
+      if(fgets(line, 4, stdin) == NULL) { return(0); }
       if(strcmp(line, "n")) { return(0); }
     }
   }
