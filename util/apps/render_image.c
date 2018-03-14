@@ -32,6 +32,7 @@
      prescale= value to multiply by prior to min/max scaling, default 1.0.
      scale"Reduction factor list, default 1.
      -c Crop flag, causes crop to RSUN_OBS
+     -r Rotate and reposition to center and solar north
      -u use unchanged for rotation and centering
      -w use white for missing pixels, instead of black
      -x High-quality flag, sets bytespercolor to 2 instead of 1,
@@ -45,11 +46,11 @@
    that is supported as the output of a pipeline which accepts a PPM file.
    @par
    The file location is spcified with the out parameter.  The target may be a seriesname in which case the image will
-   be written into a record directory of that series.  If the target seriesname is the same as the series specified in in, then
+   be written into a record directory of that series.  If the target seriesname is the same as the series specified in "in", then
    each input record will be cloned.  The image will be written into a segment named "image".
    @par
    If the target location begins with a "/" or "./" then the $target will be used as the path for a directory into which
-   the image file will be written.  If the target location beginw with a "|" character, then the target string will be used
+   the image file will be written.  If the target location begins with a "|" character, then the target string will be used
    as a pipe into which a .ppm file will be written.  The pipe string will have " > <filename>" appended to it.
    In the case of a pipe, the string given in the 'out' parameter will be scanned
    for replacement tokens delimited by '{...}'.  Inside the '{}' pair the following
@@ -90,9 +91,18 @@
    parameter is expected to be a file path to a table of .sao or .lut types.  These table formats are described in the
    ds9(1) documentation.
    @par
-   The image will be centered to the nearest pixel, and will be rotated 180 degrees if CROTA2 is near 180.
-
    @par Flags:
+   @c -u:  Leave orientation unchanged.  Else flip-flip if CROTA2 is near 180.
+
+   @c -r:  rotate and reposition image to frame center with solar north at the top.
+   If the -u flag is not set the image will be centered and rotated to make solar north at the top.  If
+   CROTA2 is near 180 degrees (within 0.1 degrees) the roll will be done as a flip about X and a flip about Y
+   and the centering will be to the nearest pixel.  If -u is not set OR if -r is set the image will be remapped
+   with full centering and rotation.  -u set takes precendence over -r.
+   if both u=0 and r=0 then the image will be flip-flipped if CROTA2 is within 1 degree of 180.  The default for
+   'r' is set, so if you want to get the normal HMI image with solar north up without interpolation or sub-pixel
+   centering, call without -u but with r=0 (to override default r=1).
+
    @c -c:  Crop image.  This flag will casue the image to be cropped at pixel radius RSUN_OBS/CDELT1 about CRPIX1,CRPIX2 center.
 
    @c -w:  White background, the -w flag will cause missing values to be white.  Else black.
@@ -151,6 +161,8 @@
 #define LOG 9
 #define SQRT 10
 
+#define NEAR_VERTICAL (0.1) // threshold to use image_cutout instead of upNcenter
+
 char *module_name = "render_image";
 
 ModuleArgs_t module_args[] =
@@ -171,6 +183,7 @@ ModuleArgs_t module_args[] =
      {ARG_FLOAT, "prescale", "1.0", "Multiplication scaling prior to color scaling"},
      {ARG_INTS, "scale", "1", "Reduction factors"},
      {ARG_FLAG, "c", "0", "Crop flag, causes crop to RSUN_OBS"},
+     {ARG_FLAG, "r", "1", "Rotate to solar north up and reposition to image center"},
      {ARG_FLAG, "u", "0", "use unchanged, is-is for rotation and centering"},
      {ARG_FLAG, "w", "0", "use white for missing pixels, instead of black"},
      {ARG_FLAG, "x", "0", "High-quality flag, sets bytespercolor to 2 instead of 1"},
@@ -197,7 +210,7 @@ struct ObsInfo_struct
   double x,y,r;
   double rho;
   double lon;
-    double lat;
+  double lat;
   double sinlat, coslat;
   double sig;
   double mu;
@@ -209,18 +222,25 @@ typedef struct ObsInfo_struct ObsInfo_t;
 
 void rebinArraySF(DRMS_Array_t *out, DRMS_Array_t *in);
 
-int add_png(char *imgPath, DRMS_Array_t *imgArray, int scaletype, int usewhite, char *palette, int colors, int bytespercolor, double *minp, double *maxp, double prescale);
+int add_png(char *imgPath, DRMS_Array_t *imgArray, int scaletype, int usewhite, char *palette, int colors,
+    int bytespercolor, double *minp, double *maxp, double prescale);
 
-int add_ppm(char *imgPath, DRMS_Array_t *imgArray, int scaletype, int usewhite, char *palette, int colors, int bytespercolor, double *minp, double *maxp, double prescale);
+int add_ppm(char *imgPath, DRMS_Array_t *imgArray, int scaletype, int usewhite, char *palette, int colors,
+    int bytespercolor, double *minp, double *maxp, double prescale);
 
 int make_png(char *imgPath, unsigned char *data, int height, int width, char *palette, int bytepercolor, int colors);
 
-char *set_scaling(DRMS_Array_t *in, double *minp, double *maxp, int *nmissp, char *palette, int colors, int bytepercolor, int scaling, int usewhite, double prescale);
+char *set_scaling(DRMS_Array_t *in, double *minp, double *maxp, int *nmissp, char *palette, int colors,
+    int bytepercolor, int scaling, int usewhite, double prescale);
 
 int upNcenter(DRMS_Array_t *arr, ObsInfo_t *ObsLoc);
+int reposition(DRMS_Array_t *arr, ObsInfo_t *ObsLoc);
 int crop_image(DRMS_Array_t *arr, ObsInfo_t *ObsLoc);
 
 ObsInfo_t *GetObsInfo(DRMS_Segment_t *seg, ObsInfo_t *pObsLoc, int *rstatus);
+
+int image_cutout(void *inarr, int nx, int ny, int in_type, float crota2, float mag, float dx, float dy,
+     void **outarr, int wide, int high,  float xc, float yc, int regridtype, int do_stretch);
 
 #define PNG 1
 #define PPM 2
@@ -248,6 +268,7 @@ int DoIt(void)
   int bytespercolor = (params_isflagset(&cmdparams, "x") ? 2 : 1);
   int missingwhite = params_isflagset(&cmdparams, "w");
   int crop = params_isflagset(&cmdparams, "c");
+  int rotate = params_isflagset(&cmdparams, "r");
   int asis = params_isflagset(&cmdparams, "u");
   char *type = (char *)params_get_str(&cmdparams, "type");
   char *scaling = (char *)params_get_str(&cmdparams, "scaling");
@@ -372,39 +393,45 @@ fprintf(stderr,"nrecs=%d\n",nrecs);
       }
     else
       {
-        if (inSegName)
+      if (inSegName)
         {
-            srcSeg = drms_segment_lookup(inRec, inSegName);
-            
-            if (srcSeg)
-            {
-                srcArray = drms_segment_read(srcSeg, DRMS_TYPE_FLOAT, &status);
-            }
-            else
-            {
-                DIE("Failure looking up segment by name.")
-            }
-        }
+        srcSeg = drms_segment_lookup(inRec, inSegName);
+        if (srcSeg)
+          {
+          srcArray = drms_segment_read(srcSeg, DRMS_TYPE_FLOAT, &status);
+          }
         else
-        {
-            DIE("Could not obtain segment name.");
+          {
+          DIE("Failure looking up segment by name.")
+          }
         }
+      else
+          {
+          DIE("Could not obtain segment name.");
+          }
         
       if (!srcArray || status)
         {
-         fprintf(stderr," No data file found rec %d, status=%d\n", irec,status);
-         if (srcArray)
-           {
-           drms_free_array(srcArray);
-           srcArray = NULL;
-           }
-         continue;
+        fprintf(stderr," No data file found rec %d, status=%d\n", irec,status);
+        if (srcArray)
+          {
+          drms_free_array(srcArray);
+          srcArray = NULL;
+          }
+        continue;
         }
       ObsLoc = GetObsInfo(srcSeg, NULL, &status);
       if (ObsLoc)
         {
-        if (!asis) upNcenter(srcArray, ObsLoc);
-        if (crop) crop_image(srcArray, ObsLoc);
+        if (!asis) 
+          {
+          if (rotate)
+            reposition(srcArray, ObsLoc);
+          else
+            upNcenter(srcArray, ObsLoc);
+          }
+        if (crop)
+          crop_image(srcArray, ObsLoc);
         }
       srcNx = srcArray->axis[0];
       srcNy = srcArray->axis[1];
@@ -1121,6 +1148,37 @@ int make_png(char *filename, unsigned char *data,
   }
 
 // ----------------------------------------------------------------------
+
+/* reposition and rotate if necessary.
+ * If the rotate flag is set or if CROTA2 more than 0.1 degree from 0 or 180
+ * then use image_cutout to center and put solar north
+ * at the top.  Else use upNcenter to get older near-south and near-north
+ * orientations set to north nearly up and centered to nearest pixel.
+ */
+int reposition(DRMS_Array_t *arr, ObsInfo_t *ObsLoc)
+  {
+  int status;
+  int regrid = 1;  // use bicubic interpolation
+  int stretch = 0; // leave off-image pixels missing
+  int type_float = 3;
+  int nx = arr->axis[0];
+  int ny = arr->axis[1];
+  float xc = 0.0;  // shift to this X wrt Sun center for final image center
+  float yc = 0.0;  // shift to this y wrt Sun center for final image center
+  float mag = 1.0;
+  float dx = (nx + 1.0)/2.0 - ObsLoc->crpix1;
+  float dy = (ny + 1.0)/2.0 - ObsLoc->crpix2;
+  float *outarray;
+  status = image_cutout(arr->data, nx, ny, type_float, ObsLoc->crota2,
+           mag, dx, dy, &(void *)outarray, nx, ny,  xc, yc, regrid, stretch);
+  if (status) {fprintf(stderr,"image_cutout failed, staus=%d\n", status);}
+  free(arr->data);
+  arr->data = outarray;
+  ObsLoc->crota2 = 0.0;
+  ObsLoc->crpix1 += dx;
+  ObsLoc->crpix2 += dy;
+  return(status);
+  }
 
 /* center whith whole pixel shifts and rotate by 180 if needed */
 /* Only apply center if it will not result in an image crop.  I.e. not ever
