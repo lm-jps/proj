@@ -28,6 +28,10 @@
 /* SO MODIFY THE CODE IF USED ON OLDER CALMODE DETUNES                                                   */
 /*-------------------------------------------------------------------------------------------------------*/
 
+/* Changes made in March 2018 by Phil for SDO operating in non-standard roll orientation
+ * These changes marked with '// ROLL 2018' comments
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -837,6 +841,7 @@ int DoIt(void) {
       double VELOCITY[nseq];                                         //Sun-SDO radial velocity
       double EXPOSURE[nseq];
       double velocity0=0.0, velocity1=0.0;
+      double OBS_VR, CROTA2;					     // addition for ROLL 2018
 
       //initialization of Richard's code for de-rotation and gapfilling, and Jesper's code for rebinning
       //************************************************************************************************
@@ -1170,6 +1175,12 @@ int DoIt(void) {
 	  printf("Error: unable to read the keyword %s of the last filtergram\n",VR);
 	  exit(EXIT_FAILURE);
 	}
+      OBS_VR = drms_getkey_double(rec2[0],VR,&status);            //  OBS_VR for the 1st filtergram, ROLL 2018 addition
+      OBS_VR += drms_getkey_double(rec2[1],VR,&status);           //  OBS_VR for the last filtergram, ROLL 2018 addition
+      OBS_VR /= 2.0;						  //  ROLL 2018 addition
+      CROTA2 = drms_getkey_double(rec2[0], "CROTA2", &status);      // first filtergram roll angle,  ROLL 2018 addition
+      CROTA2 += drms_getkey_double(rec2[1], "CROTA2", &status);     // add second filtergram roll angle,  ROLL 2018 addition
+      CROTA2 /= 2.0;						    // average roll angle.    ROLL 2018 addition
 
       printf("FSN value of first filtergram %d\n",keyvalue);          //print value of the FSN of the 1st filtergram
       printf("FSN value of last filtergram %d\n",keyvalue2);          //print value of the FSN of the last filtergram
@@ -1856,6 +1867,10 @@ int DoIt(void) {
 	  status = drms_setkey_int(recout,key6,keyvalue3);
 	  status = drms_setkey_time(recout,key5,interntime3);
 	  status = drms_setkey_string(recout,COMMENTS,COMMENT);        //COMMENT ON THE DATA 
+          drms_appendcomment(recout,"Input recordspec is:",1);	       // source info added at ROLL 2018 changes
+          drms_appendcomment(recout,inRecQuery,0);	 	       // source info added at ROLL 2018 changes
+          status += drms_setkey_float(recout,"CROTA2",CROTA2);         // ROLL 2018 addition
+          status += drms_setkey_float(recout,"OBS_VR",OBS_VR);         // ROLL 2018 addition               
 	  status = drms_setkey_float(recout,CRPIX1,X0[indexref]+1.0);  //CRPIX1
 	  status = drms_setkey_float(recout,CRPIX2,Y0[indexref]+1.0);  //CRPIX2
 	  status = drms_setkey_float(recout,SCALE,CDELT1[indexref]);   //CDELT1
