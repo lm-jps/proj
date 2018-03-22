@@ -35,6 +35,11 @@
 /*                                                                                                          */
 /*----------------------------------------------------------------------------------------------------------*/
 
+/*
+ * Changes for non-normal SDO orientation marked with comment including "ROLL 2018"
+ * Need to read and write keywords CROTA2 and OBS_VR
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -389,6 +394,8 @@ int DoIt(void) {
   const char *X0c         = "CRPIX1";                     //x-axis location of image disk in pixels, starting at 1
   const char *Y0c         = "CRPIX2";                     //y-axis location of image disk in pixels
   const char *SCALE       = "CDELT1";                     //image scale in the x direction
+  const char *CROTA2      = "CROTA2";                     // added for ROLL 2018
+  const char *OBS_VR      = "OBS_VR";                     // added for ROLL 2018
   const char *HCMNB0      = "HCMNB";
   const char *HCMWB0      = "HCMWB";
   const char *HCME10      = "HCME1";
@@ -569,6 +576,7 @@ int DoIt(void) {
       TIME   interntime2;
       TIME   interntime3;
       float XCENTER,YCENTER,RSUN,CDELT1;
+      double crota2, obs_vr;            // added for ROLL 2018
 
       //LOCATE THE PHASE-MAP RECORD TO USE
       i=0;
@@ -1231,6 +1239,8 @@ int DoIt(void) {
       status = drms_setkey_int(recout,keyname6,keyvalue5);
       status = drms_setkey_time(recout,keyname5,interntime3);
       status = drms_setkey_int(recout,keyname7,camera);//HCAMID
+      status = drms_setkey_double(recout,CROTA2,crota2);  // added for ROLL 2018
+      status = drms_setkey_double(recout,OBS_VR,obs_vr);  // added for ROLL 2018
       char  DATEOBS[256];
       sprint_time(DATEOBS,CURRENT_SYSTEM_TIME,"UTC",1);
       status = drms_setkey_string(recout,DATEs,DATEOBS);           //DATE AT WHICH THE FILE WAS CREATED
