@@ -18,6 +18,7 @@
  *
  * History
  *  2016 Dec 02: v0
+ *  2018 Mar 26: v1     a/b/c/d are limits of EDGE, fixed cdelt1/2
  *
  */
 
@@ -78,8 +79,8 @@ void pdfi2wcs(int n, int m,
     *crval2 = (minlat + maxlat) / 2.;
     *crpix1 = (1. + cols) / 2.;
     *crpix2 = (1. + rows) / 2.;
-    *cdelt1 = (maxlon - minlon) / (cols - 1.);
-    *cdelt2 = (maxlat - minlat) / (rows - 1.);
+    *cdelt1 = (maxlon - minlon) / cols;             // Fixed from cols-1
+    *cdelt2 = (maxlat - minlat) / rows;
 }
 
 /*
@@ -96,10 +97,10 @@ void wcs2pdfi(int n, int m,
     int cols, rows;
     sizeofGrid(grid, n, m, &cols, &rows);
     
-    double minlat = crval2 + (1. - crpix2) * cdelt2;
-    double maxlat = crval2 + (rows - crpix2) * cdelt2;
-    double minlon = crval1 + (1. - crpix1) * cdelt1;
-    double maxlon = crval1 + (cols - crpix1) * cdelt1;
+    double minlat = crval2 + (0.5 - crpix2) * cdelt2;           // Edge is at 0.5 and rows+0.5
+    double maxlat = crval2 + (rows + 0.5 - crpix2) * cdelt2;
+    double minlon = crval1 + (0.5. - crpix1) * cdelt1;
+    double maxlon = crval1 + (cols + 0.5 - crpix1) * cdelt1;
     
     *a = (90. - maxlat) * DTOR;
     *b = (90. - minlat) * DTOR;
