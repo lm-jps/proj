@@ -9,7 +9,7 @@ d		:= $(dir)
 #EXTRADEPS_$(d)		:= $(addprefix $(d)/, fresize.o)
 
 # NOTE: Add the base of the module's filename below (next to mymod)
-MODEXE_$(d)	:= $(addprefix $(d)/, sharp update_sharp_keys)
+MODEXE_$(d)	:= $(addprefix $(d)/, sharp update_sharp_keys smarp)
 MODEXE		:= $(MODEXE) $(MODEXE_$(d))
 
 MODEXE_SOCK_$(d):= $(MODEXE_$(d):%=%_sock)
