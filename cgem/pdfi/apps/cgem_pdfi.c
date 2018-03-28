@@ -197,6 +197,7 @@ int DoIt(void)
         rInfo0.npad0 = rInfo1.npad0 = npad;
         rInfo0.mpad0 = rInfo1.mpad0 = mpad;
         
+        // Padding added in subroutine
         if (getInputArr(inRec0, &rInfo0,
                         &bloncoe0, &blatcoe0, &brllcoe0,
                         &vloncoe0, &vlatcoe0, &vlosllcoe0,
@@ -362,10 +363,10 @@ int getInputArr(DRMS_Record_t *inRec, struct reqInfo *rInfo,
     double cdelt1 = drms_getkey_double(inRec, "CDELT1", &status); if (status) return 1;
     double cdelt2 = drms_getkey_double(inRec, "CDELT2", &status); if (status) return 1;
     
-    rInfo->c = (crval1 + (1. - rInfo->npadl - crpix1) * cdelt1) * RADSINDEG;						// min lon
-    rInfo->d = (crval1 + (rInfo->n_o + rInfo->npadr - crpix1) * cdelt1) * RADSINDEG;				// max lon
-    rInfo->a = (90. - (crval2 + (rInfo->m_o + rInfo->mpadt - crpix2) * cdelt2)) * RADSINDEG;		// min co-lat
-    rInfo->b = (90. - (crval2 + (1. - rInfo->mpadb - crpix2) * cdelt2)) * RADSINDEG;				// max co-lat
+    rInfo->c = (crval1 + (0.5 - rInfo->npadl - crpix1) * cdelt1) * RADSINDEG;						// min lon; original edge at 0.5
+    rInfo->d = (crval1 + (rInfo->n_o + 0.5 + rInfo->npadr - crpix1) * cdelt1) * RADSINDEG;			// max lon; orignal edge at col+0.5
+    rInfo->a = (90. - (crval2 + (rInfo->m_o + 0.5 + rInfo->mpadt - crpix2) * cdelt2)) * RADSINDEG;	// min co-lat; orignal edge at row+0.5
+    rInfo->b = (90. - (crval2 + (0.5 - rInfo->mpadb - crpix2) * cdelt2)) * RADSINDEG;				// max co-lat; original edge at 0.5
     
     printf("n=%d, m=%d\n", rInfo->n, rInfo->m);
     printf("n_o=%d, m_o=%d\n", rInfo->n_o, rInfo->m_o);
@@ -622,7 +623,9 @@ int writeOutputArr(DRMS_Record_t *inRec0, DRMS_Record_t *inRec1, DRMS_Record_t *
 void pad_int_gen_ss(struct reqInfo *rInfo)
 
 {
-
+    
+    // UPADDING = 12
+    
 	rInfo->mpadb = (((rInfo->m_o + 2 * rInfo->mpad0 + (rInfo->m_o % 2)) / UPADDING) * UPADDING - rInfo->m_o) / 2;
 	rInfo->mpadt = rInfo->mpadb + (rInfo->m_o % 2);
 	
