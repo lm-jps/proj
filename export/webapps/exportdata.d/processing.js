@@ -205,9 +205,92 @@ var AiaScaleOption;
 function AiaScaleSet(param)
   {
     var checkRes = null;
-    
+        
     this.argsReady = false;
     this.paramsValid = null;
+    
+    if (param == 'usempt')
+    {
+        // if the user checked the use-mpt box, then display the mpt row element, else hide it
+        if ($('AiaScaleUseMptCheckbox').checked)
+        {
+            $('AiaScaleMptRow').style.display = 'table-row';
+        }
+        else
+        {
+            $('AiaScaleMptRow').style.display = 'none';
+        }
+    }
+    else if (param == 'mpt')
+    {
+        // nothing to do
+    }
+    else if (param = 'docutout')
+    {
+        // if the user checked the perform-cutout box, then display the perform-cutout tbody element, else hide it
+        if ($('AiaScalePerformCutoutCheckbox').checked)
+        {
+            $$('tr.AiaScaleCutoutBody').each(function(elem) { elem.style.display = 'table-row'; });
+        }
+        else
+        {
+            $$('tr.AiaScaleCutoutBody').each(function(elem) { elem.style.display = 'none'; });
+        }
+    }
+    else if (param == 'xc')
+    {
+        val = parseInt($('AiaScaleXc').value)
+        if (val >= 4096)
+        {
+            $('AiaScaleXc').value = '4095'
+        }
+        else if (val <= -4096)
+        {
+            $('AiaScaleXc').value = '-4095'
+        }
+    }
+    else if (param == 'yc')
+    {
+        val = parseInt($('AiaScaleYc').value)
+        if (val >= 4096)
+        {
+            $('AiaScaleYc').value = '4095'
+        }
+        else if (val <= -4096)
+        {
+            $('AiaScaleYc').value = '-4095'
+        }
+    }
+    else if (param == 'wide')
+    {
+        val = parseInt($('AiaScaleWide').value)
+        if (val < 0)
+        {
+            $('AiaScaleWide').value = '0'
+        }
+        else if (val > 4096)
+        {
+            $('AiaScaleWide').value = '4096'
+        }
+    }
+    else if (param == 'high')
+    {
+        val = parseInt($('AiaScaleHigh').value)
+        if (val < 0)
+        {
+            $('AiaScaleHigh').value = '0'
+        }
+        else if (val > 4096)
+        {
+            $('AiaScaleHigh').value = '4096'
+        }
+    }
+    else
+    {
+        alert('Error - invalid AiaScaleSet() argument ' + param)
+        return 1;
+    }
+    
     checkRes = this.Check(false);
     
     if (checkRes === null)
@@ -228,24 +311,34 @@ function AiaScaleSet(param)
   }
 
 function AiaScaleInit(onLoad)
-  {
+{
     if (onLoad)
     {
-        $("ProcessAiaScale").style.display="none";
+        $("ProcessAiaScale").style.display = "none";
+        $('AiaScaleUseMptCheckbox').checked = false;
+        $('AiaScaleMptRow').style.display = 'none';
+        $('AiaScaleMptSelect').value = 'aia.master_pointing3h';
+        $('AiaScalePerformCutoutCheckbox').checked = false
+        // $$('tr.AiaScaleCutoutBody').each(function(elem) { elem.setStyle({ 'display': 'none' }); })
+        $$('tr.AiaScaleCutoutBody').each(function(elem) { elem.style.display = 'none'; })
+        $('AiaScaleCutoutXc').value = '0.0';
+        $('AiaScaleCutoutYc').value = '0.0';
+        $('AiaScaleCutoutWide').value = '4096';
+        $('AiaScaleCutoutHigh').value = '4096';
     }
-  }
+}
 
 function AiaScaleCheck(fromSetProcessing)
-  {
-  var AiaScaleSizeRatio = 1.0;
-  var isok = true;
-  var args = "aia_scale";
-  
-  if (!$("OptionAiaScale").checked)
-  {
-    // If this processing option is not selected, then do not check parameter values.
-    return '';
-  }
+{
+    var AiaScaleSizeRatio = 1.0;
+    var isok = true;
+    var args = null;
+
+    if (!$("OptionAiaScale").checked)
+    {
+        // If this processing option is not selected, then do not check parameter values.
+        return '';
+    }
   
     if (fromSetProcessing)
     {
@@ -258,7 +351,9 @@ function AiaScaleCheck(fromSetProcessing)
     
     if (this.paramsValid !== null)
     {
-        // Already checked.
+        // already checked; even though we use a different set of arguments for cut-out vs. non-cut-out, a change
+        // from cut-out to non-cut-out and vice versa always results in the Set() function to be called, which blows
+        // away the cached arguments
         return this.paramsValid; // Empty string if the previous call determined the arguments to be invalid.
     }
   
@@ -272,12 +367,79 @@ function AiaScaleCheck(fromSetProcessing)
         alert("Error - aia_scale can only be used for series aia.lev1");
         return 'error'; // Tell calling function to uncheck this processing step.
     }
+    
+    // choose between cut-out and non-cut-out
+    if (!$('AiaScalePerformCutoutCheckbox').checked)
+    {
+        // use the default (non-cut-out) processing
+        args = 'aia_scale';
+    }
+    else
+    {
+        // perform a cut-out during processing
+        args = 'aia_scale_mod';
+    
+        val = parseInt($('AiaScaleCutoutXc').value)
+        if (Math.abs(val) > 4096)
+        {
+            isok = false;
+        }
+        else 
+        {
+            if (val != 0)
+            {
+                args = args + ',' + 'xc=' + $('AiaScaleCutoutXc').value;
+            }
+        
+            val = parseInt($('AiaScaleCutoutYc').value);
+            if (Math.abs(val) > 4096)
+            {
+                isok = false;
+            }
+            else
+            {
+                if (val != 0)
+                {
+                    args = args + ',' + 'yc=' + $('AiaScaleCutoutYc').value;
+                }
+            
+                val = parseInt($('AiaScaleCutoutWide').value);
+                if (val < 0 || val > 4096)
+                {
+                    isok = false;
+                }
+                else
+                {
+                    if (val != 4096)
+                    {
+                        args = args + ',' + 'wide=' + $('AiaScaleCutoutWide').value;
+                    }
+                
+                    val = parseInt($('AiaScaleCutoutHigh').value);
+                    if (val < 0 || val > 4096)
+                    {
+                        isok = false;
+                    }
+                    else
+                    {
+                        args = args + ',' + 'high=' + $('AiaScaleCutoutHigh').value;
+                    }
+                }
+            }
+        }
+    }
+    
+    // provide MPT series if user has selected MPT
+    if ($('AiaScaleUseMptCheckbox').checked)
+    {
+        args = args + ',' + 'mpt=' + $('AiaScaleMptSelect').value;
+    }
 
-  ExportProcessingOptions[AiaScaleOption].Size = AiaScaleSizeRatio;
-  this.paramsValid = (isok ? args : "");
-  CheckRediness();
-  return (isok ? args : "");
-  }
+    ExportProcessingOptions[AiaScaleOption].Size = AiaScaleSizeRatio;
+    this.paramsValid = (isok ? args : "");
+    CheckRediness();
+    return (isok ? args : "");
+}
 
 // End AiaScale
 

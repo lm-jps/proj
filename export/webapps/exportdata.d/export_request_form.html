@@ -109,7 +109,63 @@
       <td colspan="2">
         <table style="border-style:solid" >
         <tr>
-        <td>Normalize image scale to AIA standard 0.6 arc-sec per pixel is enabled <b>Only for aia.lev1 for now.</b></td>
+        <td colspan='3'>Normalize image scale to AIA-standard 0.6 arcseconds per pixel<b>Only for aia.lev1 for now.</b></td>
+        </tr>
+        <tr>
+        <td colspan='3'>
+            <input id="AiaScaleUseMptCheckbox" type="checkbox" name="AiaScaleUseMptCheckbox" onChange="ExportProcessingOptions[AiaScaleOption].Set('usempt');" />
+            Use a master pointing table to scale images (instead of keyword values)&nbsp;
+        </td>
+        </tr>
+        <tr id='AiaScaleMptRow'>
+            <td>Master Pointing Table</td>
+            <td colspan="2">
+                &nbsp; <span id="AiaScaleMptHelp" class="tip">?</span>
+                <select id="AiaScaleMptSelect" type="text" name="AiaScaleMptSelect" style="width:20em;background-color:#FFFFFF" value="aia.master_pointing3h" onChange="ExportProcessingOptions[AiaScaleOption].Set('mpt');">
+                    <option value="aia.master_pointing3h">aia.master_pointing3h
+                    <option value="sdo.master_pointing">sdo.master_pointing
+                    <option value="aia_test.master_pointing3h">aia_test-master_pointing3h
+                    <option value="lm_jps.master_pointing3h">lm_jps.master_pointing3h
+                </select>
+                &nbsp; The DRMS dataseries that contains the Master Pointing Table to use&nbsp;
+            </td>
+        </tr>
+        <td colspan='3'>
+            <input id="AiaScalePerformCutoutCheckbox" type="checkbox" name="AiaScalePerformCutoutCheckbox" onChange="ExportProcessingOptions[AiaScaleOption].Set('docutout');" />
+            Perform a cut-out upon export
+        </td>
+        <tr class='AiaScaleCutoutBody' style="display:none;">
+            <td>X Center</td>
+            <td colspan="2">
+                &nbsp; <span id="AiaScaleCutoutXcHelp" class="tip">?</span>
+                <input id="AiaScaleCutoutXc" type="number" step="100" name="AiaScaleCutoutXc" style="width:20em;background-color:#FFFFFF" value="0.0" onChange="ExportProcessingOptions[AiaScaleOption].Set('xc');">
+                &nbsp; The X coordinate (pixels) of the cutout center; at Sun Center, X == 0&nbsp;
+            </td>
+        </tr>
+        <tr class='AiaScaleCutoutBody' style="display:none;">
+            <td>Y Center</td>
+            <td colspan="2">
+                &nbsp; <span id="AiaScaleCutoutYcHelp" class="tip">?</span>
+                <input id="AiaScaleCutoutYc" type="number" step="100" name="AiaScaleCutoutYc" style="width:20em;background-color:#FFFFFF" value="0.0" onChange="ExportProcessingOptions[AiaScaleOption].Set('yc');">
+                &nbsp; The Y coordinate (pixels) of the cutout center; at Sun Center, Y == 0&nbsp;
+            </td>
+        </tr>
+        <tr class='AiaScaleCutoutBody' style="display:none;">
+            <td>Width</td>
+            <td colspan="2">
+                &nbsp; <span id="AiaScaleCutoutWideHelp" class="tip">?</span>
+                <input id="AiaScaleCutoutWide" type="number" step="100" name="AiaScaleCutoutWide" style="width:20em;background-color:#FFFFFF" value="4096" onChange="ExportProcessingOptions[AiaScaleOption].Set('wide');">
+                &nbsp; The width of the cutout, in integer pixels&nbsp;
+            </td>
+        </tr>
+        <tr class='AiaScaleCutoutBody' style="display:none;">
+            <td>Height</td>
+                <td colspan="2">
+                &nbsp; <span id="AiaScaleCutoutHighHelp" class="tip">?</span>
+                <input id="AiaScaleCutoutHigh" type="number" step="100" name="AiaScaleCutoutHigh" style="width:20em;background-color:#FFFFFF" value="4096" onChange="ExportProcessingOptions[AiaScaleOption].Set('high');">
+                &nbsp; The width of the cutout, in integer pixels&nbsp;
+            </td>
+
         </tr>
         </table>
       </td>

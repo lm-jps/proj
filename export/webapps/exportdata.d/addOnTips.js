@@ -51,6 +51,11 @@ function AddOnTips(tipstyle, Tip)
   new Tip("HmiB2ptrHelp","HmiB2ptr processing reprojects HMI Vector field B to spherical coordinates (phi,theta,r).",tipstyle);
   new Tip("AiaScaleHelp",'When normalize scale processing is selected, the images will be scaled to AIA normal scale ' +
       'of 0.6 arcsec per pixel.',tipstyle);
+  new Tip("AiaScaleMptHelp",'Not sure what to say here ', tipstyle);
+  new Tip("AiaScaleCutoutXcHelp",'Not sure what to say here ', tipstyle);
+  new Tip("AiaScaleCutoutYcHelp",'Not sure what to say here ', tipstyle);
+  new Tip("AiaScaleCutoutWideHelp",'Not sure what to say here ', tipstyle);
+  new Tip("AiaScaleCutoutHighHelp",'Not sure what to say here ', tipstyle);
   new Tip("RebinHelp",'Reduce or Enlarge image size.  If scale < 1 reduce size by scale, reciprocal of scale ' +
       'rounded to integer.  Reduction can be either by boxcar binning or Gaussian smoothing to specified FWHM(pixels) ' +
       'averaged over a vector of specified length. If size enlarged, scale will be rounded to integer and pixel values ' +
