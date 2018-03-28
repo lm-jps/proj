@@ -99,7 +99,7 @@ void wcs2pdfi(int n, int m,
     
     double minlat = crval2 + (0.5 - crpix2) * cdelt2;           // Edge is at 0.5 and rows+0.5
     double maxlat = crval2 + (rows + 0.5 - crpix2) * cdelt2;
-    double minlon = crval1 + (0.5. - crpix1) * cdelt1;
+    double minlon = crval1 + (0.5 - crpix1) * cdelt1;
     double maxlon = crval1 + (cols + 0.5 - crpix1) * cdelt1;
     
     *a = (90. - maxlat) * DTOR;
