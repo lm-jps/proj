@@ -18,6 +18,7 @@
 #include "jsoc_main.h"
 #include "astro.h"
 #include "wcs4pdfi.c"
+#include "pdfi_vers.h"
 
 // Legacy macros
 
@@ -499,6 +500,8 @@ int writeOutputArr(DRMS_Record_t *inRec0, DRMS_Record_t *inRec1, DRMS_Record_t *
     // Keywords, T_REC/T_REC1 are both prime keys
     
     drms_copykeys(outRec, inRec0, 0, kDRMS_KeyClass_Explicit);     // copy all keys, for now use t0
+    
+    drms_setkey_string(outRec, "PDFIVERS", pdfi_vers);        // pdfi_vers.h
     
     drms_setkey_int(outRec, "NPADL", rInfo0->npadl);		// padding sizes
     drms_setkey_int(outRec, "NPADR", rInfo0->npadr);

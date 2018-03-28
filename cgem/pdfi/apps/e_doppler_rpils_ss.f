@@ -1,4 +1,4 @@
-      subroutine e_doppler_ss(m,n,btcoe,bpcoe,brcoe,
+      subroutine e_doppler_rpils_ss(m,n,btcoe,bpcoe,brcoe,
      1 vlos,lt,lp,lr,rsun,sinth,a,b,c,d,edopt,edopp,edopr)
 c
 c+
@@ -6,8 +6,12 @@ c    Purpose: To compute non-inductive contribution to the electric field
 c             from observed Doppler velocity and transverse magnetic field
 c             components.  See sections 2.3.1 and 2.3.3 of 
 c             Kazachenko et al. 2014
-c    Usage: call e_doppler_ss(m,n,btcoe,bpcoe,brcoe,vlos,lt,lp,lr,rsun,sinth,
-c   1 a,b,c,d,gradt,gradp,dpsi_dr)
+c
+c    This version masks out contributions that aren't near PILs using
+c    Welsch's get_pils_rad_ss subroutine, and then dilates the PILS.
+c
+c    Usage: call e_doppler_rpils_ss(m,n,btcoe,bpcoe,brcoe,vlos,lt,lp,lr,rsun,
+c    sinth,a,b,c,d,gradt,gradp,dpsi_dr)
 c
 c    This subroutine solves for gradt,gradp,dpsi_dr - the non-inductive 
 c    electric field components due to due to Doppler VLOS; See ;
@@ -34,16 +38,16 @@ c    Local variable: sigma, value of the width of the PIL in pixels.
 c    Local variable: max_iter, number of iterations for relaxation code
 c
 c    Output: edopt - theta component of the Doppler non-inductive electric 
-c    field contribution, multiplied by speed of light, dimensioned m,n+1 and 
-c    defined on phi edges (PE) [Gauss km/s]. 
+c    field contribution multiplied by speed of light, dimensioned m,n+1 and 
+c    defined on phi edges (PE) [Gauss km/s]
 c 
 c    Output: edopp - phi component of the Doppler non-inductive electric 
-c    field contribution, multiplied by speed of light, dimensioned m+1,n and 
-c    defined on theta edges (TE) [Gauss km/s]. 
+c    field contribution multiplied by speed of light, dimensioned m+1,n and 
+c    defined on theta edges (TE) [Gauss km/s]
 c 
 c    Output: edopr [m+1,n+1] (COE) - radial component of the Doppler 
-c    non-inductive electric field contribution, , multiplied by speed of light,
-c    dimensioned m+1,n+1 and defined in COE locations [Gauss km/s]. 
+c    non-inductive electric field contribution multiplied by speed of light, 
+c    dimensioned m+1,n+1 and defined in COE locations [Gauss km/s]
 c    MKD, 2015
 c-
 c   PDFI_SS Electric Field Inversion Software
@@ -91,7 +95,7 @@ c
 c - - local variables to e_doppler_ss:
 c
       real*8 :: gradt(m,n+1),gradp(m+1,n),dpsi_dr(m+1,n+1)
-      integer :: max_iter,verbose
+      integer :: max_iter,verbose,dil_prm
       real*8 :: dtheta,dphi,sigma
       real*8 :: tt(m-1,n-1),tp(m-1,n-1),tr(m-1,n-1)
       real*8 :: blos(m-1,n-1)
@@ -100,10 +104,12 @@ c
       real*8 :: bdotl(m-1,n-1),btrn(m-1,n-1)
       real*8 :: omega(m-1,n-1)
       real*8 :: edt(m-1,n-1),edp(m-1,n-1),edr(m-1,n-1)
-      real*8 :: edmag(m-1,n-1)
+      real*8 :: edmag(m-1,n-1),bmag(m-1,n-1),brco(m-1,n-1)
       real*8 :: tmp1(m-1,n-1),tmp2(m-1,n-1),tmp3(m-1,n-1)
       real*8 :: psi(m+1,n+1)
       real*8 :: etot(m-1,n-1,3),ed_h(m-1,n-1,3),q(m-1,n-1,3)
+      real*8 :: brth,bmagth
+      integer :: pilmap(m-1,n-1),dilmap(m-1,n-1)
 c      
 c - - set sigma,max_iter,verbose:
 c
@@ -112,6 +118,8 @@ c
 c - - set verbose to 0 to eliminate printed diagnostics from relax_psi_3d_ss
       verbose=1
 c
+      brth=60.d0
+      bmagth=250.d0
       bthr=0.d0
       dtheta=(b-a)/m
       dphi=(d-c)/n  
@@ -149,12 +157,35 @@ c
 c     magnitude of B_transverse:
 c
       btrn=sqrt(btt*btt+btp*btp+btr*btr)
-c 
+c
       where(btrn .ne. 0.d0) 
           omega=exp(-blos*blos/(btrn*btrn*sigma*sigma))
       elsewhere
           omega=0.d0
       endwhere
+c
+c - - B magnitude:
+c 
+      bmag(1:m-1,1:n-1)=sqrt(btcoe(2:m,2:n)**2+bpcoe(2:m,2:n)**2+
+     1 brcoe(2:m,2:n)**2)
+c
+c - - Br on interior corners:
+c
+      brco(1:m-1,1:n-1)=brcoe(2:m,2:n)
+c
+c - - Get radial PIL locations:
+c
+      dil_prm=1
+      call get_pils_rad_ss(m,n,brco,bmag,pilmap,brth,bmagth,dil_prm)
+c
+c - - Dilate the width of the PILs:
+c
+      dil_prm=2
+      call dilate_ss(m,n,pilmap,dilmap,dil_prm)
+c
+c - - mask out the omega function in regions not close to PILs:
+c
+      omega=omega*dble(dilmap)
 c
 c - - ed_h on interior corners only
 c
@@ -192,12 +223,11 @@ c  output: TE, PE gradt[m,n+1], gradp[m+1,n]
       call gradh_co_ss(m,n,psi,rsun,sinth,dtheta,
      1 dphi,gradt,gradp)
 c
-c - - we're done; components of gradient of scalar function are
-c - - returned as gradt, gradp.  E-field is minus the gradient.
-c
       edopt=-gradt
       edopp=-gradp
       edopr=-dpsi_dr
+c
+c - - we're done.
 c
       return
       end

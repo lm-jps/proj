@@ -133,7 +133,7 @@ c           Interior points in radius; regular 2nd derivative weightings
       end do   
 c
 c     Get fourier wave numbers stored into k array
-      call kfft(n,k)
+      call kfft_ss(n,k)
 c
 c - - Compute the am,bm,cm arrays needed in BLKTRI:
 c - - These are the coefficients of the finite difference expression

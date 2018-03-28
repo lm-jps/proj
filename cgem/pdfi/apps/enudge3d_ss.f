@@ -18,12 +18,15 @@ c - - Input:  btt(m+1,n) - real*8 array of time derivatives of B_theta
 c - - Input:  bpt(m,n+1) - real*8 array of time derivatives of B_phi
 c - - Input:  brt(m,n) - real*8 array of time derivatives of B_r
 c
-c - - Output: ettop(m,n+1),etbot(m,n+1) - arrays of E_theta at top and bottom
-c             edges of the voxels (PE grid)
-c - - Output: eptop(m+1,n),epbot(m+1,n) - arrays of E_phi at top and bottom
-c             edges of the voxels (TE grid)
-c - - Output: er(m+1,n+1) - array of E_r on the vertical rails of the voxels
-c             (COE grid)
+c - - Output: ettop(m,n+1),etbot(m,n+1) - arrays of E_theta, multiplied by 
+c             the speed of light, at top and bottom
+c             edges of the voxels (PE grid) [G km/s].
+c - - Output: eptop(m+1,n),epbot(m+1,n) - arrays of E_phi, multiplied by 
+c             the speed of light, at top and bottom edges of the voxels 
+c             (TE grid) [G km/s].
+c - - Output: er(m+1,n+1) - array of E_r, multiplied by 
+c              the speed of light, on the vertical rails of the voxels
+c             (COE grid) [G km/s]
 c
 c - - NOTE:  This assumes the photospheric data is located halfway (in radius)
 c            through the layer of voxels.
@@ -95,7 +98,7 @@ c
 c - - Get E_h on top and bottom layers by calling e_voxels3d_ss:
 c
       call e_voxels3d_ss(m,n,rsun,sinth_hlf,dtheta,dphi,et,ep,
-     1     dscrbdr,dr,ettop,etbot,eptop,epbot)
+     1     scrb,dscrbdr,dr,ettop,etbot,eptop,epbot)
 c
 c - - we're done
 c

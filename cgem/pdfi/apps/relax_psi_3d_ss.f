@@ -17,8 +17,9 @@ c
 c - - Input:  m,n - number of cell centers in theta, phi directions, resp.
 c - - Input:  bvec(m-1,n-1,3) - B_theta, B_phi, and B_r evaluated on interior
 c             cell corners.
-c - - Input:  evec(m-1,n-1,3) - input electric field (E_theta, E_phi, E_r)
-c             evaluated on interior cell corners.
+c - - Input:  evec(m-1,n-1,3) - input electric field, multiplied by the speed
+c             of light, (E_theta, E_phi, E_r), evaluated on interior cell
+c             corners [G km/s]
 c - - Input:  rsun - radius of the Sun
 c - - Input:  a,b,c,d - colatitude (a,b) and longitude (c,d) range of the
 c             exterior boundary of the problem (exterior cell corners)
@@ -27,8 +28,11 @@ c             of Welsch, (see section 3.2 of Fisher et al. [2010])
 c - - Input:  bthr - magnetic field threshold for parallelizing E field
 c - - Input:  verbose - integer set to nonzero value to print diagnostics
 c - - Output: psi(m+1,n+1) - scalar potential values on COE grid corners
-c - - Output: dpsi_dr(m+1,n+1) - radial derivative of psi on COE grid corners
-c - - Output: etot(m-1,n-1,3) - (evec - grad psi) on interior corners
+c - - Output: dpsi_dr(m+1,n+1) - radial derivative of psi on COE grid 
+c             corners
+c - - Output: etot(m-1,n-1,3) - (c*evec - grad psi) on interior corners,
+c             i.e. etot is in fact electric field, multiplied by the 
+c             speed of light [G km/s]
 c - - Note:   Unlike the rest of PDFI_SS, all vector calculus operations
 c             within this subroutine use centered grid formalism.  Only
 c             the last step of setting boundary conditions for psi assumes

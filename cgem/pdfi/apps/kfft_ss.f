@@ -1,19 +1,14 @@
-      subroutine bhtp2ll_ss(m,n,btcoe,bpcoe,bloncoe,blatcoe)
+      subroutine kfft_ss(n,k)
 c
 c+
-c   Purpose: To transpose B_h data arrays on COE grid
-c             from theta,phi to lon,lat order and flip sign to get B_lat.  
+c - - Purpose:  compute wavenumbers for use with fftpack's fft 
+c     routines rfftf and rfftb.
 c
-c - - Usage:  call bhtp2ll_ss(m,n,bloncoe,blatcoe,btcoe,bpcoe)
+c     Usage:  call kfft_ss(n,k)
 c
-c - - Input:  m,n - number of cell centers in the theta (lat), and phi (lon)
-c             directions, respectively.
-c - - Input:  btcoe(m+1,n+1),bpcoe(m+1,n+1) - arrays of colatitudinal and
-c             azimuthal components of magnetic field, stored in theta,phi
-c             index order.
-c - - Output: bloncoe(n+1,m+1),blatcoe(n+1,m+1) - arrays of the longitudinal
-c             and latitudinal components of the magnetic field evaluated at
-c             COE locations (corners plus exterior corners on boundary).
+c     input: n - length of 1-d vector to be transformed.
+c     output: k(n) - real*8 array of wavenumbers for each
+c             fourier mode
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index
@@ -43,27 +38,22 @@ c   59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 c
       implicit none
 c
-c - - input variables:
+      integer :: n,l,i
+      real*8 :: k(n)
 c
-      integer :: m,n
-      real*8 :: btcoe(m+1,n+1),bpcoe(m+1,n+1)
+c - - conditions below inferred from FFTPACK documentation contained within
+c - - FISHPACK 4.1 documentation
 c
-c - - output variables:
-c
-      real*8 :: bloncoe(n+1,m+1),blatcoe(n+1,m+1)
-c
-c - - local variables:
-c
-      integer :: i,j
-c
-      do i=1,m+1
-         do j=1,n+1
-            bloncoe(j,m+2-i)=bpcoe(i,j)
-            blatcoe(j,m+2-i)=-btcoe(i,j)
-         enddo
-      enddo
-c
-c - - we're done
-c
+      if((n/2)*2 .eq. n) then
+        l=n/2
+        k(n)=l
+      else
+        l=(n+1)/2
+      endif
+      k(1)=0
+      do i=2,l
+         k(2*i-1)=i-1
+         k(2*i-2)=i-1
+      end do
       return
       end

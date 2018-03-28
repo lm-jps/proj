@@ -11,8 +11,10 @@ c - - Input:  m,n - number of cell centers in theta, phi directions, resp.
 c - - Input:  rsun - assumed radius of Sun in km.
 c - - Input:  a,b - colatitude limits of wedge domain in radians (a < b)
 c - - Input:  c,d - longitude limits of wedge domain in radians (c < d)
-c - - Input: et(m,n+1) - theta component of electric field
-c - - Input: ep(m+1,n) - phi component of electric field
+c - - Input: et(m,n+1) - theta component of electric field multiplied
+c - - by the speed of light [cE, G km/s]
+c - - Input: ep(m+1,n) - phi component of electric field multiplied
+c - - by the speed of light [cE, G km/s]
 c - - Input: scrj(m+1,n+1) - time derivative of scrj from ptdsolve_ss
 c - - Input: dscrbdr(m+2,n+2) - time deriv. of dscrbdr from ptdsolve_ss.
 c - - Output: btt(m+1,n) - theta component of curl c*E

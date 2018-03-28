@@ -14,9 +14,12 @@ c - -         derived from calling ptdsolve_ss using input time derivs of B.
 c - - Input:  scrjt(m+1,n+1) - solution to Poisson equation for d script j/ dt
 c - -         derived from calling ptdsolve_ss using input time derivs of B.
 c - - Input:  sinth_hlf(m) - sin(theta) evaluated at cell centers
-c - - Output: et(m,n+1) - theta component of ptd electric field
-c - - Output: ep(m+1,n) - phi component of ptd electric field
-c - - Output: er(m+1,n+1) - radial component of ptd electric field
+c - - Output: et(m,n+1) - theta component of ptd electric field, multiplied by 
+c             the speed of light, [G km/s].
+c - - Output: ep(m+1,n) - phi component of ptd electric field, multiplied by 
+c             the speed of light, [G km/s].
+c - - Output: er(m+1,n+1) - radial component of ptd electric field, multiplied by 
+c             the speed of light, [G km/s].
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index

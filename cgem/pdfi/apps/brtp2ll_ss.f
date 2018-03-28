@@ -1,15 +1,16 @@
-      subroutine brtp2ll_ss(m,n,brtpce,brllce)
+      subroutine brtp2ll_ss(m,n,brtpcoe,brllcoe)
 c
 c+
 c   Purpose:  To transpose B_r data array from theta,phi to lon,lat order.
-c     Usage:  call brtp2ll_ss(m,n,brtpce,brllce)
+c             Can also be used to transpose other scalar COE arrays.
+c     Usage:  call brtp2ll_ss(m,n,brtpcoe,brllcoe)
 c     Input:  m,n - number of cell centers in the theta (lat), and phi (lon)
 c             directions, respectively.
-c     Input:  brtpce(m,n) - array of the radial component of the
-c             magnetic field evaluated at CE locations in theta,phi order
-c             (cell-centers).
-c    Output:  brllce(n,m) - array of radial magnetic field component
-c             stored in lon,lat index order.
+c     Input:  brtpcoe(m+1,n+1) - array of radial magnetic field component
+c             stored in theta,phi index order.
+c     Output: brllcoe(n+1,m+1) - array of the radial component of the
+c             magnetic field evaluated at COE locations
+c             (corners plus exterior corners on boundary).
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index
@@ -39,15 +40,22 @@ c   59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 c
       implicit none
 c
-      integer :: m,n
-      real*8 :: brtpce(m,n)
+c - - Input variables:
 c
-      real*8 :: brllce(n,m)
+      integer :: m,n
+      real*8 :: brtpcoe(m+1,n+1)
+c
+c - - Output variables:
+c
+      real*8 :: brllcoe(n+1,m+1)
+c
+c - - Local variables:
 c
       integer :: i,j
-      do i=1,m
-         do j=1,n
-            brllce(j,i)=brtpce(m+1-i,j)
+c
+      do i=1,m+1
+         do j=1,n+1
+            brllcoe(j,m+2-i) = brtpcoe(i,j)
          enddo
       enddo
 c

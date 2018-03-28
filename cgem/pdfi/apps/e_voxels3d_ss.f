@@ -1,5 +1,5 @@
       subroutine e_voxels3d_ss(m,n,rsun,sinth_hlf,dtheta,dphi,et,ep,
-     1 dscrbdr,dr,ettop,etbot,eptop,epbot)
+     1 scrb,dscrbdr,dr,ettop,etbot,eptop,epbot)
 c
 c+
 c - - Purpose:  To compute the 3d electric field on the upper and lower rails 
@@ -15,7 +15,7 @@ c     surface layer as the "photosphere".  The radial derivative is derived
 c     from dscrbdr by taking a curl of dscrbdr times the rhat unit vector.
 c
 c - - Usage:  call e_voxels3d_ss(m,n,rsun,sinth_hlf,dtheta,dphi,et,ep,
-c     dscrbdr,dr,ettop,etbot,eptop,epbot)
+c     scrb,dscrbdr,dr,ettop,etbot,eptop,epbot)
 c
 c - - Input:  m,n - integers describing the number of radial voxel face centers
 c     in the colatitude, and longitudinal directions, respectively.
@@ -23,20 +23,25 @@ c - - Input:  rsun:  Assumed radius of the Sun [in km]
 c - - Input:  sinth_hlf(m) : sin(colatitude) computed at cell centers
 c             (computed from subroutine sinthta_ss)
 c - - Input:  dtheta,dphi: cell thickness in colatitude, longitude directions
-c - - Input:  et(m,n+1),ep(m+1,n) - real*8 electric field variables 
-c     computed from PTD, or PDFI techniques at the photosphere.
+c - - Input:  et(m,n+1),ep(m+1,n) - real*8 electric-field mutiplied by the speed
+c             of light variables computed from PTD, or PDFI techniques at 
+c             the photosphere [G km/s].
 c - - NOTE:  the vertical rails will have the value of er along them, but
 c     since er is unchanged, we do not include er in the calling arguments.
+c - - Input:  scrb(m+2,n+2) - real*8 array returned from ptdsolve_ss
+c     subroutine.
 c - - Input:  dscrbdr(m+2,n+2) - real*8 array returned from the ptdsolve_ss
 c     subroutine.
 c - - Input:  dr - a real*8 scalar [in km] that provides the depth of 
 c     the radial legs
 c     of the voxels.  The upper rails will be 0.5*dr above the photosphere,
 c     while the lower rails will be 0.5*dr below the photosphere.
-c - - Output:  ettop(m,n+1),etbot(m,n+1) - real*8 values of E_theta on the 
-c     PE grid edges, at the top layer, and bottom layer, respectively.
-c - - Output:  eptop(m+1,n),epbot(m+1,n) - real*8 values of E_phi on the TE grid
-c     edges, at the top and bottom layers, respectively
+c - - Output:  ettop(m,n+1),etbot(m,n+1) - real*8 values of E_theta, multiplied 
+c              by the speed of light,.on the PE grid edges, at the top layer, 
+c              and bottom layer, respectively [G km/s].
+c - - Output:  eptop(m+1,n),epbot(m+1,n) - real*8 values of E_phi, multiplied 
+c              by the speed of light, on the TE grid edges, at the top and 
+c              bottom layers, respectively  [G km/s].
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index
@@ -70,7 +75,7 @@ c - - input variable declarations:
 c
       integer :: m,n
       real*8 :: et(m,n+1),ep(m+1,n)
-      real*8 :: dscrbdr(m+2,n+2)
+      real*8 :: scrb(m+2,n+2),dscrbdr(m+2,n+2)
       real*8 :: rsun,dtheta,dphi,dr
       real*8 :: sinth_hlf(m)
 c
@@ -81,17 +86,28 @@ c
 c
 c - - local variable declarations:
 c
-      real*8 :: curlt(m,n+1),curlp(m+1,n)
+      real*8 :: curlt(m,n+1),curlp(m+1,n),et_ptd(m,n+1),ep_ptd(m+1,n)
+      real*8 :: detdr(m,n+1),depdr(m+1,n)
 c
+      call curl_psi_rhat_ce_ss(m,n,scrb,rsun,sinth_hlf,dtheta,dphi,
+     1     curlt,curlp)
+      et_ptd=-curlt
+      ep_ptd=-curlp
       call curl_psi_rhat_ce_ss(m,n,dscrbdr,rsun,sinth_hlf,dtheta,dphi,
      1     curlt,curlp)
+      detdr=-curlt
+      depdr=-curlp
 c
-c - - Note that dE_h/dr has opposite sign from curlt,curlp:
+c - - CHECK:
 c
-      ettop(1:m,1:n+1)=et(1:m,1:n+1)-0.5d0*dr*curlt(1:m,1:n+1)
-      etbot(1:m,1:n+1)=et(1:m,1:n+1)+0.5d0*dr*curlt(1:m,1:n+1)
-      eptop(1:m+1,1:n)=ep(1:m+1,1:n)-0.5d0*dr*curlp(1:m+1,1:n)
-      epbot(1:m+1,1:n)=ep(1:m+1,1:n)+0.5d0*dr*curlp(1:m+1,1:n)
+      ettop(1:m,1:n+1)=et(1:m,1:n+1)+0.5d0*dr*
+     1     (detdr(1:m,1:n+1)-et_ptd(1:m,1:n+1)/rsun)
+      etbot(1:m,1:n+1)=et(1:m,1:n+1)-0.5d0*dr*
+     1     (detdr(1:m,1:n+1)-et_ptd(1:m,1:n+1)/rsun)
+      eptop(1:m+1,1:n)=ep(1:m+1,1:n)+0.5d0*dr*
+     1      (depdr(1:m+1,1:n)-ep_ptd(1:m+1,1:n)/rsun)
+      epbot(1:m+1,1:n)=ep(1:m+1,1:n)-0.5d0*dr*
+     1      (depdr(1:m+1,1:n)-ep_ptd(1:m+1,1:n)/rsun)
 c
 c - - we're done
 c

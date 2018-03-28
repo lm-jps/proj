@@ -1,20 +1,19 @@
-      subroutine bhtp2ll_ss(m,n,btcoe,bpcoe,bloncoe,blatcoe)
+      FUNCTION anticausal_init_ss(f, fsize, z)
 c
 c+
-c   Purpose: To transpose B_h data arrays on COE grid
-c             from theta,phi to lon,lat order and flip sign to get B_lat.  
-c
-c - - Usage:  call bhtp2ll_ss(m,n,bloncoe,blatcoe,btcoe,bpcoe)
-c
-c - - Input:  m,n - number of cell centers in the theta (lat), and phi (lon)
-c             directions, respectively.
-c - - Input:  btcoe(m+1,n+1),bpcoe(m+1,n+1) - arrays of colatitudinal and
-c             azimuthal components of magnetic field, stored in theta,phi
-c             index order.
-c - - Output: bloncoe(n+1,m+1),blatcoe(n+1,m+1) - arrays of the longitudinal
-c             and latitudinal components of the magnetic field evaluated at
-c             COE locations (corners plus exterior corners on boundary).
+c - - Purpose: real*8 Function needed in bspline_ss.f
+c - - Usage: a=anticausal_init_ss(f,fsize,z)
+c - - Input:  f(fsize) - real*8 array
+c - - Input:  fsize - integer value of the dimension of f
+c - - Input:  z - real*8 argument
 c-
+c   Origins:  This function was written in Fortran by Dave Bercik.
+c   It is based on software in C, published by Philippe Thevenaz, 
+c   http://bigwww.epfl.ch/thevenaz/interpolation/  
+c   originally described in IEEE TRANSACTIONS ON MEDICAL IMAGING, 
+c   VOL. 19, NO. 7, JULY 2000.  It was subsequently edited for compatibility 
+c   with the PDFI_SS library by George Fisher. 
+c  
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index
 c   Copyright (C) 2015,2016 University of California
@@ -41,29 +40,15 @@ c   http://www.gnu.org/copyleft/lesser.html
 c   or write to the Free Software Foundation, Inc.,
 c   59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 c
-      implicit none
+      IMPLICIT NONE
+      INTEGER, PARAMETER :: r8=KIND(1.d0)
+      INTEGER, PARAMETER :: i4=KIND(1)
+c     Dummy variable declarations
+      INTEGER(kind=i4) :: fsize
+      REAL(KIND=r8) :: f(fsize)
+      REAL(KIND=r8) :: z
+c     Local variable declarations
+      REAL(KIND=r8) :: anticausal_init_ss
 c
-c - - input variables:
-c
-      integer :: m,n
-      real*8 :: btcoe(m+1,n+1),bpcoe(m+1,n+1)
-c
-c - - output variables:
-c
-      real*8 :: bloncoe(n+1,m+1),blatcoe(n+1,m+1)
-c
-c - - local variables:
-c
-      integer :: i,j
-c
-      do i=1,m+1
-         do j=1,n+1
-            bloncoe(j,m+2-i)=bpcoe(i,j)
-            blatcoe(j,m+2-i)=-btcoe(i,j)
-         enddo
-      enddo
-c
-c - - we're done
-c
-      return
-      end
+      anticausal_init_ss = z/(z*z - 1.0_r8)*(z*f(fsize-1) + f(fsize))
+      END FUNCTION anticausal_init_ss

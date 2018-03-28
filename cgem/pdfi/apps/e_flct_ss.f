@@ -15,26 +15,26 @@ c    1 a,b,c,d,ezetat,ezetap)
 c
 c - - Input: brte - array of the radial component of the magnetic field,
 c - - dimensioned m+1,n and defined on theta edges, midway between
-c - - phi edges.
+c - - phi edges [Gauss].
 c
 c - - Input: brpe - array of the radial component of the magnetic field,
 c - - dimensioned m,n+1 and defined on phi edges, midway between
-c - - theta edges.
+c - - theta edges [Gauss].
 c
 c - - Input: bhte - array of the horizontal amplitude of the magnetic field,
-c - - dimensioned m+1,n and defined on theta edges
+c - - dimensioned m+1,n and defined on theta edges [Gauss]
 c
 c - - Input: bhpe - array of the horizontal amplitude of the magnetic field,
-c - - dimensioned m,n+1 and defined on phi edges
+c - - dimensioned m,n+1 and defined on phi edges [Gauss]
 c
 c - - Input:  vt - the component of the velocity field pointing in the
 c - - colatitude direction (positive is southward pointing).  
 c - - vt is dimensioned m+1,n and is defined on theta edges, midway between
-c - - phi edges.
+c - - phi edges [km/s]. 
 c
 c - - Input:  vp - the component of the velocity field pointing in the
 c - - logitude direction, is dimensioned m,n+1 and is defined on phi edges, 
-c - - midway between theta edges.
+c - - midway between theta edges [km/s].
 c
 c - - Input: rsun - units for the radius of the Sun.
 c
@@ -54,10 +54,12 @@ c
 c - - Input: sigma, value of the width of the PIL in pixels.
 c
 c - - Output: ezetat - theta component of the FLCT non-inductive electric 
-c - - field contribution, dimensioned m,n+1 and defined on theta edges PE. 
+c - - field contribution, multiplied by speed of light, dimensioned m,n+1 
+c     and defined on theta edges PE [Gauss km/s]. 
 c 
 c - - Output: ezetap - phi component of the FLCT non-inductive electric 
-c - - field contribution, dimensioned m+1,n and defined on theta edges TE. 
+c - - field contribution, multiplied by speed of light, dimensioned m+1,n 
+c     and defined on theta edges TE [Gauss km/s]. 
 c-
 c - - MKD, October 2015
 c   PDFI_SS Electric Field Inversion Software

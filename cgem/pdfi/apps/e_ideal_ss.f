@@ -17,9 +17,13 @@ c
 c    Input: btcoe [m+1,n+1] -  COE Bt from HMI data[Gauss]
 c    Input: bpcoe [m+1,n+1] - COE Bp from HMI data [Gauss]
 c    Input: brcoe [m+1,n+1] - COE Br from HMI data [Gauss]
-c    Input: et [m,n+1] - input electric field in theta (colat) direction
-c    Input: ep [m+1,n] - input electric field in phi (azimuth) direction
-c    Input: er [m+1,n+1] - input electric field in radial direction
+c    Input: et [m,n+1] - input electric field multiplied by the speed of light 
+c                        in theta (colat) direction [Gauss km/s]
+c    Input: ep [m+1,n] - input electric field multiplied by the speed of light 
+c                        in phi (azimuth) direction [Gauss km/s]
+c    Input: er [m+1,n+1] - input electric field  multiplied by the speed of light 
+c                        in radial direction [Gauss km/s]
+c
 c    Input: sinth, the value of sin(colatitude), computed for theta edge
 c    locations.  Is dimensioned m+1.
 c 
@@ -32,14 +36,16 @@ c
 c    Local variable: max_iter, number of iterations for relaxation code
 c
 c    Output: eti - theta component of the ideal non-inductive electric 
-c    field contribution, dimensioned m,n+1 and defined on phi edges (PE). 
+c    field contribution, multiplied by speed of light, dimensioned m,n+1 
+c    and defined on phi edges (PE) [Gauss km/s]. 
 c 
 c    Output: epi - phi component of the ideal non-inductive electric 
-c    field contribution, dimensioned m+1,n and defined on theta edges (TE). 
+c    field contribution, multiplied by speed of light, dimensioned m+1,n
+c    and defined on theta edges (TE) [Gauss km/s]. 
 c 
 c    Output: eri [m+1,n+1] (COE) - radial component of the ideal 
-c    non-inductive electric field contribution, dimensioned m+1,n+1 and 
-c    defined in COE locations.
+c    non-inductive electric field contribution,multiplied by speed of light, 
+c    dimensioned m+1,n+1 and defined in COE locations [Gauss km/s].
 c    GHF, 2015
 c-
 c   PDFI_SS Electric Field Inversion Software

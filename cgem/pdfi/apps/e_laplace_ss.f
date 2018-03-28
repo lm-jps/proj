@@ -1,12 +1,13 @@
-      subroutine enudge_ss(m,n,a,b,c,d,rsun,brt,et,ep)
+      subroutine e_laplace_ss(m,n,a,b,c,d,rsun,ea,eb,ec,ed,et,ep)
 c+
-c - -  Purpose:  Compute horizontal electric fields et,ep from radial magnetic 
-c - -  field time derivatives brt, using the simplest PTD electric field 
+c - -  Purpose:  Compute horizontal electric fields et,ep from solutions to
+c - -  Laplace equation, given boundary conditions ea,eb,ec,ed on the 4 sides.
 c - -  solution.
 c - -  Assumes for boundary conditions that the tangential electric field at the
-c - -  theta and phi boundaries is zero.  
+c - -  theta boundaries is given by ea and eb, and at the phi boundaries is
+c - -  given by ec, ed.
 c
-c - -  Usage:  call enudge_ss(m,n,a,b,c,d,rsun,brt,et,ep)
+c - -  Usage:  call e_laplace_ss(m,n,a,b,c,d,rsun,ea,eb,ec,ed,et,ep)
 c
 c - -  Input:  m,n - integers denoting the number of cell-centers in the
 c              colatitude and longitude directions, respectively
@@ -14,12 +15,13 @@ c - -  Input:  a,b - the real*8 values of colatitude (theta)
 c              at the northern and southern edges of the problem boundary
 c - -  Input:  c,d - the real*8 values of longitude edges
 c - -  Input:  rsun - real*8 - units for the radius of the Sun
-c - -  Input:  brt(m,n) - real*8 array of cell-center radial magnetic field
-c              time derivative values
-c - -  Output: et(m,n+1) - real*8 array of electric fields, multiplied by 
-c              the speed of light, computed on phi edges [G km/s].
-c - -  Output: ep(m+1,n) - real*8 array of electric fields, multiplied by 
-c              the speed of light, computed on theta edges [G km/s].
+c - -  Input:  ea(n),eb(n),ec(m),ed(m) - arrays of electric field values
+c              multiplied by the speed of light at theta=a, theta=b, phi=c, phi=d
+c              [Gauss km/s].
+c - -  Output: et(m,n+1) - real*8 array of theta electric fields, multiplied 
+c              by the speed of light, computed on phi edges [Gauss km/s]..
+c - -  Output: ep(m+1,n) - real*8 array of phi electric fields, multiplied
+c              by the speed of light, computed on theta edges [Gauss km/s]..
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index
@@ -54,7 +56,7 @@ c
 c - - calling arguments:
 c
       integer :: m,n
-      real*8 :: brt(m,n),et(m,n+1),ep(m+1,n)
+      real*8 :: ea(n),eb(n),ec(m),ed(m),et(m,n+1),ep(m+1,n)
       real*8 :: rsun,a,b,c,d
 c
 c - - local subroutine variables:
@@ -81,9 +83,9 @@ c
       mp1=m+1
       np1=n+1
 c
-c - - Set RHS for Poisson solve:
+c - - Set RHS for Laplace solve:
 c
-      f(1:m,1:n)=-brt(1:m,1:n)*rsun2
+      f(1:m,1:n)=0.d0
 c
 c - - The value of idimf should be exactly equal to m (staggered), or mp1 
 c - - (non-staggered)
@@ -94,7 +96,10 @@ c
 c
       cc=0.d0
       dd=dble(n)*dphi
-
+c
+c - - assign sin(theta) arrays
+c
+      call sinthta_ss(a,b,m,sinth,sinth_hlf)
 c 
 c - - set bcm (boundary condition type at theta=a, theta=b) for Neumann:
 c
@@ -104,23 +109,23 @@ c - - set bcn (boundary condition at phi=c, phi=d) for Neumann:
 c
       bcn=3
 c
-c - - Homogenous Neumann: set bda to 0
+c - - E = - \curl scrbdot*\vecrhat:
 c
-      bda(1:n)=0.d0
+c - - Neumann BC: set bda to +ea*r
 c
-c - - set bdb to zero (homogenous Neumann)
+      bda(1:n)=ea(1:n)*rsun
 c
-      bdb(1:n)=0.d0
+c - - set bdb to +eb*r
 c
-c - - allocate bdc
+      bdb(1:n)=eb(1:n)*rsun
 c
-c - - set bdc to zero (Homogenous Neumann):
+c - - set bdc to -ec*r*sintheta:
 c
-      bdc(1:m)=0.d0
+      bdc(1:m)=-ec(1:m)*rsun*sinth_hlf(1:m)
 c
-c - - set bdd to zero (Homogenous Neumann):
+c - - set bdd to -ed*r*sintheta:
 c
-      bdd(1:m)=0.d0
+      bdd(1:m)=-ed(1:m)*rsun*sinth_hlf(1:m)
 c
 c - - set elm (coefficient for Helmholtz term) to 0.
 c
@@ -136,7 +141,7 @@ c - - allocate work array w
 c
       allocate(w(itmp))
 c
-c - - Finally, solve Poisson's equation. Use hstssp subroutine from Fishpack
+c - - Finally, solve Laplace equation. Use hstssp subroutine from Fishpack
 c - - for staggered case:
 c
       call hstssp (a,b,m,bcm,bda,bdb,cc,dd,n,bcn,bdc,bdd,elm,f,
@@ -145,14 +150,14 @@ c
 c - - check for errors returned from hstssp:
 c
       if(ierror .ne. 0) then
-         write(6,*) 'enudge_ss: error in hstssp, ierror = ',ierror
+         write(6,*) 'e_laplace_ss: error in hstssp, ierror = ',ierror
          stop
       endif
 c
-c - - allocate the solution arrays u, ughost, and
-c - - electric field arrays et and ep, and the angle arrays:
+c - - fill the solution arrays ughost and
+c - - electric field arrays et and ep:
 c
-c - - set solution u to source term array (where hstssp puts the solution)
+c - - set solution ughost to source term array (where hstssp puts the solution)
 c
       ughost(2:m+1,2:n+1)=f(1:m,1:n)
 c
@@ -169,10 +174,6 @@ c
       ughost(m+2,1)=0.5d0*(ughost(m+2,2)+ughost(m+1,1))
       ughost(1,n+2)=0.5d0*(ughost(2,n+2)+ughost(1,n+1))
       ughost(m+2,n+2)=0.5d0*(ughost(m+2,n+1)+ughost(m+1,n+2))
-c
-c - - assign theta and sin(theta) arrays
-c
-      call sinthta_ss(a,b,m,sinth,sinth_hlf)
 c
 c - - compute et:
 c

@@ -10,8 +10,10 @@ c - - Input:  m,n - number of cell centers in theta, phi directions, resp.
 c - - Input:  rsun - assumed radius of Sun in km.
 c - - Input:  a,b - colatitude limits of wedge domain in radians (a < b)
 c - - Input:  c,d - longitude limits of wedge domain in radians (c < d)
-c - - Input: et(m,n+1) - theta component of ptd electric field
-c - - Input: ep(m+1,n) - phi component of ptd electric field
+c - - Input: et(m,n+1) - theta component of ptd electric field, multiplied
+c - - by the speed of light [cE, G km/s]
+c - - Input: ep(m+1,n) - phi component of ptd electric field, multiplied
+c - - by the speed of light [cE, G km/s]
 c - - Output: brt(m,n) - the radial component of curl c*E_h
 c-
 c   PDFI_SS Electric Field Inversion Software

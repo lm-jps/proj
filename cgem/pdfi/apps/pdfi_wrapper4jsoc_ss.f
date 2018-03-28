@@ -323,6 +323,7 @@ c Calculate FLCT contribution into electric field
      2 a,b,ci,di,ezetat,ezetap)
 c
 c Calculate Doppler contribution into electric field
+c
       call e_doppler_ss(m,n,btcoeh*maskcoe,
      1 bpcoeh*maskcoe,brtpcoeh*maskcoe,vlostpcoeh*maskcoe,
      2 ltcoeh,lpcoeh,lrtpcoeh,rsun,sinth,
@@ -334,8 +335,9 @@ c Calculate PDF electric field
       erpdf=er+edr
 c
 c Calculate non-inductive electric field components    
-      call e_ideal_ss(m,n,btcoeh,
-     1 bpcoeh,brtpcoeh,etpdf,eppdf,erpdf,rsun,
+c Note that magnetic field points (corners) are masked on input.
+      call e_ideal_ss(m,n,btcoeh*maskcoe,
+     1 bpcoeh*maskcoe,brtpcoeh*maskcoe,etpdf,eppdf,erpdf,rsun,
      2 sinth,a,b,ci,di,eti,epi,eri)
 c
 c Calculate PDFI electric field and convert from cE in G-km/s to E in V/cm:
