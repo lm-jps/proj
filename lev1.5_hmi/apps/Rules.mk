@@ -5,8 +5,8 @@ d		:= $(dir)
 
 # Local variables
 # NOTE: Add the base of the module's filename below (next to mymod)
-DEFMAKE_$(d)	:= $(addprefix $(d)/, HMI_lookup HMI_observables_90q HMI_observables HMI_IQUV_averaging correction_velocities ingest_dcon ingest_dcon_gen HMI_observables_dcon HMI_observables_dcon2 HMI_observables_dconS lev1_dcon HMI_IQUV_averaging_dcon HMI_observables_135q stokes_dcon)
-GSLEXE_$(d)	:= $(addprefix $(d)/, HMI_observables2 undistort_lev1 phasemaps_voigt) $(DEFMAKE_$(d))
+DEFMAKE_$(d)	:= $(addprefix $(d)/, HMI_lookup phasemaps_voigt HMI_observables_90q HMI_observables HMI_IQUV_averaging correction_velocities ingest_dcon ingest_dcon_gen HMI_observables_dcon HMI_observables_dcon2 HMI_observables_dconS lev1_dcon HMI_IQUV_averaging_dcon HMI_observables_135q stokes_dcon)
+GSLEXE_$(d)	:= $(addprefix $(d)/, HMI_observables2 undistort_lev1) $(DEFMAKE_$(d))
 
 # THERE IS AN HMI_IQUV_averaging2.c IN THE SOURCE DIRECTORY, BUT THERE IS NO RULE TO MAKE THIS FILE.
 
