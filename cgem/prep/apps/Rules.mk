@@ -9,8 +9,11 @@ d := $(dir)
 
 # module name(s) to be generated and file name(s) to be compiled
 
+# Common utilities
+EXTRADEPS_$(d)		:= $(addprefix $(d)/, flctsubs.o)
+
 ## C-wrapper name (name must end with .c)
-MODEXE_USEF_$(d) := $(addprefix $(d)/, cgem_prep cgem_cutout cgem_map cgem_flct cgem_doppcal)
+MODEXE_USEF_$(d) := $(addprefix $(d)/, cgem_prep cgem_cutout cgem_map cgem_flct correct_azim correct_azim_bharp cgem_doppcal cgem_doppcal_los vmap_flct)
 MODEXE_USEF := $(MODEXE_USEF) $(MODEXE_USEF_$(d))
 
 ## wrapped Fortran codes
@@ -34,7 +37,8 @@ DEP_$(d) := $(OBJ_$(d):%=%.d)
 CLEAN := $(CLEAN) \
          $(OBJ_$(d)) \
          $(MODEXE_USEF_$(d)) \
-         $(DEP_$(d))
+         $(DEP_$(d)) \
+         $(EXTRADEPS_$(d))
 
 
 # name(?) of target executable binary
@@ -44,7 +48,11 @@ S_$(d) := $(notdir $(MODEXE_USEF_$(d)))
 
 # making object/executable with Rules file and extra options
 $(OBJ_$(d)):	$(SRCDIR)/$(d)/Rules.mk
-$(OBJ_$(d)):	CF_TGT := $(CF_TGT) -fp-model strict -I$(SRCDIR)/$(d)/../../../libs/astro -I$(SRCDIR)/$(d)/../../../libs/stats -I$(SRCDIR)/$(d)/../../../libs/interpolate -I/home/jsoc/lib/$(JSOC_MACHINE) $(FFTWH) $(FFTW3LIBS) $(FMATHLIBSH) 
+$(OBJ_$(d)):	CF_TGT := $(CF_TGT) -fp-model strict -I$(SRCDIR)/$(d)/../../../libs/astro -I$(SRCDIR)/$(d)/../../../libs/stats -I$(SRCDIR)/$(d)/../../../libs/interpolate -I/home/jsoc/lib/$(JSOC_MACHINE) $(FFTWH) $(FFTW3LIBS) $(FMATHLIBSH)
+
+$(EXTRADEPS_$(d)):	CF_TGT := $(CF_TGT) $(FFTWH) $(GSLH) -I$(SRCDIR)/$(d)/../../../libs/astro -I$(SRCDIR)/$(d)/src/
+$(MODEXE_$(d)):			$(EXTRADEPS_$(d))
+$(MODEXE_USEF_$(d)):    $(EXTRADEPS_$(d))
 
 $(WRAPPEDF_OBJ_$(d)): FF_TGT := $(FF_TGT) $(MYCMPFLG_$(d)) -free 
 $(MODEXE_USEF_$(d)): LL_TGT := $(LL_TGT) $(MYLNKFLG_$(d)) -free
