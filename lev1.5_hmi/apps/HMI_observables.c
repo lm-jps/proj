@@ -1104,7 +1104,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.56 2018/03/30 07:39:43 baldner Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.57 2018/03/30 20:25:27 baldner Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -5612,7 +5612,10 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 	  if(anglediff[temp] > 10.0) {
 	    printf("P-angle of nearest look-up table differs from target CROTA2 by more than 10 degrees.\n");
 	    for(i=0; i<n1;i++) {
-	      if(tuningmatch[i] == 0 && anglediff[i] < 10.0 && anglediff[i] < anglediff[temp]) {
+	      // logic: check that the tunings are the same; that the difference in angles is less than 10 degrees; and
+	      // that EITHER the angle difference is smaller than the previously selected record OR that the current record is closer in time than the previously selected record
+	      // Otherwise we stick with the previously selected record
+	      if((tuningmatch[i] == 0) && (anglediff[i] < 10.0) && (anglediff[i] < anglediff[temp] || count[i] < count[temp])) {
 		temp = i;
 		temptime = count[i];
 	      }
