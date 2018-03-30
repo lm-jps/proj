@@ -42,6 +42,7 @@
 #define ARRLENGTH(ARR) (sizeof(ARR) / sizeof(ARR[0]))
 
 #define DISAMB_AZI		1
+#define DOPPCAL         0       // Calibrate Doppler here
 
 // Some other things
 #ifndef MIN
@@ -70,6 +71,7 @@ struct ephemeris {
 	double disk_lonc, disk_latc;
 	double disk_xc, disk_yc;
 	double rSun, asd, pa;
+    TIME t_rec;
 };
 
 // Mapping information
@@ -78,6 +80,7 @@ struct patchInfo {
     int cols, rows;
     TIME tref;
     int cgemnum;
+    int proj;
 };
 
 /* Cutout segment names, input identical to output */
@@ -103,11 +106,13 @@ int getEphemeris(DRMS_Record_t *inRec, struct ephemeris *ephem);
 
 /* Get cutout and write segment */
 int writeCutout(DRMS_Record_t *outRec, DRMS_Record_t *inRec,
-                int *ll, int *ur, char *SegName);
+                int *ll, int *ur, double doppbias, char *SegName);
 
 /* Set all keywords, no error checking for now */
 void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *inRec, struct patchInfo *pInfo, int *ll);
 
+/* Compute Dopper correction due to spacecraft and rotation; same as cgem_prep */
+int getDoppCorr_patch(DRMS_Record_t *inRec, int *ll, int *ur, float *doppCorr);
 
 /* ========================================================================================================== */
 
@@ -300,9 +305,10 @@ int createCutRecord(DRMS_Record_t *bRec, DRMS_Record_t *dopRec,
     // Coutout B
     
     int iSeg, nSegs = ARRLENGTH(BSegs);
+    double doppbias = drms_getkey_double(dopRec, "DOPPBIAS", &status);
     
     for (iSeg = 0; iSeg < nSegs; iSeg++) {
-        if (writeCutout(outRec, bRec, ll, ur, BSegs[iSeg])) {
+        if (writeCutout(outRec, bRec, ll, ur, doppbias, BSegs[iSeg])) {
             printf("B cutout fails for %s\n", BSegs[iSeg]);
             break;
         }
@@ -402,6 +408,8 @@ int getEphemeris(DRMS_Record_t *inRec, struct ephemeris *ephem)
     ephem->asd = asin(rSun_ref/dSun);
     ephem->rSun = asin(rSun_ref / dSun) * RAD2ARCSEC / cdelt;
     
+    ephem->t_rec = drms_getkey_time(inRec, "T_REC", &status);
+    
     return 0;
     
 }
@@ -414,7 +422,7 @@ int getEphemeris(DRMS_Record_t *inRec, struct ephemeris *ephem)
  */
 
 int writeCutout(DRMS_Record_t *outRec, DRMS_Record_t *inRec,
-                int *ll, int *ur, char *SegName)
+                int *ll, int *ur, double doppbias, char *SegName)
 {
     
     int status = 0;
@@ -460,6 +468,20 @@ int writeCutout(DRMS_Record_t *outRec, DRMS_Record_t *inRec,
     }
 #endif
     
+#if DOPPCAL
+    if (!strcmp(SegName, "vlos_mag")) {
+        // Doppler correction due to spacecraft v and diff rot
+        printf("doppbias=%f\n", doppbias);
+        float *doppCorr = (float *) (malloc(nxny * sizeof(float)));
+        getDoppCorr_patch(inRec, ll, ur, doppCorr);
+        double *dop = (double *) cutoutArray->data;
+        for (int i = 0; i < nxny; i++) {
+            dop[i] = dop[i] - doppCorr[i] - doppbias;                // cm/s
+        }
+        free(doppCorr);
+    }
+#endif
+    
     /* Write out */
     
     outSeg = drms_segment_lookup(outRec, SegName);
@@ -472,6 +494,8 @@ int writeCutout(DRMS_Record_t *outRec, DRMS_Record_t *inRec,
     status = drms_segment_write(outSeg, cutoutArray, 0);
     drms_free_array(cutoutArray);
     if (status) return 1;
+    
+//    printf("%s done\n", SegName);
     
     return 0;
 
@@ -519,5 +543,111 @@ void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *inRec, struct patchInfo *pInf
         //printf("%s, %s\n", bunit_xxx, CutBunits[iSeg]);
         drms_setkey_string(outRec, bunit_xxx, CutBunits[iSeg]);
     }
+    
+}
+
+
+// =============================================
+
+/*
+ * Compute Dopper correction due to spacecraft and rotation
+ * Adapted from Brian's code doppcal_estimate.f90, in cm/s
+ * Based on Phil's email: need to be careful about the sign of V
+ * Doppler velocity has redshift as pos (toward Sun center)
+ * OBS_VR/VW/VN is in heliocetric coordinate, so away from Sun center is pos
+ * To perform correction, one needs to project OBS_VX onto the LOS vector
+ * in *HELIOCENTRIC* coordniate (away from Sun is positive)
+ * Then simply subtract this number from the Dopplergram
+ *
+ */
+
+int getDoppCorr_patch(DRMS_Record_t *inRec, int *ll, int *ur, float *doppCorr)
+{
+    
+    int status = 0;
+    
+    // Info
+    
+    int nx = ur[0] - ll[0] + 1, ny = ur[1] - ll[1] + 1, nxny = nx * ny;
+    
+    struct ephemeris ephem;
+    if (getEphemeris(inRec, &ephem)) {
+        SHOW("Mapping: get ephemeris error\n");
+        return 1;
+    }
+    
+    // Lon/lat
+    
+    double *lon_nobp = (double *) (malloc(nxny * sizeof(double)));      // assuming b=0, p=0, in rad
+    double *lat_nobp = (double *) (malloc(nxny * sizeof(double)));
+    double *lon = (double *) (malloc(nxny * sizeof(double)));
+    double *lat = (double *) (malloc(nxny * sizeof(double)));
+    double x, y, lon_t, lat_t;
+    double rho, sinlat, coslat, sig, mu, chi;
+    int ind;
+    
+    printf("xc=%f, yc=%f, lonc=%f\nnx=%d, ny=%d\n", ephem.disk_xc, ephem.disk_yc, ephem.disk_lonc, nx, ny);
+    printf("ll[0]=%d, ll[1]=%d\nasd=%f, pa=%f, rSun=%f\n", ll[0], ll[1], ephem.asd, ephem.pa, ephem.rSun);
+    
+    for (int row = 0; row < ny; row++) {
+        for (int col = 0; col < nx; col++) {
+            
+            ind = row * nx + col;
+            x = (ll[0] + col - ephem.disk_xc) / ephem.rSun;       // normalized pixel address
+            y = (ll[1] + row - ephem.disk_yc) / ephem.rSun;       // normalized pixel address
+            
+            img2sphere (x, y, ephem.asd, 0.0, 0.0, 0.0,
+                        &rho, &lat_t, &lon_t, &sinlat, &coslat, &sig, &mu, &chi);
+            lon_nobp[ind] = lon_t; lat_nobp[ind] = lat_t;
+            
+            img2sphere (x, y, ephem.asd, ephem.disk_latc, 0.0, ephem.pa,
+                        &rho, &lat_t, &lon_t, &sinlat, &coslat, &sig, &mu, &chi);
+            lon[ind] = lon_t; lat[ind] = lat_t;
+            
+        }
+    }
+    
+    // Correction, following Brian's method
+    
+    double vr = drms_getkey_double(inRec, "OBS_VR", &status) * 100.;    // m/s => cm/s
+    double vw = drms_getkey_double(inRec, "OBS_VW", &status) * 100.;
+    double vn = drms_getkey_double(inRec, "OBS_VN", &status) * 100.;
+    double k = sin(ephem.asd);      // ~(1/215.)
+    
+    double crota2 = ephem.pa * (-1.);        // In rad already
+    double obsv_x = vw * cos(crota2) + vn * sin(crota2);
+    double obsv_y = - vw * sin(crota2) + vn * cos(crota2);
+    
+    double rsun_ref = 6.96e10;                // cm
+    double coslatc = cos(ephem.disk_latc);
+    double sinlon;
+    double sinlat_nobp, sinlon_nobp, coslat_nobp;
+    
+    for (int row = 0; row < ny; row++) {
+        for (int col = 0; col < nx; col++) {
+            
+            ind = row * nx + col;
+            
+            sinlat = sin(lat[ind]);
+            sinlon = sin(lon[ind]);
+            sinlat_nobp = sin(lat_nobp[ind]);
+            sinlon_nobp = sin(lon_nobp[ind]);
+            coslat_nobp = cos(lat_nobp[ind]);
+            
+            doppCorr[ind] = vr - obsv_y * sinlat_nobp * k
+                            - obsv_x * sinlon_nobp * coslat_nobp * k;        // cm/s
+            
+            doppCorr[ind] += (rsun_ref * sinlon * coslatc * 1.e-6 *
+                              (2.71390 - 0.405000 * pow(sinlat, 2) - 0.422000 * pow(sinlat, 4)));        // cm/s
+            
+        }
+    }
+    
+    //
+    
+    free(lon_nobp); free(lat_nobp);     // clean up
+    free(lon); free(lat);
+    
+    return 0;
     
 }
