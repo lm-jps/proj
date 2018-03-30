@@ -1104,7 +1104,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.55 2017/02/01 23:39:23 baldner Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.56 2018/03/30 07:39:43 baldner Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -1388,6 +1388,8 @@ int DoIt(void)
   double diftime=0.0;
   double coeff[4],coeff2[4];                                         //polynomial coefficients for the correction of the Doppler velocity returned by the MDI-like algorithm
   double *count=NULL;
+  double *anglediff=NULL;
+  int *tuningmatch=NULL;
 
   float *RSUN=NULL;                                                  //Radius of the Sun's image in pixels
   float *CROTA2=NULL;                                                //NEGATIVE of solar P angle
@@ -5532,7 +5534,9 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 	    }
 	  printf("KEYWORD VALUES: %d %d %d %d\n",HCMNBT,HCMWBT,HCME1T,HCMPOLT);
 
-	  char keylist[]="HWL4POS,HWL3POS,HWL2POS,HWL1POS,NWL,HCAMID,FSN_REC";
+	  char keylist[]="HWL4POS,HWL3POS,HWL2POS,HWL1POS,NWL,HCAMID,FSN_REC,CROTA2";		// Added CROTA2 keyword for using roll detunes, if applicable (2018.03.21)
+	  											// Really, CROTA2 should be read in as a double, not an int, but 
+												// we don't care about <1 degree accuracy for this.
 	  int unique=0;
 	  int n0,n1;
 
@@ -5558,7 +5562,7 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 	  timeL=arrayL1->data;
 
 	  n1=arrayL0->axis[1]; //number of look-up table records found
-	  n0=arrayL0->axis[0]; //number of keywords read (should be 7)
+	  n0=arrayL0->axis[0]; //number of keywords read (should be 8)
      	  if(n1 != arrayL1->axis[1])
 	    {
 	      printf("Error: The number of look-up table records identified by T_REC is not the same as the number of records identified by HWL4POS,HWL3POS,HWL2POS,HWL1POS, and NWL\n");
@@ -5568,9 +5572,11 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 	  printf("%d RECORDS FOUND FOR THE LOOK-UP TABLES\n",n1);
 
 	  count = (double *)malloc(n1*sizeof(double));
-	  if(count == NULL)
+	  anglediff = (double *)malloc(n1*sizeof(double));
+	  tuningmatch = (int *)malloc(n1*sizeof(int));
+	  if(count == NULL || anglediff == NULL || tuningmatch == NULL)
 	    {
-	      printf("Error: memory could not be allocated to count\n");
+	      printf("Error: memory could not be allocated to count, anglediff, or tuningmatch\n");
 	      return 1;//exit(EXIT_FAILURE);
 	    }
 
@@ -5580,13 +5586,15 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 	  for(i=0;i<n1;++i)
 	    {
 	      count[i] = fabs(timeL[i]-TargetTime); //absolute value of the difference between the T_REC of the look-up tables and the TargetTime
+	      anglediff[i] = fabs(atan2(sin((keyL[7*n1+i]-CROTA2int)/180.0*M_PI), cos((keyL[7*n1+i]-CROTA2int)/180.0*M_PI)))*180.0/M_PI; //abs. value of difference between target CROTA2 and look-up table CROTA2
 	      NBC = abs(keyL[     i]-HCMNBT); 
 	      POLC= abs(keyL[  n1+i]-HCMPOLT);
 	      WBC = abs(keyL[2*n1+i]-HCMWBT);
 	      E1C = abs(keyL[3*n1+i]-HCME1T);
 	      NC  = abs(keyL[4*n1+i]-framelistSize/npol);
 	      CAMERAUSED = abs(keyL[5*n1+i]-CamId); //we will take only the look-up tables produced from data taken on the same camera as CamId
-	      if(count[i] < temptime && NBC+WBC+POLC+E1C+NC+CAMERAUSED == 0)
+	      tuningmatch[i] = NBC+WBC+POLC+E1C+NC+CAMERAUSED;
+	      if(count[i] < temptime && tuningmatch[i] == 0)
 		{
 		  temptime=count[i];
 		  temp=i; //temp will contain the index at which the T_REC value of the look-up table is closest to the TargetTime
@@ -5597,6 +5605,23 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 	    printf("Error: could not find a look-up table with the correct keywords to produce level 1.5 data\n");
 	    QUALITY = QUALITY | QUAL_NOLOOKUPRECORD;
 	    CreateEmptyRecord=1; goto NextTargetTime;
+	  }
+	  // If the look-up table has a significantly different CROTA2 than the target observable (\delta \theta > 10 degrees), see if we can find look-up table with an appropriate angle.
+	  // If not, we just continue, using the look-up table with a different CROTA2.
+	  // Added 2018.03.23
+	  if(anglediff[temp] > 10.0) {
+	    printf("P-angle of nearest look-up table differs from target CROTA2 by more than 10 degrees.\n");
+	    for(i=0; i<n1;i++) {
+	      if(tuningmatch[i] == 0 && anglediff[i] < 10.0 && anglediff[i] < anglediff[temp]) {
+		temp = i;
+		temptime = count[i];
+	      }
+	    }
+	    if(anglediff[temp] <= 10.0) {
+	      printf("Found another look-up table with a closer P-angle\n");
+	    } else {
+	      printf("Could not find look-up table with a closer P-angle; will use closest in time.\n");
+	    }
 	  }
 
 	  printf("Index of the retrieved look-up table %d %d\n",temp,n1);
@@ -5639,6 +5664,10 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 	  arrayL1=NULL;
 	  free(count);
 	  count=NULL;
+	  free(anglediff);
+	  anglediff=NULL;
+	  free(tuningmatch);
+	  tuningmatch=NULL;
 
 	  lookup  = drms_open_records(drms_env,HMILookup,&status); 
 	  if (status == DRMS_SUCCESS && lookup != NULL)
