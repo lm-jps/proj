@@ -36,6 +36,8 @@
 #define kNotSpecified "Not Specified"
 #define dpath    "/home/jsoc/cvs/Development/JSOC"
 
+#define vSegName	"vlos_mag"
+
 #define NT          (5)             // chunk size
 #define FLIP_THR    (120)           // azimuth flipping threshold
 
@@ -106,6 +108,9 @@ float nnb (float *f, int nx, int ny, float x, float y);
 /* Azimuth correction */
 extern void azim_mindiff_jsoc_(float *azi_work, float *azi_out, int *nx, int *ny, int *nt2, int *flip_thr);
 
+/* Compute Dopper correction due to spacecraft and rotation */
+int getDoppCorr(DRMS_Record_t *inRec, double *doppCorr);
+
 // =====================================
 
 char *module_name = "cgem_prep";
@@ -120,11 +125,11 @@ ModuleArgs_t module_args[] =
     {ARG_FLAG, "s", "", "Save intermediate steps."},
     {ARG_NUME, "map", "carree", "Projetion method, carree by default.",
         "carree, Cassini, Mercator, cyleqa, sineqa, gnomonic, Postel, stereographic, orthographic, Lambert"},
-    {ARG_FLOAT, "lonref", "0", "Reference patch center Stonyhurst lon, in deg."},
-	{ARG_FLOAT, "latref", "0", "Reference patch center Stonyhurst lat, in deg."},
-	{ARG_INT, "cols", "500", "Columns of output cutout."},
-	{ARG_INT, "rows", "500", "Rows of output cutout."},
-	{ARG_FLOAT, "dx", "0.03", "X pixel size, unit depending on projection (default deg)."},
+    {ARG_DOUBLE, "lonref", "0", "Reference patch center Stonyhurst lon, in deg."},
+	{ARG_DOUBLE, "latref", "0", "Reference patch center Stonyhurst lat, in deg."},
+	{ARG_INT, "cols", "480", "Columns of output cutout."},
+	{ARG_INT, "rows", "480", "Rows of output cutout."},
+	{ARG_DOUBLE, "dx", "0.03", "X pixel size, unit depending on projection (default deg)."},
 	{ARG_FLOAT, "dy", "0.03", "Y pixel size, unit depending on projection (default deg)."},
 	{ARG_STRING, "tref", kNotSpecified, "Reference time."},
 
@@ -154,13 +159,13 @@ int DoIt(void)
     /* Mapping arguments */
     
     struct reqInfo req;
-    req.lonref = params_get_float(&cmdparams, "lonref") * RADSINDEG;
-    req.latref = params_get_float(&cmdparams, "latref") * RADSINDEG;
+    req.lonref = params_get_double(&cmdparams, "lonref") * RADSINDEG;
+    req.latref = params_get_double(&cmdparams, "latref") * RADSINDEG;
     req.ncol = params_get_int(&cmdparams, "cols");
     req.nrow = params_get_int(&cmdparams, "rows");
     req.tref = params_get_time(&cmdparams, "tref");
-    req.dx = params_get_float(&cmdparams, "dx") * RADSINDEG;		// deg to rad, for now
-    req.dy = params_get_float(&cmdparams, "dy") * RADSINDEG;
+    req.dx = params_get_double(&cmdparams, "dx") * RADSINDEG;		// deg to rad, for now
+    req.dy = params_get_double(&cmdparams, "dy") * RADSINDEG;
     req.proj = params_get_int(&cmdparams, "map");
     
     // Some checking
@@ -221,7 +226,7 @@ int DoIt(void)
         printf("Frame %d of %d... ", irec + 1, nrecs);
         
         if (correct_dop(inRec, medvRec)) {          // error
-            printf("Doppler correction error, frame %s skipped.\n", irec);
+            printf("Doppler correction error, frame %d skipped.\n", irec);
             continue;
         }
         
@@ -393,38 +398,47 @@ int correct_dop(DRMS_Record_t *inRec, DRMS_Record_t *outRec)
     
     // Read azimuth
     
-    DRMS_Segment_t *inSeg = drms_segment_lookup(inRec, "Dopplergram");
+    DRMS_Segment_t *inSeg = drms_segment_lookup(inRec, vSegName);
     if (!inSeg) return 1;
     
-    DRMS_Array_t *inArray = drms_segment_read(inSeg, DRMS_TYPE_FLOAT, &status);
+    DRMS_Array_t *inArray = drms_segment_read(inSeg, DRMS_TYPE_DOUBLE, &status);
     if (status || !inArray) return 1;
     
-    float *dop_in = (float *) inArray->data;          // actual array
+    double *dop_in = (double *) inArray->data;          // actual array
     int nx = inArray->axis[0], ny = inArray->axis[1], nxny = nx * ny;
     int dims[2] = {nx, ny};
     
     // Correction
     
-    float *dop_out = (float *) (malloc(nxny * sizeof(float)));      // output array
-    double vr = drms_getkey_double(inRec, "OBS_VR", &status);    // Keywords
+    double *dop_out = (double *) (malloc(nxny * sizeof(double)));      // output array
+    double doppbias = drms_getkey_double(inRec, "DOPPBIAS", &status);    // Keywords
     
     // ===================
     // DO CORRECTIONS HERE
     // ===================
     
+    // Compute velocity correction at each pixel, in cm/s
+    
+    double *doppCorr = (double *) (malloc(nxny * sizeof(double)));			// Doppler correction due to spacecraft v and diff rot.
+    if (getDoppCorr(inRec, doppCorr)) {
+    	drms_free_array(inArray); free(doppCorr);
+    	return 1;
+    }
+    
     // copy over & subtract vr as placeholder during testing
     for (int i = 0; i < nxny; i++) {
-    	dop_out[i] = dop_in[i] - vr;
+    	dop_out[i] = (dop_in[i] - doppCorr[i] - doppbias) / 100.;				// cm/s => m/s
     }
-    float ddop = 0;			// correction
+    
     drms_free_array(inArray);
+    free(doppCorr);
     
     // Output
     
-    DRMS_Segment_t *outSeg = drms_segment_lookup(outRec, "Dopplergram");
+    DRMS_Segment_t *outSeg = drms_segment_lookup(outRec, vSegName);
     if (!outSeg) return 1;
     
-    DRMS_Array_t *outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, dims, dop_out, &status);
+    DRMS_Array_t *outArray = drms_array_create(DRMS_TYPE_DOUBLE, 2, dims, dop_out, &status);
     if (status) {free(dop_out); return 1;}
     
     outSeg->axis[0] = outArray->axis[0]; outSeg->axis[1] = outArray->axis[1];
@@ -440,12 +454,16 @@ int correct_dop(DRMS_Record_t *inRec, DRMS_Record_t *outRec)
     // Links and keywords
     
     drms_copykeys(outRec, inRec, 0, kDRMS_KeyClass_Explicit);     // copy all keys
-    drms_setkey_float(outRec, "DDOP", ddop);		// correction
     
     TIME val, trec, tnow, UNIX_epoch = -220924792.000; /* 1970.01.01_00:00:00_UTC */
     tnow = (double)time(NULL);
     tnow += UNIX_epoch;
     drms_setkey_time(outRec, "DATE", tnow);
+    
+    drms_setkey_string(outRec, "BUNIT_000", "m/s");
+    drms_setkey_string(outRec, "BUNIT_001", "degree");
+    drms_setkey_string(outRec, "BUNIT_002", "degree");
+    drms_setkey_string(outRec, "BUNIT_003", "Mx/cm^2");
     
     DRMS_Link_t *link = hcon_lookup_lower(&outRec->links, "DATA");
     if (link) drms_link_set("DATA", outRec, inRec);
@@ -515,6 +533,11 @@ int correct_azi(DRMS_Record_t *inRec, DRMS_Record_t *outRec, float *azi_work,
     tnow += UNIX_epoch;
     drms_setkey_time(outRec, "DATE", tnow);
     
+    drms_setkey_string(outRec, "BUNIT_000", "m/s");
+    drms_setkey_string(outRec, "BUNIT_001", "degree");
+    drms_setkey_string(outRec, "BUNIT_002", "degree");
+    drms_setkey_string(outRec, "BUNIT_003", "Mx/cm^2");
+    
     DRMS_Link_t *link = hcon_lookup_lower(&outRec->links, "DATA");
     if (link) drms_link_set("DATA", outRec, inRec);
     
@@ -543,7 +566,7 @@ int cgem_mapping(DRMS_Record_t *inRec, DRMS_Record_t *outRec, struct reqInfo *re
     }
 
     // Read data
-    
+    SHOW("start reading... ");
     DRMS_Segment_t *inSeg;
     DRMS_Array_t *inArray_fld, *inArray_inc, *inArray_azi, *inArray_dop;
     
@@ -564,7 +587,7 @@ int cgem_mapping(DRMS_Record_t *inRec, DRMS_Record_t *outRec, struct reqInfo *re
     if (status) return 1;
     azi = (float *)inArray_azi->data;
     
-    inSeg = drms_segment_lookup(inRec, "Dopplergram");
+    inSeg = drms_segment_lookup(inRec, vSegName);
     inArray_dop = drms_segment_read(inSeg, DRMS_TYPE_FLOAT, &status);
     if (status) return 1;
     dop = (float *)inArray_dop->data;
@@ -618,7 +641,7 @@ int cgem_mapping(DRMS_Record_t *inRec, DRMS_Record_t *outRec, struct reqInfo *re
     free(v_out);
     
     // Output
-    
+    SHOW("start writing... ");
     DRMS_Segment_t *outSeg;
     DRMS_Array_t *outArray;
     
@@ -652,7 +675,7 @@ int cgem_mapping(DRMS_Record_t *inRec, DRMS_Record_t *outRec, struct reqInfo *re
     status = drms_segment_write(outSeg, outArray, 0);
     if (status) { return status; } else { drms_free_array(outArray); }
     
-    outSeg = drms_segment_lookup(outRec, "Dopplergram");
+    outSeg = drms_segment_lookup(outRec, vSegName);
     outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, dims_out, dop_map, &status);
     if (status) {free(dop_map); return 1;}
     outSeg->axis[0] = outArray->axis[0]; outSeg->axis[1] = outArray->axis[1];
@@ -716,6 +739,14 @@ int cgem_mapping(DRMS_Record_t *inRec, DRMS_Record_t *outRec, struct reqInfo *re
 	snprintf (key, 64, "CRLT-%s", wcsCode[req->proj]);
 	drms_setkey_string(outRec, "CTYPE2", key);
 	drms_setkey_float(outRec, "CROTA2", 0.0);
+	
+	drms_setkey_string(outRec, "BUNIT_000", "m/s");
+    drms_setkey_string(outRec, "BUNIT_001", "Mx/cm^2");
+    drms_setkey_string(outRec, "BUNIT_002", "Mx/cm^2");
+    drms_setkey_string(outRec, "BUNIT_003", "Mx/cm^2");
+    drms_setkey_string(outRec, "BUNIT_004", " ");
+    drms_setkey_string(outRec, "BUNIT_005", " ");
+    drms_setkey_string(outRec, "BUNIT_006", " ");
     
     return 0;
 }
@@ -803,8 +834,8 @@ int getEphemeris(DRMS_Record_t *inRec, struct ephemeris *ephem)
     float rSun_ref = drms_getkey_float(inRec, "RSUN_REF", &status);
     if (status) rSun_ref = 6.96e8;
     
-    ephem->asd = asin(rSun_ref/dSun);
-    ephem->rSun = asin(rSun_ref / dSun) * RAD2ARCSEC / cdelt;
+    ephem->asd = asin(rSun_ref/dSun);                               // in rad
+    ephem->rSun = asin(rSun_ref / dSun) * RAD2ARCSEC / cdelt;       // in pixel
     
     ephem->t_rec = drms_getkey_time(inRec, "T_REC", &status);
     
@@ -877,6 +908,112 @@ void findCoord(struct reqInfo *req, struct ephemeris *ephem,
 
 }
 
+// =============================================
+
+/* 
+ * Compute Dopper correction due to spacecraft and rotation
+ * Adapted from Brian's code doppcal_estimate.f90, in cm/s
+ * Based on Phil's email: need to be careful about the sign of V
+ * Doppler velocity has redshift as pos (toward Sun center)
+ * OBS_VR/VW/VN is in heliocetric coordinate, so away from Sun center is pos
+ * To perform correction, one needs to project OBS_VX onto the LOS vector
+ * in *HELIOCENTRIC* coordniate (away from Sun is positive)
+ * Then simply subtract this number from the Dopplergram
+ *
+ */
+ 
+int getDoppCorr(DRMS_Record_t *inRec, double *doppCorr)
+{
+
+	int status = 0;
+	
+	// Info
+	
+	DRMS_Segment_t *inSeg = drms_segment_lookup(inRec, vSegName);
+    if (!inSeg) return 1;
+    int nx = inSeg->axis[0], ny = inSeg->axis[1], nxny = nx * ny;
+        
+    struct ephemeris ephem;
+    if (getEphemeris(inRec, &ephem)) {
+        SHOW("Mapping: get ephemeris error\n");
+        return 1;
+    }
+	
+    printf("xc=%f, yc=%f, lonc=%f\nnx=%d, ny=%d\n", ephem.disk_xc, ephem.disk_yc, ephem.disk_lonc, nx, ny);
+    printf("asd=%f, pa=%f, rSun=%f\n", ephem.asd, ephem.pa, ephem.rSun);
+    
+	// Lon/lat
+    
+    double *lon_nobp = (double *) (malloc(nxny * sizeof(double)));      // assuming b=0, p=0, in rad
+    double *lat_nobp = (double *) (malloc(nxny * sizeof(double)));
+    double *lon = (double *) (malloc(nxny * sizeof(double)));
+    double *lat = (double *) (malloc(nxny * sizeof(double)));
+    double x, y, lon_t, lat_t;
+    double rho, sinlat, coslat, sig, mu, chi;
+    int ind;
+    
+    for (int row = 0; row < ny; row++) {
+        for (int col = 0; col < nx; col++) {
+            
+            ind = row * nx + col;
+            x = (col - ephem.disk_xc) / ephem.rSun;       // normalized pixel address
+            y = (row - ephem.disk_yc) / ephem.rSun;       // normalized pixel address
+            
+            img2sphere (x, y, ephem.asd, 0.0, 0.0, 0.0,
+                        &rho, &lat_t, &lon_t, &sinlat, &coslat, &sig, &mu, &chi);
+            lon_nobp[ind] = lon_t; lat_nobp[ind] = lat_t;
+            
+            img2sphere (x, y, ephem.asd, ephem.disk_latc, 0.0, ephem.pa,
+                        &rho, &lat_t, &lon_t, &sinlat, &coslat, &sig, &mu, &chi);
+            lon[ind] = lon_t; lat[ind] = lat_t;
+            
+        }
+    }
+    
+	// Correction, following Brian's method
+	
+    double vr = drms_getkey_double(inRec, "OBS_VR", &status) * 100.;    // m/s => cm/s
+    double vw = drms_getkey_double(inRec, "OBS_VW", &status) * 100.;
+    double vn = drms_getkey_double(inRec, "OBS_VN", &status) * 100.;
+    double k = sin(ephem.asd);      // arcsin(1/215.)
+    
+	double crota2 = ephem.pa * (-1.);		// In rad already
+	double obsv_x = vw * cos(crota2) + vn * sin(crota2);
+	double obsv_y = - vw * sin(crota2) + vn * cos(crota2);
+	
+	double rsun_ref = 6.96e10;				// cm
+	double coslatc = cos(ephem.disk_latc);
+	double sinlon;
+	double sinlat_nobp, sinlon_nobp, coslat_nobp;
+	
+	for (int row = 0; row < ny; row++) {
+        for (int col = 0; col < nx; col++) {
+        
+        	ind = row * nx + col;
+        	
+        	sinlat = sin(lat[ind]);
+        	sinlon = sin(lon[ind]);
+        	sinlat_nobp = sin(lat_nobp[ind]); 
+        	sinlon_nobp = sin(lon_nobp[ind]); 
+        	coslat_nobp = cos(lat_nobp[ind]);
+        	
+        	doppCorr[ind] = vr - obsv_y * sinlat_nobp * k
+							- obsv_x * sinlon_nobp * coslat_nobp * k;		// cm/s
+			
+			doppCorr[ind] += (rsun_ref * sinlon * coslatc * 1.e-6 *
+							 (2.71390 - 0.405000 * pow(sinlat, 2) - 0.422000 * pow(sinlat, 4)));		// cm/s
+        
+        }
+    }
+  
+	//
+	
+    free(lon_nobp); free(lat_nobp);     // clean up
+    free(lon); free(lat);
+    
+	return 0;
+	
+}
 
 // =============================================
 
