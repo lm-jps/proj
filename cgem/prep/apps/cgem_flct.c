@@ -15,7 +15,7 @@
  *		v0.0
  *
  *	Example Calls:
- *      > cgem_flct "in=hmi_test.cgem_prep[11158][2011.02.15_12:00-2011.02.15_12:24]" "out=hmi_test.cgem_vel" -t -k
+ *      > cgem_flct "in=hmi_test.cgem_prep[11158][2011.02.15_12:00-2011.02.15_12:24]" "out=hmi_test.cgem_vel" -t
  *
  */
 
@@ -32,7 +32,8 @@
 #include "finterpolate.h"
 #include <complex.h>
 #include <fftw3.h>
-#include "flct4jsoc.c"
+//#include "flct4jsoc.c"
+#include "flctsubs.h"           // impletmented by GHF version 1.6
 
 #define PI              (M_PI)
 #define RADSINDEG		(PI/180.)
@@ -42,11 +43,12 @@
 #define FOURK2          (16777216)
 
 // 0 for Wiener, 1 for Cubic convolution, 2 for Bilinear, 3 for nnb
-#define INTERPOPT       (0)         // linear interpolation
+#define INTERPOPT       (0)
 
 #define ARRLENGTH(ARR)  (sizeof(ARR) / sizeof(ARR[0]))
 
 #define TEST        1
+#define NATMAP      1       // Use George's mapping code
 
 // Some other things
 #ifndef MIN
@@ -105,7 +107,7 @@ void pc2m(int *dims, float *bz, struct ephemeris *ephem,
           int *dims_mer, float *bz_mer);
 
 /* Scale veclocity output */
-void scaleflct(DRMS_Record_t *inRec, double dt, int *dims_mer, double *v);
+void scaleflct(DRMS_Record_t *inRec, int *dims_mer, double *v);
 
 /* Map Mercator back to Plate-Carree */
 int Mercator2PC(DRMS_Record_t *inRec, int *dims_mer, double *vx_mer, double *vy_mer, double *vm_mer,
@@ -141,9 +143,9 @@ ModuleArgs_t module_args[] =
     {ARG_STRING, "out", kNotSpecified, "Output series."},
     {ARG_STRING, "seg", "Bz", "Iutput segment."},
     {ARG_DOUBLE, "sigma", "5.", "For FLCT. Images modulated by gaussian of width sigma pixels."},
-    {ARG_FLAG, "t", "", "For FLCT, evoke threshold below."},
-    {ARG_FLAG, "k", "", "For FLCT, evoke filtering below."},
-    {ARG_DOUBLE, "thresh", "0.1", "For FLCT. Pixels below threshold ignored. In Gauss if greater than 1, relative value of max value if between 0 and 1."},
+    {ARG_FLAG, "t", "", "For FLCT, evoke threshold below. Should set by default"},
+    {ARG_FLAG, "k", "", "For FLCT, evoke filtering below. Default no filtering"},
+    {ARG_DOUBLE, "thresh", "200.", "For FLCT. Pixels below threshold ignored. In Gauss if greater than 1, relative value of max value if between 0 and 1. Default 200G"},
     {ARG_DOUBLE, "kr", "0.25", "For FLCT. Filter subimages w/gaussian w/ roll-off wavenumber kr."},
     {ARG_FLAG, "a", "", "Force threshold to be absolute value"},
     {ARG_FLAG, "q", "", "Quiet mode for FLCT"},
@@ -176,7 +178,11 @@ int DoIt(void)
     double thresh = params_get_double(&cmdparams, "thresh");
     double kr = params_get_double(&cmdparams, "kr");
     int quiet = params_isflagset(&cmdparams, "q");
-    int absthresh = params_isflagset(&cmdparams, "a");
+    int absflag = params_isflagset(&cmdparams, "a");
+    
+    // Some additional default options for FLCT
+    int transp = 1, skip = 0, poffset = 0, qoffset = 0;
+    int interpolate = 0, biascor = 0, verbose = !quiet;
     
     /* Input Data */
     
@@ -207,7 +213,7 @@ int DoIt(void)
         DRMS_Record_t *outRec = outRS->records[irec];
         printf("==============\nProcessing rec pairs #%d of %d, ", irec + 1, nrecs - 2); fflush(stdout);
         
-        // Time info
+        // Time info and pixel size
         
         TIME tobs0 = drms_getkey_time(inRec0, "T_OBS", &status);
         TIME tobs1 = drms_getkey_time(inRec1, "T_OBS", &status);
@@ -216,6 +222,11 @@ int DoIt(void)
         char trec_str[100];
         sprint_time(trec_str, trec, "TAI", 0);
         printf("TREC=[%s], dt=%f... ", trec_str, dt);
+        
+        double rSun_ref = drms_getkey_double(inRec_target, "RSUN_REF", &status);        // meter
+        double cdelt = drms_getkey_double(inRec_target, "CDELT1", &status);
+        double ds = cdelt * RADSINDEG * rSun_ref;
+        printf("cd=%f, ds=%f, dt=%f\n", cdelt, ds, dt);
         
         // Check bz size
         
@@ -233,6 +244,67 @@ int DoIt(void)
         }
         int nx = inSeg0->axis[0], ny = inSeg0->axis[1], nxny = nx * ny;
         int dims[2] = {nx, ny};
+        
+        // Output data
+        
+        float *vx = (float *) (malloc(nxny * sizeof(float)));
+        float *vy = (float *) (malloc(nxny * sizeof(float)));
+        float *vm = (float *) (malloc(nxny * sizeof(float)));
+
+#if NATMAP          // Use George's mapping
+        
+        // No error checking
+        
+        DRMS_Array_t *inArray0 = drms_segment_read(inSeg0, DRMS_TYPE_DOUBLE, &status);
+        if (status) {
+            SHOW("\nArray read error... ");
+            return 1;
+        }
+        double *bz0 = (double *)inArray0->data;
+
+        DRMS_Array_t *inArray1 = drms_segment_read(inSeg1, DRMS_TYPE_DOUBLE, &status);
+        if (status) {
+            SHOW("\nArray read error... ");
+            return 1;
+        }
+        double *bz1 = (double *)inArray1->data;
+        
+        struct ephemeris ephem0, ephem1;
+        getEphemeris(inRec0, &ephem0);
+        getEphemeris(inRec1, &ephem1);
+        
+        double latmin0 = (ephem0.crval2 - ny / 2. * ephem0.cdelt2) * RADSINDEG;
+        double latmin1 = (ephem1.crval2 - ny / 2. * ephem1.cdelt2) * RADSINDEG;
+        double latmax0 = (ephem0.crval2 + ny / 2. * ephem0.cdelt2) * RADSINDEG;
+        double latmax1 = (ephem1.crval2 + ny / 2. * ephem1.cdelt2) * RADSINDEG;
+        double latmin = (latmin0 + latmin1) / 2.;
+        double latmax = (latmax0 + latmax1) / 2.;
+        
+        printf("crlva2_0=%lf, cdelt2_0=%lf\n", ephem0.crval2, ephem0.cdelt2);
+        printf("latmin=%lf, latmax=%lf\n", latmin, latmax);
+        
+        double *vx_d = (double *) (malloc(nxny * sizeof(double)));      // need double
+        double *vy_d = (double *) (malloc(nxny * sizeof(double)));
+        double *vm_d = (double *) (malloc(nxny * sizeof(double)));
+        
+        if (flct_pc(transp, bz0, bz1, dims[0], dims[1], dt, ds, sigma,
+                    vx_d, vy_d, vm_d, thresh, absflag, doFilter, kr, skip, poffset, qoffset,
+                    interpolate, latmin, latmax, biascor, verbose)) {
+            drms_free_array(inArray0); drms_free_array(inArray1);
+            SHOW("FLCT error, frames skipped.\n");
+            continue;
+        }
+        
+        for (int i = 0; i < nxny; i++) {
+            vx[i] = vx_d[i];
+            vy[i] = vy_d[i];
+            vm[i] = vm_d[i];
+        }
+        
+        free(vx_d); free(vy_d); free(vm_d);
+        drms_free_array(inArray0); drms_free_array(inArray1);
+        
+#else               // NATMAP
         
         // Map to Mercator
         
@@ -252,10 +324,10 @@ int DoIt(void)
         double *vy_mer = (double *) (malloc(nxny_mer * sizeof(double)));
         double *vm_mer = (double *) (malloc(nxny_mer * sizeof(double)));
         
-        if (flct4jsoc(dims_mer, bz0_mer, bz1_mer,
-                      1.0, 1.0, sigma, useThresh, thresh, doFilter, kr,
-                      quiet, absthresh,
-                      vx_mer, vy_mer, vm_mer)) {
+        // delta
+        if (flct(transp, bz0_mer, bz1_mer, dims_mer[0], dims_mer[1], dt, ds, sigma,
+                 vx_mer, vy_mer, vm_mer, thresh, absflag, doFilter, kr, skip, poffset, qoffset,
+                 interpolate, biascor, verbose)) {
             if (bz0_mer) free(bz0_mer); if (bz1_mer) free(bz1_mer);
             free(vx_mer); free(vy_mer); free(vm_mer);
             SHOW("FLCT error, frames skipped.\n");
@@ -269,14 +341,8 @@ int DoIt(void)
         // Map back to P-C
         // Need to do scaling: values scaled by cos(lat) * pix / sec
 
-#ifndef TEST
-        scaleflct(inRec_target, dt, dims_mer, vx_mer);
-        scaleflct(inRec_target, dt, dims_mer, vy_mer);
-#endif
-        
-        float *vx = (float *) (malloc(nxny * sizeof(float)));
-        float *vy = (float *) (malloc(nxny * sizeof(float)));
-        float *vm = (float *) (malloc(nxny * sizeof(float)));
+        scaleflct(inRec_target, dims_mer, vx_mer);
+        scaleflct(inRec_target, dims_mer, vy_mer);
 
         if (Mercator2PC(inRec1, dims_mer, vx_mer, vy_mer, vm_mer, dims, vx, vy, vm)) {
             if (bz0_mer) free(bz0_mer); if (bz1_mer) free(bz1_mer);
@@ -287,21 +353,20 @@ int DoIt(void)
 
 #ifndef TEST
         free(vx_mer); free(vy_mer); free(vm_mer);
-#endif
-        
-        // Output
-
-        if (writeV(inRec_target, outRec, dims, vx, vy, vm)) {
-            SHOW("Output error, frames skipped.\n");
-            continue;
-        }
-        
-#ifdef TEST
         if (writeSupp(inRec1, outRec, dims_mer,
                       vx_mer, vy_mer, vm_mer, bz0_mer, bz1_mer)) {
             SHOW("Output intermediate data error, carrying on.\n");
         }
 #endif
+        
+#endif          // NATMAP
+        
+        // Output, vx, vy, vm freed inside writeV
+
+        if (writeV(inRec_target, outRec, dims, vx, vy, vm)) {
+            SHOW("Output error, frames skipped.\n");
+            continue;
+        }
  
         SHOW("done.\n")
 
@@ -478,18 +543,13 @@ void pc2m(int *dims, float *bz, struct ephemeris *ephem,
  *
  */
 
-void scaleflct(DRMS_Record_t *inRec, double dt, int *dims_mer, double *v)
+void scaleflct(DRMS_Record_t *inRec, int *dims_mer, double *v)
 {
  
     int status = 0;
     
     struct ephemeris ephem;
     status = getEphemeris(inRec, &ephem);
-    
-    double rSun_ref = drms_getkey_float(inRec, "RSUN_REF", &status);        // meter
-    double ds = ephem.cdelt1 * RADSINDEG * rSun_ref;
-    double v0 = ds / dt;     // m/s
-    printf("cd1=%f, ds=%f, dt=%f, v0=%f\n", ephem.cdelt1, ds, dt, v0);
     
     // Determine lat, then scale
     
@@ -512,7 +572,7 @@ void scaleflct(DRMS_Record_t *inRec, double dt, int *dims_mer, double *v)
                 v[idx] = DRMS_MISSING_DOUBLE;
                 continue;
             }
-            v[idx] *= (v0 * cos(lat));
+            v[idx] *= cos(lat);
         }
     }
 
@@ -554,7 +614,7 @@ int Mercator2PC(DRMS_Record_t *inRec, int *dims_mer, double *vx_mer, double *vy_
     
     m2pc(dims_mer, vx_mer_t, &ephem, dims, vx);
     m2pc(dims_mer, vy_mer_t, &ephem, dims, vy);
-    m2pc(dims_mer, vm_mer_t, &ephem, dims, vy);
+    m2pc(dims_mer, vm_mer_t, &ephem, dims, vm);
     
     free(vx_mer_t); free(vy_mer_t); free(vm_mer_t);
     
@@ -871,7 +931,7 @@ int getEphemeris(DRMS_Record_t *inRec, struct ephemeris *ephem)
     ephem->crval2 = drms_getkey_double(inRec, "CRVAl2", &status);
     ephem->crpix1 = drms_getkey_double(inRec, "CRPIX1", &status);
     ephem->crpix2 = drms_getkey_double(inRec, "CRPIX2", &status);
-    ephem->cdelt1 = drms_getkey_double(inRec, "CDELT1", &status);  // in arcsec, assumimg dx=dy
+    ephem->cdelt1 = drms_getkey_double(inRec, "CDELT1", &status);
     ephem->cdelt2 = drms_getkey_double(inRec, "CDELT2", &status);
     
     ephem->asd = drms_getkey_double(inRec, "RSUN_OBS", &status);
