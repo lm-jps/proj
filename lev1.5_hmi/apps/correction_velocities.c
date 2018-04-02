@@ -123,6 +123,7 @@ int DoIt(void) {
   float *CROTA2=NULL;
   int *MISSVAL=NULL;
 
+  float delta_crota2;
   int *QUALITY=NULL;
   int *CALFSN=NULL;
   int ncoeff=4; //for a 3-rd order polynomial
@@ -206,7 +207,10 @@ int DoIt(void) {
       CROTA2[j] = drms_getkey_float(recLev1->records[i],CROTA2S,&status);
       MISSVAL[j]= drms_getkey_int(recLev1->records[i],MISSVALS,&status);
 
-      if(isnan(RAWMEDN[j]) || isnan(OBSVR[j]) || (QUALITY[j] & QUAL_ISSTARGET) == QUAL_ISSTARGET || fabs(RAWMEDN[j]-OBSVR[j]) > 1000. || (QUALITY[j] & QUAL_ECLIPSE) == QUAL_ECLIPSE || fabs(CROTA2[j]-180.) > 5.0 || MISSVAL[j] > 10000) 
+      // changed the rejection critereon from insisting on CROTA2 ~= 180 to requiring that CROTA2 be within 1 degree of the first value.
+      delta_crota2 = atan2(sin((CROTA2[j]-CROTA2[0])/180.0*M_PI), cos((CROTA2[j]-CROTA2[0])/180.0*M_PI))*180.0/M_PI;
+
+      if(isnan(RAWMEDN[j]) || isnan(OBSVR[j]) || (QUALITY[j] & QUAL_ISSTARGET) == QUAL_ISSTARGET || fabs(RAWMEDN[j]-OBSVR[j]) > 1000. || (QUALITY[j] & QUAL_ECLIPSE) == QUAL_ECLIPSE || fabs(delta_crota2) > 1.0 || MISSVAL[j] > 10000) 
 	{
 	  j-=1;
 	  nsample-=1;
