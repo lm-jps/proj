@@ -24,7 +24,7 @@
  /* resample_type controls whether we use a straight BI_CUBIC or a BI_CUBIC_SMOOTH, the
  latter is generally better (less chance of bad ringing) */
  static int	resample_type = BI_CUBIC_SMOOTH;
- int image_magrotate(void *,int,int,int,float,float,float,float,void **,int *,int *,int,int,int);
+ int image_magrotate(void *,int,int,int,float,float,float,float,void **,int *,int *,int,int);
  /*------------------------------------------------------------------------- */
 int image_magrotate(
      /* rotate about center, magnify (rescale) and then offset the input image,
@@ -34,8 +34,7 @@ int image_magrotate(
      void *array, int nin, int min, int data_type_input,
      float theta, float mag, float dx, float dy,
      void **outarray, int *nx, int *ny,
-     int regridtype_input, int stretchmark_flag_input,
-     int convertnan2zero_flag
+     int regridtype_input, int stretchmark_flag_input
      )
  /* call example:
  short  array[4096*4096];  int n,m, data_type_input;  float theta, mag, dx, dy; int *nx, *ny;
@@ -48,13 +47,6 @@ int image_magrotate(
  {
  float cx[4], cy[4], xc, yc, cq, sq, cs, magr;
  int i, stat, m;
- /* 4/9/2010 if flag set and we are I*4, convert I*4 "NAN's" to 0,
- this is done as a separate step here, could be integrated into regrid */
- if (convertnan2zero_flag && data_type_input == 2) {
-   int nn = nin * min;
-   int *p = (int *) array;
-   while (nn--)  { if (*p == 0x80000000) { *p = 0; } p++; }
- }
  /* set some local "globals" that are used by several routines */
  regridtypeflag = regridtype_input;
  stretchmark_flag = stretchmark_flag_input;
