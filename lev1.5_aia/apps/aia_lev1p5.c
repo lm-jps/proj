@@ -303,13 +303,8 @@ int DoIt ()
     }
     nsegs = hcon_size(&inprec->segments);
     for (iseg=0; iseg<1; iseg++) {
-// #define JPS_STATS
-#ifdef JPS_STATS
-      void *output_array = NULL;
-#else
       float *output_array = NULL;
       int seg0_nx, seg0_ny;
-#endif
       int i, ix, iy, n, m, dtyp, nx, ny, npix;
       axislen_t beg[2], end[2], out_axis[2];
       char *filename = NULL, *inpsegname = NULL;
@@ -319,10 +314,6 @@ int DoIt ()
       inpseg = drms_segment_lookupnum(inprec, iseg);
       inpsegname = inpseg->info->name;
       filename = inpseg->filename;
-#ifdef JPS_STATS
-      if (0 == iseg) { // ONLY process first segment
-        n = nx = inpseg->axis[0]; m = ny = inpseg->axis[1];
-#else
       if (0 == iseg) { 
 	seg0_nx = inpseg->axis[0];
 	seg0_ny = inpseg->axis[1];
@@ -330,7 +321,6 @@ int DoIt ()
       n = nx = inpseg->axis[0];
       m = ny = inpseg->axis[1];
       if (nx == seg0_nx && ny == seg0_ny) { // Check for same dimensions as first segment, i.e. first segment must have typical dims.
-#endif
         dx = (n + 1.0)*0.5 - crpix1; dy = (m + 1.0)*0.5 - crpix2;
         cutout_corners(n, m, wide, high, crota2, mag, dx, dy, xc, yc, cx, cy);
         beg[0] = end[0] = cx[0]; beg[1] = end[1] = cy[0];
@@ -396,59 +386,6 @@ int DoIt ()
                  regridtype, do_stretchmarks);
         if (status) DIE("image_magrotate failed!");
         out_axis[0] = wide; out_axis[1] = high;
-#ifdef JPS_STATS
-if (verbose) printf("using JPS_STATS section of code XXXXXX\n");
-        if (is_aia) {
-          outarr = drms_array_create(DRMS_TYPE_INT, 2, out_axis,
-                                   NULL, &status);
-        } else {
-          outarr = drms_array_create(DRMS_TYPE_FLOAT, 2, out_axis,
-                                   NULL, &status);
-        }
-
-        if (status) DIE("drms_array_create failed!");
-        s = s2 = s3 = s4 = 0.0; datamin = 9.9e9; datamax = -9.9e9, npix = 0; 
-        for (i=0; i<wide*high; i++) {
-          if (is_aia) {
-            if (*((float *)(output_array)+i)<0) *((float *)(output_array)+i)=0;
-            if (*((float *)(output_array)+i)>z) *((float *)(output_array)+i)=z;
-            *((int *)(outarr->data)+i) = *((float *)(output_array)+i);
-          } else {
-            *((float *)(outarr->data)+i) = *((float *)(output_array)+i);
-          }
-          tmpval = *((float *)(output_array)+i);
-          if (finite(tmpval)) {
-            npix++;
-            if (tmpval < datamin) datamin = tmpval;
-            if (tmpval > datamax) datamax = tmpval;
-            s += tmpval;
-            s2 += tmpval*tmpval;
-            s3 += tmpval*tmpval*tmpval;
-            // s4 += tmpval*tmpval*tmpval;  // original code
-            s4 += tmpval*tmpval*tmpval*tmpval;  // suggested code BUT worry about precision for 16M pixels
-          } 
-        }
-        drms_setkey_int(outrec, "DATAMIN", (int) datamin);
-        drms_setkey_int(outrec, "DATAMAX", (int) datamax);
-        s /= npix;
-        drms_setkey_float(outrec, "DATAMEAN", s);
-        drms_setkey_float(outrec, "DATAMEDN", DRMS_MISSING_FLOAT);
-        ss = s*s;
-        s2 /= npix;
-        s3 /= npix;
-        s4 /= npix;
-        if (npix > 1) {
-          dtmp = npix * (s2-ss) / (npix-1);
-          data_rms = sqrt(dtmp);
-          drms_setkey_float(outrec, "DATARMS", (float) data_rms);
-          if (dtmp > 0.0) {
-            dataskew = (s3 - s * (3*s2 - 2*ss)) / (dtmp*data_rms);
-            drms_setkey_float(outrec, "DATASKEW", (float) dataskew);
-            datakurt = (s4 - 4*s*s3 + 3*ss*(2*s2-ss)) / (dtmp*dtmp) - 3;
-            drms_setkey_float(outrec, "DATAKURT", (float) datakurt);
-          }
-        }
-#else
         outarr = drms_array_create(DRMS_TYPE_FLOAT, 2, out_axis, NULL, &status);
         if (status) DIE("drms_array_create failed!");
         for (i=0; i<wide*high; i++) {
@@ -460,7 +397,6 @@ if (verbose) printf("using JPS_STATS section of code XXXXXX\n");
           }
 if (verbose) printf("calling setstats XXXXX\n");
         set_statistics(outseg, outarr, 1);
-#endif
         drms_setkey_float(outrec, "CROTA2", 0.0);
         drms_setkey_float(outrec, "CRPIX1", (wide + 1.0)*0.5 - xc);
         drms_setkey_float(outrec, "CRPIX2", (high + 1.0)*0.5 - yc);
