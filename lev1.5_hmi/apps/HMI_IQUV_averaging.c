@@ -1121,7 +1121,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.55 2017/10/11 16:40:58 yliu Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.56 2018/04/05 17:48:07 baldner Exp $");
 }
 
 
@@ -3651,7 +3651,11 @@ printf("combineornot=%d, combine=%d\n", combineornot, combineYesNo);
 		      DSUNOBSint[timeindex]=(DSUNOBS[j]-DSUNOBS[i])/(internTOBS[j]-internTOBS[i])*(tobs-internTOBS[i])+DSUNOBS[i];
 		      DSUNOBSint[timeindex]=DSUNOBSint[timeindex]/(double)AstroUnit;   //do_interpolate() expects distance in AU (AstroUnit should be equal to keyword DSUN_REF of level 1 data)
 		      CRLTOBSint[timeindex]=(CRLTOBS[j]-CRLTOBS[i])/(internTOBS[j]-internTOBS[i])*(tobs-internTOBS[i])+CRLTOBS[i];
-		      CROTA2int[timeindex] =(CROTA2[j]-CROTA2[i])/(internTOBS[j]-internTOBS[i])*(tobs-internTOBS[i])+CROTA2[i];
+		      // BAD: CROTA2int[timeindex] =(CROTA2[j]-CROTA2[i])/(internTOBS[j]-internTOBS[i])*(tobs-internTOBS[i])+CROTA2[i];
+		      // Fixed interpoloation of target CROTA2:
+		      CROTA2int[timeindex] = atan2(sin((CROTA2[j]-CROTA2[i])/180.0*M_PI), cos((CROTA2[j]-CROTA2[i])/180.0*M_PI)) /
+			(internTOBS[j]-internTOBS[i])*(tobs-internTOBS[i])*180.0/M_PI+CROTA2[i];
+		      CROTA2int[timeindex] = fmod(CROTA2int[timeindex], 360.0);
 		      OBSVRint[timeindex]  =(OBSVR[j]-OBSVR[i])/(internTOBS[j]-internTOBS[i])*(tobs-internTOBS[i])+OBSVR[i];
 		      OBSVWint[timeindex]  =(OBSVW[j]-OBSVW[i])/(internTOBS[j]-internTOBS[i])*(tobs-internTOBS[i])+OBSVW[i];
 		      OBSVNint[timeindex]  =(OBSVN[j]-OBSVN[i])/(internTOBS[j]-internTOBS[i])*(tobs-internTOBS[i])+OBSVN[i];
