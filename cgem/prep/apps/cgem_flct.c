@@ -354,10 +354,6 @@ int DoIt(void)
             SHOW("FLCT error, frames skipped.\n");
             continue;
         }
-
-#ifndef TEST
-        if (bz0_mer) free(bz0_mer); if (bz1_mer) free(bz1_mer);
-#endif
         
         // Map back to P-C
         // Need to do scaling: values scaled by cos(lat) * pix / sec
@@ -371,13 +367,26 @@ int DoIt(void)
             SHOW("Mercator to Carree mapping error, frames skipped.\n");
             continue;
         }
+        
+        // Rewrite vmask. If interpolated set to 0.5
+        /*
+        for (int i = 0; i < nxny; i++) {
+            if (vm[i] > 1.e-6) {
+                vm[i] = 0.5;
+            } else {
+                vm[i] = 0;
+            }
+        }
+         */
 
-#ifndef TEST
-        free(vx_mer); free(vy_mer); free(vm_mer);
-        if (writeSupp(inRec1, outRec, dims_mer, &fOpt,
+#ifdef TEST
+        if (writeSupp(inRec1, outRec, dims_mer,
                       vx_mer, vy_mer, vm_mer, bz0_mer, bz1_mer)) {
             SHOW("Output intermediate data error, carrying on.\n");
         }
+#else
+        if (bz0_mer) free(bz0_mer); if (bz1_mer) free(bz1_mer);
+        if (vx_mer) free(vx_mer); if (vy_mer) free(vy_mer); if (vz_mer) free(vm_mer);
 #endif
         
 #endif          // NATMAP
@@ -550,6 +559,12 @@ void pc2m(int *dims, float *bz, struct ephemeris *ephem,
     // Interpolate
     
     performSampling(bz, bz_mer, col_work, row_work, dims, dims_mer);
+    
+    // Change NaNs back to 0
+    
+    for (idx = 0; idx < nxny_mer; idx++) {
+        if (isnan(bz_mer[idx])) bz_mer[idx] = 0.;
+    }
 
     free(col_work); free(row_work);
     
@@ -699,8 +714,13 @@ void m2pc(int *dims_mer, float *map_mer, struct ephemeris *ephem,
     
     // Interpolate
     
-    
     performSampling(map_mer, map, col_work, row_work, dims_mer, dims);
+    
+    // Change NaNs back to 0
+    
+    for (idx = 0; idx < nxny; idx++) {
+        if (isnan(map[idx])) map[idx] = 0.;
+    }
     
     free(col_work); free(row_work);
 
