@@ -15,7 +15,7 @@
  *		v0.0
  *
  *	Example Calls:
- *      > cgem_flct "in=hmi_test.cgem_prep[11158][2011.02.15_12:00-2011.02.15_12:24]" "out=hmi_test.cgem_vel" -t
+ *      > cgem_flct "in=hmi_test.cgem_prep[11158][2011.02.15_12:00-2011.02.15_12:24]" "out=hmi_test.cgem_vel"
  *
  */
 
@@ -34,6 +34,7 @@
 #include <fftw3.h>
 //#include "flct4jsoc.c"
 #include "flctsubs.h"           // impletmented by GHF version 1.6
+#include "flct_vers.h"
 
 #define PI              (M_PI)
 #define RADSINDEG		(PI/180.)
@@ -89,6 +90,14 @@ struct reqInfo {
     int proj;
 };
 
+// FLCT options
+struct flctOpt {
+    double thresh, sigma, kr;
+    int transp, absflag, doFilter, interpolate, biascor, verbose;
+    int skip, poffset, qoffset, natmap;
+    char vers[100];
+};
+
 /* ========================================================================================================== */
 
 char *mapName[] = {"PlateCarree", "Cassini-Soldner", "Mercator",
@@ -118,7 +127,7 @@ void m2pc(int *dims_mer, float *map_mer, struct ephemeris *ephem,
 
 /* Output */
 int writeV(DRMS_Record_t *inRec, DRMS_Record_t *outRec,
-           int *dims, float *vx, float *vy, float *vm);
+           int *dims, struct flctOpt *fOpt, float *vx, float *vy, float *vm);
 
 int writeSupp(DRMS_Record_t *inRec, DRMS_Record_t *outRec, int *dims_mer,
               double *vx_mer, double *vy_mer, double *vm_mer, double *bz0_mer, double *bz1_mer);
@@ -143,7 +152,7 @@ ModuleArgs_t module_args[] =
     {ARG_STRING, "out", kNotSpecified, "Output series."},
     {ARG_STRING, "seg", "Bz", "Iutput segment."},
     {ARG_DOUBLE, "sigma", "5.", "For FLCT. Images modulated by gaussian of width sigma pixels."},
-    {ARG_FLAG, "t", "", "For FLCT, evoke threshold below. Should set by default"},
+//    {ARG_FLAG, "t", "", "For FLCT, evoke threshold below. Should set by default"},
     {ARG_FLAG, "k", "", "For FLCT, evoke filtering below. Default no filtering"},
     {ARG_DOUBLE, "thresh", "200.", "For FLCT. Pixels below threshold ignored. In Gauss if greater than 1, relative value of max value if between 0 and 1. Default 200G"},
     {ARG_DOUBLE, "kr", "0.25", "For FLCT. Filter subimages w/gaussian w/ roll-off wavenumber kr."},
@@ -172,17 +181,29 @@ int DoIt(void)
         DIE("Input/output not available");
     }
     
-    double sigma = params_get_double(&cmdparams, "sigma");
-    int useThresh = params_isflagset(&cmdparams, "t");
-    int doFilter = params_isflagset(&cmdparams, "k");
-    double thresh = params_get_double(&cmdparams, "thresh");
-    double kr = params_get_double(&cmdparams, "kr");
-    int quiet = params_isflagset(&cmdparams, "q");
-    int absflag = params_isflagset(&cmdparams, "a");
-    
+    // FLCT options
+    struct flctOpt fOpt;
+    fOpt.sigma = params_get_double(&cmdparams, "sigma");
+ //   fOpt.useThresh = params_isflagset(&cmdparams, "t");
+    fOpt.doFilter = params_isflagset(&cmdparams, "k");
+    fOpt.thresh = params_get_double(&cmdparams, "thresh");
+    fOpt.kr = params_get_double(&cmdparams, "kr");
+    fOpt.verbose = !(params_isflagset(&cmdparams, "q"));
+    fOpt.absflag = params_isflagset(&cmdparams, "a");
     // Some additional default options for FLCT
-    int transp = 1, skip = 0, poffset = 0, qoffset = 0;
-    int interpolate = 0, biascor = 0, verbose = !quiet;
+    fOpt.transp = 1;
+    fOpt.skip = 0;
+    fOpt.poffset = 0;
+    fOpt.qoffset = 0;
+    fOpt.interpolate = 0;
+    fOpt.biascor = 0;
+    strcpy(fOpt.vers, flct_vers);       // version
+#if NATMAP
+    fOpt.natmap = 1;
+#else
+    fOpt.natmap = 0;
+#endif
+    
     
     /* Input Data */
     
@@ -280,16 +301,16 @@ int DoIt(void)
         double latmin = (latmin0 + latmin1) / 2.;
         double latmax = (latmax0 + latmax1) / 2.;
         
-        printf("crlva2_0=%lf, cdelt2_0=%lf\n", ephem0.crval2, ephem0.cdelt2);
-        printf("latmin=%lf, latmax=%lf\n", latmin, latmax);
+//        printf("crlva2_0=%lf, cdelt2_0=%lf\n", ephem0.crval2, ephem0.cdelt2);
+//        printf("latmin=%lf, latmax=%lf\n", latmin, latmax);
         
         double *vx_d = (double *) (malloc(nxny * sizeof(double)));      // need double
         double *vy_d = (double *) (malloc(nxny * sizeof(double)));
         double *vm_d = (double *) (malloc(nxny * sizeof(double)));
         
-        if (flct_pc(transp, bz0, bz1, dims[0], dims[1], dt, ds, sigma,
-                    vx_d, vy_d, vm_d, thresh, absflag, doFilter, kr, skip, poffset, qoffset,
-                    interpolate, latmin, latmax, biascor, verbose)) {
+        if (flct_pc(fOpt.transp, bz0, bz1, dims[0], dims[1], dt, ds, fOpt.sigma,
+                    vx_d, vy_d, vm_d, fOpt.thresh, fOpt.absflag, fOpt.doFilter, fOpt.kr, fOpt.skip, fOpt.poffset, fOpt.qoffset,
+                    fOpt.interpolate, latmin, latmax, fOpt.biascor, fOpt.verbose)) {
             drms_free_array(inArray0); drms_free_array(inArray1);
             SHOW("FLCT error, frames skipped.\n");
             continue;
@@ -325,9 +346,9 @@ int DoIt(void)
         double *vm_mer = (double *) (malloc(nxny_mer * sizeof(double)));
         
         // delta
-        if (flct(transp, bz0_mer, bz1_mer, dims_mer[0], dims_mer[1], dt, ds, sigma,
-                 vx_mer, vy_mer, vm_mer, thresh, absflag, doFilter, kr, skip, poffset, qoffset,
-                 interpolate, biascor, verbose)) {
+        if (flct(fOpt.transp, bz0_mer, bz1_mer, dims_mer[0], dims_mer[1], dt, ds, fOpt.sigma,
+                 vx_mer, vy_mer, vm_mer, fOpt.thresh, fOpt.absflag, fOpt.doFilter, fOpt.kr, fOpt.skip, fOpt.poffset, fOpt.qoffset,
+                 fOpt.interpolate, fOpt.biascor, fOpt.verbose)) {
             if (bz0_mer) free(bz0_mer); if (bz1_mer) free(bz1_mer);
             free(vx_mer); free(vy_mer); free(vm_mer);
             SHOW("FLCT error, frames skipped.\n");
@@ -353,7 +374,7 @@ int DoIt(void)
 
 #ifndef TEST
         free(vx_mer); free(vy_mer); free(vm_mer);
-        if (writeSupp(inRec1, outRec, dims_mer,
+        if (writeSupp(inRec1, outRec, dims_mer, &fOpt,
                       vx_mer, vy_mer, vm_mer, bz0_mer, bz1_mer)) {
             SHOW("Output intermediate data error, carrying on.\n");
         }
@@ -363,7 +384,7 @@ int DoIt(void)
         
         // Output, vx, vy, vm freed inside writeV
 
-        if (writeV(inRec_target, outRec, dims, vx, vy, vm)) {
+        if (writeV(inRec_target, outRec, dims, &fOpt, vx, vy, vm)) {
             SHOW("Output error, frames skipped.\n");
             continue;
         }
@@ -694,7 +715,7 @@ void m2pc(int *dims_mer, float *map_mer, struct ephemeris *ephem,
  */
 
 int writeV(DRMS_Record_t *inRec, DRMS_Record_t *outRec,
-           int *dims, float *vx, float *vy, float *vm)
+           int *dims, struct flctOpt *fOpt, float *vx, float *vy, float *vm)
 {
     int status = 0;
     
@@ -777,7 +798,25 @@ int writeV(DRMS_Record_t *inRec, DRMS_Record_t *outRec,
     tnow = (double)time(NULL);
     tnow += UNIX_epoch;
     drms_setkey_time(outRec, "DATE", tnow);
-
+    
+    // FLCT options
+    
+    drms_setkey_double(outRec, "SIGMA", fOpt->sigma);
+    drms_setkey_double(outRec, "BTHRESH", fOpt->thresh);
+    if (fOpt->absflag || fOpt->thresh > 1.0) {
+        drms_setkey_int(outRec, "ABSTHR", 1);
+    } else {
+        drms_setkey_int(outRec, "ABSTHR", 0);
+    }
+    if (fOpt->doFilter) {
+        drms_setkey_double(outRec, "KR", fOpt->kr);
+    } else {
+        drms_setkey_double(outRec, "KR", 0.0);
+    }
+    drms_setkey_int(outRec, "BIASCORR", fOpt->biascor);
+    drms_setkey_int(outRec, "NATMAP", fOpt->natmap);
+    drms_setkey_string(outRec, "FLCTVERS", fOpt->vers);
+    
     return 0;
 }
 
