@@ -518,13 +518,13 @@ void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *inRec, struct patchInfo *pInf
     
     int status = 0;
     
-    float disk_xc = drms_getkey_float(outRec, "CRPIX1", &status);
-    float disk_yc = drms_getkey_float(outRec, "CRPIX2", &status);
+    struct ephemeris ephem;
+    getEphemeris(inRec, &ephem);
     // Defined as disk center's pixel address wrt lower-left of cutout
-    drms_setkey_float(outRec, "CRPIX1", disk_xc - ll[0] + 1.);
-    drms_setkey_float(outRec, "CRPIX2", disk_yc - ll[1] + 1.);
-    drms_setkey_float(outRec, "IMCRPIX1", disk_xc + 1.);
-    drms_setkey_float(outRec, "IMCRPIX2", disk_yc + 1.);
+    drms_setkey_float(outRec, "CRPIX1", ephem.disk_xc - ll[0] + 1.);
+    drms_setkey_float(outRec, "CRPIX2", ephem.disk_yc - ll[1] + 1.);
+    drms_setkey_float(outRec, "IMCRPIX1", ephem.disk_xc + 1.);
+    drms_setkey_float(outRec, "IMCRPIX2", ephem.disk_yc + 1.);
     // Always 0.
     drms_setkey_float(outRec, "CRVAL1", 0);
     drms_setkey_float(outRec, "CRVAL2", 0);
