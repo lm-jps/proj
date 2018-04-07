@@ -692,6 +692,195 @@ WlSeriesInfo.prototype.extractSnames = function(args)
      $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
 };
 
+// ajax callback
+function ParseSpecResponse(transport)
+{
+    var response = transport.responseText;
+    var data = null;
+    var error = null;
+    
+    if (response && response.length)
+    {   
+        data = response.evalJSON();
+    }
+    else
+    {
+        data = { 'status' : 'invalid parserecset response' };
+        error = 'invalid parserecset response';
+    }
+    
+    // data contains parsed spec data; use it
+    // callback closure
+    if (parseSpecResponseCallback !== null)
+    {
+        parseSpecResponseCallback(error, data);
+    }
+}
+
+function CreateParseSpecResponse(processSpec, specIn)
+{
+    var parseSpecResponseCallback = processSpec;
+    var spec = specIn;
+    
+    var ParseSpecResponse = 
+        function(transport)
+        {
+            var response = transport.responseText;
+            var data = null;
+            var error = null;
+
+            if (response && response.length)
+            {   
+                data = response.evalJSON();
+            }
+            else
+            {
+                data = { 'status' : 'invalid parserecset response' };
+                error = 'invalid parserecset response';
+            }
+
+            // data contains parsed spec data; use it
+            // callback closure
+            if (parseSpecResponseCallback !== null)
+            {
+                parseSpecResponseCallback(error, data);
+            }
+        };
+                            
+    return ParseSpecResponse;
+}
+
+function ParseSpec(specIn, processSpec)
+{    
+    var onSuccess = CreateParseSpecResponse(processSpec, specIn);
+
+    new Ajax.Request('http://' + EXTERNAL_WEBSERVER + '.' + STANFORD_DOMAIN + '/cgi-bin/' + PARSE_RECSET, 
+    {
+        'method' : 'get',
+        'parameters' : { 'spec' : specIn },
+        'onSuccess' : onSuccess,
+        'onFailure' : function() { $("RSCountPlace").innerHTML = 'ERROR - unable to parse record-set specification ' + specIn; },
+        'onComplete' : function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
+    });
+}
+
+// ajax callback
+function CreateSetRecordCount(setRecordCount)
+{
+    var setRecordCountCallback = setRecordCount;
+    
+    var SetRecordCount = 
+        function(transport)
+        {
+            var response = transport.responseText;; 
+
+            if (response && response.length)
+            {
+                var data = response.evalJSON();
+
+                if (data.status != 0)
+                {
+                    RecordCount = null; // global
+                    $("RSCountPlace").innerHTML = data.error;
+                    ExportRecordSetOK = 0; // global
+                }
+                else
+                {
+                    RecordCount = data.count; // global
+                    $("RSCountPlace").innerHTML = data.count;
+                    ExportRecordSetOK = 1; // global
+                }
+
+                CheckRediness();        
+            }
+            else
+            {
+                RecordCount = null;
+                $("RSCountPlace").innerHTML = 'invalid jsoc_info response';
+                ExportRecordSetOK = 0; // global        
+            }
+
+            if (setRecordCountCallback !== null)
+            {
+                var errMsg = null;
+
+                if (!ExportRecordSetOK)
+                {
+                    errMsg = $("RSCountPlace").innerHTML;
+                }
+
+                setRecordCountCallback(errMsg);
+            }
+        };
+        
+    return SetRecordCount;
+}
+
+function MakeInfoRequest(specIn, makeInfoRequestCallback)
+{
+    var arguments = null;
+    var jsocinfoCGI = null;
+    var host = null;
+
+    // if this is the external host, then use jsocinfointext; this CGI will choose the correct db server to handle the series;
+    // if this is the internal host, then use jsoc_info, which will use the internal db server; Host, RecordLimit and EXTERNAL_SERVER 
+    // are globals
+    host = Host.toLowerCase();
+    if (serverMap[host] == INTERNAL_SERVER)
+    {
+        jsocinfoCGI = JSOC_INFO;
+        arguments = { "ds" : specIn, "op" : "rs_summary", "n" : RecordLimit };
+    }
+    else
+    {
+        jsocinfoCGI = JSOCEXTINFO;
+        arguments = {"dbhost" : EXTERNAL_SERVER, "ds" : specIn, "op" : "rs_summary", "n" : RecordLimit };
+    }
+
+    var onSuccess = CreateSetRecordCount(makeInfoRequestCallback);
+        
+    new Ajax.Request('http://' + host + '/cgi-bin/ajax/' + jsocinfoCGI,
+    {        
+        'method': 'get',
+        'parameters': arguments,
+        'onSuccess': onSuccess, 
+        'onFailure': function() { RecordCount = null; $("RSCountPlace").innerHTML = 'ERROR - failure calling jsoc_info'; ExportRecordSetOK = 0; },
+        'onComplete': function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
+    });
+}
+
+// callback - called after record-set specification has been successfully parsed
+function CreateProcessSpec(processRecordCount, specIn)
+{
+    var processRecordCountCallback = processRecordCount;
+    var spec = specIn;
+    
+    var ProcessSpec = 
+        function(error, data)
+        {
+            if (error !== null && error.length != 0 || data.errMsg !== null)
+            {
+                RecordCount = null;
+                $("RSCountPlace").innerHTML = 'ERROR - unable to parse record-set specification ' + spec;
+                ExportRecordSetOK = 0;
+            }
+            else
+            {
+                // set SeriesName
+                var series = data.subsets[0].seriesname;
+                var validSpec = data.subsets[0].spec;
+
+                SeriesName = series; // global
+                $("ExportRecordSet").value = validSpec;
+        
+                // use the parsed record-set spec to call the jsocInfoCGI
+                MakeInfoRequest(specIn, processRecordCountCallback);
+            }
+        };
+        
+    return ProcessSpec;
+}
+
 // Internal-DB pass-through.
 // If the user is accessing the external website, the database source of the series information could be the internal database.
 // External users have access to a sanctioned list of internal data series. So, we do not necessarily want to use the 'Host'
@@ -699,112 +888,31 @@ WlSeriesInfo.prototype.extractSnames = function(args)
 // CGI hosted on jsoc2.stanford.edu, not the one on 'Host' (which is jsoc.stanford.edu).
 // The callback is optional. Many functions require jsoc_info to have returned before they can continue.
 function GetRSCount(countCallback)
-  {
-  ExportQueryOK = 0;
-  ExportRecordSetOK = 0;
-  SeriesName = "";
+{
+    ExportQueryOK = 0;
+    ExportRecordSetOK = 0;
+    SeriesName = "";
 
-  var recset = $("ExportRecordSet").value;
-  
-  if (recset.length == 0)
-  {
-    $("RSCountPlace").innerHTML = "ERROR - missing record-set specification.";
-    return(1);
-  }
+    var recset = $("ExportRecordSet").value;
 
-  var recfilt, segfilt;
-  var posbracket = recset.indexOf("[");
-  var posRbracket = recset.lastIndexOf("]");
-  var posCurlbracket = recset.indexOf("{");
-  var posCurlRbracket = recset.lastIndexOf("}");
-  if ((posbracket>=0 && posRbracket < posbracket) || 
-      (posRbracket>=0 && posbracket < 0) ||
-      (posCurlbracket>=0 && (posCurlRbracket < posCurlbracket || posCurlbracket < posbracket || posCurlbracket < posRbracket)) ||
-      (posCurlRbracket>=0 && posCurlbracket < 0))
-       {
-       $("RSCountPlace").innerHTML = "ERROR - missing or wrong bracket or seglist precedes record filter";
-       return(1);
-       }
-  var firstbracket = posbracket>=0 ? posbracket : posCurlbracket;
-  SeriesName = (firstbracket == -1 ? recset : recset.substring(0,firstbracket));
-
-  if (SeriesName.length < 3)
+    if (recset.length == 0)
     {
-    $("RSCountPlace").innerHTML = "ERROR - missing SeriesName";
-    return(1);
-    }
-  recfilt = (posbracket >=0 ? recset.substring(posbracket,posRbracket+1) : (RecordLimit == 0 ? "[$]" : ""));
-  segfilt = (posCurlbracket >=0 ? recset.substring(posCurlbracket,posCurlRbracket+1) : "");
-  $("ExportRecordSet").value = SeriesName + recfilt + segfilt;
-  
-  $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
-  $("RSCountPlace").innerHTML = RSCountActiveMSg;
-  RecordCount = null; // To indicate that the RecordCount has not been set yet.
-  var RecordSet = $("ExportRecordSet").value;
-  
-    // Internal-db pass-through. We need to determine which host has the series information needed.
-    var doInfoReqFn = function(infoCallback)
-    {
-        var arguments = null;
-        var jsocinfoCGI = null;
-
-        // If this is the external host, then use jsocinfointext. This CGI will choose the correct db server to handle the series.
-        // If this is the internal host, then use jsoc_info, which will use the internal db server.
-        if (serverMap[Host.toLowerCase()] == INTERNAL_SERVER)
-        {
-            jsocinfoCGI = JSOC_INFO;
-            arguments = { "ds" : RecordSet, "op" : "rs_summary", "n" : RecordLimit };
-        }
-        else
-        {
-            jsocinfoCGI = JSOCEXTINFO;
-            arguments = {"dbhost" : EXTERNAL_SERVER, "ds" : RecordSet, "op" : "rs_summary", "n" : RecordLimit };
-        }
-    
-        $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
-
-        new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + jsocinfoCGI,
-        {
-            method: 'get',
-            parameters: arguments,
-            onSuccess: function(transport, json)
-            {
-                var response = transport.responseText || "no response text";
-                var data = response.evalJSON();
-                
-                if (data.status != 0)
-                {
-                    RecordCount = null;
-                    $("RSCountPlace").innerHTML = data.error;
-                    ExportRecordSetOK = 0;
-                }
-                else
-                {
-                    RecordCount = data.count;
-                    $("RSCountPlace").innerHTML = data.count;
-                    ExportRecordSetOK = 1;
-                }
-                         
-                $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
-                CheckRediness();
-                
-                if (infoCallback !== null)
-                {
-                    infoCallback();
-                }
-            },
-            onFailure: function() { alert('Something went wrong...'); },
-            onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
-        });
-        
-        $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
+        $("RSCountPlace").innerHTML = "ERROR - missing record-set specification.";
+        return(1);
     }
 
-	// Just call the function. It will determine if it should use the internal or external version of the CGI.
-	doInfoReqFn(countCallback);
-    
-  return(0);
-  }
+    $("RSCountPlace").innerHTML = RSCountActiveMSg;
+    // we need not only the series name, but we need the CTYPE1 and CTYPE2 keyword values so that
+    // we can determine if the series is suitable for aia_scale processing; from recset, we can
+    // extract the seriesname
+    var cb = CreateProcessSpec(countCallback, recset);
+    ParseSpec(recset, cb);
+
+    RecordCount = null; // To indicate that the RecordCount has not been set yet.  
+    $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
+
+    return(0);
+}
 
 function GetDefaultFormat()
 {
@@ -960,9 +1068,8 @@ function ExportRSChanged()
   ExportNewRS(); // to fix opeator not pressing enter or count.
   }
   
-function ProcessRSChange()
-{    
-    
+function ProcessRSChange(error)
+{
     // GetDefaultFormat() starts another jsoc_info asnchronously. It sets firstTimePrime. firstTimePrime is used in processing.js.
     // GetDefaultFormat() requires SeriesName, which is set in the first jsoc_info.
     // ProcessRSChange() is now not called until the first jsoc_info has completed.
