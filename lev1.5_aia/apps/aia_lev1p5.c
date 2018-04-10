@@ -349,19 +349,7 @@ int DoIt ()
 //      dx = crpix1 - (n + 1.0)*0.5; dy = crpix2 - (m + 1.0)*0.5;
         dx = (n + 1.0)*0.5 - crpix1; dy = (m + 1.0)*0.5 - crpix2;
 
-        if (is_aia)  // why zero edge of cutout image??
-          {
-          fval = inparr->data;
-          for (ix = 0; ix<n; ix++) {
-            fval[ix] = 0.0;
-            fval[(m - 1)*n + ix] = 0.0;
-          }
-          for (iy = 0; iy<m; iy++) {
-            fval[iy*n] = 0.0;
-            fval[iy*n + n - 1] = 0.0;
-          }
-          }
-        if (crop && !is_aia) // WARNING - if magrotate can not deal with nanx, then must make all nans some huge val then after cutout, convert all hugeish to nans.
+        if (crop && !is_aia)
 	  {
           double crop_limit2 = 0.999; // square of 1 - 1/2000, 1/2 HMI pixel.
           double rsun_obs = drms_getkey_double(inprec, "RSUN_OBS)", &status);
