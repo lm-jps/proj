@@ -13,7 +13,7 @@ d := $(dir)
 EXTRADEPS_$(d)		:= $(addprefix $(d)/, flctsubs.o)
 
 ## C-wrapper name (name must end with .c)
-MODEXE_USEF_$(d) := $(addprefix $(d)/, cgem_prep cgem_cutout cgem_map cgem_flct correct_azim correct_azim_bharp cgem_doppcal cgem_doppcal_los vmap_flct)
+MODEXE_USEF_$(d) := $(addprefix $(d)/, cgem_prep cgem_cutout cgem_map cgem_flct cgem_doppcal)
 MODEXE_USEF := $(MODEXE_USEF) $(MODEXE_USEF_$(d))
 
 ## wrapped Fortran codes
