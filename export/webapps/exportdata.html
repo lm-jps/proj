@@ -4,7 +4,10 @@
 <meta HTTP-EQUIV="Content-Type" content="text/html; charset=iso-8859-1">
 <title>JSOC Export Data</title>
 
+<!--
 <script type="text/javascript" src="js/prototype-1.6.0.3.js"></script>
+-->
+<script type="text/javascript" src="js/prototype-1.6.1.js"></script>
 <script type="text/javascript" src="js/cookies.js"></script>
 <script type="text/javascript" src="js/prototip.js"></script>
 <link rel="stylesheet" type="text/css" href="css/prototip.css" >
@@ -31,6 +34,12 @@ var INTERNAL_WEBSERVER = 'jsoc2'
 var EXTERNAL_WEBSERVER = 'jsoc'
 var STANFORD_DOMAIN = 'stanford.edu'
 
+var KEYWORD_CTYPE1 = 'CTYPE1';
+var KEYWORD_CTYPE2 = 'CTYPE2';
+var AIA_SCALE_CTYPE1 = 'HPLN-TAN';
+var AIA_SCALE_CTYPE2 = 'HPLT-TAN';
+var AIA_SCALE_NAXES = 2;
+
 var serverMap = new Array();
 serverMap[EXTERNAL_WEBSERVER] = EXTERNAL_SERVER;
 serverMap[EXTERNAL_WEBSERVER + '.' + STANFORD_DOMAIN] = EXTERNAL_SERVER;
@@ -41,6 +50,7 @@ var JSOCEXTINFO = 'jsocextinfo';
 var JSOC_INFO = 'jsoc_info';
 var JSOCEXTFETCH = 'jsocextfetch';
 var JSOC_FETCH = 'jsoc_fetch';
+var SERIES_INFO = 'series_info';
 var PARSE_RECSET = 'drms_parserecset';
 var LOOKDATA = "lookdata";
 
@@ -692,31 +702,6 @@ WlSeriesInfo.prototype.extractSnames = function(args)
      $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
 };
 
-// ajax callback
-function ParseSpecResponse(transport)
-{
-    var response = transport.responseText;
-    var data = null;
-    var error = null;
-    
-    if (response && response.length)
-    {   
-        data = response.evalJSON();
-    }
-    else
-    {
-        data = { 'status' : 'invalid parserecset response' };
-        error = 'invalid parserecset response';
-    }
-    
-    // data contains parsed spec data; use it
-    // callback closure
-    if (parseSpecResponseCallback !== null)
-    {
-        parseSpecResponseCallback(error, data);
-    }
-}
-
 function CreateParseSpecResponse(processSpec, specIn)
 {
     var parseSpecResponseCallback = processSpec;
@@ -737,6 +722,7 @@ function CreateParseSpecResponse(processSpec, specIn)
             {
                 data = { 'status' : 'invalid parserecset response' };
                 error = 'invalid parserecset response';
+                $('ExportRecordSet').disabled = false; // allow the user to try again
             }
 
             // data contains parsed spec data; use it
@@ -759,7 +745,7 @@ function ParseSpec(specIn, processSpec)
         'method' : 'get',
         'parameters' : { 'spec' : specIn },
         'onSuccess' : onSuccess,
-        'onFailure' : function() { $("RSCountPlace").innerHTML = 'ERROR - unable to parse record-set specification ' + specIn; },
+        'onFailure' : function() { $("RSCountPlace").innerHTML = 'ERROR - unable to parse record-set specification ' + specIn; $('ExportRecordSet').disabled = false; },
         'onComplete' : function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
     });
 }
@@ -772,7 +758,7 @@ function CreateSetRecordCount(setRecordCount)
     var SetRecordCount = 
         function(transport)
         {
-            var response = transport.responseText;; 
+            var response = transport.responseText;
 
             if (response && response.length)
             {
@@ -783,6 +769,8 @@ function CreateSetRecordCount(setRecordCount)
                     RecordCount = null; // global
                     $("RSCountPlace").innerHTML = data.error;
                     ExportRecordSetOK = 0; // global
+                    SeriesName = ''; // global
+                    $('ExportRecordSet').disabled = false; // allow the user to try again
                 }
                 else
                 {
@@ -791,13 +779,15 @@ function CreateSetRecordCount(setRecordCount)
                     ExportRecordSetOK = 1; // global
                 }
 
-                CheckRediness();        
+                CheckRediness();
             }
             else
             {
                 RecordCount = null;
                 $("RSCountPlace").innerHTML = 'invalid jsoc_info response';
-                ExportRecordSetOK = 0; // global        
+                ExportRecordSetOK = 0; // global  
+                SeriesName = ''; // global
+                $('ExportRecordSet').disabled = false; // allow the user to try again
             }
 
             if (setRecordCountCallback !== null)
@@ -816,7 +806,7 @@ function CreateSetRecordCount(setRecordCount)
     return SetRecordCount;
 }
 
-function MakeInfoRequest(specIn, makeInfoRequestCallback)
+function RequestRSInfo(specIn, rsInfoRequestCallback)
 {
     var arguments = null;
     var jsocinfoCGI = null;
@@ -837,14 +827,91 @@ function MakeInfoRequest(specIn, makeInfoRequestCallback)
         arguments = {"dbhost" : EXTERNAL_SERVER, "ds" : specIn, "op" : "rs_summary", "n" : RecordLimit };
     }
 
-    var onSuccess = CreateSetRecordCount(makeInfoRequestCallback);
+    var onSuccess = CreateSetRecordCount(rsInfoRequestCallback);
         
     new Ajax.Request('http://' + host + '/cgi-bin/ajax/' + jsocinfoCGI,
     {        
         'method': 'get',
         'parameters': arguments,
         'onSuccess': onSuccess, 
-        'onFailure': function() { RecordCount = null; $("RSCountPlace").innerHTML = 'ERROR - failure calling jsoc_info'; ExportRecordSetOK = 0; },
+        'onFailure': function() { RecordCount = null; $("RSCountPlace").innerHTML = 'ERROR - failure calling jsoc_info'; ExportRecordSetOK = 0; SeriesName = ''; $('ExportRecordSet').disabled = false; },
+        'onComplete': function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
+    });
+}
+
+function CreateProcessSeriesSelect(series)
+{
+    var processSeriesSelect = 
+        function(transport)
+        {
+            var response = transport.responseText;
+
+            if (response && response.length)
+            {
+                var data = response.evalJSON();
+         
+                // check for suitability for aia_scale processing
+                if (data.errMsg !== null)
+                {
+                    RecordCount = null; // global
+                    $("RSCountPlace").innerHTML = data.errMsg;
+                    ExportRecordSetOK = 0; // global
+                    SeriesName = ''; // global
+                }
+                else
+                {
+                    // successfully obtained series info
+                    for (var property in data[series.toLowerCase()].segments)
+                    {
+                        if (data[series.toLowerCase()].segments.hasOwnProperty(property))
+                        {
+                            if (parseInt(data[series.toLowerCase()].segments[property]['segment-number']) == 0)
+                            {
+                                if (parseInt(data[series.toLowerCase()].segments[property]['number-axes']) == 2 && data[series.toLowerCase()].keywords[KEYWORD_CTYPE1.toLowerCase()]['constant-value'] == AIA_SCALE_CTYPE1 && data[series.toLowerCase()].keywords[KEYWORD_CTYPE2.toLowerCase()]['constant-value'] == AIA_SCALE_CTYPE2)
+                                {
+                                    alert('ENABLE!');
+                                    // this series' 0 segment has a 2D-image with a CTYPE1 value of 'HPLN-TAN' and a CTYPE2 value of 'HPLT-TAN'
+                                    // suitable for aia_scale
+                                    $('OptionAiaScale').disabled = false;
+                                    $('OptionAiaScaleLabel').innerHTML = 'aia_scale - Scale image to 0.6 arcsec/pixel';
+                                    $('OptionAiaScaleLabel').setStyle({ color: 'black' });
+                                }
+                                else
+                                {
+                                    alert('DISABLE!');
+                                    $('OptionAiaScale').disabled = true;
+                                    $('OptionAiaScaleLabel').innerHTML = 'aia_scale - Scale image to 0.6 arcsec/pixel (disabled except for 2D dataseries with CTYPE1 == HPLN-TAN and CTYPE2 == HPLT-TAN)'
+                                    $('OptionAiaScaleLabel').setStyle({ color: 'grey' });
+                                }
+                                
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            else
+            {
+                RecordCount = null; // global
+                $("RSCountPlace").innerHTML = 'unable to obtain series information';
+                ExportRecordSetOK = 0; // global
+                SeriesName = ''; // global
+            }
+        };
+        
+    return processSeriesSelect;
+}
+
+function RequestSeriesInfo(series)
+{
+    var onSuccess = CreateProcessSeriesSelect(series);
+
+    new Ajax.Request('http://' + EXTERNAL_WEBSERVER + '.' + STANFORD_DOMAIN + '/cgi-bin/' + SERIES_INFO,
+    {
+        'method': 'get',
+        'parameters': { 'series' : series, 'atts' : 1, 'keys' : KEYWORD_CTYPE1 + ',' + KEYWORD_CTYPE2, 'segs' : '*' },
+        'onSuccess': onSuccess, 
+        'onFailure': function() { RecordCount = null; SeriesName = ''; ExportRecordSetOK = 0; $("RSCountPlace").innerHTML = 'ERROR - failure calling series-info'; $('ExportRecordSet').disabled = false; },
         'onComplete': function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
     });
 }
@@ -863,6 +930,7 @@ function CreateProcessSpec(processRecordCount, specIn)
                 RecordCount = null;
                 $("RSCountPlace").innerHTML = 'ERROR - unable to parse record-set specification ' + spec;
                 ExportRecordSetOK = 0;
+                $('ExportRecordSet').disabled = false; // allow the user to try again
             }
             else
             {
@@ -873,8 +941,17 @@ function CreateProcessSpec(processRecordCount, specIn)
                 SeriesName = series; // global
                 $("ExportRecordSet").value = validSpec;
         
-                // use the parsed record-set spec to call the jsocInfoCGI
-                MakeInfoRequest(specIn, processRecordCountCallback);
+                // use the parsed record-set spec to call the jsocInfoCGI to get record-set information
+                RequestRSInfo(specIn, processRecordCountCallback);
+                
+                // use the parsed series name to call the jsocInfoCGI to get the series information;
+                // disable the aia_scale processing option if the series selected is not suitable for that
+                // processing option; series suitable for the aia_scale processing option have these
+                // attributes:
+                //   1. They are 2-D time series
+                //   2. CTYPE1 == 'HPLN-TAN'
+                //   3. CTYPE2 == 'HPLT-TAN'
+                RequestSeriesInfo(series);
             }
         };
         
@@ -1089,7 +1166,9 @@ function ProcessRSChange(error)
     for (iProc = 0; iProc < ExportProcessingOptions.length; iProc++)
     {
         var ExpOpt = ExportProcessingOptions[iProc];
-        $(ExpOpt.id).disabled = false;
+
+        // ART $(ExpOpt.id).disabled = false;
+        $(ExpOpt.id).disabled = $(ExpOpt.id).retrieve('disabledState', false);
     }
     
     newRSRunning = false;
@@ -1414,6 +1493,7 @@ function runSetProcessing(intervalFn, spCallback)
         for (iProc = 0; iProc < nProcs; iProc++)
         {
             var ExpOpt = ExportProcessingOptions[iProc];
+            $(ExpOpt.id).store({ 'disabledState' : $(ExpOpt.id).disabled})
             $(ExpOpt.id).disabled = true;
         }
       }
@@ -1545,7 +1625,8 @@ function GetExportProcessingArguments(spCallback)
     for (iProc = 0; iProc < ExportProcessingOptions.length; iProc++)
     {
         var ExpOpt = ExportProcessingOptions[iProc];
-        $(ExpOpt.id).disabled = false;
+        // ART $(ExpOpt.id).disabled = false;
+        $(ExpOpt.id).disabled = $(ExpOpt.id).retrieve('disabledState', false);
     }
     
     $("ExportSizeRatio").value = SizeRatio;

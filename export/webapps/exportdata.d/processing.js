@@ -1545,7 +1545,7 @@ function ProcessingInit()
   iOpt++;
   ProcessingOptionsHTML +=
     '<input type="checkbox" checked="false" value="aia_scale" id="OptionAiaScale" onChange="SetProcessing('+iOpt+');" /> ' +
-    'aia_scale - Scale AIA lev1 to 0.6 arcsec/pixel<br>';
+    '<label id="OptionAiaScaleLabel" for="OptionAiaScale">aia_scale - Scale image to 0.6 arcsec/pixel</label><br>';
   ExpOpt = new Object();
   ExpOpt.id = "OptionAiaScale";
   ExpOpt.rowid = "ProcessAiaScale";
