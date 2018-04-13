@@ -356,18 +356,12 @@ function AiaScaleCheck(fromSetProcessing)
         // away the cached arguments
         return this.paramsValid; // Empty string if the previous call determined the arguments to be invalid.
     }
-  
-    if (SeriesName === 'aia.lev1')
+
+    if (SeriesName.toLowerCase() === 'aia.lev1')
     {
         $("ExportFilenameFmt").value = $("ExportFilenameFmt").value.replace('T_REC','T_OBS');
     }
-    else
-    {
-        isok = false;
-        alert("Error - aia_scale can only be used for series aia.lev1");
-        return 'error'; // Tell calling function to uncheck this processing step.
-    }
-    
+
     // choose between cut-out and non-cut-out
     if (!$('AiaScalePerformCutoutCheckbox').checked)
     {
