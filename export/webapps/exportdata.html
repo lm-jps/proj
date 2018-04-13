@@ -38,6 +38,7 @@ var KEYWORD_CTYPE1 = 'CTYPE1';
 var KEYWORD_CTYPE2 = 'CTYPE2';
 var AIA_SCALE_CTYPE1 = 'HPLN-TAN';
 var AIA_SCALE_CTYPE2 = 'HPLT-TAN';
+var NA = 'na';
 var AIA_SCALE_NAXES = 2;
 
 var serverMap = new Array();
@@ -751,11 +752,9 @@ function ParseSpec(specIn, processSpec)
 }
 
 // ajax callback
-function CreateSetRecordCount(setRecordCount)
-{
-    var setRecordCountCallback = setRecordCount;
-    
-    var SetRecordCount = 
+function CreateRequestRSInfoCallback(callback)
+{    
+    var processRSInfo = 
         function(transport)
         {
             var response = transport.responseText;
@@ -767,7 +766,7 @@ function CreateSetRecordCount(setRecordCount)
                 if (data.status != 0)
                 {
                     RecordCount = null; // global
-                    $("RSCountPlace").innerHTML = data.error;
+                    $("RSCountPlace").innerHTML = 'failure running jsoc_info';
                     ExportRecordSetOK = 0; // global
                     SeriesName = ''; // global
                     $('ExportRecordSet').disabled = false; // allow the user to try again
@@ -777,6 +776,92 @@ function CreateSetRecordCount(setRecordCount)
                     RecordCount = data.count; // global
                     $("RSCountPlace").innerHTML = data.count;
                     ExportRecordSetOK = 1; // global
+                    
+                    // check for compatibility with aia_scale processing
+                    if ($('OptionAiaScale').retrieve('disabledState', null) === null)
+                    {
+                        // aia_scale compatibility has not yet been determined; check now
+                        // loop through all records, checking the keyword criteria; jsoc_info
+                        // does not provide hash-accessibility to keyword info, so must
+                        // loop through all keywords
+                        var compatible = true;
+                        for (var index = 0; index < data.keywords.length; index++)
+                        {
+                            // we are assured that the CTYPE keywords will be in the jsoc_info results, 
+                            // even if the series does not have those keywords; if a keyword
+                            // does not exist in the series, jsoc_info prints 'Invalid Keylink'
+                            // for the keyword value
+                            if (data.keywords[index].name.strip().toLowerCase() == KEYWORD_CTYPE1.toLowerCase())
+                            {
+                                for (var valIndex = 0; valIndex < data.keywords[index].values.length; valIndex++)
+                                {
+                                    if (data.keywords[index].values[valIndex] != AIA_SCALE_CTYPE1)
+                                    {
+                                        compatible = false;
+                                        break;
+                                    }
+                                }
+                            }
+                        
+                            if (!compatible)
+                            {
+                                break;
+                            }
+                            
+                            if (data.keywords[index].name.strip().toLowerCase() == KEYWORD_CTYPE2.toLowerCase())
+                            {
+                                for (var valIndex = 0; valIndex < data.keywords[index].values.length; valIndex++)
+                                {
+                                    if (data.keywords[index].values[valIndex] != AIA_SCALE_CTYPE2)
+                                    {
+                                        compatible = false;
+                                        break;
+                                    }
+                                }
+                            }
+                            
+                            if (!compatible)
+                            {
+                                break;
+                            }
+                        }
+                        
+                        // we definitively know whether or not aia_scale processing should be disabled
+                        if (compatible)
+                        {
+                            $('OptionAiaScale').store({ 'disabledState' : false });
+                        }
+                        else
+                        {
+                            $('OptionAiaScale').store({ 'disabledState' : true });
+                        }
+                    }
+                    else
+                    {
+                        // processSeriesSelection determine that the series is not aia_scale compatible
+                        alert('not here');
+                    }
+                    
+                    if (!$('OptionAiaScale').retrieve('disabledState', false))
+                    {
+                        // this series' first segment has a 2D-image with a CTYPE1 value of 'HPLN-TAN' and a CTYPE2 value of 'HPLT-TAN' so
+                        // it is compatible with aia_scale processing; the code to determine this is split between processSeriesSelection and 
+                        // processRSInfo                    
+
+                        // this should remain disabled until all asynchronous processing completes
+                        // $('OptionAiaScale').disabled = false;
+                        $('OptionAiaScaleLabel').innerHTML = 'aia_scale - Scale image to 0.6 arcsec/pixel';
+                        $('OptionAiaScaleLabel').setStyle({ color: 'black' });
+                    }
+                    else
+                    {
+                        // not compatible with aia_scale processing
+
+                        // this should remain disabled until all asynchronous processing completes
+                        // $('OptionAiaScale').disabled = true;
+                        $('OptionAiaScaleLabel').innerHTML = 'aia_scale - Scale image to 0.6 arcsec/pixel (compatible with 2D dataseries with CTYPE1 == HPLN-TAN and CTYPE2 == HPLT-TAN only)'
+                        $('OptionAiaScaleLabel').setStyle({ color: 'grey' });                    
+                    }
                 }
 
                 CheckRediness();
@@ -790,7 +875,7 @@ function CreateSetRecordCount(setRecordCount)
                 $('ExportRecordSet').disabled = false; // allow the user to try again
             }
 
-            if (setRecordCountCallback !== null)
+            if (callback !== null)
             {
                 var errMsg = null;
 
@@ -799,14 +884,14 @@ function CreateSetRecordCount(setRecordCount)
                     errMsg = $("RSCountPlace").innerHTML;
                 }
 
-                setRecordCountCallback(errMsg);
+                callback(errMsg);
             }
         };
         
-    return SetRecordCount;
+    return processRSInfo;
 }
 
-function RequestRSInfo(specIn, rsInfoRequestCallback)
+function RequestRSInfo(spec, callback)
 {
     var arguments = null;
     var jsocinfoCGI = null;
@@ -819,15 +904,15 @@ function RequestRSInfo(specIn, rsInfoRequestCallback)
     if (serverMap[host] == INTERNAL_SERVER)
     {
         jsocinfoCGI = JSOC_INFO;
-        arguments = { "ds" : specIn, "op" : "rs_summary", "n" : RecordLimit };
+        arguments = { 'ds' : spec, 'n' : RecordLimit, 'op' : 'rs_list', 'key' : KEYWORD_CTYPE1 + ',' + KEYWORD_CTYPE2 };
     }
     else
     {
         jsocinfoCGI = JSOCEXTINFO;
-        arguments = {"dbhost" : EXTERNAL_SERVER, "ds" : specIn, "op" : "rs_summary", "n" : RecordLimit };
+        arguments = { 'dbhost' : EXTERNAL_SERVER, 'ds' : spec, 'n' : RecordLimit, 'op' : 'rs_list', 'key' : KEYWORD_CTYPE1 + ',' + KEYWORD_CTYPE2 };
     }
 
-    var onSuccess = CreateSetRecordCount(rsInfoRequestCallback);
+    var onSuccess = CreateRequestRSInfoCallback(callback);
         
     new Ajax.Request('http://' + host + '/cgi-bin/ajax/' + jsocinfoCGI,
     {        
@@ -839,9 +924,9 @@ function RequestRSInfo(specIn, rsInfoRequestCallback)
     });
 }
 
-function CreateProcessSeriesSelect(series)
+function CreateProcessSeriesSelection(spec, series, callback)
 {
-    var processSeriesSelect = 
+    var processSeriesSelection = 
         function(transport)
         {
             var response = transport.responseText;
@@ -861,32 +946,41 @@ function CreateProcessSeriesSelect(series)
                 else
                 {
                     // successfully obtained series info
-                    for (var property in data[series.toLowerCase()].segments)
+                    var compatible = null;
+                    for (var segment in data[series.toLowerCase()].segments)
                     {
-                        if (data[series.toLowerCase()].segments.hasOwnProperty(property))
+                        if (data[series.toLowerCase()].segments.hasOwnProperty(segment))
                         {
-                            if (parseInt(data[series.toLowerCase()].segments[property]['segment-number']) == 0)
+                            if ((parseInt(data[series.toLowerCase()].segments[segment]['segment-number']) == 0) &&
+                                 (parseInt(data[series.toLowerCase()].segments[segment]['number-axes']) != 2))
                             {
-                                if (parseInt(data[series.toLowerCase()].segments[property]['number-axes']) == 2 && data[series.toLowerCase()].keywords[KEYWORD_CTYPE1.toLowerCase()]['constant-value'] == AIA_SCALE_CTYPE1 && data[series.toLowerCase()].keywords[KEYWORD_CTYPE2.toLowerCase()]['constant-value'] == AIA_SCALE_CTYPE2)
-                                {
-                                    alert('ENABLE!');
-                                    // this series' 0 segment has a 2D-image with a CTYPE1 value of 'HPLN-TAN' and a CTYPE2 value of 'HPLT-TAN'
-                                    // suitable for aia_scale
-                                    $('OptionAiaScale').disabled = false;
-                                    $('OptionAiaScaleLabel').innerHTML = 'aia_scale - Scale image to 0.6 arcsec/pixel';
-                                    $('OptionAiaScaleLabel').setStyle({ color: 'black' });
-                                }
-                                else
-                                {
-                                    alert('DISABLE!');
-                                    $('OptionAiaScale').disabled = true;
-                                    $('OptionAiaScaleLabel').innerHTML = 'aia_scale - Scale image to 0.6 arcsec/pixel (disabled except for 2D dataseries with CTYPE1 == HPLN-TAN and CTYPE2 == HPLT-TAN)'
-                                    $('OptionAiaScaleLabel').setStyle({ color: 'grey' });
-                                }
-                                
+                                // we know that aia_scale should definitely be disabled; store that information now so we can skip
+                                // the secondary check in processRSInfo
+                                $('OptionAiaScale').store({ 'disabledState' : true });
+                                compatible = false;
                                 break;
                             }
                         }
+                    }
+                    
+                    if (compatible === null)
+                    {
+                        // compatibility not yet determined
+                        if ((data[series.toLowerCase()].keywords[KEYWORD_CTYPE1.toLowerCase()]['constant-value'] != AIA_SCALE_CTYPE1 && 
+                             data[series.toLowerCase()].keywords[KEYWORD_CTYPE1.toLowerCase()]['constant-value'] != NA) ||
+                            (data[series.toLowerCase()].keywords[KEYWORD_CTYPE2.toLowerCase()]['constant-value'] != AIA_SCALE_CTYPE2 && 
+                             data[series.toLowerCase()].keywords[KEYWORD_CTYPE2.toLowerCase()]['constant-value'] != NA))
+                        {
+                            // we know that aia_scale should definitely be disabled; store that information now so we can skip
+                            // the secondary check in 
+                            $('OptionAiaScale').store({ 'disabledState' : true });
+                            compatible = false;
+                        }   
+                    }
+                    
+                    if (callback !== null)
+                    {
+                        callback();
                     }
                 }
             }
@@ -899,12 +993,12 @@ function CreateProcessSeriesSelect(series)
             }
         };
         
-    return processSeriesSelect;
+    return processSeriesSelection;
 }
 
-function RequestSeriesInfo(series)
+function RequestSeriesInfo(series, callback)
 {
-    var onSuccess = CreateProcessSeriesSelect(series);
+    var onSuccess = callback;
 
     new Ajax.Request('http://' + EXTERNAL_WEBSERVER + '.' + STANFORD_DOMAIN + '/cgi-bin/' + SERIES_INFO,
     {
@@ -917,12 +1011,9 @@ function RequestSeriesInfo(series)
 }
 
 // callback - called after record-set specification has been successfully parsed
-function CreateProcessSpec(processRecordCount, specIn)
-{
-    var processRecordCountCallback = processRecordCount;
-    var spec = specIn;
-    
-    var ProcessSpec = 
+function CreateProcessSpec(spec, processRecordCount)
+{    
+    var processSpec = 
         function(error, data)
         {
             if (error !== null && error.length != 0 || data.errMsg !== null)
@@ -940,22 +1031,26 @@ function CreateProcessSpec(processRecordCount, specIn)
 
                 SeriesName = series; // global
                 $("ExportRecordSet").value = validSpec;
-        
-                // use the parsed record-set spec to call the jsocInfoCGI to get record-set information
-                RequestRSInfo(specIn, processRecordCountCallback);
-                
+
                 // use the parsed series name to call the jsocInfoCGI to get the series information;
                 // disable the aia_scale processing option if the series selected is not suitable for that
-                // processing option; series suitable for the aia_scale processing option have these
-                // attributes:
+                // processing option; NOTE: the series info might not be sufficient to make this determination;
+                // if this is the case, then we need to consult the actual record metadata to do so; check
+                // series info first since this is a simpler, quicker test; 
+                //
+                // series suitable for the aia_scale processing option have these properties:
                 //   1. They are 2-D time series
                 //   2. CTYPE1 == 'HPLN-TAN'
                 //   3. CTYPE2 == 'HPLT-TAN'
-                RequestSeriesInfo(series);
+                //
+                // the RequestSeriesInfo callback needs to call RequestRSInfo with processRecordCount as the callback
+                var requestRSInfo = function() { RequestRSInfo(validSpec, processRecordCount); };
+                var processSeriesSelection = CreateProcessSeriesSelection(validSpec, series, requestRSInfo);
+                RequestSeriesInfo(series, processSeriesSelection);
             }
         };
         
-    return ProcessSpec;
+    return processSpec;
 }
 
 // Internal-DB pass-through.
@@ -969,6 +1064,7 @@ function GetRSCount(countCallback)
     ExportQueryOK = 0;
     ExportRecordSetOK = 0;
     SeriesName = "";
+    $('OptionAiaScale').store({ 'disabledState' : null }) // means aia_scale compatibility not determined yet
 
     var recset = $("ExportRecordSet").value;
 
@@ -982,7 +1078,7 @@ function GetRSCount(countCallback)
     // we need not only the series name, but we need the CTYPE1 and CTYPE2 keyword values so that
     // we can determine if the series is suitable for aia_scale processing; from recset, we can
     // extract the seriesname
-    var cb = CreateProcessSpec(countCallback, recset);
+    var cb = CreateProcessSpec(recset, countCallback);
     ParseSpec(recset, cb);
 
     RecordCount = null; // To indicate that the RecordCount has not been set yet.  
