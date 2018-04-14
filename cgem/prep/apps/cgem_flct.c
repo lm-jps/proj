@@ -48,8 +48,9 @@
 
 #define ARRLENGTH(ARR)  (sizeof(ARR) / sizeof(ARR[0]))
 
-#define TEST        1
+//#define TEST        1
 #define NATMAP      1       // Use George's mapping code
+#define MAXTDIFF    0.05    // relative allowed difference of cadence for pairing input frames
 
 // Some other things
 #ifndef MIN
@@ -108,6 +109,9 @@ char *wcsCode[] = {"CAR", "CAS", "MER", "CEA", "GLS", "TAN", "ARC", "STG",
 
 /* ========================================================================================================== */
 
+/* Find pairs of images according to T_REC and delt */
+int pairTRecs(DRMS_RecordSet_t *inRS, double delt, int *pairedRecNums, int *npairs);
+
 /* Map Plate-Carree to Mercator */
 int PC2Mercator(DRMS_Record_t *inRec0, DRMS_Record_t *inRec1, char *segQuery,
                 int *dims_mer, double **bz0_mer_ptr, double **bz1_mer_ptr);
@@ -126,7 +130,7 @@ void m2pc(int *dims_mer, float *map_mer, struct ephemeris *ephem,
           int *dims, float *map);
 
 /* Output */
-int writeV(DRMS_Record_t *inRec, DRMS_Record_t *outRec,
+int writeV(DRMS_Record_t *inRec0, DRMS_Record_t *inRec1, DRMS_Record_t *outRec,
            int *dims, struct flctOpt *fOpt, float *vx, float *vy, float *vm);
 
 int writeSupp(DRMS_Record_t *inRec, DRMS_Record_t *outRec, int *dims_mer,
@@ -150,9 +154,9 @@ ModuleArgs_t module_args[] =
 {
     {ARG_STRING, "in", kNotSpecified, "Input series."},
     {ARG_STRING, "out", kNotSpecified, "Output series."},
+    {ARG_FLOAT, "delt", "1440.", "Temporal spacing between FLCT input frames"},
     {ARG_STRING, "seg", "Bz", "Iutput segment."},
     {ARG_DOUBLE, "sigma", "5.", "For FLCT. Images modulated by gaussian of width sigma pixels."},
-//    {ARG_FLAG, "t", "", "For FLCT, evoke threshold below. Should set by default"},
     {ARG_FLAG, "k", "", "For FLCT, evoke filtering below. Default no filtering"},
     {ARG_DOUBLE, "thresh", "200.", "For FLCT. Pixels below threshold ignored. In Gauss if greater than 1, relative value of max value if between 0 and 1. Default 200G"},
     {ARG_DOUBLE, "kr", "0.25", "For FLCT. Filter subimages w/gaussian w/ roll-off wavenumber kr."},
@@ -181,10 +185,11 @@ int DoIt(void)
         DIE("Input/output not available");
     }
     
+    double delt = params_get_double(&cmdparams, "delt");
+    
     // FLCT options
     struct flctOpt fOpt;
     fOpt.sigma = params_get_double(&cmdparams, "sigma");
- //   fOpt.useThresh = params_isflagset(&cmdparams, "t");
     fOpt.doFilter = params_isflagset(&cmdparams, "k");
     fOpt.thresh = params_get_double(&cmdparams, "thresh");
     fOpt.kr = params_get_double(&cmdparams, "kr");
@@ -204,7 +209,6 @@ int DoIt(void)
     fOpt.natmap = 0;
 #endif
     
-    
     /* Input Data */
     
     DRMS_RecordSet_t *inRS = drms_open_records(drms_env, inQuery, &status);
@@ -213,41 +217,77 @@ int DoIt(void)
     DRMS_Segment_t *inSeg = drms_segment_lookup(inRS->records[0], segQuery);        // check segment
     if (!inSeg) {
         drms_close_records(inRS, DRMS_FREE_RECORD);
-        DIE("Requested segment not available\n");
+        DIE("Requested segment not available");
     }
+    
+    // Gather all T_RECs in input, determine available pairs of output
+    
+    int *pairedRecNums = (int *) (malloc(nrecs * sizeof(int)));
+    int npairs;
+    if (pairTRecs(inRS, delt, pairedRecNums, &npairs)) {
+        free(pairedRecNums);
+        drms_close_records(inRS, DRMS_FREE_RECORD);
+        DIE("No pairs of input images satisfy requested cadence.");
+    }
+    printf("Found %d pairs in %d frames.\n", npairs, nrecs); fflush(stdout);
+
+    /*
+    int ii = 0;
+    for (int irec = 0; irec < nrecs; irec++) {
+        if (pairedRecNums[irec] == nrecs) continue;
+        printf("pair %d: #%d & #%d, ", ii + 1, irec, pairedRecNums[irec]);
+        TIME tobs0 = drms_getkey_time(inRS->records[irec], "T_OBS", &status);
+        TIME tobs1 = drms_getkey_time(inRS->records[pairedRecNums[irec]], "T_OBS", &status);
+        TIME trec0 = drms_getkey_time(inRS->records[irec], "T_REC", &status);
+        TIME trec1 = drms_getkey_time(inRS->records[pairedRecNums[irec]], "T_REC", &status);
+        char trec_str[100];
+        sprint_time(trec_str, (trec0 + trec1) / 2., "TAI", 0);
+        printf("T_REC=[%s], dt=%f\n", trec_str, tobs1 - tobs0);
+        ii++;
+    }
+     */
     
     /* Output Data */
 
-    DRMS_RecordSet_t *outRS = drms_create_records(drms_env, nrecs - 2, outQuery, DRMS_PERMANENT, &status);
+    DRMS_RecordSet_t *outRS = drms_create_records(drms_env, npairs, outQuery, DRMS_PERMANENT, &status);
     if (status || !outRS) {
+        free(pairedRecNums);
         drms_close_records(outRS, DRMS_FREE_RECORD);
         DIE("Error creating output series\n");
     }
     
     /* Loop */
     
-    for (int irec = 0; irec < nrecs - 2; irec++) {
+    int ipair = 0;
+    for (int irec = 0; irec < nrecs; irec++) {
+        
+        if (pairedRecNums[irec] == nrecs) continue;     // no pairing, skip frame
         
         DRMS_Record_t *inRec0 = inRS->records[irec];
-        DRMS_Record_t *inRec1 = inRS->records[irec + 2];
-        DRMS_Record_t *inRec_target = inRS->records[irec + 1];
-        DRMS_Record_t *outRec = outRS->records[irec];
-        printf("==============\nProcessing rec pairs #%d of %d, ", irec + 1, nrecs - 2); fflush(stdout);
+        DRMS_Record_t *inRec1 = inRS->records[pairedRecNums[irec]];
+        
+        DRMS_Record_t *outRec = outRS->records[ipair];
+        printf("==============\nProcessing rec pairs #%d of %d, ", ipair + 1, npairs); fflush(stdout);
         
         // Time info and pixel size
         
         TIME tobs0 = drms_getkey_time(inRec0, "T_OBS", &status);
         TIME tobs1 = drms_getkey_time(inRec1, "T_OBS", &status);
-        TIME trec = drms_getkey_time(inRec_target, "T_REC", &status);
+        TIME tobs = (tobs0 + tobs1) / 2.;
+        
+        TIME trec0 = drms_getkey_time(inRec0, "T_REC", &status);
+        TIME trec1 = drms_getkey_time(inRec1, "T_REC", &status);
+        TIME trec = (trec0 + trec1) / 2.;
+        
         double dt = tobs1 - tobs0;
         char trec_str[100];
         sprint_time(trec_str, trec, "TAI", 0);
-        printf("TREC=[%s], dt=%f... ", trec_str, dt);
+        printf("TREC=[%s], dt=%f... \n", trec_str, dt);
         
-        double rSun_ref = drms_getkey_double(inRec_target, "RSUN_REF", &status);        // meter
-        double cdelt = drms_getkey_double(inRec_target, "CDELT1", &status);
+        double rSun_ref = drms_getkey_double(inRec0, "RSUN_REF", &status);        // meter, assuming two frames identical
+        double cdelt = drms_getkey_double(inRec0, "CDELT1", &status);
         double ds = cdelt * RADSINDEG * rSun_ref;
-        printf("cd=%f, ds=%f, dt=%f\n", cdelt, ds, dt);
+//        printf("cd=%f, ds=%f, dt=%f\n", cdelt, ds, dt);
         
         // Check bz size
         
@@ -345,7 +385,10 @@ int DoIt(void)
         double *vy_mer = (double *) (malloc(nxny_mer * sizeof(double)));
         double *vm_mer = (double *) (malloc(nxny_mer * sizeof(double)));
         
-        // delta
+        // Threshold performed on Mercator map
+        // when mapped back to P-C, zeros (masked) reduces velocity
+        // This is taken care in George's native mapping method but not here
+        
         if (flct(fOpt.transp, bz0_mer, bz1_mer, dims_mer[0], dims_mer[1], dt, ds, fOpt.sigma,
                  vx_mer, vy_mer, vm_mer, fOpt.thresh, fOpt.absflag, fOpt.doFilter, fOpt.kr, fOpt.skip, fOpt.poffset, fOpt.qoffset,
                  fOpt.interpolate, fOpt.biascor, fOpt.verbose)) {
@@ -393,21 +436,67 @@ int DoIt(void)
         
         // Output, vx, vy, vm freed inside writeV
 
-        if (writeV(inRec_target, outRec, dims, &fOpt, vx, vy, vm)) {
+        if (writeV(inRec0, inRec1, outRec, dims, &fOpt, vx, vy, vm)) {
             SHOW("Output error, frames skipped.\n");
             continue;
         }
  
         SHOW("done.\n")
+        ipair++;
 
     }       // irec
     
-    drms_close_records(inRS, DRMS_FREE_RECORD);
     drms_close_records(outRS, DRMS_INSERT_RECORD);
+    
+    drms_close_records(inRS, DRMS_FREE_RECORD);
+    free(pairedRecNums);
     
     return DRMS_SUCCESS;
     
 }	// DoIt
+
+
+/*
+ * Find pairs of images according to T_REC and delt
+ * For each record, find the record that closest to T_REC+delt
+ * Store the record numbers in paiedRecNums[], total pairs in npairs
+ *
+ */
+
+int pairTRecs(DRMS_RecordSet_t *inRS, double delt, int *pairedRecNums, int *npairs)
+{
+    
+    int status = 0;
+    
+    int nrecs = inRS->n;
+    int *cgemnums = (int *) (malloc(nrecs * sizeof(int)));       // CGEMNUM
+    TIME *trecs = (TIME *) (malloc(nrecs * sizeof(TIME)));       // T_REC
+    
+    for (int irec = 0; irec < nrecs; irec++) {
+        cgemnums[irec] = drms_getkey_int(inRS->records[irec], "CGEMNUM", &status);
+        trecs[irec] = drms_getkey_time(inRS->records[irec], "T_REC", &status);
+    }
+    
+    *npairs = 0;
+    for (int i = 0; i < nrecs; i++) {
+        pairedRecNums[i] = nrecs;       // no findings
+        for (int j = 0; j < nrecs; j++) {
+            if (j == i || cgemnums[j] != cgemnums[i] || trecs[j] <= trecs[i]) continue;
+            if (fabs(trecs[j] - trecs[i] - delt) < (MAXTDIFF * delt)) {
+                pairedRecNums[i] = j;
+                (*npairs)++;
+                break;
+            }
+        }   // j
+    }   // i
+    
+    free(cgemnums); free(trecs);
+    
+    if (*npairs == 0) return 1;
+    
+    return 0;
+    
+}
 
 
 // =============================================
@@ -734,7 +823,7 @@ void m2pc(int *dims_mer, float *map_mer, struct ephemeris *ephem,
  *
  */
 
-int writeV(DRMS_Record_t *inRec, DRMS_Record_t *outRec,
+int writeV(DRMS_Record_t *inRec0, DRMS_Record_t *inRec1, DRMS_Record_t *outRec,
            int *dims, struct flctOpt *fOpt, float *vx, float *vy, float *vm)
 {
     int status = 0;
@@ -766,10 +855,7 @@ int writeV(DRMS_Record_t *inRec, DRMS_Record_t *outRec,
     drms_free_array(outArray);
     
     // Vy
-    
-    for (int i = 0; i < nxny; i++) {
-        vy[i] *= (-1.);
-    }
+
     outSeg = drms_segment_lookup(outRec, "Vy");
     outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, dims, vy, &status);
     if (status) {
@@ -812,9 +898,21 @@ int writeV(DRMS_Record_t *inRec, DRMS_Record_t *outRec,
     
     // Keywords
     
-    drms_copykeys(outRec, inRec, 0, kDRMS_KeyClass_Explicit);     // copy all keys
+    drms_copykeys(outRec, inRec0, 0, kDRMS_KeyClass_Explicit);     // most keywords copied from inRec0
     
-    TIME val, trec, tnow, UNIX_epoch = -220924792.000; /* 1970.01.01_00:00:00_UTC */
+    TIME tobs0 = drms_getkey_time(inRec0, "T_OBS", &status);
+    TIME tobs1 = drms_getkey_time(inRec1, "T_OBS", &status);
+    TIME tobs = (tobs0 + tobs1) / 2.;
+    drms_setkey_time(outRec, "T_OBS", tobs);
+    
+    TIME trec0 = drms_getkey_time(inRec0, "T_REC", &status);
+    TIME trec1 = drms_getkey_time(inRec1, "T_REC", &status);
+    TIME trec = (trec0 + trec1) / 2.;
+    drms_setkey_time(outRec, "T_REC", trec);
+    drms_setkey_time(outRec, "T_REC0", trec0);
+    drms_setkey_time(outRec, "T_REC1", trec1);
+    
+    TIME val, tnow, UNIX_epoch = -220924792.000; /* 1970.01.01_00:00:00_UTC */
     tnow = (double)time(NULL);
     tnow += UNIX_epoch;
     drms_setkey_time(outRec, "DATE", tnow);
