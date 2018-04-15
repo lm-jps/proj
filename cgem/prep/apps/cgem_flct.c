@@ -50,7 +50,7 @@
 
 //#define TEST        1
 #define NATMAP      1       // Use George's mapping code
-#define MAXTDIFF    0.05    // relative allowed difference of cadence for pairing input frames
+#define MAXTDIFF    0.01    // relative allowed difference of cadence for pairing input frames
 
 // Some other things
 #ifndef MIN
@@ -252,7 +252,6 @@ int DoIt(void)
     DRMS_RecordSet_t *outRS = drms_create_records(drms_env, npairs, outQuery, DRMS_PERMANENT, &status);
     if (status || !outRS) {
         free(pairedRecNums);
-        drms_close_records(outRS, DRMS_FREE_RECORD);
         DIE("Error creating output series\n");
     }
     
@@ -261,7 +260,7 @@ int DoIt(void)
     int ipair = 0;
     for (int irec = 0; irec < nrecs; irec++) {
         
-        if (pairedRecNums[irec] == nrecs) continue;     // no pairing, skip frame
+        if (pairedRecNums[irec] >= nrecs) continue;     // no pairing, skip frame
         
         DRMS_Record_t *inRec0 = inRS->records[irec];
         DRMS_Record_t *inRec1 = inRS->records[pairedRecNums[irec]];
@@ -442,6 +441,9 @@ int DoIt(void)
         }
  
         SHOW("done.\n")
+        
+        // NEXT!!!
+        
         ipair++;
 
     }       // irec
@@ -934,6 +936,10 @@ int writeV(DRMS_Record_t *inRec0, DRMS_Record_t *inRec1, DRMS_Record_t *outRec,
     drms_setkey_int(outRec, "BIASCORR", fOpt->biascor);
     drms_setkey_int(outRec, "NATMAP", fOpt->natmap);
     drms_setkey_string(outRec, "FLCTVERS", fOpt->vers);
+    
+    drms_setkey_string(outRec, "BUNIT_000", "m/s");
+    drms_setkey_string(outRec, "BUNIT_001", "m/s");
+    drms_setkey_string(outRec, "BUNIT_002", " ");
     
     return 0;
 }

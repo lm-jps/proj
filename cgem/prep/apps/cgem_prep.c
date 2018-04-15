@@ -159,7 +159,7 @@ int DoIt(void)
 
     /* Get data series */
     
-    char *inQuery, *outQuery, *medvQuery, *medaQuery;    // Data series query
+    char *inQuery, *outQuery;    // Data series query
     
     inQuery = (char *) params_get_str(&cmdparams, "in");
     outQuery = (char *) params_get_str(&cmdparams, "out");
@@ -780,13 +780,13 @@ int writeOutput(DRMS_Record_t *inRec, DRMS_Record_t *outRec, struct reqInfo *req
     drms_setkey_string(outRec, "CTYPE2", key);
     drms_setkey_float(outRec, "CROTA2", 0.0);
     
-    drms_setkey_string(outRec, "BUNIT_000", "m/s");
+    drms_setkey_string(outRec, "BUNIT_000", "Mx/cm^2");
     drms_setkey_string(outRec, "BUNIT_001", "Mx/cm^2");
     drms_setkey_string(outRec, "BUNIT_002", "Mx/cm^2");
-    drms_setkey_string(outRec, "BUNIT_003", "Mx/cm^2");
+    drms_setkey_string(outRec, "BUNIT_003", " ");
     drms_setkey_string(outRec, "BUNIT_004", " ");
     drms_setkey_string(outRec, "BUNIT_005", " ");
-    drms_setkey_string(outRec, "BUNIT_006", " ");
+    drms_setkey_string(outRec, "BUNIT_006", "m/s");
  
     return 0;
     
