@@ -19,7 +19,7 @@
  *
  *
  *  Example call:
- *      pfss_q "in=hmi.synoptic_mr_polfil_720s[2099]" "out=hmi_test.pfss_synop"
+ *      pfss_q "in=hmi.synoptic_mr_polfil_720s[2099]" "out=hmi.pfss_synop"
  *
  */
 
@@ -54,6 +54,8 @@
 #define ARRLENGTH(ARR) (sizeof(ARR) / sizeof(ARR[0]))
 #define NR_PFSS     (ARRLENGTH(r_pfss))
 #define NR_OUT      (ARRLENGTH(r_out))
+
+#define WRITEGH     (1)
 
 // =================================
 
@@ -105,6 +107,7 @@ int DoIt(void)
     const int np_q = params_get_int(&cmdparams, "np_q");
     const int nt_q = params_get_int(&cmdparams, "nt_q");
     const int lmax = params_get_int(&cmdparams, "lmax");
+    const int lmax12 = (lmax + 1) * (lmax + 1);
     
     const int nr = NR_PFSS, nr_q = NR_OUT;
     
@@ -198,8 +201,8 @@ int DoIt(void)
         // Calculate SPH coeffcients
         // =============
         
-        double *g = (double *) (calloc((lmax + 1) * (lmax + 1), sizeof(double)));
-        double *h = (double *) (calloc((lmax + 1) * (lmax + 1), sizeof(double)));
+        double *g = (double *) (calloc(lmax12, sizeof(double)));
+        double *h = (double *) (calloc(lmax12, sizeof(double)));
         
         SHOW("Calculating spherical harmonics... ");
         gh_pfss (br_sm, np, nt, lmax, p, t, kp, kt, g, h);
@@ -208,7 +211,7 @@ int DoIt(void)
         // =============
         // PFSS cube
         // =============
-        
+ 
         double *Bp = (double *) (malloc(np * nt * nr * sizeof(double)));
         double *Bt = (double *) (malloc(np * nt * nr * sizeof(double)));
         double *Br = (double *) (malloc(np * nt * nr * sizeof(double)));
@@ -229,11 +232,12 @@ int DoIt(void)
         pfss_cube (g, h, lmax, p_q, t_q, r_q, np_q, nt_q, nr_q, Bp_q, Bt_q, Br_q);
         SHOW("done.\n");
         
-        // Write out
+        // =============
+        // Output
+        // =============
         
         int dims0[2] = {np, nt};
         writeOutput (outRec, br_sm, dims0, 2, "Br0");       // arrays freed in subroutine
-//        free(br_sm);
         
         int dims[3] = {np, nt, nr};
         writeOutput (outRec, Br, dims, 3, "Br");
@@ -242,6 +246,18 @@ int DoIt(void)
         
         int dims_q[3] = {np_q, nt_q, nr_q};
         writeOutput (outRec, Br_q, dims_q, 3, "Brq");
+        
+        printf("lmax12=%ld\n", lmax12);
+        
+#ifdef WRITEGH
+        int dims_gh[3] = {lmax + 1, lmax + 1, 2};
+        double *gh = (double *) (calloc(lmax12 * 2, sizeof(double)));
+        memcpy(gh, g, lmax12 * sizeof(double));
+        memcpy(gh + lmax12, h, lmax12 * sizeof(double));
+        writeOutput (outRec, gh, dims_gh, 3, "gh");
+#endif      // WRITEGH
+        
+        SHOW("here\n");
         
         // Keywords
         
@@ -260,7 +276,7 @@ int DoIt(void)
         drms_setkey_double(outRec, "SIGMA", sig);
         
         drms_setkey_double(outRec, "CRPIX1", 1.);
-        printf("crval1=%f, crpix1=%f, cdelt1=%f, crva11_n=%f\n", crval1, crpix1, cdelt1, crval1_n);
+//        printf("crval1=%f, crpix1=%f, cdelt1=%f, crva11_n=%f\n", crval1, crpix1, cdelt1, crval1_n);
         drms_setkey_double(outRec, "CRVAL1", crval1_n);
         drms_setkey_double(outRec, "CDELT1", (-1.) * 360. / (np - 1.));
         drms_setkey_string(outRec, "CUNIT1", "degree");
@@ -408,55 +424,9 @@ void smoothSynop (double *br_o, double *p_o, double *t_o, int np_o, int nt_o, do
         
         // Clean up
         
-        // printf("row #%d done.\n", row); fflush(stdout);
         free(gK); free(br_t);
         
     }   // row
-
-    // Test printing
-    // ============================
-    /*
-     for (int idx = 0; idx < 10; idx++) { printf("lon_o[%d]=%f\n", idx, p_o[idx]/RADSINDEG); }
-     for (int idx = 0; idx < 10; idx++) { printf("lat_o[%d]=%f\n", idx, 90. - t_o[idx]/RADSINDEG); }
-     */
-    /*
-     for (int idx = 0; idx < 10; idx++) { printf("lon[%d]=%f\n", idx, p[idx]/RADSINDEG); }
-     for (int idx = 0; idx < 10; idx++) { printf("lat[%d]=%f\n", idx, 90. - t[idx]/RADSINDEG); }
-     */
-    /*
-     for (int idx = 0; idx < 11; idx++) { printf("sigmax[%d]=%f\n", idx, sigmax[idx]); }
-     for (int idx = 0; idx < 11; idx++) { printf("sigmay[%d]=%f\n", idx, sigmay[idx]); }
-     for (int idx = 80; idx < 91; idx++) { printf("sigmax[%d]=%f\n", idx, sigmax[idx]); }
-     for (int idx = 80; idx < 91; idx++) { printf("sigmay[%d]=%f\n", idx, sigmay[idx]); }
-     */
-    /*
-     for (int idx = 0; idx < 11; idx++) { printf("npixx[%d]=%d\n", idx, npixx[idx]); }
-     for (int idx = 0; idx < 11; idx++) { printf("npixy[%d]=%d\n", idx, npixy[idx]); }
-     for (int idx = 80; idx < 91; idx++) { printf("npixx[%d]=%d\n", idx, npixx[idx]); }
-     for (int idx = 80; idx < 91; idx++) { printf("npixy[%d]=%d\n", idx, npixy[idx]); }
-     */
-    /*
-     for (int idx = 357; idx < 361; idx++) { printf("x_c[%d]=%d\n", idx, x_c[idx]); }
-     for (int idx = 1; idx < 11; idx++) { printf("y_c[%d]=%d, y_off[%d]=%f\n", idx, y_c[idx], idx, y_off[idx]); }
-     for (int idx = 80; idx < 91; idx++) { printf("y_c[%d]=%d, y_off[%d]=%f\n", idx, y_c[idx], idx, y_off[idx]); }
-     */
-    /*
-     int npix = 11 * 11;
-     double *gK = (double *) (malloc(npix * sizeof(double)));
-     createGK (gK, 11, 11, 1.5, 1.5, -0.3);
-     int idx = 0;
-     double sum = 0.0;
-     for (int row = 0; row < 11; row++) {
-     for (int col = 0; col < 11; col++) {
-     printf("%9.6f", gK[idx]);
-     sum += gK[idx++];
-     }
-     printf("\n");
-     }
-     printf("sum=%f\n", sum);
-     free(gK);
-     */
-    // ================================
     
     // Clean up
     
@@ -487,7 +457,6 @@ void createGK (double *gK, int nx, int ny, double sigx, double sigy, double yoff
     for (int idx = 0; idx < nx; idx++) {
         x = (idx - xc) / sigx;
         psfx[idx] = exp(- x * x / 2.) * xfac;
-//        printf("psfx[%d]=%f\n", idx, psfx[idx]);
     }
 
     // 1D Y
@@ -499,7 +468,6 @@ void createGK (double *gK, int nx, int ny, double sigx, double sigy, double yoff
     for (int idx = 0; idx < ny; idx++) {
         y = (idx - yc) / sigy;
         psfy[idx] = exp(- y * y / 2.) * yfac;
-//        printf("psfy[%d]=%f\n", idx, psfy[idx]);
     }
     
     // 2D
