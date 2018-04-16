@@ -703,17 +703,16 @@ WlSeriesInfo.prototype.extractSnames = function(args)
      $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
 };
 
-function CreateParseSpecResponse(processSpec, specIn)
+function CreateParseSpecResponse(processSpec)
 {
     var parseSpecResponseCallback = processSpec;
-    var spec = specIn;
     
     var ParseSpecResponse = 
         function(transport)
         {
             var response = transport.responseText;
             var data = null;
-            var error = null;
+            var errMsg = null;
 
             if (response && response.length)
             {   
@@ -722,31 +721,30 @@ function CreateParseSpecResponse(processSpec, specIn)
             else
             {
                 data = { 'status' : 1, 'errMsg' : 'invalid parserecset response' };
-                error = 'invalid parserecset response';
-                $('ExportRecordSet').disabled = false; // allow the user to try again
+                errMsg = 'invalid parserecset response';
             }
 
             // data contains parsed spec data; use it
             // callback closure
             if (parseSpecResponseCallback !== null)
             {
-                parseSpecResponseCallback(error, data);
+                parseSpecResponseCallback(errMsg, data);
             }
         };
                             
     return ParseSpecResponse;
 }
 
-function ParseSpec(specIn, processSpec)
+function ParseSpec(spec, processSpec)
 {    
-    var onSuccess = CreateParseSpecResponse(processSpec, specIn);
+    var onSuccess = CreateParseSpecResponse(processSpec);
 
     new Ajax.Request('http://' + EXTERNAL_WEBSERVER + '.' + STANFORD_DOMAIN + '/cgi-bin/' + PARSE_RECSET, 
     {
         'method' : 'get',
-        'parameters' : { 'spec' : specIn },
+        'parameters' : { 'spec' : spec },
         'onSuccess' : onSuccess,
-        'onFailure' : function() { $("RSCountPlace").innerHTML = 'ERROR - unable to parse record-set specification ' + specIn; $('ExportRecordSet').disabled = false; },
+        'onFailure' : function() { $("RSCountPlace").innerHTML = 'ERROR - unable to parse record-set specification ' + spec; $('ExportRecordSet').disabled = false; },
         'onComplete' : function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
     });
 }
@@ -763,13 +761,22 @@ function CreateRequestRSInfoCallback(callback)
             {
                 var data = response.evalJSON();
 
-                if (data.status != 0)
+                if (!data || !data.hasOwnProperty('status') || data.status != 0)
                 {
+                    errMsg = 'failure running jsoc_info';
+                    if (data.hasOwnProperty('error'))
+                    {
+                        errMsg = data.error;
+                    }
                     RecordCount = null; // global
-                    $("RSCountPlace").innerHTML = 'failure running jsoc_info';
+                    $("RSCountPlace").innerHTML = errMsg;
                     ExportRecordSetOK = 0; // global
                     SeriesName = ''; // global
-                    $('ExportRecordSet').disabled = false; // allow the user to try again
+                    
+                    if (callback !== null)
+                    {
+                        callback(errMsg);
+                    }
                 }
                 else
                 {
@@ -868,11 +875,16 @@ function CreateRequestRSInfoCallback(callback)
             }
             else
             {
+                errMsg = 'invalid jsoc_info response';
                 RecordCount = null;
-                $("RSCountPlace").innerHTML = 'invalid jsoc_info response';
+                $("RSCountPlace").innerHTML = errMsg;
                 ExportRecordSetOK = 0; // global  
                 SeriesName = ''; // global
-                $('ExportRecordSet').disabled = false; // allow the user to try again
+
+                if (callback !== null)
+                {
+                    callback(errMsg);
+                }
             }
 
             if (callback !== null)
@@ -891,37 +903,48 @@ function CreateRequestRSInfoCallback(callback)
     return processRSInfo;
 }
 
-function RequestRSInfo(spec, callback)
+// if errMsg, then do not call jsoc_info, but we still have to call the callback
+function RequestRSInfo(errMsg, spec, callback)
 {
     var arguments = null;
     var jsocinfoCGI = null;
     var host = null;
 
-    // if this is the external host, then use jsocinfointext; this CGI will choose the correct db server to handle the series;
-    // if this is the internal host, then use jsoc_info, which will use the internal db server; Host, RecordLimit and EXTERNAL_SERVER 
-    // are globals
-    host = Host.toLowerCase();
-    if (serverMap[host] == INTERNAL_SERVER)
+    if (errMsg && errMsg.length != 0)
     {
-        jsocinfoCGI = JSOC_INFO;
-        arguments = { 'ds' : spec, 'n' : RecordLimit, 'op' : 'rs_list', 'key' : KEYWORD_CTYPE1 + ',' + KEYWORD_CTYPE2 };
+        if (callback !== null)
+        {
+            callback(errMsg);
+        }
     }
     else
     {
-        jsocinfoCGI = JSOCEXTINFO;
-        arguments = { 'dbhost' : EXTERNAL_SERVER, 'ds' : spec, 'n' : RecordLimit, 'op' : 'rs_list', 'key' : KEYWORD_CTYPE1 + ',' + KEYWORD_CTYPE2 };
-    }
+        // if this is the external host, then use jsocinfointext; this CGI will choose the correct db server to handle the series;
+        // if this is the internal host, then use jsoc_info, which will use the internal db server; Host, RecordLimit and EXTERNAL_SERVER 
+        // are globals
+        host = Host.toLowerCase();
+        if (serverMap[host] == INTERNAL_SERVER)
+        {
+            jsocinfoCGI = JSOC_INFO;
+            arguments = { 'ds' : spec, 'n' : RecordLimit, 'op' : 'rs_list', 'key' : KEYWORD_CTYPE1 + ',' + KEYWORD_CTYPE2 };
+        }
+        else
+        {
+            jsocinfoCGI = JSOCEXTINFO;
+            arguments = { 'dbhost' : EXTERNAL_SERVER, 'ds' : spec, 'n' : RecordLimit, 'op' : 'rs_list', 'key' : KEYWORD_CTYPE1 + ',' + KEYWORD_CTYPE2 };
+        }
 
-    var onSuccess = CreateRequestRSInfoCallback(callback);
+        var onSuccess = CreateRequestRSInfoCallback(callback);
         
-    new Ajax.Request('http://' + host + '/cgi-bin/ajax/' + jsocinfoCGI,
-    {        
-        'method': 'get',
-        'parameters': arguments,
-        'onSuccess': onSuccess, 
-        'onFailure': function() { RecordCount = null; $("RSCountPlace").innerHTML = 'ERROR - failure calling jsoc_info'; ExportRecordSetOK = 0; SeriesName = ''; $('ExportRecordSet').disabled = false; },
-        'onComplete': function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
-    });
+        new Ajax.Request('http://' + host + '/cgi-bin/ajax/' + jsocinfoCGI,
+        {        
+            'method': 'get',
+            'parameters': arguments,
+            'onSuccess': onSuccess, 
+            'onFailure': function() { RecordCount = null; $("RSCountPlace").innerHTML = 'ERROR - failure calling jsoc_info'; ExportRecordSetOK = 0; SeriesName = ''; $('ExportRecordSet').disabled = false; },
+            'onComplete': function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
+        });
+    }
 }
 
 function CreateProcessSeriesSelection(spec, series, callback)
@@ -934,14 +957,31 @@ function CreateProcessSeriesSelection(spec, series, callback)
             if (response && response.length)
             {
                 var data = response.evalJSON();
+                var errMsg = null;
          
                 // check for suitability for aia_scale processing
-                if (data.errMsg !== null)
+                if (!data || !data.hasOwnProperty('errMsg'))
+                {
+                    // unexpected response from seriesinfo.py
+                    errMsg = 'unexpected response to series-info request';
+                }
+                else if (data.errMsg !== null)
+                {
+                    errMsg = data.errMsg;
+                }
+
+                if (errMsg)
                 {
                     RecordCount = null; // global
-                    $("RSCountPlace").innerHTML = data.errMsg;
+                    $("RSCountPlace").innerHTML = errMsg;
                     ExportRecordSetOK = 0; // global
                     SeriesName = ''; // global
+                    
+                    // need to call GetRSCount callback by calling the series-selection callback (with an error message)
+                    if (callback !== null)
+                    {
+                        callback(errMsg);
+                    }
                 }
                 else
                 {
@@ -980,16 +1020,23 @@ function CreateProcessSeriesSelection(spec, series, callback)
                     
                     if (callback !== null)
                     {
-                        callback();
+                        callback(null);
                     }
                 }
             }
             else
             {
+                errMsg = 'unable to obtain series information';
                 RecordCount = null; // global
-                $("RSCountPlace").innerHTML = 'unable to obtain series information';
+                $("RSCountPlace").innerHTML = errMsg;
                 ExportRecordSetOK = 0; // global
                 SeriesName = ''; // global
+                
+                // need to call GetRSCount callback by calling the series-selection callback (with an error message)
+                if (callback !== null)
+                {
+                    callback(errMsg);
+                }
             }
         };
         
@@ -1014,28 +1061,28 @@ function RequestSeriesInfo(series, callback)
 function CreateProcessSpec(spec, processRecordCount)
 {    
     var processSpec = 
-        function(error, data)
+        function(errMsg, data)
         {
-            errMsg = null;
+            var errMsgActual = null;
             prefix = 'ERROR - unable to parse record-set specification';
 
             if (data && data.hasOwnProperty('errMsg') && data.errMsg && data.errMsg.length != 0)
             {
-                errMsg = prefix + ': ' + data.errMsg;
+                errMsgActual = prefix + ': ' + data.errMsg;
             }
-            else if (error && error.length != 0)
+            else if (errMsg && errMsg.length != 0)
             {
-                errMsg = prefix + ': ' + error;
+                errMsgActual = prefix + ': ' + errMsg;
             }
             
-            if (errMsg)
+            if (errMsgActual)
             {
                 RecordCount = null;
                 ExportRecordSetOK = 0;
-                $('RSCountPlace').innerHTML = errMsg;
+                $('RSCountPlace').innerHTML = errMsgActual;
                 
                 // if an error occurred, we still need to call the processRecordCount callback
-                processRecordCount(errMsg);
+                processRecordCount(errMsgActual);
             }
             else
             {
@@ -1058,7 +1105,7 @@ function CreateProcessSpec(spec, processRecordCount)
                 //   3. CTYPE2 == 'HPLT-TAN'
                 //
                 // the RequestSeriesInfo callback needs to call RequestRSInfo with processRecordCount as the callback
-                var requestRSInfo = function() { RequestRSInfo(validSpec, processRecordCount); };
+                var requestRSInfo = function(errMsg) { RequestRSInfo(errMsg, validSpec, processRecordCount); };
                 var processSeriesSelection = CreateProcessSeriesSelection(validSpec, series, requestRSInfo);
                 RequestSeriesInfo(series, processSeriesSelection);
             }
