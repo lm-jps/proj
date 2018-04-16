@@ -47,6 +47,8 @@ c   or write to the Free Software Foundation, Inc.,
 c   59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 c
 c
+      implicit none
+c
       integer :: m,n
       real*8 :: bmag0(m+1,n+1)
       real*8 :: bmag1(m+1,n+1)
@@ -56,6 +58,12 @@ c
       real*8 :: mask0(m+1,n+1),mask1(m+1,n+1)
       real*8 :: mask2(m+1,n+1)
 
+c
+c - - initialize mask0,mask1,mask2 to 0:
+c
+      mask0(:,:)=0.d0
+      mask1(:,:)=0.d0
+      mask2(:,:)=0.d0
 
       where(bmag0 .ge. bthr) 
           mask0=1.d0
