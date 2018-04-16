@@ -721,7 +721,7 @@ function CreateParseSpecResponse(processSpec, specIn)
             }
             else
             {
-                data = { 'status' : 'invalid parserecset response' };
+                data = { 'status' : 1, 'errMsg' : 'invalid parserecset response' };
                 error = 'invalid parserecset response';
                 $('ExportRecordSet').disabled = false; // allow the user to try again
             }
@@ -839,7 +839,7 @@ function CreateRequestRSInfoCallback(callback)
                     else
                     {
                         // processSeriesSelection determine that the series is not aia_scale compatible
-                        alert('not here');
+                        alert('danger will robinson!');
                     }
                     
                     if (!$('OptionAiaScale').retrieve('disabledState', false))
@@ -1016,12 +1016,26 @@ function CreateProcessSpec(spec, processRecordCount)
     var processSpec = 
         function(error, data)
         {
-            if (error !== null && error.length != 0 || data.errMsg !== null)
+            errMsg = null;
+            prefix = 'ERROR - unable to parse record-set specification';
+
+            if (data && data.hasOwnProperty('errMsg') && data.errMsg && data.errMsg.length != 0)
+            {
+                errMsg = prefix + ': ' + data.errMsg;
+            }
+            else if (error && error.length != 0)
+            {
+                errMsg = prefix + ': ' + error;
+            }
+            
+            if (errMsg)
             {
                 RecordCount = null;
-                $("RSCountPlace").innerHTML = 'ERROR - unable to parse record-set specification ' + spec;
                 ExportRecordSetOK = 0;
-                $('ExportRecordSet').disabled = false; // allow the user to try again
+                $('RSCountPlace').innerHTML = errMsg;
+                
+                // if an error occurred, we still need to call the processRecordCount callback
+                processRecordCount(errMsg);
             }
             else
             {
@@ -1059,6 +1073,9 @@ function CreateProcessSpec(spec, processRecordCount)
 // variable to identify the jsoc_info CGI. If the user is accessing a sanctioned internal series, then we need to use the jsoc_info
 // CGI hosted on jsoc2.stanford.edu, not the one on 'Host' (which is jsoc.stanford.edu).
 // The callback is optional. Many functions require jsoc_info to have returned before they can continue.
+//
+// IF THE CALLBACK IS NOT null THEN IT MUST BE CALLED, EVEN ON ERROR; OTHERWISE, CERTAIN GLOBAL VARIABLES
+// WILL NOT BE SET APPROPRIATELY
 function GetRSCount(countCallback)
 {
     ExportQueryOK = 0;
@@ -1246,27 +1263,32 @@ function ProcessRSChange(error)
     // GetDefaultFormat() starts another jsoc_info asnchronously. It sets firstTimePrime. firstTimePrime is used in processing.js.
     // GetDefaultFormat() requires SeriesName, which is set in the first jsoc_info.
     // ProcessRSChange() is now not called until the first jsoc_info has completed.
-    firstTimePrime = ""; // Used in GetDefaultFormat()
-    GetDefaultFormat();
+    if (!error)
+    {
+        firstTimePrime = ""; // Used in GetDefaultFormat()
+        GetDefaultFormat();
 
-    CheckNoProcessingList();
-    // NotifyProcessingCode requires the first jsoc_info to have completed (the one started by SetRecordLimit()).
-    // It also requires that SetProcessing() has completed its asynchronous running.
-    NotifyProcessingCode();
-    CheckRediness();
+        CheckNoProcessingList();
+        // NotifyProcessingCode requires the first jsoc_info to have completed (the one started by SetRecordLimit()).
+        // It also requires that SetProcessing() has completed its asynchronous running.
+        NotifyProcessingCode();
+        CheckRediness();
+    
+        // re-enable the processing step checkboxes
+        for (iProc = 0; iProc < ExportProcessingOptions.length; iProc++)
+        {
+            var ExpOpt = ExportProcessingOptions[iProc];
+
+            // ART $(ExpOpt.id).disabled = false;
+            $(ExpOpt.id).disabled = $(ExpOpt.id).retrieve('disabledState', false);
+        }
+    }
     
     // Re-enable the RecordSet text box.
     $('ExportRecordSet').disabled = false;
     
-    // re-enable the processing step checkboxes
-    for (iProc = 0; iProc < ExportProcessingOptions.length; iProc++)
-    {
-        var ExpOpt = ExportProcessingOptions[iProc];
-
-        // ART $(ExpOpt.id).disabled = false;
-        $(ExpOpt.id).disabled = $(ExpOpt.id).retrieve('disabledState', false);
-    }
-    
+    // must set to false every time the user enters a specification, even on error, otherwise the user will never
+    // be able to enter a new specification
     newRSRunning = false;
 }
 
