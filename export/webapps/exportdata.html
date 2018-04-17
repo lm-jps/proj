@@ -369,6 +369,9 @@ function OnLoadInit()
 
   CreateTips();
   $("TipsOnOffButton").value = "Turn Help Off";
+  
+  $('RSCountPlace').up().setStyle({ 'max-width': '22em', 'overflow-wrap': 'break-word', 'word-wrap': 'break-word', 'word-break': 'break-all' });
+  
   window.focus();
   }
 
