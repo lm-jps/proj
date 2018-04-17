@@ -3,7 +3,7 @@
  *
  *  Example:
  *	limit s u
- *  cgem_pdfi "in=hmi_test.cgem_pdfi_in[11158][2011.02.15_01:24/30m]" "out=hmi_test.cgem_pdfi_out"
+ *  cgem_pdfi "in=hmi_test.cgem_pdfi_in[11158][2011.02.15_01:24/24m]" "out=hmi_test.cgem_pdfi_out"
  *
  */
 
@@ -36,28 +36,30 @@
 
 #define kNotSpecified "Not Specified"
 
-#define TESTMODE    (1)
+//#define TESTMODE    (1)
 
 // Adjust padding sizes such that m, n are dividable by UPADDING, must be even
 #define UPADDING	(12)
+
+#define MAXTDIFF    0.01    // relative allowed difference of cadence for pairing input frames
 
 // Constants
 // Blon equivalent to Bx, Blat equivalent to By
 
 #ifdef TESTMODE
-char *inSegNames[] = {"Bloncoe", "Blatcoe", "Brllcoe",
-                      "Vloncoe", "Vlatcoe", "Vlosllcoe",
-                      "Lloncoe", "Llatcoe", "Lrllcoe"};
-char *outSegNames[] = {"Elonpdfi", "Elatpdfi", "Erllpdfi"};
-char *outSegBNames[] = {"Blon0", "Blat0", "Brll0",
-                        "Blon1", "Blat1", "Brll1"};
-#else
 char *inSegNames[] = {"Bx", "By", "Bz",
                       "Vx", "Vy", "Vz",
                       "Lx", "Ly", "Lz"};
 char *outSegNames[] = {"Expdfi", "Eypdfi", "Ezpdfi"};
 char *outSegBNames[] = {"Bx0", "By0", "Bz0",
                         "Bx1", "By1", "Bz1"};
+#else
+char *inSegNames[] = {"Bloncoe", "Blatcoe", "Brllcoe",
+                      "Vloncoe", "Vlatcoe", "Vlosllcoe",
+                      "Lloncoe", "Llatcoe", "Lrllcoe"};
+char *outSegNames[] = {"Elonpdfi", "Elatpdfi", "Erllpdfi"};
+char *outSegBNames[] = {"Blon0", "Blat0", "Brll0",
+                        "Blon1", "Blat1", "Brll1"};
 #endif
 
 // Parameters
@@ -89,11 +91,17 @@ extern void pdfi_wrapper4jsoc_ss_(int *m, int *n, double *rsun, double *a, doubl
 
 // C functions
 
+/* Find pairs of images according to T_REC and delt */
+int pairTRecs(DRMS_RecordSet_t *inRS, double delt, int *pairedRecNums, int *npairs);
+
+/* Get patch and padding dimensions */
+void getRInfo(DRMS_Record_t *inRec, struct reqInfo *rInfo);
+
 // Reading 9 input arrays
 int getInputArr(DRMS_Record_t *inRec, struct reqInfo *rInfo,
-                double **bloncoe_ptr, double **blatcoe_ptr, double **brllcoe_ptr,
-                double **vloncoe_ptr, double **vlatcoe_ptr, double **vloscoe_ptr,
-                double **lloncoe_ptr, double **llatcoe_ptr, double **lrllcoe_ptr);
+                double *bloncoe, double *blatcoe, double *brllcoe,
+                double *vloncoe, double *vlatcoe, double *vlosllcoe,
+                double *lloncoe, double *llatcoe, double *lrllcoe);
 
 // Writing 3 output arrays
 int writeOutputArr(DRMS_Record_t *inRec0, DRMS_Record_t *inRec1, DRMS_Record_t *outRec,
@@ -113,11 +121,9 @@ ModuleArgs_t module_args[] =
 {
     {ARG_STRING, "in", kNotSpecified, "Input data series."},
     {ARG_STRING, "out", kNotSpecified, "Output data series."},
+    {ARG_FLOAT, "delt", "720.", "Temporal spacing between input frames"},
     {ARG_INT, "npad", "50", "Initial guess of padding in column."},
     {ARG_INT, "mpad", "50", "Initial guess of padding in row."},
-//    {ARG_DOUBLE, "bthr", "200.", "Threshold for masking."},
-//    {ARG_DOUBLE, "bthr_r", "0.", "Threshold for relaxation."},
-//    {ARG_FLAG, "n", "", "No padding, overrides npad & mpad."},
     {ARG_END}
 };
 
@@ -135,9 +141,10 @@ int DoIt(void)
     int noPadding = params_isflagset(&cmdparams, "n");
     int mpad = params_get_int(&cmdparams, "mpad"); if (mpad < 0) mpad = 0;
     int npad = params_get_int(&cmdparams, "npad"); if (npad < 0) npad = 0;
-//    if (noPadding) mpad = npad = 0;
-//    double bthr = params_get_double(&cmdparams, "bthr");
-//    double bthr_relax = params_get_double(&cmdparams, "bthr_r");
+    
+    double delt = params_get_double(&cmdparams, "delt");
+    
+    double rsun_ref = 6.96e5;       // fixed for HMI
     
     /* Input Data */
     
@@ -146,109 +153,142 @@ int DoIt(void)
     if (status || nrecs <= 1) {
         DIE("Input data series error");
     }
-    int cgemnum = drms_getkey_int(inRS->records[0], "CGEMNUM", &status);
-    for (int irec = 1; irec < nrecs; irec++) {
-        if (drms_getkey_int(inRS->records[irec], "CGEMNUM", &status) != cgemnum) {
-            DIE("Input data series error");     // Check cgemnum
-        }
+    
+    // Gather all T_RECs in input, determine available pairs of output
+    
+    int *pairedRecNums = (int *) (malloc(nrecs * sizeof(int)));
+    int npairs;
+    if (pairTRecs(inRS, delt, pairedRecNums, &npairs)) {
+        free(pairedRecNums);
+        drms_close_records(inRS, DRMS_FREE_RECORD);
+        DIE("No pairs of input images satisfy requested cadence.");
     }
+    printf("Found %d pairs in %d frames.\n", npairs, nrecs); fflush(stdout);
     
     /* Output */
     
-    DRMS_RecordSet_t *outRS = drms_create_records(drms_env, nrecs - 1, outQuery, DRMS_PERMANENT, &status);
+    DRMS_RecordSet_t *outRS = drms_create_records(drms_env, npairs, outQuery, DRMS_PERMANENT, &status);
     if (status) {
+        free(pairedRecNums);
+        drms_close_records(inRS, DRMS_FREE_RECORD);
         DIE("Output data series error");
     }
     
     /* Loop */
     
-    // Useful variables
-    
-    double *bloncoe0, *blatcoe0, *brllcoe0;     // B vectors
-    double *bloncoe1, *blatcoe1, *brllcoe1;
-    
-    double *vloncoe0, *vlatcoe0, *vlosllcoe0;     // V vectors
-    double *vloncoe1, *vlatcoe1, *vlosllcoe1;
-    
-    double *lloncoe0, *llatcoe0, *lrllcoe0;     // los vectors
-    double *lloncoe1, *llatcoe1, *lrllcoe1;
-
-    double *blon0, *blat0, *brll0;      // staggered output B vector
-    double *blon1, *blat1, *brll1;
-    
-    double *elonpdfi, *elatpdfi, *erllpdfi;     // staggered output E vector
-    double *srll, *hmll;                // Poynting flux, helicity flux density
-    
-    int n, m;
-    double a, b, c, d;
-    TIME t0, t1, thalf;
-    TIME tjul0, tjul1, tjulhalf;      // Julian day required by FORTRAN (with offset)
-    double rsun_ref = 6.96e5;       // fixed for HMI
-    
-    /* Loop */
-    
-    for (int irec = 0; irec < nrecs - 1; irec++) {
+    int ipair = 0;
+    for (int irec = 0; irec < nrecs; irec++) {
+        
+        if (pairedRecNums[irec] >= nrecs) continue;     // no pairing, skip frame
+        
+        printf("==============\nProcessing rec pairs #%d of %d\n", ipair + 1, npairs); fflush(stdout);
         
         // Input, n x m
         
         DRMS_Record_t *inRec0 = inRS->records[irec];
-        DRMS_Record_t *inRec1 = inRS->records[irec+1];
+        DRMS_Record_t *inRec1 = inRS->records[pairedRecNums[irec]];
         
         struct reqInfo rInfo0, rInfo1;
         rInfo0.npad0 = rInfo1.npad0 = npad;
         rInfo0.mpad0 = rInfo1.mpad0 = mpad;
         
-        // Padding added in subroutine
+        // Patch & padding info
+        
+        getRInfo(inRec0, &rInfo0);
+        getRInfo(inRec1, &rInfo1);
+        if (rInfo0.n != rInfo1.n || rInfo0.m != rInfo1.m) {
+            printf("Input array error, record #%d skipped", ipair + 1);
+            continue;
+        }
+        
+        // Input data arrays with padding, need calloc for zeros
+        
+        int n1m1 = (rInfo0.n + 1) * (rInfo0.m + 1);
+        
+        double *bloncoe0 = (double *) (calloc(n1m1, sizeof(double)));      // B vectors
+        double *blatcoe0 = (double *) (calloc(n1m1, sizeof(double)));
+        double *brllcoe0 = (double *) (calloc(n1m1, sizeof(double)));
+        
+        double *vloncoe0 = (double *) (calloc(n1m1, sizeof(double)));      // V vectors
+        double *vlatcoe0 = (double *) (calloc(n1m1, sizeof(double)));
+        double *vlosllcoe0 = (double *) (calloc(n1m1, sizeof(double)));
+        
+        double *lloncoe0 = (double *) (calloc(n1m1, sizeof(double)));
+        double *llatcoe0 = (double *) (calloc(n1m1, sizeof(double)));      // los vectors
+        double *lrllcoe0 = (double *) (calloc(n1m1, sizeof(double)));
+        
+        double *bloncoe1 = (double *) (calloc(n1m1, sizeof(double)));
+        double *blatcoe1 = (double *) (calloc(n1m1, sizeof(double)));
+        double *brllcoe1 = (double *) (calloc(n1m1, sizeof(double)));
+        
+        double *vloncoe1 = (double *) (calloc(n1m1, sizeof(double)));
+        double *vlatcoe1 = (double *) (calloc(n1m1, sizeof(double)));
+        double *vlosllcoe1 = (double *) (calloc(n1m1, sizeof(double)));
+        
+        double *lloncoe1 = (double *) (calloc(n1m1, sizeof(double)));
+        double *llatcoe1 = (double *) (calloc(n1m1, sizeof(double)));
+        double *lrllcoe1 = (double *) (calloc(n1m1, sizeof(double)));
+
+        
+        // Get data
+        
         if (getInputArr(inRec0, &rInfo0,
-                        &bloncoe0, &blatcoe0, &brllcoe0,
-                        &vloncoe0, &vlatcoe0, &vlosllcoe0,
-                        &lloncoe0, &llatcoe0, &lrllcoe0)) {
-            printf("Input array error, record #%d skipped", irec);
+                        bloncoe0, blatcoe0, brllcoe0,
+                        vloncoe0, vlatcoe0, vlosllcoe0,
+                        lloncoe0, llatcoe0, lrllcoe0)) {
+            printf("Input array error, record #%d skipped", ipair);
             continue;
         }
         
         if (getInputArr(inRec1, &rInfo1,
-                        &bloncoe1, &blatcoe1, &brllcoe1,
-                        &vloncoe1, &vlatcoe1, &vlosllcoe1,
-                        &lloncoe1, &llatcoe1, &lrllcoe1)
-            || rInfo0.m != rInfo1.m || rInfo0.n != rInfo1.n) {
-            printf("Input array error, record #%d skipped", irec);
+                        bloncoe1, blatcoe1, brllcoe1,
+                        vloncoe1, vlatcoe1, vlosllcoe1,
+                        lloncoe1, llatcoe1, lrllcoe1)) {
+            printf("Input array error, record #%d skipped", ipair);
             continue;
         }
         
         // Needed parameters
         
-        n = rInfo0.n; m = rInfo0.m;
-        a = rInfo0.a; b = rInfo0.b; c = rInfo0.c; d = rInfo0.d;
-        t0 = rInfo0.t; t1 = rInfo1.t;
-        tjul0 = t0 / SECINDAY; tjul1 = t1 / SECINDAY;
+        int n = rInfo0.n, m = rInfo0.m;
+        double a = rInfo0.a, b = rInfo0.b, c = rInfo0.c, d = rInfo0.d;
+        TIME t0 = rInfo0.t, t1 = rInfo1.t;
+        double tjul0 = t0 / SECINDAY, tjul1 = t1 / SECINDAY, tjulhalf;
+        TIME trec = (rInfo0.trec + rInfo1.trec) / 2.;
         
-        printf("dt=%36.30f\n", t1 - t0);
+        char trec_str[100];
+        sprint_time(trec_str, trec, "TAI", 0);
+        printf("TREC=[%s], dt=%lf, djul=%lf...\n", trec_str, t1 - t0, tjul1 - tjul0);
+        
+        printf("n=%d, m=%d, rsun_ref=%f\n", n, m, rsun_ref);
+        printf("a=%f, b=%f, c=%f, d=%f\n", a, b, c, d);
+        printf("tjul0=%f, tjul1=%f\n", tjul0, tjul1);
         
         /*
-         a = 1.444096088409423828125000000000;
-         b = 1.720951676368713378906250000000;
-         c = 0.000000000000000000000000000000;
-         d = 0.288267821073532104492187500000;
-         t0 = 0.0;
-         t1 = t0 + 1439.999994635581970214843750000000;     // for now
+        int idx = 48890;
+        printf("blon0=%f, blat0=%f, brll0=%f\n", bloncoe0[idx], blatcoe0[idx], brllcoe0[idx]);
+        printf("vlon0=%f, vlat0=%f, vlosll0=%f\n", vloncoe0[idx], vlatcoe0[idx], vlosllcoe0[idx]);
+        printf("llon0=%f, llat0=%f, lrll0=%f\n", lloncoe0[idx], llatcoe0[idx], lrllcoe0[idx]);
+        printf("blon1=%f, blat1=%f, brll1=%f\n", bloncoe1[idx], blatcoe1[idx], brllcoe1[idx]);
+        printf("vlon1=%f, vlat1=%f, vlosll1=%f\n", vloncoe1[idx], vlatcoe1[idx], vlosllcoe1[idx]);
+        printf("llon1=%f, llat1=%f, lrll1=%f\n", lloncoe1[idx], llatcoe1[idx], lrllcoe1[idx]);
          */
         
-        // Output arrays, n x m; rec0 as default
+        // Output arrays, rec0 as default, freed in writeOutputArr
         
-        blon0 = (double *) (malloc((n + 1) * m * sizeof(double)));
-        blat0 = (double *) (malloc(n * (m + 1) * sizeof(double)));
-        brll0 = (double *) (malloc(n * m * sizeof(double)));
-        blon1 = (double *) (malloc((n + 1) * m * sizeof(double)));
-        blat1 = (double *) (malloc(n * (m + 1) * sizeof(double)));
-        brll1 = (double *) (malloc(n * m * sizeof(double)));
+        double *blon0 = (double *) (calloc((n + 1) * m, sizeof(double)));
+        double *blat0 = (double *) (calloc(n * (m + 1), sizeof(double)));
+        double *brll0 = (double *) (calloc(n * m, sizeof(double)));
+        double *blon1 = (double *) (calloc((n + 1) * m, sizeof(double)));
+        double *blat1 = (double *) (calloc(n * (m + 1), sizeof(double)));
+        double *brll1 = (double *) (calloc(n * m, sizeof(double)));
         
-        elonpdfi = (double *) (malloc(n * (m + 1) * sizeof(double)));
-        elatpdfi = (double *) (malloc((n + 1) * m * sizeof(double)));
-        erllpdfi = (double *) (malloc((n + 1) * (m + 1) * sizeof(double)));
+        double *elonpdfi = (double *) (calloc(n * (m + 1), sizeof(double)));
+        double *elatpdfi = (double *) (calloc((n + 1) * m, sizeof(double)));
+        double *erllpdfi = (double *) (calloc((n + 1) * (m + 1), sizeof(double)));
         
-        srll = (double *) (malloc(n * m * sizeof(double)));
-        hmll = (double *) (malloc(n * m * sizeof(double)));
+        double *srll = (double *) (calloc(n * m, sizeof(double)));
+        double *hmll = (double *) (calloc(n * m, sizeof(double)));
         
         // Run it in FORTRAN
         // New wrapper makes sure that a, b, c, d are within bounds (Oct 21 2016)
@@ -261,25 +301,22 @@ int DoIt(void)
                               blon0, blat0, brll0, blon1, blat1, brll1,
                               elonpdfi, elatpdfi, erllpdfi, srll, hmll,
                               &tjulhalf);
-        thalf = tjulhalf * SECINDAY;
-        SHOW("Fortran done\n");
         
         // Output, finally save as n x m
         
-        DRMS_Record_t *outRec = outRS->records[irec];
+        DRMS_Record_t *outRec = outRS->records[ipair];
         
         if (writeOutputArr(inRec0, inRec1, outRec,
                            &rInfo0, &rInfo1,
                            elonpdfi, elatpdfi, erllpdfi,
                            blon0, blat0, brll0,
                            blon1, blat1, brll1)) {
-            printf("Output array error, record #%d skipped", irec);
+            printf("Output array error, record #%d skipped", ipair);
             free(elonpdfi); free(elatpdfi); free(erllpdfi);     // otherwise freed in function
             free(blon0); free(blat0); free(brll0);
             free(blon1); free(blat1); free(brll1);
         }
-        SHOW("here1\n");
-        
+
         // Clean up
         
         free(bloncoe0); free(blatcoe0); free(brllcoe0);
@@ -289,14 +326,21 @@ int DoIt(void)
         free(lloncoe0); free(llatcoe0); free(lrllcoe0);
         free(lloncoe1); free(llatcoe1); free(lrllcoe1);
         
-        // Not written out now
-        free(srll); free(hmll);
+        free(srll); free(hmll);     // Not written out now
+        
+        SHOW("done.\n")
+        
+        // NEXT!!!
+        
+        ipair++;
         
     }
     
     drms_close_records(outRS, DRMS_INSERT_RECORD);
     drms_close_records(inRS, DRMS_FREE_RECORD);
 
+    free(pairedRecNums);
+    
     //
     
     return DRMS_SUCCESS;
@@ -304,7 +348,72 @@ int DoIt(void)
 }   // DoIt
 
 
+// ========================================
 
+/*
+ * Find pairs of images according to T_REC and delt
+ * For each record, find the record that closest to T_REC+delt
+ * Store the record numbers in paiedRecNums[], total pairs in npairs
+ *
+ */
+
+int pairTRecs(DRMS_RecordSet_t *inRS, double delt, int *pairedRecNums, int *npairs)
+{
+    
+    int status = 0;
+    
+    int nrecs = inRS->n;
+    int *cgemnums = (int *) (malloc(nrecs * sizeof(int)));       // CGEMNUM
+    TIME *trecs = (TIME *) (malloc(nrecs * sizeof(TIME)));       // T_REC
+    
+    for (int irec = 0; irec < nrecs; irec++) {
+        cgemnums[irec] = drms_getkey_int(inRS->records[irec], "CGEMNUM", &status);
+        trecs[irec] = drms_getkey_time(inRS->records[irec], "T_REC", &status);
+    }
+    
+    *npairs = 0;
+    for (int i = 0; i < nrecs; i++) {
+        pairedRecNums[i] = nrecs;       // no findings
+        for (int j = 0; j < nrecs; j++) {
+            if (j == i || cgemnums[j] != cgemnums[i] || trecs[j] <= trecs[i]) continue;
+            if (fabs(trecs[j] - trecs[i] - delt) < (MAXTDIFF * delt)) {
+                pairedRecNums[i] = j;
+                (*npairs)++;
+                break;
+            }
+        }   // j
+    }   // i
+    
+    free(cgemnums); free(trecs);
+    
+    if (*npairs == 0) return 1;
+    
+    return 0;
+    
+}
+
+// ========================================
+
+/*
+ * Get patch & padding dimensions
+ *
+ */
+ 
+void getRInfo(DRMS_Record_t *inRec, struct reqInfo *rInfo)
+{
+    DRMS_Segment_t *inSeg = drms_segment_lookup(inRec, inSegNames[0]);
+    rInfo->n_o = inSeg->axis[0] - 1; rInfo->m_o = inSeg->axis[1] - 1;     // n + 1 cols, m + 1 rows
+    
+    pad_int_gen_ss(rInfo);        // find out the right padding size, adapted from George's code
+    
+    rInfo->n = rInfo->n_o + rInfo->npadl + rInfo->npadr;
+    rInfo->m = rInfo->m_o + rInfo->mpadb + rInfo->mpadt;
+    
+//    printf("m_o=%d, m=%d, mpadb=%d, mpadt=%d\n", rInfo->m_o, rInfo->m, rInfo->mpadb, rInfo->mpadt);
+//    printf("n_o=%d, n=%d, npadl=%d, npadr=%d\n", rInfo->n_o, rInfo->n, rInfo->npadl, rInfo->npadr);
+}
+
+// ========================================
 
 /*
  * Get input data
@@ -313,41 +422,21 @@ int DoIt(void)
  */
 
 int getInputArr(DRMS_Record_t *inRec, struct reqInfo *rInfo,
-                double **bloncoe_ptr, double **blatcoe_ptr, double **brllcoe_ptr,
-                double **vloncoe_ptr, double **vlatcoe_ptr, double **vlosllcoe_ptr,
-                double **lloncoe_ptr, double **llatcoe_ptr, double **lrllcoe_ptr)
+                double *bloncoe, double *blatcoe, double *brllcoe,
+                double *vloncoe, double *vlatcoe, double *vlosllcoe,
+                double *lloncoe, double *llatcoe, double *lrllcoe)
 {
     int status = 0;
-    
-    // Need to compute a/b/c/d from WCS
-    /*
-    rInfo->a = drms_getkey_double(inRec, "MINCOLAT", &status); if (status) return 1;
-    rInfo->b = drms_getkey_double(inRec, "MAXCOLAT", &status); if (status) return 1;
-    rInfo->c = drms_getkey_double(inRec, "MINLON", &status); if (status) return 1;
-    rInfo->d = drms_getkey_double(inRec, "MAXLON", &status); if (status) return 1;
-     */
     
     rInfo->t = drms_getkey_time(inRec, "T_OBS", &status); if (status) return 1;
     rInfo->trec = drms_getkey_time(inRec, "T_REC", &status); if (status) return 1;
     
-    // Segments & padding
+    // Segments
     
-    double *data_ptr[9];        // holder for pointers
     DRMS_Segment_t *inSeg[9];   // 9 segments
     
-    inSeg[0] = drms_segment_lookup(inRec, inSegNames[0]);
-    rInfo->n_o = inSeg[0]->axis[0] - 1; rInfo->m_o = inSeg[0]->axis[1] - 1;     // n + 1 cols, m + 1 rows
-    
-    pad_int_gen_ss(rInfo);		// find out the right padding size, adapted from George's code
-    
-    rInfo->n = rInfo->n_o + rInfo->npadl + rInfo->npadr;
-    rInfo->m = rInfo->m_o + rInfo->mpadb + rInfo->mpadt;
-    
-    printf("m_o=%d, m=%d, mpadb=%d, mpadt=%d\n", rInfo->m_o, rInfo->m, rInfo->mpadb, rInfo->mpadt);
-    printf("n_o=%d, n=%d, npadl=%d, npadr=%d\n", rInfo->n_o, rInfo->n, rInfo->npadl, rInfo->npadr);
-    
     if (rInfo->n <= 0 || rInfo->m <= 0) {return 1;}
-    for (int i = 1; i < 9; i++) {
+    for (int i = 0; i < 9; i++) {
         inSeg[i] = drms_segment_lookup(inRec, inSegNames[i]);
         if (inSeg[i]->axis[0] != (rInfo->n_o + 1) || inSeg[i]->axis[1] != (rInfo->m_o + 1)) {
             return 1;
@@ -369,9 +458,9 @@ int getInputArr(DRMS_Record_t *inRec, struct reqInfo *rInfo,
     rInfo->a = (90. - (crval2 + (rInfo->m_o + 0.5 + rInfo->mpadt - crpix2) * cdelt2)) * RADSINDEG;	// min co-lat; orignal edge at row+0.5
     rInfo->b = (90. - (crval2 + (0.5 - rInfo->mpadb - crpix2) * cdelt2)) * RADSINDEG;				// max co-lat; original edge at 0.5
     
-    printf("n=%d, m=%d\n", rInfo->n, rInfo->m);
-    printf("n_o=%d, m_o=%d\n", rInfo->n_o, rInfo->m_o);
-    printf("a=%36.30f, b=%36.30f\nc=%36.30f, d=%36.30f\n", rInfo->a, rInfo->b, rInfo->c, rInfo->d);
+//    printf("n=%d, m=%d\n", rInfo->n, rInfo->m);
+//    printf("n_o=%d, m_o=%d\n", rInfo->n_o, rInfo->m_o);
+//    printf("a=%36.30f, b=%36.30f\nc=%36.30f, d=%36.30f\n", rInfo->a, rInfo->b, rInfo->c, rInfo->d);
     
     // Read segments
     
@@ -389,22 +478,6 @@ int getInputArr(DRMS_Record_t *inRec, struct reqInfo *rInfo,
         inData[i] = (double *) inArray[i]->data;
     }
     
-    // Copy over
-    
-    int n1m1 = (rInfo->n + 1) * (rInfo->m + 1);
-    
-    *bloncoe_ptr = (double *) (malloc(n1m1 * sizeof(double)));
-    *blatcoe_ptr = (double *) (malloc(n1m1 * sizeof(double)));
-    *brllcoe_ptr = (double *) (malloc(n1m1 * sizeof(double)));
-    
-    *vloncoe_ptr = (double *) (malloc(n1m1 * sizeof(double)));
-    *vlatcoe_ptr = (double *) (malloc(n1m1 * sizeof(double)));
-    *vlosllcoe_ptr = (double *) (malloc(n1m1 * sizeof(double)));
-    
-    *lloncoe_ptr = (double *) (malloc(n1m1 * sizeof(double)));
-    *llatcoe_ptr = (double *) (malloc(n1m1 * sizeof(double)));
-    *lrllcoe_ptr = (double *) (malloc(n1m1 * sizeof(double)));
-    
     // Copy & padding
     
     int col, col_o, row, row_o, lead, lead_o, idx, idx_o;
@@ -416,29 +489,17 @@ int getInputArr(DRMS_Record_t *inRec, struct reqInfo *rInfo,
             col = col_o + rInfo->npadl;
             idx = lead + col;
             idx_o = lead_o + col_o;
-            (*bloncoe_ptr)[idx] = (inData[0])[idx_o];
-            (*blatcoe_ptr)[idx] = (inData[1])[idx_o];
-            (*brllcoe_ptr)[idx] = (inData[2])[idx_o];
-            (*vloncoe_ptr)[idx] = (inData[3])[idx_o];
-            (*vlatcoe_ptr)[idx] = (inData[4])[idx_o];
-            (*vlosllcoe_ptr)[idx] = (inData[5])[idx_o];
-            (*lloncoe_ptr)[idx] = (inData[6])[idx_o];
-            (*llatcoe_ptr)[idx] = (inData[7])[idx_o];
-            (*lrllcoe_ptr)[idx] = (inData[8])[idx_o];
+            bloncoe[idx] = (inData[0])[idx_o];
+            blatcoe[idx] = (inData[1])[idx_o];
+            brllcoe[idx] = (inData[2])[idx_o];
+            vloncoe[idx] = (inData[3])[idx_o];
+            vlatcoe[idx] = (inData[4])[idx_o];
+            vlosllcoe[idx] = (inData[5])[idx_o];
+            lloncoe[idx] = (inData[6])[idx_o];
+            llatcoe[idx] = (inData[7])[idx_o];
+            lrllcoe[idx] = (inData[8])[idx_o];
         }
     }
-    
-    /*
-    memcpy(*bloncoe_ptr, inData[0], n1m1 * sizeof(double));
-    memcpy(*blatcoe_ptr, inData[1], n1m1 * sizeof(double));
-    memcpy(*brllcoe_ptr, inData[2], n1m1 * sizeof(double));
-    memcpy(*vloncoe_ptr, inData[3], n1m1 * sizeof(double));
-    memcpy(*vlatcoe_ptr, inData[4], n1m1 * sizeof(double));
-    memcpy(*vlosllcoe_ptr, inData[5], n1m1 * sizeof(double));
-    memcpy(*lloncoe_ptr, inData[6], n1m1 * sizeof(double));
-    memcpy(*llatcoe_ptr, inData[7], n1m1 * sizeof(double));
-    memcpy(*lrllcoe_ptr, inData[8], n1m1 * sizeof(double));
-     */
     
     // Clean up
     
@@ -490,6 +551,9 @@ int writeOutputArr(DRMS_Record_t *inRec0, DRMS_Record_t *inRec1, DRMS_Record_t *
             return 1;
         }
         outSeg[i]->axis[0] = outArray[i]->axis[0]; outSeg[i]->axis[1] = outArray[i]->axis[1];
+        outArray[i]->israw = 0;        // always compressed
+        outArray[i]->bzero = outSeg[i]->bzero;
+        outArray[i]->bscale = outSeg[i]->bscale;
         status = drms_segment_write(outSeg[i], outArray[i], 0);
     }
     
@@ -584,7 +648,15 @@ int writeOutputArr(DRMS_Record_t *inRec0, DRMS_Record_t *inRec1, DRMS_Record_t *
     drms_setkey_double(outRec, "CRPIX1_008", (1. + n) / 2.);
     drms_setkey_double(outRec, "CRPIX2_008", (1. + m) / 2.);
     
-    SHOW("kk\n");
+    drms_setkey_string(outRec, "BUNIT_000", "V/cm");
+    drms_setkey_string(outRec, "BUNIT_001", "V/cm");
+    drms_setkey_string(outRec, "BUNIT_002", "V/cm");
+    drms_setkey_string(outRec, "BUNIT_003", "G");
+    drms_setkey_string(outRec, "BUNIT_004", "G");
+    drms_setkey_string(outRec, "BUNIT_005", "G");
+    drms_setkey_string(outRec, "BUNIT_006", "G");
+    drms_setkey_string(outRec, "BUNIT_007", "G");
+    drms_setkey_string(outRec, "BUNIT_008", "G");
     
     // Supplementary output
     
@@ -608,12 +680,20 @@ int writeOutputArr(DRMS_Record_t *inRec0, DRMS_Record_t *inRec1, DRMS_Record_t *
             return 1;
         }
         outSegB[i]->axis[0] = outArrayB[i]->axis[0]; outSegB[i]->axis[1] = outArrayB[i]->axis[1];
+        outArrayB[i]->israw = 0;        // always compressed
+        outArrayB[i]->bzero = outSegB[i]->bzero;
+        outArrayB[i]->bscale = outSegB[i]->bscale;
         status = drms_segment_write(outSegB[i], outArrayB[i], 0);
     }
     
     for (int i = 0; i < 6; i++) {
         drms_free_array(outArrayB[i]);
     }
+    
+    TIME val, trec, tnow, UNIX_epoch = -220924792.000; /* 1970.01.01_00:00:00_UTC */
+    tnow = (double)time(NULL);
+    tnow += UNIX_epoch;
+    drms_setkey_time(outRec, "DATE", tnow);
 
     //
     
