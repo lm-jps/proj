@@ -1,21 +1,22 @@
       subroutine bhyeetp2ll_ss(m,n,btte,bppe,blon,blat)
 c
 c+
-c   Purpose: To transpose B_h data arrays from theta,phi to lon,lat order
-c             and flip sign to get B_lat.  
-c     Usage:  call bhyeetp2ll_ss(m,n,btte,bppe,blon,blat)
-c     Input:  m,n - number of cell centers in the theta (lat), and phi (lon)
-c             directions, respectively.
-c     Input:  btte (m+1,n),bppe(m,n+1) - arrays of the co-latitudinal and
-c             azimuthal components of the magnetic field evaluated at
-c             TE and PE locations (theta and phi edges, resp.)
-c    Output:  blon(n+1,m),blat(n,m+1) - arrays of longitudinal and
-c             latitudinal components of magnetic field, stored in lon,lat
-c             index order.
+c - - Purpose: To transpose B_h data arrays from theta,phi to lon,lat order
+c              and flip sign to get B_lat.  Array values are assumed at
+c              staggered Yee grid locations.
+c - - Usage:   call bhyeetp2ll_ss(m,n,btte,bppe,blon,blat)
+c - - Input:   m,n - number of cell centers in the theta (lat), and phi (lon)
+c              directions, respectively.
+c - - Input:   btte (m+1,n),bppe(m,n+1) - real*8 arrays of the co-latitudinal 
+c              and azimuthal components of the magnetic field evaluated at
+c              TE and PE locations (theta and phi edges, resp.) [G]
+c - - Output:  blon(n+1,m),blat(n,m+1) - real*8 arrays of longitudinal and
+c              latitudinal components of magnetic field, stored in lon,lat
+c              index order. [G]
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index
-c   Copyright (C) 2015,2016 University of California
+c   Copyright (C) 2015-2018 University of California
 c  
 c   This software is based on the concepts described in Kazachenko et al. 
 c   (2014, ApJ 795, 17).  It also extends those techniques to 

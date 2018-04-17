@@ -6,10 +6,14 @@ c
 c - - Usage:  call cotp_ss(m,n,a,b,c,d,theta,phi)
 c
 c - - Input:  m,n - number of cell interiors in the theta,phi directions
-c - - Input:  a,b, - a,b are colatitude range for the problem domain, a < b
-c - - Input:  c,d - c,d are the longitude range for the problem, c < d
-c - - Output: theta(m-1,n-1) - the colatitude values of the CO grid
-c - - Output: phi(m-1,n-1) - the longitude values of the CO grid
+c - - Input:  a,b, - real*8 values of colatitude range for the problem domain, 
+c             a < b [radians]
+c - - Input:  c,d - real*8 values of longitude range for the problem, c < d
+c             [radians]
+c - - Output: theta(m-1,n-1) - real*8 array of colatitude values of the CO grid
+c             [radians]
+c - - Output: phi(m-1,n-1) - real*8 array of longitude values of the CO grid
+c             [radians]
 c
 c-
 c   PDFI_SS Electric Field Inversion Software

@@ -1,25 +1,27 @@
        subroutine bhpot_ss(m,n,p,a,b,c,d,rsun,rssmrs,scrb3d,btpot,bppot)
 c
 c+ - - Purpose: compute potential field value of bt,bp given the 3-d array
-c  - - scrb3d by taking horizontal gradient of d scriptB / dr
+c              scrb3d by taking horizontal gradient of d scriptB / dr.
+c              scrb3d is computed by subroutine scrbpot_ss.
 c
-c      Usage:  call bhpot_ss(m,n,p,a,b,c,d,rsun,rssmrs,scrb3d,btpot,bppot)
+c - -  Usage:  call bhpot_ss(m,n,p,a,b,c,d,rsun,rssmrs,scrb3d,btpot,bppot)
 c
-c      Input:  m,n,p: integer values of numbers of cell centers in theta,
+c - -  Input:  m,n,p: integer values of numbers of cell centers in theta,
 c              phi, and r directions
-c      Input:  a,b,c,d:  values of min, max colatitude, min, max
-c              values of longitude. 
-c      Input:  rsun,rssmrs: radius of sun, and distance from phot
-c              to source surface.
-c      Input:  scrb3d(m,n,p+1): 3-d array of poloidal potential scribtb
-c      Output: btpot(m+1,n,p): 3-d array of theta-comp magnetic field
-c      Output: bppot(m,n+1,p): 3-d array of theta-comp magnetic field
-c - -  Note:  btpot,bppot are computed on theta and phi edges, and mid-way
-c - -         between radial shells.
+c - -  Input:  a,b,c,d:  real*8 values of min, max colatitude, min, max
+c              values of longitude. [radians]
+c - -  Input:  rsun,rssmrs: real*8 values of radius of sun, and distance 
+c              from phot to source surface. [km] Normally, rsun=6.96d5
+c - -  Input:  scrb3d(m,n,p+1): real*8 array of poloidal potential scribtb
+c              [G km^2]
+c - -  Output: btpot(m+1,n,p): real*8 array of theta-comp magnetic field [G]
+c - -  Output: bppot(m,n+1,p): real*8 array of phi-comp magnetic field [G]
+c - -  Note:   btpot,bppot are computed on theta and phi edges, and mid-way
+c              between radial shells.
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index
-c   Copyright (C) 2015,2016 University of California
+c   Copyright (C) 2015-2018 University of California
 c  
 c   This software is based on the concepts described in Kazachenko et al. 
 c   (2014, ApJ 795, 17).  It also extends those techniques to 

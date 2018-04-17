@@ -2,44 +2,47 @@
      1 bt,bp,br,dr,brtop,brbot)
 c
 c+
-c - - Purpose:  To compute the radial magnetic field (or its time derivative)
-c     on the upper and lower faces of a layer of spherical voxels, 
-c     given magnetic field components halfway in radius between the faces.
+c - - Purpose: To compute the radial magnetic field (or its time derivative)
+c             on the upper and lower faces of a layer of spherical voxels, 
+c             given magnetic field components halfway in radius between 
+c             the faces.
 c
-c - - Method:  Use div B=0 (or div B dot = 0) to find radial derivative of 
-c     Br (or Br dot) from measured 
-c     values of divh cdot Bh:  (d/dr)(r**2 B_r) = -r**2 div_h B_h,
-c     where B_h is the horizontal magnetic field (or its time derivative).
-c     Once radial derivative of Br (or Br dot) is known at 
-c     photosphere, use it to estimate
-c     radial magnetic field half a voxel above and below the photosphere.
-c     It is assumed that the photosphere is placed half-way (in radius) between
-c     the top and the bottom layers of the voxels.  
+c - - Method: Use div B=0 (or div B dot = 0) to find radial derivative of 
+c             Br (or Br dot) from measured 
+c             values of divh cdot Bh:  (d/dr)(r**2 B_r) = -r**2 div_h B_h,
+c             where B_h is the horizontal magnetic field (or its time 
+c             derivative).  Once radial derivative of Br (or Br dot) is known 
+c             at photosphere, use it to estimate radial magnetic field half 
+c             a voxel above and below the photosphere.
+c             It is assumed that the photosphere is placed half-way 
+c             (in radius) between the top and the bottom layers of the voxels.
 c
 c - - Usage:  call br_voxels3d_ss(m,n,rsun,sinth,sinth_hlf,dtheta,dphi,bt,bp,br,
-c     dr,brtop,brbot)
+c             dr,brtop,brbot)
 c
 c - - Input:  m,n - integers describing the number of radial voxel face centers
-c     in the colatitude, and longitudinal directions, respectively.
-c - - Input:  rsun:  Assumed radius of the Sun [in km]
+c             in the colatitude, and longitudinal directions, respectively.
+c - - Input:  rsun:  Assumed radius of the Sun [km].  Normally 6.96e5.
 c - - Input:  sinth(m+1) : sin(colatitude) computed at theta cell edges
 c             (computed from subroutine sinthta_ss)
 c - - Input:  sinth_hlf(m) : sin(colatitude) computed at theta cell centers
 c             (computed from subroutine sinthta_ss)
 c - - Input:  dtheta,dphi: cell thickness in colatitude, longitude directions
+c             [radians]
 c - - Input:  bt(m+1,n),bp(m,n+1),br(m,n) - real*8 magnetic field variables 
-c     (or their time derivatives) on staggered mesh 
-c     (br on CE grid, bt on TE grid, bp on PE grid).
-c - - Input:  dr - a real*8 scalar [in km] that provides the depth of 
-c     the radial legs of the voxels.  The upper face will be 0.5*dr above 
-c     the photosphere,
-c     while the lower face will be 0.5*dr below the photosphere.
-c - - Output:  brtop(m,n),brbot(m,n) - real*8 values of B_r (or B_r dot)
-c     on the CE grid, at the top layer, and bottom layer, respectively.
+c             (or their time derivatives) on staggered mesh 
+c             (br on CE grid, bt on TE grid, bp on PE grid). [G or G/sec]
+c - - Input:  dr - a real*8 scalar [km] that provides the depth of 
+c             the radial legs of the voxels.  The upper face will be 0.5*dr 
+c             above the photosphere, while the lower face will be 0.5*dr 
+c             below the photosphere.
+c - - Output: brtop(m,n),brbot(m,n) - real*8 values of B_r (or B_r dot)
+c             on the CE grid, at the top layer, and bottom layer, respectively.
+c             [G or G/sec]
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index
-c   Copyright (C) 2015,2016 University of California
+c   Copyright (C) 2015-2018 University of California
 c  
 c   This software is based on the concepts described in Kazachenko et al. 
 c   (2014, ApJ 795, 17).  It also extends those techniques to 

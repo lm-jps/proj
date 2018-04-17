@@ -1,20 +1,20 @@
       subroutine brll2tp_ss(m,n,brllcoe,brtpcoe)
 c
 c+
-c   Purpose:  To transpose B_r data array from lon,lat to theta,phi order.
+c - - Purpose: To transpose B_r data array from lon,lat to theta,phi order.
 c             Can also be used to transpose other scalar COE arrays.
-c     Usage:  call brll2tp_ss(m,n,brllcoe,brtpcoe)
-c     Input:  m,n - number of cell centers in the theta (lat), and phi (lon)
+c - - Usage:  call brll2tp_ss(m,n,brllcoe,brtpcoe)
+c - - Input:  m,n - number of cell centers in the theta (lat), and phi (lon)
 c             directions, respectively.
-c     Input:  brllcoe(n+1,m+1) - array of the radial component of the
+c - - Input:  brllcoe(n+1,m+1) - real*8 array of the radial component of the
 c             magnetic field evaluated at COE locations
-c             (corners plus exterior corners on boundary).
-c    Output:  brtpcoe(m+1,n+1) - array of radial magnetic field component
-c             stored in theta,phi index order.
+c             (corners plus exterior corners on boundary). [G]
+c - - Output: brtpcoe(m+1,n+1) - real*8 array of radial magnetic field component
+c             stored in theta,phi index order. [G]
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index
-c   Copyright (C) 2015,2016 University of California
+c   Copyright (C) 2015-2018 University of California
 c  
 c   This software is based on the concepts described in Kazachenko et al. 
 c   (2014, ApJ 795, 17).  It also extends those techniques to 

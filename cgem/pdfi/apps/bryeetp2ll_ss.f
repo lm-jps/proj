@@ -1,19 +1,19 @@
       subroutine bryeetp2ll_ss(m,n,brtpce,brllce)
 c
 c+
-c   Purpose:  To transpose B_r data array from theta,phi to lon,lat order.
-c     Usage:  call bryeetp2ll_ss(m,n,brtpce,brllce)
-c     Input:  m,n - number of cell centers in the theta (lat), and phi (lon)
+c - - Purpose: To transpose B_r data array from theta,phi to lon,lat order.
+c - - Usage:  call bryeetp2ll_ss(m,n,brtpce,brllce)
+c - - Input:  m,n - number of cell centers in the theta (lat), and phi (lon)
 c             directions, respectively.
-c     Input:  brtpce(m,n) - array of the radial component of the
+c - - Input:  brtpce(m,n) - real*8 array of the radial component of the
 c             magnetic field evaluated at CE locations in theta,phi order
-c             (cell-centers).
-c    Output:  brllce(n,m) - array of radial magnetic field component
-c             stored in lon,lat index order.
+c             (cell-centers). [G]
+c - - Output: brllce(n,m) - real*8 array of radial magnetic field component
+c             stored in lon,lat index order. [G]
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index
-c   Copyright (C) 2015,2016 University of California
+c   Copyright (C) 2015-2018 University of California
 c  
 c   This software is based on the concepts described in Kazachenko et al. 
 c   (2014, ApJ 795, 17).  It also extends those techniques to 

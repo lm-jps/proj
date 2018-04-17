@@ -73,6 +73,7 @@ c
       integer :: bcn, bcm
       real*8 :: a,b,c,d,elm,pertrb,pi,twopi,dum
       real*8 :: dtheta,dphi,rsun2
+      real*8 :: brtbal(m,n)
 c
 c - - pimach function declaration:
 c
@@ -85,10 +86,6 @@ c
       rsun2=rsun**2
       mp1=m+1
       np1=n+1
-c
-c - - For RHS of Poisson equation, add a minus sign to brt and mpy by rsun**2:
-c
-      f(:,:)=-brt(:,:)*rsun2
 c
 c - - The value of idimf should be exactly equal to m (staggered)
 c
@@ -103,6 +100,14 @@ c
       c=0.d0
       d=twopi
       dphi=(d-c)/dble(n)
+c
+c - - remove monopole term from input brt array:
+c
+      call fluxbal_ss(m,n,a,b,c,d,rsun,brt,brtbal)
+c
+c - - For RHS of Poisson equation, add a minus sign to brtbal, mpy by rsun**2:
+c
+      f(:,:)=-brtbal(:,:)*rsun2
 c
 c - - compute sinth, sinth_hlf arrays from call to sinthta_ss:
 c

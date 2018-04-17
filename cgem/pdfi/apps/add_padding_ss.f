@@ -2,7 +2,8 @@
 c
 c+
 c - - Purpose:  To add a buffer of zero-padding around a 2-d array containing
-c               non-zero values.
+c               non-zero values.  Padding is assumed symmetric between 
+c               N and S edges of domain, and between left and right edges.
 c - - Usage:    call add_padding_ss(m,n,npadlat,npadlon,arrs,arrpadded)
 c - - Input:    m,n - integers describing the number of cell interiors
 c               in latitude/colatitude, and in longitude, respectively, 

@@ -3,23 +3,28 @@
 c
 c+
 c - - Purpose:  To compute the curl of psi * rhat unit vector, for psi located
-c - - on the CE (cell center) grid.  Output is computed on cell edges.
+c               on the CE (cell center) grid.  Output is computed on cell edges.
 c
-c - - Usage: call curl_psi_rhat_ce_ss(m,n,psi,rsun,sinth_hlf,dtheta,
-c    1 dphi,curlt,curlp)
+c - - Usage:   call curl_psi_rhat_ce_ss(m,n,psi,rsun,sinth_hlf,dtheta,
+c              dphi,curlt,curlp)
 c
-c - - Input:  m,n - numbers of cell-centers in theta, phi directions, resp
-c - - Input:  psi - array of the scalar potential at cell-centers, 
-c - -         including ghost-zones.  Dimensions assume of size m+2,n+2
-c - - Input:  rsun - units for the radius of the Sun.
-c - - Input:  sinth_hlf, sin(theta) computed over the co-latitude range,
-c - -         at cell centers, active zones only.  
-c - - Input:  dtheta,dphi - the spacing of cells in theta,phi directions
-c - - Output: curlt - 2d array of size m,n+1 equal to curl in
-c - -         theta direction, evaluated on phi edges (PE).
-c - - Output: curlp - 2d array of size m+1,n equal to curl
-c - -         in phi direction, evaluated on theta edges (TE).
-c - - NOTE:  Plate Carree grid spacing (dtheta, dphi are constants) assumed!
+c - - Input:   m,n - numbers of cell-centers in theta, phi directions, resp
+c - - Input:   psi(m+2,n+2) - real*8 array of the poloidal potential at 
+c              cell-centers, including ghost-zones. 
+c              [G km^2 or G km^2/sec]
+c - - Input:   rsun - real*8 value for the radius of the Sun. [km]
+c              Normally 6.96d5.
+c - - Input:   sinth_hlf(m), real*8 array of sin(theta) computed over the 
+c              co-latitude range, at cell centers, active zones only.  
+c - - Input:   dtheta,dphi - real*8 values of the spacing of cells in 
+c              theta,phi directions, resp. [radians]
+c - - Output:  curlt(m,n+1) - real*8 array of curl in
+c              theta direction, evaluated on phi edges (PE grid).
+c              [G km or G km/sec]
+c - - Output:  curlp(m+1,n) - real*8 array of curl
+c              in phi direction, evaluated on theta edges (TE grid).
+c              [G km or G km/sec]
+c - - NOTE:    Plate Carree grid spacing (dtheta, dphi are constants) assumed.
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index

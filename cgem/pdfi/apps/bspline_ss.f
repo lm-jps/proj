@@ -3,19 +3,23 @@
 c
 c+
 c - - Purpose: To interpolate the array fdata to a new grid defined by
-c     xnew,ynew locations (in terms of original index ranges [1:nx],[1:ny] 
+c             xnew,ynew locations (in terms of original index 
+c             ranges [1:nx],[1:ny]) 
 c
-c - - Usage: call bspline_ss(fdata,nx,ny,xnew,nxinterp,ynew,nyinterp,
-c            finterp, degree)
+c - - Usage:  call bspline_ss(fdata,nx,ny,xnew,nxinterp,ynew,nyinterp,
+c             finterp, degree)
 c
-c - - Input:  fdata - real*8 array of data to be used for interpolation.
+c - - Input:  fdata(nx,ny) - real*8 array of data to be used for interpolation.
+c             [units arbitrary]
 c - - Input:  nx,ny - dimensions of input array fdata
 c - - Input:  xnew(nxinterp) - real*8 array of desired x values in [1,nx] range
 c - - Input:  nxinterp - dimension of xnew
 c - - Input:  ynew(nyinterp) - real*8 array of desired y values in [1,ny] range
-c - - Output: finterp(nxinterp,nyinterp) - array of interpolated values  
+c - - Input:  nyinterp - dimension of ynew
+c - - Output: finterp(nxinterp,nyinterp) - real*8 array of interpolated values  
+c             [units arbitrary]
 c - - Input:  degree - integer value of the degree of the bspline (3 <= 9).
-c - -         degree must also be an odd integer.
+c             degree must also be an odd integer: allowed values 3,5,7,9.
 c-
 c   Origins:  This routine was written in Fortran by Dave Bercik.
 c   It is based on software in C, published by Philippe Thevenaz, 
@@ -66,7 +70,8 @@ c     Dummy variable declarations:
       INTEGER(KIND=i4) :: degree
 
 c     Local variable declarations
-      INTEGER(KIND=i4) :: i, j, k, n, npoles, ix, jy, istat
+      INTEGER(KIND=i4) :: i, j, k, n, npoles, ix, jy
+c     INTEGER(KIND=ir) :: istat
       INTEGER(KIND=i4) :: width2, height2
       INTEGER(KIND=i4), DIMENSION(10) :: xindex, yindex
       REAL(KIND=r8) :: lambda, w, w2, w4, t, t0, t1
@@ -86,7 +91,7 @@ c - - check for degree being even, and exit if so; very poor results.
      1  degree
         stop
       endif
-      ALLOCATE(poles(npoles), STAT=istat)
+      ALLOCATE(poles(npoles))
       SELECT CASE (degree)
         CASE (2)
           poles(1) = SQRT(8.0_r8) - 3.0_r8 
@@ -135,7 +140,7 @@ c - - check for degree being even, and exit if so; very poor results.
           poles(4) = 
      1    -0.0021213069031808184203048965578486234220548560988624_r8
         CASE DEFAULT
-          write(6,*) 'bspline: exiting, invalid value of degree = ',
+          write(6,*) 'bspline_ss: exiting, invalid value of degree = ',
      1     degree
           STOP
       END SELECT
@@ -144,7 +149,7 @@ c     Find coefficients of bspline expansion.  Treat as separable.
 c       - Mirror boundary conditions
       width2 = 2*(nx-1)
       height2 = 2*(ny-1)
-      ALLOCATE(coeffs(nx, ny), STAT=istat)
+      ALLOCATE(coeffs(nx, ny))
       coeffs = fdata(1:nx,1:ny)
 c     Calculate overall gain for one dimension
       lambda = 1.0_r8
@@ -579,7 +584,7 @@ c         Calculate interpolation weights:
      2                     - yweight(6) - yweight(7) - yweight(8) 
      3                     - yweight(10)
             CASE DEFAULT
-              write (6,*) 'bspline: Invalid bspline degree'
+              write (6,*) 'bspline_ss: Invalid bspline degree'
               stop
           END SELECT
         

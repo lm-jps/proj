@@ -1,15 +1,19 @@
       subroutine cetp_ss(m,n,a,b,c,d,theta,phi)
 c
 c+
-c - - Purpose:  Compute the theta and phi locations of the CE grid
+c - - Purpose: Compute the theta and phi locations of the CE grid
 c
 c - - Usage:  call cetp_ss(m,n,a,b,c,d,theta,phi)
 c
 c - - Input:  m,n - number of cell interiors in the theta,phi directions
-c - - Input:  a,b, - a,b are colatitude range for the problem domain, a < b
-c - - Input:  c,d - c,d are the longitude range for the problem, c < d
-c - - Output: theta(m,n) - the colatitude values of the CE grid
-c - - Output: phi(m,n) - the longitude values of the CE grid
+c - - Input:  a,b - real*8 values of colatitude range for the problem domain, 
+c             a < b [radians]
+c - - Input:  c,d - real*8 values of longitude range for the problem, 
+c             c < d [radians]
+c - - Output: theta(m,n) - real*8 array of colatitude values of the CE grid
+c             [radians]
+c - - Output: phi(m,n) - real*8 array of longitude values of the CE grid
+c             [radians]
 c
 c-
 c   PDFI_SS Electric Field Inversion Software

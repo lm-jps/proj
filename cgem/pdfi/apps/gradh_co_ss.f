@@ -65,13 +65,38 @@ c
 c
 c - - gradp loop:
 c
-      do i=1,mp1
+      do i=2,m
          do jph=1,n
             j=jph
             jp1=jph+1
             gradp(i,jph)=oneodp*(psi(i,jp1)-psi(i,j))/sinth(i)
          enddo
       enddo
+c
+c - - logic for handling north and south poles:
+c
+      if(sinth(1) .le. 1.d-15) then
+c - - north pole
+        gradp(1,1:n)=0.d0
+      else
+        i=1
+        do jph=1,n
+          j=jph
+          jp1=jph+1
+          gradp(i,jph)=oneodp*(psi(i,jp1)-psi(i,j))/sinth(i)
+        enddo
+      endif
+      if(sinth(m+1) .le. 1.d-15) then
+c - - south pole
+        gradp(m+1,1:n)=0.d0
+      else
+        i=m+1
+        do jph=1,n
+          j=jph
+          jp1=jph+1
+          gradp(i,jph)=oneodp*(psi(i,jp1)-psi(i,j))/sinth(i)
+        enddo
+      endif
 c
 c - - gradt loop:
 c

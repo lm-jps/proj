@@ -3,12 +3,12 @@
      2 vloncoe0,vlatcoe0,vlosllcoe0,vloncoe1,vlatcoe1,vlosllcoe1,
      3 lloncoe0,llatcoe0,lrllcoe0,lloncoe1,llatcoe1,lrllcoe1,
      4 tjul0,tjul1,blon0,blat0,brll0,blon1,blat1,brll1,
-     5 elonpdfi,elatpdfi,erllpdfi,srll,hmll,tjulhalf)
+     5 elonpdfi,elatpdfi,erllpdfi,srll,srtot,hmll,hmtot,tjulhalf)
 c    
 c    
 c
 c - - documentation below can be seen using DOC_LIB,'pdfi_wrapper4jsoc_ss.f'
-c - - in and IDL session.
+c - - in an IDL session.
 c+
 c    Purpose:  This is the subroutine that computes the entire PDFI_SS 
 c              solution, given the HMI input data for a pair of observation
@@ -17,63 +17,70 @@ c              from the JSOC software, and returns the output variables to
 c              that software as part of the calling argument list, as
 c              described in further detail below.
 c
-c    Usage:  call pdfi_wrapper4jsoc_ss(m,n,rsun,a,b,c,d,
-c      bloncoe0,blatcoe0,brllcoe0,bloncoe1,blatcoe1,brllcoe1,
-c      vloncoe0,vlatcoe0,vlosllcoe0,vloncoe1,vlatcoe1,vlosllcoe1,
-c      lloncoe0,llatcoe0,lrllcoe0,lloncoe1,llatcoe1,lrllcoe1,tjul0,tjul1,
-c      blon0,blat0,brll0,blon1,blat1,brll1,elonpdfi,elatpdfi,erllpdfi,
-c      srll,hmll,tjulhalf)
-c             This subroutine derives PDFI_SS electric fields from vector 
-c             magnetogram sequences.
-c     Input:  m,n - number of cell centers in the theta (lat), and phi (lon)
-c             directions, respectively. 
-c     Input:  rsun - assumed radius of the Sun [in km].  Normally 
-c             this should be set to 6.96d5 .
-c     Input:  a,b - Minimum and maximum values of co-latitude in radians
-c             corresponding to the range of the theta (colatitude) edge values.
-c     Input:  c,d - Minimum and maximum values of longitude in radians 
-c             corresponding to the range of longitude (azimuth) edge values.
+c    Usage:    call pdfi_wrapper4jsoc_ss(m,n,rsun,a,b,c,d,
+c              bloncoe0,blatcoe0,brllcoe0,bloncoe1,blatcoe1,brllcoe1,
+c              vloncoe0,vlatcoe0,vlosllcoe0,vloncoe1,vlatcoe1,vlosllcoe1,
+c              lloncoe0,llatcoe0,lrllcoe0,lloncoe1,llatcoe1,lrllcoe1,
+c              tjul0,tjul1,blon0,blat0,brll0,blon1,blat1,brll1,
+c              elonpdfi,elatpdfi,erllpdfi,srll,srtot,hmll,hmtot,tjulhalf)
 c
-c     Input:  bloncoe0(n+1,m+1),blatcoe0(n+1,m+1),brllcoe0(n+1,m+1) - arrays 
-c             of the longitudinal, latitudinal and radial components of the 
-c             magnetic field evaluated at COE locations at time t0 
-c             (corners plus exterior corners on boundary).
-c     Input:  bloncoe1(n+1,m+1),blatcoe1(n+1,m+1),brllcoe1(n+1,m+1) - 
-c             arrays of the longitudinal, latitudinal and radial components of 
-c             the magnetic field evaluated at COE locations at time t1 
-c             (corners plus exterior corners on boundary).
-c     Input:  vloncoe0(n+1,m+1),vlatcoe0(n+1,m+1),vlosllcoe0(n+1,m+1) - arrays 
-c             of the longitudinal, latitudinal and LOS components of 
-c             the velocity field evaluated at COE locations at time t0 
-c             (corners plus exterior corners on boundary).
-c             vloncoe0, vlatcoe0 have units of km/s; vlosllcoe1 has units 
-c             of m/s and is directed such that positive values 
-c             correspond to redshift. 
-c     Input:  vloncoe1(n+1,m+1),vlatcoe1(n+1,m+1),vlosllcoe1(n+1,m+1) - arrays 
-c             of the longitudinal, latitudinal and LOS components of 
-c             the velocity field evaluated at COE locations at time t1 
-c             (corners plus exterior corners on boundary). vloncoe1 and vlatcoe1
-c             have units of km/s; vlosllcoe1 has units of m/s and is 
-c             directed such that positive values correspond to redshift. 
-c     Input:  lloncoe0(n+1,m+1),llatcoe0(n+1,m+1),lrllcoe0(n+1,m+1) - arrays 
-c             of the longitudinal, latitudinal and radial components of 
-c             the LOS vector evaluated at COE locations at time t0 (corners 
-c             plus exterior corners on boundary).
-c     Input:  lloncoe1(n+1,m+1),llatcoe1(n+1,m+1),lrllcoe1(n+1,m+1) - arrays 
-c             of the longitudinal, latitudinal and radial components of the 
-c             LOS vector evaluated at COE locations at time t1 (corners plus 
-c             exterior corners on boundary).
-c     Input:  tjul0,tjul1 - times, t0 and t1, in julian days.
+c     Input:   m,n - number of cell centers in the theta (lat), and phi (lon)
+c              directions, respectively. 
+c     Input:   rsun - assumed radius of the Sun [km].  Normally set to 6.96d5.
+c     Input:   a,b - real*8 Minimum and maximum values of co-latitude [radians]
+c              corresponding to the range of the theta (colatitude) edge values.
+c     Input:   c,d - real*8 Minimum and maximum values of longitude [radians]
+c              corresponding to the range of longitude (azimuth) edge values.
 c
-c     Output: elonpdfi(n,m+1),elatpdfi(n+1,m),erllpdfi(n+1,m+1) - arrays 
-c             of lontitudinal, latidudinal and radial components of electric 
-c             field, stored in lon,lat index order.
-c     Output: blon0(n+1,m),blat0(n,m+1),brll0(n,m),blon1(n+1,m),
-c             blat1(n,m+1),brll1(n,m) - magnetic field values at the staggered
-c             grid locations at both the t0 and t1 times, in (lon,lat) order
-c     Output: srll(n,m) - Poynting flux array in lon,lat order
-c     Output: hmll(n,m) - Helicity flux density array in lon,lat order
-c     Output: tjulhalf - time halfway between t0 and t1, in julian days
+c     Input:   bloncoe0(n+1,m+1),blatcoe0(n+1,m+1),brllcoe0(n+1,m+1) - real*8
+c              arrays of longitudinal, latitudinal and radial components of the 
+c              magnetic field evaluated at COE locations at time t0 
+c              (corners plus exterior corners on boundary). [G]
+c     Input:   bloncoe1(n+1,m+1),blatcoe1(n+1,m+1),brllcoe1(n+1,m+1) - 
+c              real*8 arrays of the longitudinal, latitudinal and radial 
+c              components of the magnetic field evaluated at COE locations at 
+c              time t1 (corners plus exterior corners on boundary). [G]
+c     Input:   vloncoe0(n+1,m+1),vlatcoe0(n+1,m+1),vlosllcoe0(n+1,m+1) - real*8
+c              arrays of the longitudinal, latitudinal and LOS components of 
+c              the velocity field evaluated at COE locations at time t0 
+c              (corners plus exterior corners on boundary).
+c              vloncoe0, vlatcoe0 have units of [km/s]; vlosllcoe1 has units 
+c              of [m/s] and is directed such that positive values 
+c              correspond to redshift. 
+c     Input:   vloncoe1(n+1,m+1),vlatcoe1(n+1,m+1),vlosllcoe1(n+1,m+1) - real*8
+c              arrays of the longitudinal, latitudinal and LOS components of 
+c              the velocity field evaluated at COE locations at time t1 
+c              (corners plus exterior corners on boundary). 
+c              vloncoe1 and vlatcoe1 have units of [km/s]; vlosllcoe1 has 
+c              units of [m/s] and is 
+c              directed such that positive values correspond to redshift. 
+c     Input:   lloncoe0(n+1,m+1),llatcoe0(n+1,m+1),lrllcoe0(n+1,m+1) - real*8
+c              arrays of the longitudinal, latitudinal and radial components of 
+c              the LOS unit vector evaluated at COE locations at time t0 
+c              (corners plus exterior corners on boundary).
+c     Input:   lloncoe1(n+1,m+1),llatcoe1(n+1,m+1),lrllcoe1(n+1,m+1) - real*8
+c              arrays of the longitudinal, latitudinal and radial components 
+c              of the LOS unit vector evaluated at COE locations at time t1 
+c              (corners plus exterior corners on boundary).
+c     Input:   tjul0,tjul1 - real*8 values of times t0 and t1 [days].
+c
+c     Output:  elonpdfi(n,m+1),elatpdfi(n+1,m),erllpdfi(n+1,m+1) - real*8 
+c              arrays of longitudinal, latidudinal and radial components of 
+c              electric field, stored in lon,lat index order [V/cm].
+c              If desired, these electric fields can be converted to cE values
+c              in [G km/sec] by multiplying by 1d3.
+c     Output:  blon0(n+1,m),blat0(n,m+1),brll0(n,m),blon1(n+1,m),
+c              blat1(n,m+1),brll1(n,m) - real*8 arrays of magnetic field 
+c              values at the staggered grid locations at both the t0 and t1 
+c              times, in (lon,lat) order. blon0,blon1 on PE grid, blat0,blat1
+c              on TE grid, brll0,brll1 on CE grid. [G]
+c     Output:  srll(n,m) - real*8 array of radial component of Poynting flux 
+c              values in lon,lat order on CE grid [erg/(cm^2-sec)]
+c     Output:  srtot - real*8 value of the area integral of srll [erg/sec]
+c     Output:  hmll(n,m) - real*8 array of Helicity flux density in lon,lat 
+c              order.  [Mx^2/(cm^2-sec)]
+c     Output:  hmtot - real*8 value of the area integral of hmll. [Mx^2/sec]
+c     Output:  tjulhalf - time halfway between t0 and t1, [days].
 c
 c - - MKD, January 2016
 c - - GHF, mods OCT 2016 to add ci,di = 0,d-c and add output var tjulhalf
@@ -138,6 +145,10 @@ c
 c output: time halfway between magnetogram times for electric fields
 c
       real*8 :: tjulhalf
+c
+c output:  area integrals of Poynting flux, Helicity injection rate density:
+c
+      real*8 :: srtot,hmtot
 c      
 c - - local variables 
 c 
@@ -190,10 +201,6 @@ c  ci and di are values of c,d with c subtracted from both, for use in fishpack
       real*8 :: etpdf(m,n+1),eppdf(m+1,n),erpdf(m+1,n+1)
       real*8 :: etpdfi(m,n+1),eppdfi(m+1,n),erpdfi(m+1,n+1)
       real*8 :: sr(m,n),hm(m,n)
-c
-c scalar integrated quanitities:  (might become arguments)
-c
-      real*8 :: srtot,hmtot
 c
 c keywords: bthr -|B| threshold for masking 
       real*8 :: bthr

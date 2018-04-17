@@ -1,26 +1,29 @@
        subroutine ahpot_ss(m,n,p,a,b,c,d,rsun,rssmrs,scrb3d,atpot,appot)
 c
 c+ - - Purpose: compute potential field value of at,ap (vector potential
-c - -  components) given the 3-d array
-c  - - scrb3d by taking curl of scriptB rhat.
+c               components) given the 3-d array scrb3d by taking curl of 
+c               scriptB rhat. scrb3d is computed by subroutine scrbpot_ss.
 c
-c      Usage:  call ahpot_ss(m,n,p,a,b,c,d,rsun,rssmrs,scrb3d,atpot,appot)
+c - -  Usage:   call ahpot_ss(m,n,p,a,b,c,d,rsun,rssmrs,scrb3d,atpot,appot)
 c
-c      Input:  m,n,p: integer values of numbers of cell centers in theta,
-c              phi, and r directions
-c      Input:  a,b,c,d:  values of min, max colatitude, min, max
-c              values of longitude. 
-c      Input:  rsun,rssmrs: radius of sun, and distance from phot
-c              to source surface.
-c      Input:  scrb3d(m,n,p+1): 3-d array of poloidal potential scribtb
-c      Output: atpot(m,n+1,p+1): 3-d array of theta-comp of vector potential
-c      Output: appot(m+1,n,p+1): 3-d array of phi-comp of vector potential
-c - -  Note:   atpot,appot are computed on phi and theta edges, and on
-c -            radial shells.
+c - -  Input:   m,n,p: integer values of numbers of cell centers in theta,
+c               phi, and r directions
+c - -  Input:   a,b,c,d:  real*8 values of min, max colatitude, min, max
+c               values of longitude. [radians]
+c - -  Input:   rsun,rssmrs: real*8 values of the radius of sun, and 
+c               distance from phot to source surface. [km] Normally rsun=6.96d5.
+c - -  Input:   scrb3d(m,n,p+1): real*8 array of poloidal potential scribtb
+c               [G km^2]
+c - -  Output:  atpot(m,n+1,p+1): real*8 array of theta-comp of vector potential
+c               [G km]
+c - -  Output:  appot(m+1,n,p+1): real*8 array of phi-comp of vector potential
+c               [G km]
+c - -  Note:    atpot,appot are computed on phi and theta edges, and on
+c -             radial shells.
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index
-c   Copyright (C) 2015,2016 University of California
+c   Copyright (C) 2015-2018 University of California
 c  
 c   This software is based on the concepts described in Kazachenko et al. 
 c   (2014, ApJ 795, 17).  It also extends those techniques to 

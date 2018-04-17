@@ -1,30 +1,32 @@
       subroutine berciktest_ss(m,n,p,a,b,c,d,rsun,rssmrs,scrb3d,
      1 brh,brr)
 c
-c+ - - Purpose: compute potential field value of br above photosphere
-c      in two different ways given the 3-d array scrb3d, 
-c              (1) by taking horizontal Laplacian at each radius value, and
-c              (2) by taking 2nd deriv w/r r.  Both results should be equal.
+c+ - - Purpose: Compute potential field value of br above photosphere
+c               in two different ways given the 3-d array scrb3d, 
+c               (1) by taking horizontal Laplacian at each radius value, and
+c               (2) by taking 2nd deriv w/r r.  Both results should be equal,
+c               according to Bercik's equation.
 c
-c      Usage:  call berciktest_ss(m,n,p,a,b,c,d,rsun,rssmrs,scrb3d,brh,brr)
+c - -  Usage:   call berciktest_ss(m,n,p,a,b,c,d,rsun,rssmrs,scrb3d,brh,brr)
 c
-c      Input:  m,n,p: integer values of numbers of cell centers in theta,
-c              phi, and r directions
-c      Input:  a,b,c,d:  values of min, max colatitude, min, max
-c              values of longitude. 
-c      Input:  rsun,rssmrs: radius of sun, and distance from phot
-c              to source surface.
-c      Input:  scrb3d(m,n,p+1): 3-d array of poloidal potential scribtb
-c      Output: brh(m,n,p-1): 3-d array of radial magnetic field values
-c              above photosphere and below source-surface.  Computed from
-c              horizontal Laplacian.
-c      Output: brr(m,n,p-1): 3d array of radial magnetic field values above
-c              photosphere and below source-surface.  Computed from radial
-c              2nd derivative.
+c - -  Input:   m,n,p: integer values of numbers of cell centers in theta,
+c               phi, and r directions
+c - -  Input:   a,b,c,d:  real*8 values of min, max colatitude, min, max
+c               values of longitude. [radians]
+c - -  Input:   rsun,rssmrs: real*8 value for radius of sun, and distance 
+c               from photosphere to source surface. [km].  Normally rsun=6.96e5.
+c - -  Input:   scrb3d(m,n,p+1): real*8 array of poloidal potential scribtb
+c               [G km^2]
+c - -  Output:  brh(m,n,p-1): real*8 array of radial magnetic field values
+c               above photosphere and below the source-surface. [km]  Computed 
+c               from horizontal Laplacian.
+c - -  Output:  brr(m,n,p-1): real*8 array of radial magnetic field values above
+c               photosphere and below source-surface. [km]  Computed from radial
+c               2nd derivative.
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index
-c   Copyright (C) 2015,2016 University of California
+c   Copyright (C) 2015-2018 University of California
 c  
 c   This software is based on the concepts described in Kazachenko et al. 
 c   (2014, ApJ 795, 17).  It also extends those techniques to 

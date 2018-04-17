@@ -1,23 +1,30 @@
       subroutine curlh_co_ss(m,n,bt,bp,rsun,sinth,sinth_hlf,dtheta,
      1 dphi,curl)
 c
-c+ staggered grid version of curlh_sph, evaluated at cell corners
-c  Purpose: Compute rhat cdot curl of vector with components bt,bp.  Result
-c          is evaluated on the CO grid (interior corners).
+c+     Purpose: Compute rhat cdot curl of vector with components bt,bp.  
+c               The bt array is on the TE grid, bp array is on the PE grid, and
+c               the result is evaluated on the CO grid (interior corners).
 c
-c  Usage:  call curlh_co_ss(m,n,bt,bp,rsun,sinth,sinth_hlf,dtheta,dphi,curl)
-c  Input:  m,n - number of cell centers in theta, phi directions, resp
-c  Input:  bt - double prec. theta component of vector, dimensions m+1,n
-c  Input:  bp - double prec. phi component of vector, dimensions m,n+1
-c  Input:  rsun - double prec., assumed value of radius of Sun
-c  Input:  sinth - double prec. array of sin(theta) evaluated at theta edges,
-c          dimension must be m+1
-c  Input:  sinth_hlf - double prec. array of sin(theta) evaluated cell centers.
-c          dimension must be m.
-c  Input:  dtheta - double prec. value of angular distance between theta edges
-c  Input:  dphi - double prec. value of angular distance between phi edges
-c Output:  curl - double prec. array of size (m-1),(n-1) containing the
-c          curl evaluated at active cell corners.
+c - -  Usage:   call curlh_co_ss(m,n,bt,bp,rsun,sinth,sinth_hlf,
+c               dtheta,dphi,curl)
+c - -  Input:   m,n - integer number of cell centers in theta, phi directions, 
+c               respectively.
+c - -  Input:   bt(m+1,n) - real*8 array of theta component of vector 
+c               [G or G/sec].
+c - -  Input:   bp(m,n+1) - real*8 array of phi component of vector 
+c               [G or G/sec].
+c - -  Input:   rsun - real*8 value of radius of Sun [km].  Normally 6.96d5.
+c - -  Input:   sinth(m+1) - real*8 array of sin(theta) evaluated at 
+c               theta edges.
+c - -  Input:   sinth_hlf(m) - real*8 array of sin(theta) evaluated 
+c               cell centers.
+c - -  Input:   dtheta - real*8 value of angular distance between 
+c               theta edges [radians]
+c - -  Input:   dphi - real*8 value of angular distance between 
+c               phi edges [radians]
+c - - Output:   curl(m-1,n-1) - real*8 array containing the
+c               curl evaluated at interior cell corners (CO grid). 
+c               [G/km or G/(km-sec)]
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index

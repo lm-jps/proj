@@ -2,19 +2,23 @@
 c
 c+
 c - - Purpose: Compute radial component of the curl of c*E_h.
-c     This can be used to check inductivity of solutions for E_h.
+c              This can be used to check inductivity of solutions for c*E_h.
 c
-c - - Usage:  call curlehr_ss(m,n,rsun,a,b,c,d,et,ep,brt)
+c - - Usage:   call curlehr_ss(m,n,rsun,a,b,c,d,et,ep,brt)
 c
-c - - Input:  m,n - number of cell centers in theta, phi directions, resp.
-c - - Input:  rsun - assumed radius of Sun in km.
-c - - Input:  a,b - colatitude limits of wedge domain in radians (a < b)
-c - - Input:  c,d - longitude limits of wedge domain in radians (c < d)
-c - - Input: et(m,n+1) - theta component of ptd electric field, multiplied
-c - - by the speed of light [cE, G km/s]
-c - - Input: ep(m+1,n) - phi component of ptd electric field, multiplied
-c - - by the speed of light [cE, G km/s]
-c - - Output: brt(m,n) - the radial component of curl c*E_h
+c - - Input:   m,n - number of cell centers in theta, phi directions, resp.
+c - - Input:   rsun - real*8 value of assumed radius of Sun [km].
+c              Normally 6.96d5.
+c - - Input:   a,b - real*8 values of colatitude limits of wedge domain
+c              (a < b) [radians]
+c - - Input:   c,d - real*8 values of longitude limits of wedge domain 
+c              (c < d) [radians]
+c - - Input:   et(m,n+1) - real*8 array of theta component of ptd electric 
+c              field, multiplied by the speed of light (cE) [G km/s]
+c - - Input:   ep(m+1,n) - real*8 array of phi component of ptd electric field, 
+c              multiplied by the speed of light (cE) [G km/s]
+c - - Output:  brt(m,n) - real*8 array of the radial component of curl c*E_h
+c              [G /sec]
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index

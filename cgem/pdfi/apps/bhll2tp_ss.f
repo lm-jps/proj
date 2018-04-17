@@ -1,23 +1,24 @@
       subroutine bhll2tp_ss(m,n,bloncoe,blatcoe,btcoe,bpcoe)
 c
 c+
-c   Purpose: To transpose B_h data arrays from lon,lat to theta,phi order
-c             and flip sign to get B_theta.  This same subroutine can be
-c             used to convert the components of v_lon and v_lat returned from
-c             FLCT into components of v_theta and v_phi.
-c     Usage:  call bhl2tp_ss(m,n,bloncoe,blatcoe,btcoe,bpcoe)
-c     Input:  m,n - number of cell centers in the theta (lat), and phi (lon)
-c             directions, respectively.
-c     Input:  bloncoe(n+1,m+1),blatcoe(n+1,m+1) - arrays of the longitudinal
-c             and latitudinal components of the magnetic field evaluated at
-c             COE locations (corners plus exterior corners on boundary).
-c    Output:  btcoe(m+1,n+1),bpcoe(m+1,n+1) - arrays of colatitudinal and
-c             azimuthal components of magnetic field, stored in theta,phi
-c             index order.
+c - - Purpose: To transpose B_h data arrays from lon,lat to theta,phi order
+c              and flip sign to get B_theta.  This same subroutine can be
+c              used to convert the components of v_lon and v_lat returned from
+c              FLCT into components of v_theta and v_phi.  COE grid locations.
+c - - Usage:   call bhll2tp_ss(m,n,bloncoe,blatcoe,btcoe,bpcoe)
+c - - Input:   m,n - number of cell centers in the theta (lat), and phi (lon)
+c              directions, respectively.
+c - - Input:   bloncoe(n+1,m+1),blatcoe(n+1,m+1) - real*8 arrays of the 
+c              longitudinal and latitudinal components of the magnetic field 
+c              evaluated at COE locations (corners plus exterior corners on 
+c              boundary) [G].
+c - - Output:  btcoe(m+1,n+1),bpcoe(m+1,n+1) - real*8 arrays of colatitudinal 
+c              and azimuthal components of magnetic field, stored in theta,phi
+c              index order, COE grid locations. [G]
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index
-c   Copyright (C) 2015,2016 University of California
+c   Copyright (C) 2015-2018 University of California
 c  
 c   This software is based on the concepts described in Kazachenko et al. 
 c   (2014, ApJ 795, 17).  It also extends those techniques to 

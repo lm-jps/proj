@@ -1,21 +1,24 @@
        subroutine brpot_ss(m,n,p,a,b,c,d,rsun,rssmrs,scrb3d,brpot)
 c
 c+ - - Purpose: compute potential field value of br given the 3-d array
-c  - - scrb3d by taking horizontal Laplacian at each radius value
-c      Usage:  call brpot_ss(m,n,p,a,b,c,d,rsun,rssmrs,scrb3d,brpot)
+c              scrb3d by taking horizontal Laplacian at each radius value.
+c              The array scrb3d is computed by subroutine scrbpot_ss.
 c
-c      Input:  m,n,p: integer values of numbers of cell centers in theta,
+c - -  Usage:  call brpot_ss(m,n,p,a,b,c,d,rsun,rssmrs,scrb3d,brpot)
+c
+c - -  Input:  m,n,p: integer values of numbers of cell centers in theta,
 c              phi, and r directions
-c      Input:  a,b,c,d:  values of min, max colatitude, min, max
-c              values of longitude. 
-c      Input:  rsun,rssmrs: radius of sun, and distance from phot
-c              to source surface.
-c      Input:  scrb3d(m,n,p+1): 3-d array of poloidal potential scribtb
-c      Output: brpot(m,n,p+1): 3-d array of radial magnetic field values
+c - -  Input:  a,b,c,d:  real*8 values of min, max colatitude, min, max
+c              values of longitude [radians]. 
+c - -  Input:  rsun,rssmrs: real*8 values of the radius of sun, and distance 
+c              from photosphere to source surface. [km].  Normally rsun=6.96d5.
+c - -  Input:  scrb3d(m,n,p+1): real*8 array of poloidal potential scribtb
+c              [G km^2]
+c - -  Output: brpot(m,n,p+1): real*8 array of radial magnetic field values [G]
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index
-c   Copyright (C) 2015,2016 University of California
+c   Copyright (C) 2015-2018 University of California
 c  
 c   This software is based on the concepts described in Kazachenko et al. 
 c   (2014, ApJ 795, 17).  It also extends those techniques to 

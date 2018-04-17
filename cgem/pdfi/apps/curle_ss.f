@@ -2,28 +2,40 @@
      1 brt)
 c
 c+
-c - - Purpose: Compute 3 components of the curl of c*E.
-c     This can be used to check inductivity of solutions for E.
+c - - Purpose: Compute 3 components of the curl of cE.
+c              This can be used to check inductivity of solutions for E.
+c              This subroutine uses photospheric values of et,ep, plus
+c              arrays of toroidal potential plus radial derivative of
+c              poloidal potential, to compute all 3 components of the curl
+c              of cE.  This is in contrast to curle3d_ss, which uses E
+c              values on all the rails of the spherical voxels to compute
+c              the 3 components of the curl.
 c
-c - - Usage:  call curle_ss(m,n,rsun,a,b,c,d,et,ep,scrj,dscrbdr,btt,bpt,brt)
+c - - Usage:   call curle_ss(m,n,rsun,a,b,c,d,et,ep,scrj,dscrbdr,btt,bpt,brt)
 c
-c - - Input:  m,n - number of cell centers in theta, phi directions, resp.
-c - - Input:  rsun - assumed radius of Sun in km.
-c - - Input:  a,b - colatitude limits of wedge domain in radians (a < b)
-c - - Input:  c,d - longitude limits of wedge domain in radians (c < d)
-c - - Input: et(m,n+1) - theta component of electric field multiplied
-c - - by the speed of light [cE, G km/s]
-c - - Input: ep(m+1,n) - phi component of electric field multiplied
-c - - by the speed of light [cE, G km/s]
-c - - Input: scrj(m+1,n+1) - time derivative of scrj from ptdsolve_ss
-c - - Input: dscrbdr(m+2,n+2) - time deriv. of dscrbdr from ptdsolve_ss.
-c - - Output: btt(m+1,n) - theta component of curl c*E
-c - - Output: bpt(m,n+1) - phi component of curl c*E
-c - - Output: brt(m,n) - the radial component of curl c*E_h
+c - - Input:   m,n - number of cell centers in theta, phi directions, resp.
+c - - Input:   rsun - real*8 value of assumed radius of Sun [km].
+c              Normally 6.96d5.
+c - - Input:   a,b - real*8 colatitude limits of wedge domain in radians (a < b)
+c              [radians]
+c - - Input:   c,d - real*8 longitude limits of wedge domain in radians (c < d)
+c              [radians]
+c - - Input:   et(m,n+1) - real*8 array of the theta component of electric 
+c              field (cE) multiplied by the speed of light [G km/s]
+c - - Input:   ep(m+1,n) - real*8 array of the phi component of electric field 
+c              (cE) multiplied by the speed of light [G km/s]
+c - - Input:   scrj(m+1,n+1) - real*8 array of time derivative of the toroidal
+c              potential returned from ptdsolve_ss [G km/s]
+c - - Input:   dscrbdr(m+2,n+2) - real*8 array of the time deriv. of the radial
+c              derivative of the poloidal potential returned from ptdsolve_ss.
+c              [G km/s]
+c - - Output:  btt(m+1,n) - real*8 array of theta component of curl c*E [G/s]
+c - - Output:  bpt(m,n+1) - real*8 array of phi component of curl c*E [G/s]
+c - - Output:  brt(m,n) - real*8 array of r component of curl c*E [G/s]
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index
-c   Copyright (C) 2015,2016 University of California
+c   Copyright (C) 2015-2018 University of California
 c  
 c   This software is based on the concepts described in Kazachenko et al. 
 c   (2014, ApJ 795, 17).  It also extends those techniques to 

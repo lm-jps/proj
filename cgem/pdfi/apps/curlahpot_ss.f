@@ -1,27 +1,31 @@
       subroutine curlahpot_ss(m,n,p,a,b,c,d,rsun,rssmrs,atpot,appot,
      1 btpot,bppot,brpot)
 c
-c+ - - Purpose: compute potential field values of bt,bp,br given the 3-d arrays
-c      atpot,appot of the potential-field vector potential, by taking
-c      the curl of A_h.
+c+ - - Purpose: Compute potential field values of bt,bp,br given the 3-d arrays
+c              atpot,appot of the potential-field vector potential, by taking
+c              the curl of A_h.
 c
-c      Usage:  call curlahpot_ss(m,n,p,a,b,c,d,rsun,rssmrs,atpot,appot,btpot,
+c - -  Usage:  call curlahpot_ss(m,n,p,a,b,c,d,rsun,rssmrs,atpot,appot,btpot,
 c              bppot,brpot)
 c
-c      Input:  m,n,p: integer values of numbers of cell centers in theta,
-c              phi, and r directions
-c      Input:  a,b,c,d:  values of min, max colatitude, min, max
-c              values of longitude. 
-c      Input:  rsun,rssmrs: radius of sun, and distance from phot
-c              to source surface.
-c      Input:  atpot(m,n+1,p+1): 3-d array of theta-comp vector potential
-c      Input:  appot(m+1,n,p+1): 3-d array of phi-comp vector potential
-c      Output: btpot(m+1,n,p): 3-d array of theta-comp magnetic field
-c      Output: bppot(m,n+1,p): 3-d array of phi-comp magnetic field
-c      Output: brpot(m,n,p+1): 3-d array of r-comp magnetic field
-c - -  Note:  btpot,bppot are computed on theta and phi edges, and mid-way
-c             between radial shells. brpot is computed on radial shells, at
-c             cell-center in theta and phi.
+c - -  Input:  m,n,p -  integer values of numbers of cell centers in 
+c              theta (colat), phi, and r directions
+c - -  Input:  a,b - real*8 values of min, max of colatitude. a < b [radians]
+c - -  Input:  c,d - real*8 values of min, max of longitude. c < d [radians]
+c - -  Input:  rsun,rssmrs -  real*8 values of radius of sun, and distance 
+c              from phot to source surface. [km].  Normally rsun=6.96d5.
+c - -  Input:  atpot(m,n+1,p+1) - real*8 array of theta-comp vector potential
+c              [G km]
+c - -  Input:  appot(m+1,n,p+1) - real*8 array of phi-comp vector potential
+c              [G km]
+c - -  Output: btpot(m+1,n,p) - real*8 array of theta-comp magnetic field [G]
+c - -  Output: bppot(m,n+1,p) - real*8 array of phi-comp magnetic field [G]
+c - -  Output: brpot(m,n,p+1) - real*8 array of r-comp magnetic field [G]
+c - -  Note:   btpot,bppot are computed on theta and phi edges, and mid-way
+c              between radial shells. brpot is computed on radial shells, at
+c              cell-center in theta and phi. atpot is located on radial shells,
+c              on the PE (phi-edge) grid, and appot is located on radial shells,
+c              on the TE (theta-edge) grid.
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index

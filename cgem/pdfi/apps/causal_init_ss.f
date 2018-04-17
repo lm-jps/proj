@@ -6,6 +6,7 @@ c - - Usage: a=causal_init_ss(f,fsize,z)
 c - - Input:  f(fsize) - real*8 array
 c - - Input:  fsize - integer value of the dimension of f
 c - - Input:  z - real*8 argument
+c - - Note:  This function is *only* used by subroutine bspline_ss.
 c-
 c   Origins:  This function was written in Fortran by Dave Bercik.
 c   It is based on software in C, published by Philippe Thevenaz, 

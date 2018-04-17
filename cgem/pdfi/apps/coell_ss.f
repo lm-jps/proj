@@ -6,10 +6,14 @@ c
 c - - Usage:  call coetp_ss(m,n,a,b,c,d,theta,phi)
 c
 c - - Input:  m,n - number of cell interiors in the colat,lon directions
-c - - Input:  a,b,c,d - a,b are colatitude range for the problem domain, a < b
-c - - Input:  c,d - c,d are the longitude range for the problem, c < d
-c - - Output: lon(n+1,m+1) - the longitude values of the COE grid
-c - - Output: lat(n+1,m+1) - the latitude values of the COE grid
+c - - Input:  a,b - real*8 values of colatitude range for the problem domain, 
+c             a < b [radians]
+c - - Input:  c,d - real*8 values of the longitude range for the problem, 
+c             c < d [radians]
+c - - Output: lon(n+1,m+1) - real*8 array of longitude values of the COE grid
+c             [radians]
+c - - Output: lat(n+1,m+1) - real*8 array of latitude values of the COE grid
+c             [radians]
 c
 c-
 c   PDFI_SS Electric Field Inversion Software

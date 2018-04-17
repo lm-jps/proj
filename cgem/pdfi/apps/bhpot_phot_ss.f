@@ -1,29 +1,33 @@
       subroutine bhpot_phot_ss(m,n,p,a,b,c,d,rsun,rssmrs,brce,scrb3d,
      1            btphot,bpphot)
 c
-c+ - - Purpose: compute potential field value of bt,bp 
-c      at the photosphere given the 3-d array
-c      scrb3d by taking horizontal gradient of d scriptB / dr (interpolated to
-c      the photosphere)
+c+ - - Purpose: compute potential field values of bt,bp 
+c              at the photosphere given the 3-d array
+c              scrb3d by taking horizontal gradient of d scriptB / dr 
+c              (interpolated to the photosphere).  scrb3d is computed by 
+c              subroutine scrbpot_ss.
 c      
 c
-c      Usage:  call bhpot_phot_ss(m,n,p,a,b,c,d,rsun,rssmrs,brce,scrb3d,
-c    1 btphot,bpphot)
+c  - - Usage:  call bhpot_phot_ss(m,n,p,a,b,c,d,rsun,rssmrs,brce,scrb3d,
+c              btphot,bpphot)
 c
-c      Input:  m,n,p: integer values of numbers of cell centers in theta,
+c  - - Input:  m,n,p: integer values of numbers of cell centers in theta,
 c              phi, and r directions
-c      Input:  a,b,c,d:  values of min, max colatitude, min, max
-c              values of longitude. 
-c      Input:  rsun,rssmrs: radius of sun, and distance from phot
-c              to source surface.
-c      Input:  brce(m,n): 2-d array of photospheric magnetic field values
-c      Input:  scrb3d(m,n,p+1): 3-d array of poloidal potential scribtb
-c      Output: btpot(m+1,n): 2-d array of theta-comp magnetic field at phot
-c      Output: bppot(m,n+1): 2-d array of theta-comp magnetic field at phot
+c  - - Input:  a,b,c,d:  real*8 values of min, max colatitude, min, max
+c              values of longitude. [radians]
+c  - - Input:  rsun,rssmrs: real*8 values of radius of sun, and distance 
+c              from phot to source surface. [km] Normally, rsun=6.96d5.
+c  - - Input:  brce(m,n): real*8 array of photospheric magnetic field values [G]
+c  - - Input:  scrb3d(m,n,p+1): real*8 array of poloidal potential scribtb
+c              [G km^2]
+c  - - Output: btpot(m+1,n): real*8 array of theta-comp magnetic field at phot
+c              [G]
+c  - - Output: bppot(m,n+1): real*8 array of phi-comp magnetic field at phot
+c              [G]
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index
-c   Copyright (C) 2015,2016 University of California
+c   Copyright (C) 2015-2018 University of California
 c  
 c   This software is based on the concepts described in Kazachenko et al. 
 c   (2014, ApJ 795, 17).  It also extends those techniques to 

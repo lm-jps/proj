@@ -2,24 +2,31 @@
      1           cosang)
 c
 c+
-c - - Purpose:  To compute the angle between the E and B vectors.
+c - - Purpose: To compute the angle between the E and B vectors.
 c
-c - - Usage: call angle_be_ss(m,n,et,ep,er,btcoe,bpcoe,brcoe,cosang)
+c - - Usage:  call angle_be_ss(m,n,et,ep,er,btcoe,bpcoe,brcoe,cosang)
 c
-c - - Input:  m,n - number of cell centers in theta, phi directions, resp.
-c - - Input:  et(m,n+1): theta component electric field [V/cm] on PE grid
-c - - Input:  ep(m+1,n): phi component electric field [V/cm] on TE grid
-c - - Input:  er(m+1,n+1): radial component electric field [V/cm] on COE grid
-c - - Input:  btcoe(m+1,n+1): theta component magnetic field [G] on COE grid
-c - - Input:  bpcoe(m+1,n+1): phi component magnetic field [G] on COE grid
-c - - Input:  brcoe(m+1,n+1): radial component magnetic field [G] on COE grid
-c - - Input:  maskcoe(m+1,n+1): mask array for strong magnetic fields
-c - - Output: cosang(m-1,n-1): angle between E and B on CO grid expressed as
-c             cos(theta)
+c - - Input:  m,n - integer values for the number of cell centers in 
+c             theta, phi directions, resp.
+c - - Input:  et(m,n+1): real*8 array of theta component electric field 
+c             [V/cm or G km/sec] on PE grid
+c - - Input:  ep(m+1,n): real*8 array of phi component electric field 
+c             [V/cm or G km/sec] on TE grid
+c - - Input:  er(m+1,n+1): real*8 array of radial component of electric field 
+c             [V/cm or G km/sec] on COE grid
+c - - Input:  btcoe(m+1,n+1): real*8 array of theta component magnetic 
+c             field [G] on COE grid
+c - - Input:  bpcoe(m+1,n+1): real*8 array of phi component magnetic field [G] 
+c             on COE grid
+c - - Input:  brcoe(m+1,n+1): real*8 array of radial component magnetic field 
+c             [G] on COE grid
+c - - Input:  maskcoe(m+1,n+1): real*8 mask array for strong magnetic fields
+c - - Output: cosang(m-1,n-1): real*8 array of the angle between E and B on 
+c             CO grid expressed as cos(theta)
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index
-c   Copyright (C) 2015,2016 University of California
+c   Copyright (C) 2015-2018 University of California
 c  
 c   This software is based on the concepts described in Kazachenko et al. 
 c   (2014, ApJ 795, 17).  It also extends those techniques to 
@@ -44,10 +51,6 @@ c   or write to the Free Software Foundation, Inc.,
 c   59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 c
       implicit none
-c
-c - - declare pimach function (FISHPACK/FFTPACK) to compute pi
-c
-c     real*8 :: pimach
 c
 c - - Input variable declarations
 c

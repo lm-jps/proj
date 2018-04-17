@@ -73,6 +73,10 @@ struct reqInfo {
     TIME t, trec;   // use T_OBS for time, trec for prime key
 };
 
+struct pdfi_result {        // results from PDFI calculation
+    double srtot, hmtot;
+};
+
 // FORTRAN function
 
 extern void pdfi_wrapper4jsoc_ss_(int *m, int *n, double *rsun, double *a, double *b, double *c, double *d,
@@ -86,7 +90,7 @@ extern void pdfi_wrapper4jsoc_ss_(int *m, int *n, double *rsun, double *a, doubl
                                   double *blon0, double *blat0, double *brll0,
                                   double *blon1, double *blat1, double *brll1,
                                   double *elonpdfi, double *elatpdfi, double *erllpdfi,
-                                  double *srll, double *hmll,
+                                  double *srll, double *srtot, double *hmll, double *hmtot,
                                   double *tjulhalf);
 
 // C functions
@@ -108,7 +112,8 @@ int writeOutputArr(DRMS_Record_t *inRec0, DRMS_Record_t *inRec1, DRMS_Record_t *
                    struct reqInfo *rInfo0, struct reqInfo *rInfo1,
                    double *elonpdfi, double *elatpdfi, double *erllpdfi,
                    double *blon0, double *blat0, double *brll0,
-                   double *blon1, double *blat1, double *brll1);
+                   double *blon1, double *blat1, double *brll1,
+                   struct pdfi_result *res);
 
 // Figure out padding sizes
 void pad_int_gen_ss(struct reqInfo *rInfo);
@@ -290,6 +295,9 @@ int DoIt(void)
         double *srll = (double *) (calloc(n * m, sizeof(double)));
         double *hmll = (double *) (calloc(n * m, sizeof(double)));
         
+        struct pdfi_result res;
+        double srtot = 0., hmtot = 0.;
+        
         // Run it in FORTRAN
         // New wrapper makes sure that a, b, c, d are within bounds (Oct 21 2016)
         
@@ -299,8 +307,8 @@ int DoIt(void)
                               lloncoe0, llatcoe0, lrllcoe0, lloncoe1, llatcoe1, lrllcoe1,
                               &tjul0, &tjul1,
                               blon0, blat0, brll0, blon1, blat1, brll1,
-                              elonpdfi, elatpdfi, erllpdfi, srll, hmll,
-                              &tjulhalf);
+                              elonpdfi, elatpdfi, erllpdfi, srll, &srtot, hmll, &hmtot, &tjulhalf);
+        res.srtot = srtot; res.hmtot = hmtot;
         
         // Output, finally save as n x m
         
@@ -310,7 +318,7 @@ int DoIt(void)
                            &rInfo0, &rInfo1,
                            elonpdfi, elatpdfi, erllpdfi,
                            blon0, blat0, brll0,
-                           blon1, blat1, brll1)) {
+                           blon1, blat1, brll1, &res)) {
             printf("Output array error, record #%d skipped", ipair);
             free(elonpdfi); free(elatpdfi); free(erllpdfi);     // otherwise freed in function
             free(blon0); free(blat0); free(brll0);
@@ -524,7 +532,8 @@ int writeOutputArr(DRMS_Record_t *inRec0, DRMS_Record_t *inRec1, DRMS_Record_t *
                    struct reqInfo *rInfo0, struct reqInfo *rInfo1,
                    double *elonpdfi, double *elatpdfi, double *erllpdfi,
                    double *blon0, double *blat0, double *brll0,
-                   double *blon1, double *blat1, double *brll1)
+                   double *blon1, double *blat1, double *brll1,
+                   struct pdfi_result *res)
 {
     int status = 0;
     
@@ -566,6 +575,10 @@ int writeOutputArr(DRMS_Record_t *inRec0, DRMS_Record_t *inRec1, DRMS_Record_t *
     drms_copykeys(outRec, inRec0, 0, kDRMS_KeyClass_Explicit);     // copy all keys, for now use t0
     
     drms_setkey_string(outRec, "PDFIVERS", pdfi_vers);        // pdfi_vers.h
+    
+    drms_setkey_double(outRec, "SRTOT", res->srtot);            // Integral Poynting flux
+    drms_setkey_double(outRec, "HMTOT", res->hmtot);            // Helicity flux
+    printf("srtot=%lf, hmtot=%lf\n", res->srtot, res->hmtot);
     
     drms_setkey_int(outRec, "NPADL", rInfo0->npadl);		// padding sizes
     drms_setkey_int(outRec, "NPADR", rInfo0->npadr);

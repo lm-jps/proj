@@ -1,23 +1,27 @@
       subroutine curlh_ce_ss(m,n,et,ep,rsun,sinth,sinth_hlf,dtheta,
      1 dphi,curl)
 c
-c+ staggered spherical grid version of curlh: evaluated at cell-centers
-c  Purpose: Compute rhat cdot curl of the vector with components et and ep.
-c           Result is evaluated at cell centers (CE grid).
+c+     Purpose: Compute rhat dot curl of the vector with components et and ep.
+c               et is on the PE grid, ep is on the TE grid.
+c               Result is evaluated at cell centers (CE grid).
 c
-c  Usage:  call curlh_ce_ss(m,n,et,ep,rsun,sinth,sinth_hlf,dtheta,dphi,curl)
-c  Input:  m,n - numbers of cell-centers in theta, phi directions, resp.
-c  Input:  et - double prec. theta component of vector, dimensioned m,n+1
-c  Input:  ep - double prec. phi component of vector, dimensioned m+1,n
-c  Input:  rsun - double prec., assumed units of radius of Sun
-c  Input:  sinth - double prec. array of theta cell-edge values of sin(theta),
-c          must be dimensioned m+1
-c  Input:  sinth_hlf - double prec. array of theta-cell center values of
-c          sin(theta), must be dimensioned m
-c  Input:  dtheta - double prec. value of distance between theta edges
-c  Input:  dphi - double prec. value of distance between phi edges
-c Output:  curl - double prec. array dimensioned m,n - cell-center values
-c          of rhat dot curl(et,ep)
+c - -  Usage:   call curlh_ce_ss(m,n,et,ep,rsun,sinth,sinth_hlf,
+c               dtheta,dphi,curl)
+c - -  Input:   m,n - integer numbers of cell-centers in theta, phi directions, 
+c               resp.
+c - -  Input:   et(m,n+1) - real*8 array of theta component of cE vector.
+c               [G km/sec]
+c - -  Input:   ep(m+1,n) - real*8 array of phi component of cE vector. 
+c               [G km/sec]
+c - -  Input:   rsun - real*8 value of radius of Sun. [km] Normally 6.96d5.
+c - -  Input:   sinth(m+1) - real*8 array of theta cell-edge values of
+c               sin(theta).
+c - -  Input:   sinth_hlf(m) - real*8 array of theta-cell center values of
+c               sin(theta).
+c - -  Input:   dtheta - real*8 value of distance between theta edges. [radians]
+c - -  Input:   dphi - real*8 value of distance between phi edges. [radians]
+c - - Output:   curl(m,n) - real*8 array of cell-center values
+c               of rhat dot curl(et,ep) [G/sec]
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index
