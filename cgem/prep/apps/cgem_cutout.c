@@ -30,6 +30,7 @@
 #include "jsoc_main.h"
 #include "astro.h"
 #include "cartography.c"
+#include "diffrot.h"        // double diffrot[3];
 
 #define PI              (M_PI)
 #define RADSINDEG		(PI/180.)
@@ -42,7 +43,7 @@
 #define ARRLENGTH(ARR) (sizeof(ARR) / sizeof(ARR[0]))
 
 #define DISAMB_AZI		1
-#define DOPPCAL         0       // Calibrate Doppler here
+#define DOPPCAL         1       // Calibrate Doppler here
 
 // Some other things
 #ifndef MIN
@@ -349,7 +350,7 @@ int findCoord(DRMS_Record_t *inRec, struct patchInfo *pInfo, int *ll, int *ur)
     // proj/lev1.5_hmi/libs/lev15/rotcoef_file.txt
     
     double lat_c = pInfo->latref;
-    double difr = 2.7139 - 0.405 * pow(sin(lat_c),2) - 0.422 * pow(sin(lat_c),4);
+    double difr = diffrot[0] + diffrot[1] * pow(sin(lat_c),2) + diffrot[2] * pow(sin(lat_c),4);
     double dt = drms_getkey_time(inRec, "T_REC", &status) - pInfo->tref;
     double lon_c = pInfo->lonref + dt * difr * 1.0e-6;      // urad/s to rad
     printf("lon_c=%f\n", lon_c/RADSINDEG);

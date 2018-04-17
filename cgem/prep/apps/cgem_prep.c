@@ -16,6 +16,7 @@
 #include "cartography.c"
 #include "img2helioVector.c"
 #include "finterpolate.h"
+#include "diffrot.h"            // double diffrot[3]
 
 // Legacy macros
 
@@ -605,6 +606,8 @@ int getDoppCorr(DRMS_Record_t *inRec, int *dims, double *doppCorr)
     double sinlon;
     double sinlat_nobp, sinlon_nobp, coslat_nobp;
     
+//    printf("diffrot=%lf, %lf, %lf\n", diffrot[0], diffrot[1], diffrot[2]);
+    
     for (int row = 0; row < ny; row++) {
         for (int col = 0; col < nx; col++) {
             
@@ -620,7 +623,7 @@ int getDoppCorr(DRMS_Record_t *inRec, int *dims, double *doppCorr)
                             - obsv_x * sinlon_nobp * coslat_nobp * k;        // cm/s
             
             doppCorr[ind] += (rsun_ref * sinlon * coslatc * 1.e-6 *
-                              (2.71390 - 0.405000 * pow(sinlat, 2) - 0.422000 * pow(sinlat, 4)));        // cm/s
+                              (diffrot[0] + diffrot[1] * pow(sinlat, 2) + diffrot[2] * pow(sinlat, 4)));        // cm/s
             
         }
     }

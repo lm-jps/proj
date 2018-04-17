@@ -36,6 +36,7 @@
 #include <sys/time.h>
 #include <math.h>
 #include <string.h>
+#include "diffrot.h"        // double diff_rot[3];
 #include "jsoc_main.h"
 
 // Macros
@@ -100,7 +101,8 @@ extern void doppcal_estimate_ (int *naxis1, int *naxis2, int *naxis3i, int *naxi
                                double *crpix, double *obs_v, double *rsun_obs, double *rsun_ref, double *crlt_obs, double *crota2,
                                float *doppcal_bias,
                                double *max_ang_in, double *thresh_blos_in, double *pix_in,
-                               double *thresh_bmag_in, int *rad_los_sep_in);
+                               double *thresh_bmag_in, int *rad_los_sep_in,
+                               double *diff_a0_in, double *diff_a2_in, double *diff_a4_in);
 
 // =====================================
 
@@ -124,6 +126,9 @@ int DoIt(void)
     char *inQuery = (char *) params_get_str(&cmdparams, "in");
     char *outQuery = (char *) params_get_str(&cmdparams, "out");
     int writeImg = params_isflagset(&cmdparams, "w");
+    
+    double a0 = diffrot[0], a2 = diffrot[1], a4 = diffrot[2];
+//    printf("a0=%lf, a2=%lf, a4=%lf\n", a0, a2, a4);
     
     /* Input data */
     
@@ -194,7 +199,8 @@ int DoIt(void)
                            crpix, obs_v, &rsun_obs, &rsun_ref, &crlt_obs, &crota2,
                            &doppcal_bias,
                            &max_ang_in, &thresh_blos_in, &pix_in,
-                           &thresh_bmag_in, &rad_los_sep_in);
+                           &thresh_bmag_in, &rad_los_sep_in,
+                           &a0, &a2, &a4);
         
         printf("done.\n");
         printf("doppcal_bias = %f\n", doppcal_bias);
