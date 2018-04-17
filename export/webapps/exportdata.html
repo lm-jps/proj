@@ -849,7 +849,7 @@ function CreateRequestRSInfoCallback(callback)
                     else
                     {
                         // processSeriesSelection determine that the series is not aia_scale compatible
-                        alert('danger will robinson!');
+                        alert('Danger, Will Robinson!');
                     }
                     
                     if (!$('OptionAiaScale').retrieve('disabledState', false))
@@ -1094,6 +1094,13 @@ function CreateProcessSpec(spec, processRecordCount)
                 var validSpec = data.subsets[0].spec;
 
                 SeriesName = series; // global
+                if (!data.hasfilts && RecordLimit == 0)
+                {
+                    validSpec = series + '[$]' + (data.subsets[0].segments === null ? '' : data.subsets[0].segments);
+                }
+                
+                alert(validSpec);
+                
                 $("ExportRecordSet").value = validSpec;
 
                 // use the parsed series name to call the jsocInfoCGI to get the series information;
