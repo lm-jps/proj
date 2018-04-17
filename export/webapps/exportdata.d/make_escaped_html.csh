@@ -1,4 +1,4 @@
-#
+#! /bin/csh -f
 
 set TMP = $$.tmp
 echo -n "escaped_html='" > $TMP
