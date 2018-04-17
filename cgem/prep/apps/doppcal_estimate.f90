@@ -3,7 +3,7 @@ subroutine doppcal_estimate(naxis1, naxis2, naxis3i, naxis3o, & ! N_x, N_y; naxi
      crpix, obs_v, rsun_obs, rsun_ref, crlt_obs, crota2, & ! input HMI keywords
      doppcal_bias, & ! output estimate of bias velocity
      max_ang_in, thresh_blos_in, pix_in, &  ! optional input parameters
-     thresh_bmag_in, rad_los_sep_in)  ! more optional input parameters
+     thresh_bmag_in, rad_los_sep_in, diff_a0_in, diff_a2_in, diff_a4_in)  ! more optional input parameters
 
   
   !===================================================================
@@ -69,6 +69,8 @@ subroutine doppcal_estimate(naxis1, naxis2, naxis3i, naxis3o, & ! N_x, N_y; naxi
   !   "rad_los_sep_in" = maximum separation allowed between LoS PIL
   !        pixels and nearest radial-field PIL
   !
+  !   "diff_a0, diff_a2, diff_a4" are a0/a2/a4 above. added X Sun Apr 16 2018
+  !
   !==========================================================
   !
   ! METHOD:
@@ -107,6 +109,7 @@ subroutine doppcal_estimate(naxis1, naxis2, naxis3i, naxis3o, & ! N_x, N_y; naxi
 
   ! Define optional inputs
   real*8, intent(in), optional :: max_ang_in, thresh_blos_in, thresh_bmag_in
+  real*8, intent(in), optional :: diff_a0_in, diff_a2_in, diff_a4_in
   real*8, intent(in), optional :: pix_in
   integer, intent(in), optional :: rad_los_sep_in 
   !
@@ -138,6 +141,8 @@ subroutine doppcal_estimate(naxis1, naxis2, naxis3i, naxis3o, & ! N_x, N_y; naxi
   integer rad_los_sep
   
   real*8 vlos_pils_median ! median of vlos on PILs
+
+  real*8 diff_a0, diff_a2, diff_a4
 
   real*8, parameter :: pi = 3.1415927 ! 3.1415926535897932
 
@@ -177,6 +182,26 @@ subroutine doppcal_estimate(naxis1, naxis2, naxis3i, naxis3o, & ! N_x, N_y; naxi
   else 
      pix = 0.504276     
   end if
+
+  if (present(diff_a0_in)) then ! pixel size in arcsec
+     diff_a0 = diff_a0_in
+  else
+     diff_a0 = 2.71390
+  end if
+
+  if (present(diff_a2_in)) then ! pixel size in arcsec
+     diff_a2 = diff_a2_in
+  else
+     diff_a2 = - 0.40500
+  end if
+
+  if (present(diff_a4_in)) then ! pixel size in arcsec
+     diff_a4 = diff_a4_in
+  else
+     diff_a4 = - 0.42200
+  end if
+
+!  print *, diff_a0, diff_a2, diff_a4
 
   ! Alloc. intermediate variables 
   allocate( lonlat( naxis1, naxis2, 2)) 
@@ -295,10 +320,10 @@ subroutine doppcal_estimate(naxis1, naxis2, naxis3i, naxis3o, & ! N_x, N_y; naxi
      !  a4   float   -0.422000	
      !
      ! 1e+2 for rsun_ref in m --> to cm; and 1e-6 for microradians 
-     vlos = vlos - rsun_ref *1e-4 *sin(lonlat(:,:,1)) *cos(crlt_obs*dtor) & 
-          *( 2.71390 &    ! a0 term
-          - 0.405000 * sin(lonlat(:,:,2))**2 & ! a2 term
-          - 0.422000 * sin(lonlat(:,:,2))**4 ) ! a4 term
+     vlos = vlos - rsun_ref *1e-4 *sin(lonlat(:,:,1)) *cos(crlt_obs*dtor) &
+          *( diff_a0 &    ! a0 term
+          + diff_a2 * sin(lonlat(:,:,2))**2 & ! a2 term
+          + diff_a4 * sin(lonlat(:,:,2))**4 ) ! a4 term
 
   elsewhere
 
