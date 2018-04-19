@@ -39,6 +39,7 @@ var KEYWORD_CTYPE2 = 'CTYPE2';
 var AIA_SCALE_CTYPE1 = 'HPLN-TAN';
 var AIA_SCALE_CTYPE2 = 'HPLT-TAN';
 var KEYWORD_SPEC = '*spec*';
+var AIA_NAMESPACE = 'aia';
 var NA = 'na';
 var AIA_SCALE_NAXES = 2;
 
@@ -870,7 +871,7 @@ function CreateRequestRSInfoCallback(callback, lastRecord)
                         // this should remain disabled until all asynchronous processing completes
                         // $('OptionAiaScale').disabled = true;
                         $('OptionAiaScaleLabel').innerHTML = 'aia_scale - Scale image to 0.6 arcsec/pixel (compatible with 2D dataseries with CTYPE1 == HPLN-TAN and CTYPE2 == HPLT-TAN only)'
-                        $('OptionAiaScaleLabel').setStyle({ color: 'grey' });                    
+                        $('OptionAiaScaleLabel').setStyle({ color: 'grey' });
                     }
                     
                     // if the user has specified the current record with [$], then replace [$] with the record-specification
@@ -963,7 +964,7 @@ function RequestRSInfo(errMsg, spec, lastRecord, callback)
     }
 }
 
-function CreateProcessSeriesSelection(spec, series, callback)
+function CreateProcessSeriesSelection(spec, series, seriesNs, callback)
 {
     var processSeriesSelection = 
         function(transport)
@@ -1034,6 +1035,20 @@ function CreateProcessSeriesSelection(spec, series, callback)
                         }   
                     }
                     
+                    // we can also determine compatibility with the MPT-selection check box
+                    if (seriesNs.toLowerCase() == AIA_NAMESPACE)
+                    {
+                        $('AiaScaleUseMptCheckbox').disabled = false;
+                        $('AiaScaleUseMptCheckboxLabel').innerHTML = 'Use a master pointing table to scale images (instead of keyword values)&nbsp';
+                        $('AiaScaleUseMptCheckboxLabel').setStyle({ color: 'black' });
+                    }
+                    else
+                    {
+                        $('AiaScaleUseMptCheckbox').disabled = true;
+                        $('AiaScaleUseMptCheckboxLabel').innerHTML = 'Use a master pointing table to scale images (instead of keyword values - compatible with AIA series only)&nbsp';
+                        $('AiaScaleUseMptCheckboxLabel').setStyle({ color: 'grey' });
+                    }
+                    
                     if (callback !== null)
                     {
                         callback(null);
@@ -1073,7 +1088,8 @@ function RequestSeriesInfo(series, callback)
     });
 }
 
-// callback - called after record-set specification has been successfully parsed
+// callback - called after record-set specification has been successfully parsed (this does not mean that the 
+// series is valid - it just means the specification has valid syntax)
 function CreateProcessSpec(spec, processRecordCount)
 {    
     var processSpec = 
@@ -1104,6 +1120,7 @@ function CreateProcessSpec(spec, processRecordCount)
             {
                 // set SeriesName
                 var series = data.subsets[0].seriesname;
+                var seriesNs = data.subsets[0].seriesns;
                 var validSpec = data.subsets[0].spec;
                 var lastRecord = false;
 
@@ -1136,7 +1153,7 @@ function CreateProcessSpec(spec, processRecordCount)
                 //
                 // the RequestSeriesInfo callback needs to call RequestRSInfo with processRecordCount as the callback
                 var requestRSInfo = function(errMsg) { RequestRSInfo(errMsg, validSpec, lastRecord, processRecordCount); };
-                var processSeriesSelection = CreateProcessSeriesSelection(validSpec, series, requestRSInfo);
+                var processSeriesSelection = CreateProcessSeriesSelection(validSpec, series, seriesNs, requestRSInfo);
                 RequestSeriesInfo(series, processSeriesSelection);
             }
         };
