@@ -38,6 +38,7 @@ var KEYWORD_CTYPE1 = 'CTYPE1';
 var KEYWORD_CTYPE2 = 'CTYPE2';
 var AIA_SCALE_CTYPE1 = 'HPLN-TAN';
 var AIA_SCALE_CTYPE2 = 'HPLT-TAN';
+var KEYWORD_SPEC = '*spec*';
 var NA = 'na';
 var AIA_SCALE_NAXES = 2;
 
@@ -752,8 +753,7 @@ function ParseSpec(spec, processSpec)
     });
 }
 
-// ajax callback
-function CreateRequestRSInfoCallback(callback)
+function CreateRequestRSInfoCallback(callback, lastRecord)
 {    
     var processRSInfo = 
         function(transport)
@@ -872,6 +872,19 @@ function CreateRequestRSInfoCallback(callback)
                         $('OptionAiaScaleLabel').innerHTML = 'aia_scale - Scale image to 0.6 arcsec/pixel (compatible with 2D dataseries with CTYPE1 == HPLN-TAN and CTYPE2 == HPLT-TAN only)'
                         $('OptionAiaScaleLabel').setStyle({ color: 'grey' });                    
                     }
+                    
+                    // if the user has specified the current record with [$], then replace [$] with the record-specification
+                    if (lastRecord && data.hasOwnProperty('keywords'))
+                    {
+                        for (var index = 0; index < data.keywords.length; index++)
+                        {
+                            if (data.keywords[index].name.strip().toLowerCase() == '*spec*' && data.keywords[index].values.length == 1)
+                            {
+                                $("ExportRecordSet").value = data.keywords[index].values[0];
+                                break;
+                            }
+                        }
+                    }
                 }
 
                 CheckRediness();
@@ -907,7 +920,7 @@ function CreateRequestRSInfoCallback(callback)
 }
 
 // if errMsg, then do not call jsoc_info, but we still have to call the callback
-function RequestRSInfo(errMsg, spec, callback)
+function RequestRSInfo(errMsg, spec, lastRecord, callback)
 {
     var arguments = null;
     var jsocinfoCGI = null;
@@ -929,15 +942,15 @@ function RequestRSInfo(errMsg, spec, callback)
         if (serverMap[host] == INTERNAL_SERVER)
         {
             jsocinfoCGI = JSOC_INFO;
-            arguments = { 'ds' : spec, 'n' : RecordLimit, 'op' : 'rs_list', 'key' : KEYWORD_CTYPE1 + ',' + KEYWORD_CTYPE2 };
+            arguments = { 'ds' : spec, 'n' : RecordLimit, 'op' : 'rs_list', 'key' : KEYWORD_CTYPE1 + ',' + KEYWORD_CTYPE2 + ',' + KEYWORD_SPEC };
         }
         else
         {
             jsocinfoCGI = JSOCEXTINFO;
-            arguments = { 'dbhost' : EXTERNAL_SERVER, 'ds' : spec, 'n' : RecordLimit, 'op' : 'rs_list', 'key' : KEYWORD_CTYPE1 + ',' + KEYWORD_CTYPE2 };
+            arguments = { 'dbhost' : EXTERNAL_SERVER, 'ds' : spec, 'n' : RecordLimit, 'op' : 'rs_list', 'key' : KEYWORD_CTYPE1 + ',' + KEYWORD_CTYPE2 + ',' + KEYWORD_SPEC };
         }
 
-        var onSuccess = CreateRequestRSInfoCallback(callback);
+        var onSuccess = CreateRequestRSInfoCallback(callback, lastRecord);
         
         new Ajax.Request('http://' + host + '/cgi-bin/ajax/' + jsocinfoCGI,
         {        
@@ -1092,14 +1105,21 @@ function CreateProcessSpec(spec, processRecordCount)
                 // set SeriesName
                 var series = data.subsets[0].seriesname;
                 var validSpec = data.subsets[0].spec;
+                var lastRecord = false;
 
                 SeriesName = series; // global
                 if (!data.hasfilts && RecordLimit == 0)
                 {
                     validSpec = series + '[$]' + (data.subsets[0].segments === null ? '' : data.subsets[0].segments);
+                    lastRecord = true;
                 }
-                
-                alert(validSpec);
+                else if (data.hasfilts)
+                {
+                    if (data.subsets[0].filter == '[$]')
+                    {
+                        lastRecord = true;
+                    }
+                }
                 
                 $("ExportRecordSet").value = validSpec;
 
@@ -1115,7 +1135,7 @@ function CreateProcessSpec(spec, processRecordCount)
                 //   3. CTYPE2 == 'HPLT-TAN'
                 //
                 // the RequestSeriesInfo callback needs to call RequestRSInfo with processRecordCount as the callback
-                var requestRSInfo = function(errMsg) { RequestRSInfo(errMsg, validSpec, processRecordCount); };
+                var requestRSInfo = function(errMsg) { RequestRSInfo(errMsg, validSpec, lastRecord, processRecordCount); };
                 var processSeriesSelection = CreateProcessSeriesSelection(validSpec, series, requestRSInfo);
                 RequestSeriesInfo(series, processSeriesSelection);
             }
