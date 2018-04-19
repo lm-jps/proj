@@ -368,14 +368,14 @@ function AiaScaleCheck(fromSetProcessing)
     // choose between cut-out and non-cut-out
     if (!$('AiaScalePerformCutoutCheckbox').checked)
     {
-        if (SeriesName.strip().toLowerCase() === 'aia.lev1')
+        // use the default (non-cut-out) processing
+        if (SeriesName.strip().toLowerCase() == 'aia.lev1')
         {
-            args = 'aia_scale_mod';
+            args = 'aia_scale';
         }
         else
         {
-            // use the default (non-cut-out) processing
-            args = 'aia_scale';
+            args = 'aia_scale_mod';
         }
     }
     else

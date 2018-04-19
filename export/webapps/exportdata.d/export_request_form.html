@@ -107,12 +107,12 @@
       <td colspan="2">
         <table style="border-style:solid" >
         <tr>
-        <td colspan='3'>Normalize image scale to AIA-standard 0.6 arcseconds per pixel<b>Only for aia.lev1 for now.</b></td>
+        <td colspan='3'>Normalize image scale to AIA-standard 0.6 arcseconds per pixel</td>
         </tr>
         <tr>
         <td colspan='3'>
             <input id="AiaScaleUseMptCheckbox" type="checkbox" name="AiaScaleUseMptCheckbox" onChange="ExportProcessingOptions[AiaScaleOption].Set('usempt');" />
-            Use a master pointing table to scale images (instead of keyword values)&nbsp;
+            <label id='AiaScaleUseMptCheckboxLabel' for='AiaScaleUseMptCheckbox'>Use a master pointing table to scale images (instead of keyword values)&nbsp</label>
         </td>
         </tr>
         <tr id='AiaScaleMptRow'>
