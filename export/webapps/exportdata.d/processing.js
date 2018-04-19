@@ -356,8 +356,11 @@ function AiaScaleCheck(fromSetProcessing)
         // away the cached arguments
         return this.paramsValid; // Empty string if the previous call determined the arguments to be invalid.
     }
+    
+    // if the series is aia.lev1 and we are producing non-cut-outs, then data go into aia.lev1p5 (indicated by 
+    // 'aia_scale' processing); otherwise, data go into SeriesName + '_mod' (indicated by 'aia_scale_mod' processing)
 
-    if (SeriesName.toLowerCase() === 'aia.lev1')
+    if (SeriesName.strip().toLowerCase() === 'aia.lev1')
     {
         $("ExportFilenameFmt").value = $("ExportFilenameFmt").value.replace('T_REC','T_OBS');
     }
@@ -365,8 +368,15 @@ function AiaScaleCheck(fromSetProcessing)
     // choose between cut-out and non-cut-out
     if (!$('AiaScalePerformCutoutCheckbox').checked)
     {
-        // use the default (non-cut-out) processing
-        args = 'aia_scale';
+        if (SeriesName.strip().toLowerCase() === 'aia.lev1')
+        {
+            args = 'aia_scale_mod';
+        }
+        else
+        {
+            // use the default (non-cut-out) processing
+            args = 'aia_scale';
+        }
     }
     else
     {
