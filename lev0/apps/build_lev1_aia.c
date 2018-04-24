@@ -72,6 +72,7 @@ ModuleArgs_t module_args[] = {
   {ARG_STRING, "dsout", NOTSPECIFIED, "dataset of lev1 output"},
   {ARG_STRING, "dsff", NOTSPECIFIED, "dataset of darks flats bads"},
   {ARG_STRING, "dsaiabad", NOTSPECIFIED, "dataset of AIA bad pixels"},
+  {ARG_STRING, "mpt", "sdo.master_pointing", "Master Pointing Table series"},
   {ARG_STRING, "logfile", NOTSPECIFIED, "optional log file name. Will create one if not given"},
   {ARG_INTS, "brec", "0", "first lev0 rec# to process. 0=error must be given by build_lev1_mgr"},
   {ARG_INTS, "erec", "0", "last lev0 rec# to process. 0=error must be given by build_lev1_mgr"},
@@ -302,6 +303,7 @@ int nice_intro ()
         "      default aia_test.flatfield\n"
         "dsaiabad= AIA bad pixel series, default is to use BPL from dsff,\n"
                "but bugs need to be fixed\n"
+        "mpt=<master pointing table series>, default=sdo.master_pointing\n"
 	"brec= first lev0 rec# to process. 0=error must be given by build_lev1_mgr\n"
 	"erec= last lev0 rec# to process. 0=error must be given by build_lev1_mgr\n"
 	"bfsn= first fsn# to process. 0=error must be given by build_lev1_mgr\n"
@@ -1434,6 +1436,7 @@ int DoIt(void)
   int numrec, numofchunks, i;
   char line[80];
   const char *dpath = NULL;
+  char *mpt = NULL;
 
   if (nice_intro())
     return (0);
@@ -1464,6 +1467,8 @@ int DoIt(void)
   quicklook = cmdparams_get_int(&cmdparams, "quicklook", NULL);
 
   dpath = cmdparams_get_str(&cmdparams, kDpath, NULL);
+  mpt = strdup(cmdparams_get_str(&cmdparams, "mpt", NULL));
+  set_mpt_series_name(mpt);
 
   //quicklook = 1; //!!TEMP for test
   if(modeflg) {		//recnum mode

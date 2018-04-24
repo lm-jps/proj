@@ -1,4 +1,4 @@
-#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/get_image_location.c,v 1.7 2011/04/08 19:51:34 carl Exp $" 
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/get_image_location.c,v 1.8 2018/04/24 20:27:01 jps Exp $" 
 /* GET IMAGE LOCATION to be merged into Jim's Lev1 code */
 /* NOTE1:Jim:Jim's code needs to free Image_Location after calling get_location_information. */
 /* NOTE2:Jim:Example main file used to test at:/home3/carl/cvs/JSOC/proj/lev1/apps/gif_main.c*/
@@ -54,7 +54,35 @@ typedef struct TIME_MP_struct {
    TIME tstop;
 } TIME_MP;
 
+/******************** private variables *************************************/
+
+static char mpt_series_name[GMP_MAX_DSNAME_STR];
+static int no_mpt_series_name = 1;
+
 /******************** functions *********************************************/
+
+/*************  get_mpt_series_name function ********************************/
+
+char *get_mpt_series_name()
+{
+
+  if (no_mpt_series_name) {
+    strcpy(mpt_series_name, GMP_MASTER_POINTING_SERIES);
+    no_mpt_series_name = 0;
+  }
+  return mpt_series_name;
+}
+
+/*************  set_mpt_series_name function ********************************/
+
+char *set_mpt_series_name(char *mptname)
+{
+  no_mpt_series_name = 0;
+  return strncpy(mpt_series_name, mptname, GMP_MAX_DSNAME_STR);
+}
+
+/****************************************************************************/
+
 int find_mp_record(TIME_MP *time_mp, int nrec, TIME tobs);
 
 /****************************************************************************/
@@ -71,7 +99,7 @@ int get_image_location(DRMS_Env_t *drms_env, int ncnt, Image_Location **ptr_imag
   Image_Location *tptr;
   TIME tstart_range,tend_range;
   TIME_MP *time_mp;
-  char dsname[GMP_MAX_DSNAME_STR];
+  char *mpt_name;
   char nquery[GMP_MAX_QUERY_STR];
   int i,j,idx;
   int nrec;
@@ -81,7 +109,7 @@ int get_image_location(DRMS_Env_t *drms_env, int ncnt, Image_Location **ptr_imag
   tptr= *ptr_imageloc;
   
   /*get master pointing series name */
-  strcpy(dsname, GMP_MASTER_POINTING_SERIES);
+  mpt_name = get_mpt_series_name();
 
   /* set tstart and  tend range */
   tstart_range= (tptr)->tobs;
@@ -96,7 +124,7 @@ int get_image_location(DRMS_Env_t *drms_env, int ncnt, Image_Location **ptr_imag
   }
 
   /* create query statement */
-  sprintf(nquery,"%s[? T_START < %.0f AND T_STOP > %.0f ?]",dsname,tend_range,tstart_range);
+  sprintf(nquery,"%s[? T_START < %.0f AND T_STOP > %.0f ?]",mpt_name,tend_range,tstart_range);
   //printf("test:get_location_information:<%s>\n",nquery);
 
   /* open records with query */
@@ -107,7 +135,7 @@ int get_image_location(DRMS_Env_t *drms_env, int ncnt, Image_Location **ptr_imag
      printkerr("ERROR at %s, line %d: Failed to open  master pointing series:<%s>. "
                "Check envirionment  GMP_MASTER_POINTING_SERIES variable is set "
                "correctly. Or check time range in master pointing series is available.\n",
-               __FILE__,__LINE__, dsname);
+               __FILE__,__LINE__, mpt_name);
      return (GMP_DRMS_OPEN_FAILED);
   }
   nrec= rset->n; 
@@ -172,7 +200,7 @@ int get_image_location(DRMS_Env_t *drms_env, int ncnt, Image_Location **ptr_imag
            (tptr+i)->y=drms_getkey_float(rec, "H_CAM1_Y0", &status);
            (tptr+i)->instrot=drms_getkey_float(rec, "H_CAM1_INSTROT", &status);
            (tptr+i)->imscale=drms_getkey_float(rec, "H_CAM1_IMSCALE", &status);
-           sprintf((tptr+i)->mpo_rec,  "%s[:#%lld]", GMP_MASTER_POINTING_SERIES, rec->recnum);
+           sprintf((tptr+i)->mpo_rec,  "%s[:#%lld]", mpt_series_name, rec->recnum);
         }
         else if((tptr+i)->camera == 2)
         {
@@ -180,7 +208,7 @@ int get_image_location(DRMS_Env_t *drms_env, int ncnt, Image_Location **ptr_imag
            (tptr+i)->y=drms_getkey_float(rec, "H_CAM2_Y0", &status);
            (tptr+i)->instrot=drms_getkey_float(rec, "H_CAM2_INSTROT", &status);
            (tptr+i)->imscale=drms_getkey_float(rec, "H_CAM2_IMSCALE", &status);
-           sprintf((tptr+i)->mpo_rec,  "%s[:#%lld]", GMP_MASTER_POINTING_SERIES, rec->recnum);
+           sprintf((tptr+i)->mpo_rec,  "%s[:#%lld]", mpt_series_name, rec->recnum);
         }
         else
         {
@@ -201,7 +229,7 @@ int get_image_location(DRMS_Env_t *drms_env, int ncnt, Image_Location **ptr_imag
         (tptr+i)->y=drms_getkey_float(rec, "A_094_Y0", &status);
         (tptr+i)->instrot=drms_getkey_float(rec, "A_094_INSTROT", &status);
         (tptr+i)->imscale=drms_getkey_float(rec, "A_094_IMSCALE", &status);
-        sprintf((tptr+i)->mpo_rec,  "%s[:#%lld]", GMP_MASTER_POINTING_SERIES, rec->recnum);
+        sprintf((tptr+i)->mpo_rec,  "%s[:#%lld]", mpt_series_name, rec->recnum);
       }
       else if ( (tptr+i)->wavelength == 131)
       {
@@ -209,7 +237,7 @@ int get_image_location(DRMS_Env_t *drms_env, int ncnt, Image_Location **ptr_imag
         (tptr+i)->y=drms_getkey_float(rec, "A_131_Y0", &status);
         (tptr+i)->instrot=drms_getkey_float(rec, "A_131_INSTROT", &status);
         (tptr+i)->imscale=drms_getkey_float(rec, "A_131_IMSCALE", &status);
-        sprintf((tptr+i)->mpo_rec,  "%s[:#%lld]", GMP_MASTER_POINTING_SERIES, rec->recnum);
+        sprintf((tptr+i)->mpo_rec,  "%s[:#%lld]", mpt_series_name, rec->recnum);
       }
       else if ( (tptr+i)->wavelength == 171)
       {
@@ -217,7 +245,7 @@ int get_image_location(DRMS_Env_t *drms_env, int ncnt, Image_Location **ptr_imag
         (tptr+i)->y=drms_getkey_float(rec, "A_171_Y0", &status);
         (tptr+i)->instrot=drms_getkey_float(rec, "A_171_INSTROT", &status);
         (tptr+i)->imscale=drms_getkey_float(rec, "A_171_IMSCALE", &status);
-        sprintf((tptr+i)->mpo_rec,  "%s[:#%lld]", GMP_MASTER_POINTING_SERIES, rec->recnum);
+        sprintf((tptr+i)->mpo_rec,  "%s[:#%lld]", mpt_series_name, rec->recnum);
       }
       //added after ok from jps to treat 193 and 195 identical
       else if (((tptr+i)->wavelength == 193) || ((tptr+i)->wavelength == 195))
@@ -226,7 +254,7 @@ int get_image_location(DRMS_Env_t *drms_env, int ncnt, Image_Location **ptr_imag
         (tptr+i)->y=drms_getkey_float(rec, "A_193_Y0", &status);
         (tptr+i)->instrot=drms_getkey_float(rec, "A_193_INSTROT", &status);
         (tptr+i)->imscale=drms_getkey_float(rec, "A_193_IMSCALE", &status);
-        sprintf((tptr+i)->mpo_rec,  "%s[:#%lld]", GMP_MASTER_POINTING_SERIES, rec->recnum);
+        sprintf((tptr+i)->mpo_rec,  "%s[:#%lld]", mpt_series_name, rec->recnum);
       }
       else if ( (tptr+i)->wavelength == 211)
       {
@@ -234,7 +262,7 @@ int get_image_location(DRMS_Env_t *drms_env, int ncnt, Image_Location **ptr_imag
         (tptr+i)->y=drms_getkey_float(rec, "A_211_Y0", &status);
         (tptr+i)->instrot=drms_getkey_float(rec, "A_211_INSTROT", &status);
         (tptr+i)->imscale=drms_getkey_float(rec, "A_211_IMSCALE", &status);
-        sprintf((tptr+i)->mpo_rec,  "%s[:#%lld]", GMP_MASTER_POINTING_SERIES, rec->recnum);
+        sprintf((tptr+i)->mpo_rec,  "%s[:#%lld]", mpt_series_name, rec->recnum);
       }
       else if ( (tptr+i)->wavelength == 304)
       {
@@ -242,7 +270,7 @@ int get_image_location(DRMS_Env_t *drms_env, int ncnt, Image_Location **ptr_imag
         (tptr+i)->y=drms_getkey_float(rec, "A_304_Y0", &status);
         (tptr+i)->instrot=drms_getkey_float(rec, "A_304_INSTROT", &status);
         (tptr+i)->imscale=drms_getkey_float(rec, "A_304_IMSCALE", &status);
-        sprintf((tptr+i)->mpo_rec,  "%s[:#%lld]", GMP_MASTER_POINTING_SERIES, rec->recnum);
+        sprintf((tptr+i)->mpo_rec,  "%s[:#%lld]", mpt_series_name, rec->recnum);
       }
       else if ( (tptr+i)->wavelength == 335)
       {
@@ -250,7 +278,7 @@ int get_image_location(DRMS_Env_t *drms_env, int ncnt, Image_Location **ptr_imag
         (tptr+i)->y=drms_getkey_float(rec, "A_335_Y0", &status);
         (tptr+i)->instrot=drms_getkey_float(rec, "A_335_INSTROT", &status);
         (tptr+i)->imscale=drms_getkey_float(rec, "A_335_IMSCALE", &status);
-        sprintf((tptr+i)->mpo_rec,  "%s[:#%lld]", GMP_MASTER_POINTING_SERIES, rec->recnum);
+        sprintf((tptr+i)->mpo_rec,  "%s[:#%lld]", mpt_series_name, rec->recnum);
       }
       else if ( (tptr+i)->wavelength == 1600)
       {
@@ -258,7 +286,7 @@ int get_image_location(DRMS_Env_t *drms_env, int ncnt, Image_Location **ptr_imag
         (tptr+i)->y=drms_getkey_float(rec, "A_1600_Y0", &status);
         (tptr+i)->instrot=drms_getkey_float(rec, "A_1600_INSTROT", &status);
         (tptr+i)->imscale=drms_getkey_float(rec, "A_1600_IMSCALE", &status);
-        sprintf((tptr+i)->mpo_rec,  "%s[:#%lld]", GMP_MASTER_POINTING_SERIES, rec->recnum);
+        sprintf((tptr+i)->mpo_rec,  "%s[:#%lld]", mpt_series_name, rec->recnum);
       }
       else if ( (tptr+i)->wavelength == 1700)
       {
@@ -266,7 +294,7 @@ int get_image_location(DRMS_Env_t *drms_env, int ncnt, Image_Location **ptr_imag
         (tptr+i)->y=drms_getkey_float(rec, "A_1700_Y0", &status);
         (tptr+i)->instrot=drms_getkey_float(rec, "A_1700_INSTROT", &status);
         (tptr+i)->imscale=drms_getkey_float(rec, "A_1700_IMSCALE", &status);
-        sprintf((tptr+i)->mpo_rec,  "%s[:#%lld]", GMP_MASTER_POINTING_SERIES, rec->recnum);
+        sprintf((tptr+i)->mpo_rec,  "%s[:#%lld]", mpt_series_name, rec->recnum);
       }
       else if ( (tptr+i)->wavelength == 4500)
       {
@@ -274,7 +302,7 @@ int get_image_location(DRMS_Env_t *drms_env, int ncnt, Image_Location **ptr_imag
         (tptr+i)->y=drms_getkey_float(rec, "A_4500_Y0", &status);
         (tptr+i)->instrot=drms_getkey_float(rec, "A_4500_INSTROT", &status);
         (tptr+i)->imscale=drms_getkey_float(rec, "A_4500_IMSCALE", &status);
-        sprintf((tptr+i)->mpo_rec,  "%s[:#%lld]", GMP_MASTER_POINTING_SERIES, rec->recnum);
+        sprintf((tptr+i)->mpo_rec,  "%s[:#%lld]", mpt_series_name, rec->recnum);
       }
       else 
       {
