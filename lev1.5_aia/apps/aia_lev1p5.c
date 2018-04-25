@@ -132,10 +132,10 @@ int DoIt ()
   TIME tstart, tstop;
   char mptqs[256];
   const char *x0names[] = { "A_094_X0", "A_131_X0", "A_171_X0", "A_193_X0",
-    "A_211_X0", "A_304_X0", "A_335_X0", "A_1600_X0", "A1700_X0", "A_4500_X0"
+    "A_211_X0", "A_304_X0", "A_335_X0", "A_1600_X0", "A_1700_X0", "A_4500_X0"
   };
   const char *y0names[] = { "A_094_Y0", "A_131_Y0", "A_171_Y0", "A_193_Y0",
-    "A_211_Y0", "A_304_Y0", "A_335_Y0", "A_1600_Y0", "A1700_Y0", "A_4500_Y0"
+    "A_211_Y0", "A_304_Y0", "A_335_Y0", "A_1600_Y0", "A_1700_Y0", "A_4500_Y0"
   };
   if (nice_intro(0)) return(0);
   dsinp = strdup(cmdparams_get_str(&cmdparams, "dsinp", NULL));
