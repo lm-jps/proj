@@ -1389,9 +1389,26 @@ function ProcessRSChange(error)
         {
             var ExpOpt = ExportProcessingOptions[iProc];
 
-            // ART $(ExpOpt.id).disabled = false;
+            // if disabledState metadata do not exist, then set disabled to false (the second arg to retrieve() is the default
             $(ExpOpt.id).disabled = $(ExpOpt.id).retrieve('disabledState', false);
         }
+    }
+    else
+    {
+        // something went wrong; uncheck any processing check boxes that are checked and hide the processing UI
+        for (iProc = 0; iProc < ExportProcessingOptions.length; iProc++)
+        {
+            var ExpOpt = ExportProcessingOptions[iProc];
+
+            $(ExpOpt.id).checked = false;
+            if (ExpOpt.id != 'OptionNone' && ExpOpt.hasOwnProperty('rowid'))
+            {
+                // the 'none' processing step has no processing UI html element
+                $(ExpOpt.rowid).style.display = "none";
+            }
+        }
+        
+        CheckRediness();
     }
     
     // Re-enable the RecordSet text box.
