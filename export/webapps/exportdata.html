@@ -795,46 +795,59 @@ function CreateRequestRSInfoCallback(callback, lastRecord)
                         // loop through all records, checking the keyword criteria; jsoc_info
                         // does not provide hash-accessibility to keyword info, so must
                         // loop through all keywords
-                        var compatible = true;
-                        for (var index = 0; index < data.keywords.length; index++)
-                        {
-                            // we are assured that the CTYPE keywords will be in the jsoc_info results, 
-                            // even if the series does not have those keywords; if a keyword
-                            // does not exist in the series, jsoc_info prints 'Invalid Keylink'
-                            // for the keyword value
-                            if (data.keywords[index].name.strip().toLowerCase() == KEYWORD_CTYPE1.toLowerCase())
-                            {
-                                for (var valIndex = 0; valIndex < data.keywords[index].values.length; valIndex++)
-                                {
-                                    if (data.keywords[index].values[valIndex] != AIA_SCALE_CTYPE1)
-                                    {
-                                        compatible = false;
-                                        break;
-                                    }
-                                }
-                            }
+                        var compatible = null;
                         
-                            if (!compatible)
+                        if (data.hasOwnProperty('keywords'))
+                        {
+                            compatible = true;
+                            for (var index = 0; index < data.keywords.length; index++)
                             {
-                                break;
-                            }
-                            
-                            if (data.keywords[index].name.strip().toLowerCase() == KEYWORD_CTYPE2.toLowerCase())
-                            {
-                                for (var valIndex = 0; valIndex < data.keywords[index].values.length; valIndex++)
+                                // we are assured that the CTYPE keywords will be in the jsoc_info results, 
+                                // even if the series does not have those keywords; if a keyword
+                                // does not exist in the series, jsoc_info prints 'Invalid Keylink'
+                                // for the keyword value
+                                if (data.keywords[index].name.strip().toLowerCase() == KEYWORD_CTYPE1.toLowerCase())
                                 {
-                                    if (data.keywords[index].values[valIndex] != AIA_SCALE_CTYPE2)
+                                    for (var valIndex = 0; valIndex < data.keywords[index].values.length; valIndex++)
                                     {
-                                        compatible = false;
-                                        break;
+                                        // loop over records
+                                        if (data.keywords[index].values[valIndex] != AIA_SCALE_CTYPE1)
+                                        {
+                                            compatible = false;
+                                            break;
+                                        }
                                     }
                                 }
-                            }
+                        
+                                if (!compatible)
+                                {
+                                    break;
+                                }
                             
-                            if (!compatible)
-                            {
-                                break;
+                                if (data.keywords[index].name.strip().toLowerCase() == KEYWORD_CTYPE2.toLowerCase())
+                                {
+                                    for (var valIndex = 0; valIndex < data.keywords[index].values.length; valIndex++)
+                                    {
+                                        // loop over records
+                                        if (data.keywords[index].values[valIndex] != AIA_SCALE_CTYPE2)
+                                        {
+                                            compatible = false;
+                                            break;
+                                        }
+                                    }
+                                }
+                            
+                                if (!compatible)
+                                {
+                                    break;
+                                }
                             }
+                        }
+                        else
+                        {
+                            // no keyword information was returned by jsoc_info, so we cannot tell if this series;
+                            // this happens if no rows were returned
+                            compatible = false;
                         }
                         
                         // we definitively know whether or not aia_scale processing should be disabled
@@ -849,8 +862,7 @@ function CreateRequestRSInfoCallback(callback, lastRecord)
                     }
                     else
                     {
-                        // processSeriesSelection determine that the series is not aia_scale compatible
-                        alert('Danger, Will Robinson!');
+                        // processSeriesSelection determined that the series is not aia_scale compatible
                     }
                     
                     if (!$('OptionAiaScale').retrieve('disabledState', false))
@@ -860,7 +872,6 @@ function CreateRequestRSInfoCallback(callback, lastRecord)
                         // processRSInfo                    
 
                         // this should remain disabled until all asynchronous processing completes
-                        // $('OptionAiaScale').disabled = false;
                         $('OptionAiaScaleLabel').innerHTML = 'aia_scale - Scale image to 0.6 arcsec/pixel';
                         $('OptionAiaScaleLabel').setStyle({ color: 'black' });
                     }
@@ -869,9 +880,14 @@ function CreateRequestRSInfoCallback(callback, lastRecord)
                         // not compatible with aia_scale processing
 
                         // this should remain disabled until all asynchronous processing completes
-                        // $('OptionAiaScale').disabled = true;
                         $('OptionAiaScaleLabel').innerHTML = 'aia_scale - Scale image to 0.6 arcsec/pixel (compatible with 2D dataseries with CTYPE1 == HPLN-TAN and CTYPE2 == HPLT-TAN only)'
                         $('OptionAiaScaleLabel').setStyle({ color: 'grey' });
+                        
+                        // uncheck the aia_scale checkbox if it is currently checked
+                        if ($('OptionAiaScale').checked)
+                        {
+                            $('OptionAiaScale').checked = false;
+                        }
                     }
                     
                     // if the user has specified the current record with [$], then replace [$] with the record-specification
