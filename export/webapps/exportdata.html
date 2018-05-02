@@ -743,8 +743,21 @@ function CreateParseSpecResponse(processSpec)
 function ParseSpec(spec, processSpec)
 {    
     var onSuccess = CreateParseSpecResponse(processSpec);
+    var url = null;
+    var origin = null;
+    
+    origin = ExportOrigin(null, Host.toLowerCase())
+    
+    if (origin[0] == 'extServer')
+    {
+        url = 'http://' + EXTERNAL_WEBSERVER + '.' + STANFORD_DOMAIN + '/cgi-bin/' + PARSE_RECSET;
+    }
+    else
+    {
+        url = 'http://' + INTERNAL_WEBSERVER + '.' + STANFORD_DOMAIN + '/cgi-bin/' + PARSE_RECSET;
+    }
 
-    new Ajax.Request('http://' + EXTERNAL_WEBSERVER + '.' + STANFORD_DOMAIN + '/cgi-bin/' + PARSE_RECSET, 
+    new Ajax.Request(url, 
     {
         'method' : 'get',
         'parameters' : { 'spec' : spec },
@@ -1093,8 +1106,22 @@ function CreateProcessSeriesSelection(spec, series, seriesNs, callback)
 function RequestSeriesInfo(series, callback)
 {
     var onSuccess = callback;
+    var url = null;
+    var origin = null;
+    
+    origin = ExportOrigin(null, Host.toLowerCase())
+    
+    if (origin[0] == 'extServer')
+    {
+        url = 'http://' + EXTERNAL_WEBSERVER + '.' + STANFORD_DOMAIN + '/cgi-bin/' + SERIES_INFO;
+    }
+    else
+    {
+        url = 'http://' + INTERNAL_WEBSERVER + '.' + STANFORD_DOMAIN + '/cgi-bin/' + SERIES_INFO;
+    }
 
-    new Ajax.Request('http://' + EXTERNAL_WEBSERVER + '.' + STANFORD_DOMAIN + '/cgi-bin/' + SERIES_INFO,
+
+    new Ajax.Request(url,
     {
         'method': 'get',
         'parameters': { 'series' : series, 'atts' : 1, 'keys' : KEYWORD_CTYPE1 + ',' + KEYWORD_CTYPE2, 'segs' : '*' },
@@ -2286,6 +2313,64 @@ function GetExport() // This is the code executed when the user clicks on the "S
     // Just call the function. It will determine if it should use the internal or external version of the CGI.
     doFetchReqFn();
   }
+ 
+function ExportOrigin(requestID, webserver)
+{
+    var retVal = [];
+    
+    if (webserver.toLowerCase() == EXTERNAL_WEBSERVER || webserver.toLowerCase() == EXTERNAL_WEBSERVER + '.' + STANFORD_DOMAIN)
+    {
+        retVal.push('extServer');
+    }
+    else if (webserver.toLowerCase() == INTERNAL_WEBSERVER || webserver.toLowerCase() == INTERNAL_WEBSERVER + '.' + STANFORD_DOMAIN)
+    {
+        retVal.push('intServer');
+    }
+    else
+    {
+        retVal.push('invalidServer');
+    }
+    
+    if (requestID)
+    {
+        if (retVal[0] != 'invalidServer')
+        {
+            // can't determine if request ID is valid or not
+            retVal.push('invalidRequestID');
+        }
+        else
+        {
+            if ($("StatusRequestID").value.search("_IN") != -1)
+            {
+                // an internal request ID
+                if (retVal[0] == 'extServer' && $("StatusRequestID").value.search("_X") == -1 ||
+                    retVal[0] == 'intServer' && $("StatusRequestID").value.search("_X") != -1)
+                {
+                    // the external server can process internal request IDs, but only if there is an '_X_IN' in the ID
+                    retVal.push('invalidRequestID');
+                }
+                else
+                {
+                    retVal.push('intRequestID');
+                }
+            }
+            else
+            {
+                if (retVal[0] == 'intServer')
+                {
+                    // the internal server cannot process external request IDs
+                    retVal.push('invalidRequestID');
+                }
+                else
+                {
+                    retVal.push('extRequestID');
+                }
+            }
+        }
+    }
+    
+    return retVal;
+}
 
 function GetReExport()
   {
@@ -2515,6 +2600,14 @@ function GetStatus()
 	var jsocfetchCGI = JSOC_FETCH;
 	var is_IN = ($("StatusRequestID").value.search("_IN") > 0);
     var isExtOrigin = ($("StatusRequestID").value.search("_X_IN") > 0);
+    
+    // there are two boolean attributes describing the origin of an export request:
+    // 1. the request was submitted from the external website (EXTERNAL_WEBSERVER) or the internal website (INTERNAL_WEBSERVER)
+    // 2. the request was for the export of a db-external data series (the request ID ends in '_IN') or a db-internal data series (the request ID does not end in '_IN')
+    //
+    // the internal server can serve requests for db-internal series only; the external server can serve requests for either
+    // db-external series (the request ID does not end in '_IN'), or db-internal series initiated from the external server 
+    // (the request ID ends in '_X_IN')
 
 	if (is_IN && (Host.toLowerCase() == EXTERNAL_WEBSERVER || Host.toLowerCase() == EXTERNAL_WEBSERVER + '.' + STANFORD_DOMAIN))
 	{
