@@ -53,7 +53,7 @@
 
 #define kNotSpecified "Not Specified"
 
-#define SLOG        (1)         // Signed or abs logQ
+#define SLOGQ        (1)         // Signed or abs logQ
 
 #define ARRLENGTH(ARR) (sizeof(ARR) / sizeof(ARR[0]))
 #define NR_OUT      (ARRLENGTH(r_out))
