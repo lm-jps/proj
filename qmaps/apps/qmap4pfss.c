@@ -53,6 +53,8 @@
 
 #define kNotSpecified "Not Specified"
 
+#define SLOG        (1)         // Signed or abs logQ
+
 #define ARRLENGTH(ARR) (sizeof(ARR) / sizeof(ARR[0]))
 #define NR_OUT      (ARRLENGTH(r_out))
 
@@ -96,6 +98,12 @@ int DoIt(void)
     int do_cubic = params_isflagset(&cmdparams, "c");
     int np_q = params_get_int(&cmdparams, "np");
     int nt_q = params_get_int(&cmdparams, "nt");
+    
+#ifdef SLOGQ
+    SHOW("Compute signed Q.\n");
+#else
+    SHOW("Compute unsigned Q.\n");
+#endif
     
     /* Input Data */
     
@@ -227,12 +235,12 @@ int DoIt(void)
             
             // Call Fortran function
             // Output qmap and chmap readily rotated into C convention
-            
+
             mapfl_wrapper_(bp, bt, br, p, t, r, &np, &nt, &nr,
                            p_q, t_q, r_q, &np_q, &nt_q, &r_ch,
                            &do_chmap, &vb, &do_cubic,
                            qmap, chmap);
-            
+
             // test
 //            printf("%f,%f,%f\n",qmap[0],qmap[1],qmap[2]);
 //            printf("%f,%f,%f\n",qmap[0],qmap[np_q],qmap[np_q*2]);
@@ -242,11 +250,8 @@ int DoIt(void)
         // slogQ
         
         int npix_q = np_q * nt_q * nr_q;
-        /*
-        for (int idx = 0; idx < npix_q; idx++) {
-            qmap_cube[idx] = log10(qmap_cube[idx]);
-        }
-         */
+
+#ifdef SLOGQ
         
         DRMS_Segment_t *inSeg_brq = drms_segment_lookup(inRec, "Brq");
         DRMS_Array_t *inArray_brq = drms_segment_read(inSeg_brq, DRMS_TYPE_DOUBLE, &status);
@@ -268,10 +273,24 @@ int DoIt(void)
         }
         
         drms_free_array(inArray_brq);
+
+#else
+        
+        for (int idx = 0; idx < npix_q; idx++) {
+            qmap_cube[idx] = log10(qmap_cube[idx]);
+        }
+        
+#endif
         
         // Write out
+
+#ifdef SLOGQ
+        char *qSegName = "slogQ";
+#else
+        char *qSegName = "logQ";
+#endif
         
-        DRMS_Segment_t *outSeg_q = drms_segment_lookup(outRec, "slogQ");
+        DRMS_Segment_t *outSeg_q = drms_segment_lookup(outRec, qSegName);
         int dims_q[3] = {np_q, nt_q, nr_q};
         DRMS_Array_t *outArray_q = drms_array_create(DRMS_TYPE_DOUBLE, 3, dims_q, qmap_cube, &status);
         for (idx = 0; idx < 3; idx++) {
