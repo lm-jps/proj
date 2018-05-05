@@ -120,9 +120,21 @@ ModuleArgs_t module_args[] = {
   {}
 };
 
-#include "keystuff.c"
-#include "selstuff.c"
+#include "earth_ephem.c"
 #include "soho_ephem.c"
+
+static int key_params_from_dspec (const char *dspec) {
+/*
+ *  Establish whether target times are determined from dataset specifier
+ *  assume that if a bracket is found in the dataset specifier it is a
+ *  set of well-specified records containing a properly ordered input dataset;
+ *  otherwise, a dataseries to be queried
+ */
+  int n, nt = strlen (dspec);
+
+  for (n = 0; n < nt; n++) if (dspec[n] == '[') return 1;
+  return 0;
+}
 
 /*
  *  Functions to support reading from a specified rejection list of the
@@ -511,6 +523,13 @@ int DoIt (void) {
 	else
 	  tstop = earth_meridian_crossing (tmid_cl, tmid_cr);
       } else tstop = sscan_time (tstop_str);
+      if (time_is_invalid (tstrt) || time_is_invalid (tstop)) {
+	fprintf (stderr,
+	    "Error: if data set not explicitly selected, either tmid and length\n");
+	fprintf (stderr, "       or tstart and tstop must be specified\n");
+	drms_free_record (irec);
+	return 1;
+      }
       length = (tstop - tstrt + 1.01 * tstep) / tstep;
     }
     drms_free_record (irec);
@@ -750,5 +769,11 @@ int DoIt (void) {
  *		removed needless interpolation code and verbose messages of
  *	same (only partially removed in v 1.1)
  *  15.09.14	fixed bug in slot index calculation
+ *  v 1.2 frozen 2018.03.02
+ *  17.01.25	added trap for mistaken or missing specifications of time
+ *	targets when required; included function key_params_from_dspec, only
+ *	function from selstuff used, and included earth_ephem
+ *  18.05.04	removed unused include file
+ *  v 1.3 frozen 2018.05.04
  *
  */

@@ -2,7 +2,7 @@
 # Create averages of hmi.rdv_pspec_fd* power spectra over a rotation by
 #   Stonyhurst coordinates (cf. avgpscrsyn)
 
-set SCRIPT_VERSION = 1.6
+set SCRIPT_VERSION = 1.7
 
 @ TEST = 0	# set to 1 for production in namespace hmi_test
 set TW
@@ -215,15 +215,18 @@ foreach TLAT ($TLATS)
   if ($FAIL) then
     echo "  $FAIL averaging failures on cluster at Latitude `printf %+05.1f $TLAT`" >> $MMSG
     echo "  ($CROT) $FAIL averaging failures on cluster at Latitude `printf %+05.1f $TLAT`" >> $LOGF
-    set QID = `grep "exited with exit code" $RLOG | awk '{print $2}' | awk -F. '{print $1}' | sort -u`
+    set QIDS = `grep "exited with exit code" $RLOG | awk '{print $2}' | awk -F. '{print $1}' | sort -u`
     set PROG = `basename $SCRIPT`
-    set ERRLOG = $QRES/$PROG.e$QID
-    set noglob
-    echo "  stderr from module failures in $ERRLOG.*" >> $MMSG
-    unset noglob
-    set JOBID = `grep "Your job-array" $RLOG | awk '{print $3}' | awk -F. '{print $1}'`
-    echo "  For details, qacct[2] -j $JOBID" >> $MMSG
+    foreach QID ($QIDS)
+      set ERRLOG = $QRES/$PROG.e$QID
+      set noglob
+      echo "  stderr from module failures in $ERRLOG.*" >> $MMSG
+      echo "  For details, qacct[2] -j $QID" >> $MMSG
+      unset noglob
+    end
+#    set JOBID = `grep "Your job-array" $RLOG | awk '{print $3}' | awk -F. '{print $1}'`
   endif
+  sleep 120
   @ FINIS = `date +%s`
   @ ELAPS = $FINIS - $BEGUN
   @ TOTEL += $ELAPS

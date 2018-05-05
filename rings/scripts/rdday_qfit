@@ -131,6 +131,7 @@ endif
 # add flags
 set TRACK = "$TRACK -voc"
 set PSPEC = "$PSPEC -v"
+set LSMAI = "$LSMAI -l"
 
 # select from synoptic series
 set TILESS = (  05    15    30)
@@ -193,10 +194,13 @@ set QMASK = 0x80004000
 @ MINCV = 850
 @ MMINCV = 700
 set APODE = 0.9765625
+set APODT = 0.96875
 # for MAI calc
 set MSCALE = 0.04
 set MSMPLS = 64
 set MREACH = 0.5
+set MFLOOR = 50
+set MQMASK = 0x8001c540
 @ SLPMULT = 1
 
 # output series
@@ -205,6 +209,7 @@ set PSER = $NMSP.$BASE\pspec$SUFX
 set CSER = $NMSP.$BASE\fitsc$SUFX
 set FSER = $NMSP.$BASE\fitsf$SUFX
 set FLOW = $NMSP.$BASE\flows$SUFX\_frame
+set MAISER = $NMSP.rdMAI$SUFX
 # set THRM = $NMSP.$BASE\struc$SUFX
 
 # input series
@@ -250,7 +255,7 @@ if ($TEST) then
 endif
 
 #  check that input and product series exist
-foreach SER ($ISER $MSER $BCKG $GSER $TSER $PSER $CSER $FSER $FLOW $KSER)
+foreach SER ($ISER $MSER $BCKG $GSER $MAISER $TSER $PSER $CSER $FSER $FLOW $KSER)
   show_info -j ds= "$SER" >& /dev/null
   if ($status) then
     echo Error: series "$SER" does not exist\; full script will fail
@@ -314,6 +319,13 @@ if ($NOGO) goto TURNOUT
 
 # limit vm ${PLIM}M
 
+set TTIME = '*'
+set PTIME = '*'
+set FTIME = '*'
+set CTIME = '*'
+set ITIME = '*'
+@ RGNCT = 0
+
 # check coverage
 $COVER ds= $ISER tmid= $CARTIM length= $LNGTH \
     max_miss= $MMISS qmask= $QMASK reject= $RJCT > $TLIST
@@ -322,7 +334,6 @@ if ($status) then
   echo "  coverage calc failure on $HOSTID" >> $MMSG
   echo "  output is on $TLIST"  >> $MMSG
   echo "  coverage calc failure on $HOSTID for $CARTIM ($TYPE)"  >> $LOGF
-  @ RGNCT = 0
   @ STRTSTOP = 0
   goto CLEANUP
 endif
@@ -338,13 +349,6 @@ else
 endif
 set CVRG = 0.$CVG
 if ($CVG >= 1000) set CVRG = 1.000
-
-set TTIME = '*'
-set PTIME = '*'
-set FTIME = '*'
-set CTIME = '*'
-set ITIME = '*'
-@ RGNCT = 0
 
 # set up logging, notification
 set SUBJ = "HMI ring-diagram $SYSE-deg synoptic frame $TW processing for $CARTIM"
@@ -448,17 +452,21 @@ while ($STRIP < $STRIPCT)
 # determine MAI's for regions to be tracked
   @ BEGUN = `date +%s`
 
-  $LSMAI ds= $MSER cr= $CROT cl= $CLON \
-      scale= $MSCALE extent= $MSIZE interval= $SYSE \
-      rec_step= $MSMPLS qmask= $QMASK max_reach= $MREACH \
-      reject= $MRJCT \
+  $LSMAI los= $MSER mai= $MAISER cr= $CROT cl= $CLON \
+      scale= $MSCALE extent= $MSIZE length= $LNGTH rec_step= $MSMPLS \
+      qmask= $MQMASK reject= $MRJCT max_reach= $MREACH \
+      floor= $MFLOOR mask_in= $APODE apodize= $APODT \
       lat= "{$LATLIST}" lon= "{$LONLIST}" > $MLIST
   if ($status) then
     set SUBJ = "HMI $SYSE-deg ring-diagram $TW processing for $CARTIM incomplete"
     echo "  MAI calc failure on $HOSTID" >> $MMSG
     echo "  run log is on $RLOG"  >> $MMSG
     echo "  command executed:" >> $MMSG
-    echo "  $LSMAI ds= $MSER cr= $CROT cl= $CLON scale= $MSCALE extent= $MSIZE interval= $SYSE rec_step= $MSMPLS qmask= $QMASK max_reach= $MREACH reject= $MRJCT lat= {$LATLIST} lon= {$LONLIST}" >> $MMSG
+    echo "  $LSMAI ds= $MSER mai= $MAISER cr= $CROT cl= $CLON" >> $MMSG
+    echo "      scale= $MSCALE extent= $MSIZE length= $LNGTH rec_step= $MSMPLS" >> $MMSG
+    echo "      qmask= $MQMASK reject= $MRJCT max_reach= $MREACH" >> $MMSG
+    echo "      floor= $MFLOOR mask_in= $APODE apodize= $APODT" >> $MMSG
+    echo "      lat= {$LATLIST} lon= {$LONLIST}" >> $MMSG
     echo "  MAI calc failure on $HOSTID for $CARTIM ($TYPE)"  >> $LOGF
     echo "  output is on $MLIST"  >> $MMSG
     @ RGNCT -= $EXPCT
@@ -552,7 +560,7 @@ if ($NOGO) goto TURNOUT
 @ BEGUN = `date +%s`
 @ RGNCT = `show_info -cq ds= $TSER"[$CROT][$CLON]"`
 @ EXIST = `show_info -bcq ds= $PSER"[$CROT][$CLON]"`
-$PSPEC pspec= $PSER in= $TSER"[$CROT][$CLON]" mask_in= $APODE >>& $RLOG
+$PSPEC pspec= $PSER in= $TSER"[$CROT][$CLON]" mask_in= $APODE apodize= $APODT >>& $RLOG
 if ($status) then
   set SUBJ = "HMI $SYSE-deg ring-diagram $TW processing for $CARTIM incomplete"
   echo "  pspec failure on $HOSTID"  >> $MMSG

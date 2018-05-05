@@ -1,13 +1,14 @@
+/******************************************************************************/
 /*
  *  rdfitc.c						~rick/src/ringfit/rdfitc
  *
- *  Responsible:  Rick Bogart                   	RBogart@spd.aas.org
+ *  Responsible:  Rick Bogart                   	rick@sun.stanford.edu
  *     
  *  "Ring" fitting based on the code developed and used by Sarbani Basu
  *    and H. M. Antia for fitting 3-d solar acoustic power spectra; based
  *    on SOI module ringfit_v0.86
  *
- *  Main program begins around line 800
+ *  Module body begins around line 960
  *
  *  Bugs:
  *    Timing is not re-zeroed for each I/O record pair processed
@@ -31,12 +32,13 @@
  *
  *  Revision history is at end of file.
  */
+/******************************************************************************/
 
 #include <jsoc_main.h>
 						      /*  module identifier  */
 char *module_name = "ringfit_bba";
 char *module_desc = "ring fitting using method of Basu and Antia";
-char *version_id = "1.2";
+char *version_id = "1.3";
 
 ModuleArgs_t module_args[] = {
   {ARG_DATASET,	"in", "", "input dataset"}, 
@@ -953,6 +955,9 @@ static int get_scaling_values (DRMS_Record_t *rec, double *dnu, double *dkx,
   return 0;
 }
 
+/******************************************************************************/
+			/*  module body begins here  */
+/******************************************************************************/
 int DoIt (void) {
   CmdParams_t *params = &cmdparams;
   DRMS_RecordSet_t *ids;
@@ -1163,7 +1168,7 @@ int DoIt (void) {
     }
   }
 					/*  check output data series struct  */
-  orec = drms_create_record (drms_env, outser, DRMS_TRANSIENT, &status);
+  orec = drms_template_record (drms_env, outser, &status);
   if (orec) {
     segct = drms_record_numsegments (orec);
     if (segct < 1) {
@@ -1196,7 +1201,6 @@ int DoIt (void) {
     oseg = drms_segment_lookup (orec, "Log");
     if (oseg && oseg->info->protocol == DRMS_GENERIC)
       logsegnum = oseg->info->segnum;
-    drms_close_record (orec, DRMS_FREE_RECORD);
     drms_output = 1;
   } else {
 	   /*  Can't create in named series, assume it's a filename instead  */
@@ -1813,7 +1817,6 @@ int DoIt (void) {
 	fprintf (unit22, "\n");
       }
 
-
       fprintf (runlog, "End iteration n = %d; time = %s\n", n,
           time_elapsed (0, &total_clock));
       fprintf (runlog, "  %d converged", cvg_ct);
@@ -1840,6 +1843,7 @@ int DoIt (void) {
     }
     fclose (unit22);
 
+    gethostname (line, 1024);
     if (drms_output) {
       int kstat = 0;
       int keyct = sizeof (propagate) / sizeof (char *);
@@ -1890,16 +1894,18 @@ int DoIt (void) {
      	drms_close_record (orec, DRMS_FREE_RECORD);
         continue;
       }
-      gethostname (line, 1024);
-      fprintf (runlog, "Total wall clock time = %d sec on %s\n", total_clock, line);
-      if (runlog != stderr) fclose (runlog);
+      fprintf (runlog, "Total wall clock time = %d sec on %s\n", total_clock,
+	  line);
+      fclose (runlog);
       drms_close_record (orec, dispose);
-    }
+    } else
+      fprintf (runlog, "Total wall clock time = %d sec on %s\n", total_clock,
+	  line);
   }
   drms_close_records (ids, DRMS_FREE_RECORD);
   return 0;
 }
-
+/******************************************************************************/
 /*
  *  Revision History (all mods by Rick Bogart unless otherwise noted)
  *
@@ -1956,4 +1962,7 @@ int DoIt (void) {
  *	11.06.06		ditto
  *				Added optional rectangular filtering on spectrum
  *  v 1.2 frozen 2011.06.09
+ *	17.02.27		Use template record for output series checking
+ *	17.04.18		Log host/timing info even when not in drms 
  */	
+/******************************************************************************/

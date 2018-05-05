@@ -36,14 +36,14 @@ cc      write(72,*)rad(j), avc(j),sumker(j+1)
 
         j=1
         anor=sumker(np)
-        if(bverb)then
-          print*, 'anor ', anor
-        endif
+C        if(bverb)then
+C          print*, 'anor ', anor
+C        endif
         do 400 i=1,np
         sumker(i)=sumker(i)/anor
 cc      write(82,*)rad(i), sumker(i)
 400     continue
-        if(bverb) print*, sumker(i),sumker(np)
+C        if(bverb) print*, sumker(i),sumker(np)
 410     continue
 
         ntab=np
@@ -63,7 +63,7 @@ cc      write(82,*)rad(i), sumker(i)
       call DIVDIF(q3,y,rad,NUSE,NTAB,FB,REPS,IER,DFB,DDFB)
         widthc(3)=fb(nuse)
 1000    continue
-        if(bverb) print*,'wid ', widthc
+C        if(bverb) print*,'wid ', widthc
 
         return
         end
@@ -82,14 +82,14 @@ c       =====================================
         lwork=10000
         uplo='u'
         call dsytrf(uplo, norder, a ,la, ipiv, work, lwork, ier)
-        if(ier.ne.0)then
-        print*,'error in transformation', ier
-        endif
+C        if(ier.ne.0)then
+C        print*,'error in transformation', ier
+C        endif
 
         trans='N'
         uplo='u'
         call dsytrs(uplo,norder,nrhs,a,la,ipiv,b,lb,ierr)
-        if(qverb) print*, 'solution ier', ierr
+C        if(qverb) print*, 'solution ier', ierr
         return
         end
 
@@ -182,76 +182,3 @@ c       --------------------------------------------------
 
       IER=24
       END
-
-c       -------------------------------------------
-
-      SUBROUTINE GAUELM(N,NUM,A,X,DET,INT,LJ,IER,IFLG)
-        implicit real*8(a-h,o-z)
-      DIMENSION A(LJ,N),INT(N),X(LJ,NUM)
-
-      IF(N.LE.0.OR.N.GT.LJ) THEN
-        IER=111
-        RETURN
-      ENDIF
-
-      IER=122
-      IF(IFLG.LE.1) THEN
-        DET=1.0
-        DO 2600 K=1,N-1
-          R1=0.0
-          DO 2200 L=K,N
-            IF(ABS(A(L,K)).GT.R1) THEN
-              R1=ABS(A(L,K))
-              KM=L
-            ENDIF
-2200      CONTINUE
-
-          INT(K)=KM
-          IF(KM.NE.K) THEN
-            DO 2300 L=K,N
-              T1=A(K,L)
-              A(K,L)=A(KM,L)
-2300        A(KM,L)=T1
-            DET=-DET
-          ENDIF
-
-          DET=DET*A(K,K)
-          IF(A(K,K).EQ.0.0) RETURN
-C         IF(ABS(A(K,K)).LT.REPS) RETURN
-          DO 2500 L=K+1,N
-            A(L,K)=A(L,K)/A(K,K)
-            DO 2500 L1=K+1,N
-2500      A(L,L1)=A(L,L1)-A(L,K)*A(K,L1)
-2600    CONTINUE
-        DET=DET*A(N,N)
-        INT(N)=N
-        IF(A(N,N).EQ.0.0) RETURN
-C         IF(ABS(A(N,N)).LT.REPS) RETURN
-
-        IER=0
-        IF(IFLG.EQ.1) THEN
-          IFLG=2
-          RETURN
-        ENDIF
-        IFLG=2
-      ENDIF
-
-      IER=0
-      DO 5000 J=1,NUM
-        DO 3000 K=1,N-1
-          IF(K.NE.INT(K)) THEN
-            T1=X(K,J)
-            X(K,J)=X(INT(K),J)
-            X(INT(K),J)=T1
-          ENDIF
-          DO 3000 L=K+1,N
-3000    X(L,J)=X(L,J)-A(L,K)*X(K,J)
-
-        X(N,J)=X(N,J)/A(N,N)
-        DO 3300 K=N-1,1,-1
-          DO 3200 L=N,K+1,-1
-3200      X(K,J)=X(K,J)-X(L,J)*A(K,L)
-3300    X(K,J)=X(K,J)/A(K,K)
-5000  CONTINUE
-      END
-

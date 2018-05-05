@@ -9,7 +9,7 @@ INCL = -I$(DRMS)/base/include
 LIBD = -L$(DRMS)/lib/$(JPLAT) -L/home/jsoc/lib/$(JPLAT)
 
 SLIBS = $(LIBD) -lcmdparams -ldstruct -ltimeio -lmisc -lm
-DLIBS = $(LIBD) -ldrms -lpq -lz -lpthread -lcfitsio -lfftw3 -lfftw3f -lm
+DLIBS = $(LIBD) -ldrms -lpq -lz -lpthread -lcfitsio -lfftw3 -lfftw3f -lcurl -lm
 
 DEST = ../bin/$(JPLAT)
 
@@ -48,7 +48,7 @@ rdsinv:		$$@.o h1h2.o
 	$(FC) -nofor_main -openmp -o $(DEST)/$@ $? $(DLIBS) -lmkl_em64t
 	$(RM) $?
 
-rdvinv:		$$@.o ola_xy_v12.o ola_subs.o
+rdvinv:		$$@.o ola_xy_v13.o ola_subs.o
 	$(FC) -nofor_main -openmp -o $(DEST)/$@ $? $(DLIBS) -lmkl_em64t
 	$(RM) $?
 

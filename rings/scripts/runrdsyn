@@ -165,7 +165,6 @@ if ($NOGO) then
   endif
 
   echo `whoami` > $MSGS/list.$PROCID
-  echo $SUBJ > $MSGS/subj.$PROCID
   exit
 endif
 

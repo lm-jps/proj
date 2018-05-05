@@ -1,5 +1,24 @@
 /*
  *  static versions of functions for soho_ephemeris for direct inclusion
+ *
+ *  This code is included in the following known modules which should be
+ *    recompiled whenever this code is modified:
+ *
+ *	$JSOC/proj/rings/apps/gentargs.c
+ *	$JSOC/proj/rings/apps/maicalc.c
+ *	$JSOC/proj/rings/apps/mtrack.c
+ *	$JSOC/proj/rings/apps/rdcover.c
+ *	$JSOC/proj/rings/apps/xtrackd.c
+ *	~rick/src/hmi/hmiploc.c
+ *	~rick/src/mtrack/tstloncm.c
+ *	~rick/src/mtrack/tstparse.c
+ *	~rick/hmi/rings/src/cmcross.c
+ *	~rick/hmi/rings/src/copy_track.c
+ *	~rick/hmi/rings/src/drawtargets.c
+ *	~rick/hmi/rings/src/genmtscr.c
+ *	~rick/hmi/rings/src/ingest_mditrack.c
+ *	~rick/hmi/rings/src/ingest_pspec.c
+ *	~rick/hmi/rings/src/ingest_track.c
  */
 
 #ifndef LOCAL_SOLEPHEM_INCL
@@ -162,12 +181,22 @@ TIME SOHO_meridian_crossing (double lonn, int crr) {
 /*
  *  Provide the time at which a selected heliographic longitude (in degrees)
  *    is on the SOHO meridian in a given Carrington Rotation
+ *
+ *  N.B. Due to lack of data, soho_ephemeris returns 0 for longitude (and
+ *    other values) or nonsensical values between 1998.07.14_23:50_TAI
+ *    and 1998.09.25_23:50_TAI (1938:229 and 1941:344); also
+ *    between 1999.01.20_00:00_TAI and 1999.01.21_00:00_TAI (1945:256 and
+ *    1945:242). Consequently
+ *    this function only returns the mean times during that interval
  */
   TIME modt;
   double au, lon, lat, vr, vn, vw;
   double phi, secapp;
 
   secapp = ((crr - CRR0) * 360.0 - (lonn - LONN0)) * K;
+  if ((crr == 1939 || crr == 1940) || (crr == 1938 && lonn <= 230) ||
+      (crr == 1941 && lonn >= 344) ||
+      (crr == 1945 && lonn < 256 && lonn > 242)) return secapp;
   soho_ephemeris (secapp, &au, &lat, &lon, &vr, &vn, &vw, &modt);
 		  /*  soho_ephemeris always returns a longitude in [0, 360)  */
   while (lonn >= 360.0) lonn -= 360.0;
@@ -184,3 +213,12 @@ TIME SOHO_meridian_crossing (double lonn, int crr) {
   }
   return secapp;
 }
+
+/*
+ *  Revision History: all mods by R. Bogart unless otherwise noted
+ *      18.01.18	Added trap in SOHO_meridian_crossing() for times
+ *		when lack of ephemeris data might lead to infinite looping
+ *		in convergence
+ *			Added listing of known modules including this code
+ *		as source for compilation
+ */

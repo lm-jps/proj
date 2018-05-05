@@ -93,51 +93,55 @@
  *
  */
 
+#define MODULE_VERSION_NUMBER	("1.7")
+#define KEYSTUFF_VERSION "keystuff_v10.c"
+#define EARTH_EPHEM_VERSION "earth_ephem_v10.c"
+
 #include <jsoc_main.h>
-#include "keystuff.c"
-#include "earth_ephem.c"
+#include KEYSTUFF_VERSION
+#include EARTH_EPHEM_VERSION
 
 #define	DO_NOTHING	(0)
 #define	DO_ABSVAL	(1)
 #define	DO_SQUARE	(2)
 
 char *module_name = "data average";
-char *version_id = "1.5";
+char *version_id = MODULE_VERSION_NUMBER;
 
 ModuleArgs_t module_args[] = {
-  {ARG_STRING,	"in", "", "input data series or dataset"}, 
-  {ARG_STRING,	"out", "", "output data series"}, 
+  {ARG_STRING,	"in", "", "input data series or dataset"},
+  {ARG_STRING,	"out", "", "output data series"},
   {ARG_STRING,	"tmid", "Not Specified",
-      "midpoint of averaging interval (in Carrington longitude)"}, 
+      "midpoint of averaging interval (in Carrington longitude)"},
   {ARG_FLOAT,	"length", "Not Specified",
-      "length of averaging interval (in degrees of Carrington rotation)"}, 
-  {ARG_FLOAT,	"pa", "180.0", "centre of acceptable roll angles"}, 
-  {ARG_FLOAT,	"dpa", "1.0", "maximum deviation of acceptable roll angles"}, 
+      "length of averaging interval (in degrees of Carrington rotation)"},
+  {ARG_FLOAT,	"pa", "180.0", "centre of acceptable roll angles"},
+  {ARG_FLOAT,	"dpa", "1.0", "maximum deviation of acceptable roll angles"},
   {ARG_INT,	"qmask", "0x80000000", "quality bit mask for image rejection"},
-  {ARG_STRING,	"reject", "Not Specified", "file containing rejection list"}, 
-  {ARG_STRING,	"cvkey", "CalVer64", "keyname for Calibration Version key"}, 
+  {ARG_STRING,	"reject", "Not Specified", "file containing rejection list"},
+  {ARG_STRING,	"cvkey", "CalVer64", "keyname for Calibration Version key"},
   {ARG_STRING,  "cvok", "any", "Acceptable value of cvkey"},
   {ARG_STRING,  "cvno", "none", "Unacceptable value of cvkey"},
   {ARG_STRING,  "copy",  "+", "comma separated list of keys to propagate"},
   {ARG_STRING,  "average",  "+", "comma separated list of keys to average"},
   {ARG_STRING,	"pkey", "T_OBS",
-      "keyname for index over which records are selected for averaging"}, 
-  {ARG_STRING,	"qual_key", "Quality", "keyname for 32-bit image quality field"}, 
-  {ARG_STRING,	"roll_key", "CROTA2", "keyname for input roll-angle field"}, 
-  {ARG_STRING,	"count", "valid", "output data series segment containing count"}, 
-  {ARG_STRING,	"mean", "mean", "output data series segment containing mean"}, 
-  {ARG_STRING,	"power", "power", "output data series segment containing variance"}, 
-  {ARG_STRING,	"log", "Log", "output data series segment containing run log"}, 
-  {ARG_STRING,	"setkey", "Not Specified", "name of special extra key to be set"}, 
+      "keyname for index over which records are selected for averaging"},
+  {ARG_STRING,	"qual_key", "Quality", "keyname for 32-bit image quality field"},
+  {ARG_STRING,	"roll_key", "CROTA2", "keyname for input roll-angle field"},
+  {ARG_STRING,	"count", "valid", "output data series segment containing count"},
+  {ARG_STRING,	"mean", "mean", "output data series segment containing mean"},
+  {ARG_STRING,	"power", "power", "output data series segment containing variance"},
+  {ARG_STRING,	"log", "Log", "output data series segment containing run log"},
+  {ARG_STRING,	"setkey", "Not Specified", "name of special extra key to be set"},
   {ARG_DOUBLE,	"setval", "Not Specified",
-	"value of special extra key to be set; if invalid, name of key whose value is to be used"}, 
+	"value of special extra key to be set;\n    if non-numeric, name of key whose value is to be used"},
   {ARG_FLOAT,	"mscale", "Segment Default", "output BSCALE factor for mean"},
   {ARG_FLOAT,	"mzero", "Segment Default", "output BZERO offset for mean"},
   {ARG_FLOAT,	"pscale", "Segment Default", "output BSCALE factor for power"},
   {ARG_FLOAT,	"pzero", "Segment Default", "output BZERO offset for power"},
-  {ARG_FLAG,	"n",	"", "no output records produced; diagnostics only"}, 
-  {ARG_FLAG,	"o",	"", "remove effects of observer velocity"}, 
-  {ARG_FLAG,	"v",	"", "verbose mode"}, 
+  {ARG_FLAG,	"n",	"", "no output records produced; diagnostics only"},
+  {ARG_FLAG,	"o",	"", "remove effects of observer velocity"},
+  {ARG_FLAG,	"v",	"", "verbose mode"},
   {ARG_END}
 };
 
@@ -473,6 +477,7 @@ int DoIt (void) {
 
   double fp_nan = 0.0 / 0.0;
   int badqual = 0, blacklist = 0, badpa = 0, badcv = 0, rejects = 0;
+  int badread = 0, badtime = 0;
   int needpowr = 1;
   int propkeyct = sizeof (propagate) / sizeof (char *);
   int meankeyct = sizeof (average) / sizeof (char *);
@@ -726,6 +731,16 @@ int DoIt (void) {
    }
   }
   if (verbose) printf ("processing %d input records\n", recct);
+		 /*  added call to drms_stage_records to pre-cache SUMS info  */
+						      /*  withdrawn in v 1.7  */
+/*
+  if (drms_stage_records (ids, 1, 0)) {
+    fprintf (stderr, "Error (%s): drms_stage_records() failure\n",
+	module_ident);
+    drms_close_records (ids, DRMS_FREE_RECORD);
+    return 1;
+  }
+*/
   propct = construct_stringlist (propagate_req, ',', &copykeylist);
 					       /*  replace '+' with defaults  */
   if (propkeyct) {
@@ -1088,7 +1103,7 @@ int DoIt (void) {
       if (isfinite (pa_rec)) {
 	dpa = fabs (pa_rec - pa_nom);
 	while (dpa > 180.0) dpa -= 360.0;
-	while (dpa < 0.0) dpa += 360.0;
+	dpa = fabs (dpa);
 	if (dpa > dpa_max) {
 	  badpa++;
 	  if (verbose) printf ("skipped (rotated)\n");
@@ -1116,6 +1131,7 @@ int DoIt (void) {
     						   /*  read input data image  */
     data_array = drms_segment_read (iseg, DRMS_TYPE_DOUBLE, &status);
     if (status) {
+      badread++;
       if (data_array) drms_free_array (data_array);
       if (verbose) printf ("skipped (segment read error)\n");
       if (writelog) fprintf (runlog, "skipped (segment read error)\n");
@@ -1133,6 +1149,7 @@ int DoIt (void) {
 
     tobs_rec = drms_getkey_time (irec, primekey, &status);
     if (status || time_is_invalid (tobs_rec)) {
+      badtime++;
       if (writelog) fprintf (runlog, "skipped (time invalid)\n");
       if (verbose) printf ("skipped (time invalid)\n");
       else fprintf (stderr, "error reading %s from record #%d\n", primekey, rec);
@@ -1399,6 +1416,9 @@ int DoIt (void) {
       if (cvct) printf (",");
       printf (" %016llx (%d)", cvlist[cvct], cvfound[cvct]);
     }
+    if (badread) printf ("    %d input records unreadable\n", badread);
+    if (badtime) printf
+	("    %d input records rejected for invalid obs time\n", badtime);
     printf ("\n");
   }
   if (writelog) {
@@ -1422,6 +1442,9 @@ int DoIt (void) {
       if (cvct) fprintf (runlog, ",");
       fprintf (runlog, " %016llx (%d)", cvlist[cvct], cvfound[cvct]);
     }
+    if (badread) fprintf (runlog, "    %d input records unreadable\n", badread);
+    if (badtime) fprintf (runlog,
+	"    %d input records rejected for invalid obs time\n", badtime);
     fprintf (runlog, "\n");
     fclose (runlog);
   }
@@ -1509,4 +1532,10 @@ int DoIt (void) {
  *		calculation of power values conditional on presence of the
  *		appropriate segment in the output record
  *  v 1.5 frozen 15.04.08
+ *	17.10.02	added stage_records call to pre-cache SUMS info
+ *  v 1.6 frozen 18.03.08
+ *	18.04.18	fixed bug in determination of position angle difference
+ *		added counts of bad reads and invalid times
+ *		added version control for included local source files
+ *  v 1.7 frozen 18.04.20
  */

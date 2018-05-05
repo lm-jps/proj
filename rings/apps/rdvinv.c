@@ -8,7 +8,7 @@
  *
  *  Parameters: (type   default         description)
  *	in	string	-		Input data set descriptor or filename
- *	out	string	fort.10.hmixy	Output filename
+ *	out	string	-		Output data series or directory
  *	seg	string	fit.out		Input data segment name
  *	cr	int	NS		Carrington rotation common to dataset
  *	clon	float	NS		CM Longitude common to dataset
@@ -24,7 +24,7 @@
  *				containing mode kernels for inversions
  *	ave	string	Not Specified	Output file for averaging kernels
  *				(if not set, kernels are not written)
- *	coef	string	Not Specified	Output file for ?? coefficients
+ *	coef	string	Not Specified	Output file for inversion coefficients
  *				(if not set, coefficients are not written)
  *
  *  Flags
@@ -37,7 +37,7 @@
  *	the inversion outputs.
  *
  *  Bugs:
- *    If the input data is not in a drms series, an output series can't be
+ *    If the input data are not in a drms series, an output series can't be
  *	created - rdvinv will exit with an error message.
  *    Argument 'out', when a file name, cannot contain any path information.
  *    When writing output to a file, rather than a drms record set, only one
@@ -52,14 +52,20 @@
  *  Revision history is at end of file
  ******************************************************************/
 
+#define MODULE_VERSION_NUMBER	("0.92")
+#define KEYSTUFF_VERSION "keystuff_v10.c"
+#define RDUTIL_VERSION "rdutil_v09.c"
+
+char *module_name = "rdvinv";
+char *version_id = MODULE_VERSION_NUMBER;
 
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
 #include <jsoc_main.h>
-#include "keystuff.c"
-#include "old_rdutil.c"
-#include "ola_xy.c"
+#include KEYSTUFF_VERSION
+#include RDUTIL_VERSION
+/* #include "ola_xy.c" */
 
 /* prototypes */
 
@@ -69,12 +75,10 @@ extern void ola_(double *, int *, double *, double *, double *,
       char *, char *, int *, int *, int *, double *, double *,
       int *, double *, double *, double *, int *, int, int, int);
 
-char *module_name = "rdvinv";
-char *version_id = "0.91";
-
 ModuleArgs_t module_args[] = {
   {ARG_STRING, "in", "", "Input data series or recordset"},
   {ARG_STRING, "seg", "fit.out", "Input data segment name"},
+  {ARG_STRING, "out", "", "Output series or directory"},
   {ARG_STRING, "uxseg", "Ux", "Output data segment name for Ux inversions"},
   {ARG_STRING, "uyseg", "Uy", "Output data segment name for Uy inversions"},
   {ARG_INT,    "cr", "Not Specified", "Carrington rotation for all regions"},
@@ -88,7 +92,6 @@ ModuleArgs_t module_args[] = {
   {ARG_DOUBLE, "rb", "0.97", "Lower radius limit"},
   {ARG_DOUBLE, "re", "1.00", "Upper radius limit"},
   {ARG_INT,    "num", "40", "Number of target inversion points"},
-  {ARG_STRING, "out", "fort.10.hmixy", "Output filename"},
   {ARG_STRING, "kernel", "", ""},
   {ARG_STRING, "ave",  "Not Specified",
       "output file for averaging kernels (if not set, kernels are not written)"},
@@ -102,10 +105,10 @@ char *propagate[] = {"CarrTime", "CarrRot", "CMLon", "LonHG", "LatHG", "LonCM",
     "MidTime", "Duration", "MapProj", "MapScale", "Map_PA", "Width", "Height",
     "Size", "Cadence", "ZonalTrk", "ZonalVel", "MeridTrk", "MeridVel", "MAI"};
 
-int process_record (const char *filename, int drms_output, char *outfilex,
-    char *outfiley, char *kernel, char *kername, char *ave, char *coef,
-    int qave, int qcoef, int verbose, double ob, double oe, int num,
-    double rb, double re, double amu, char *sourcerec, char *codever) {
+int process_record (const char *filename, char *outfilex, char *outfiley,
+    char *kernel, char *kername, char *ave, char *coef, int qave, int qcoef,
+    int verbose, double ob, double oe, int num, double rb, double re,
+    double amu, char *sourcerec, char *codever) {
   FILE *infile = fopen (filename, "r");
   FILE *filex = fopen (outfilex, "w");
   FILE *filey = fopen (outfiley, "w");
@@ -114,6 +117,7 @@ int process_record (const char *filename, int drms_output, char *outfilex,
   int *n, *mask;
   int npts, i, j, status;
   int lenkern, lenave, lencoef;
+
   status = read_fit_v (infile, &npts, &n, &l, &f, &ef, &ux, &eux, &uy, &euy);
   fclose (infile);
   if(status)	{
@@ -346,6 +350,7 @@ int DoIt(void)	{
       outdiry[DRMS_MAXPATHLEN], kernfile[DRMS_MAXPATHLEN];
   char *carstr;
   char rec_query[DRMS_MAXQUERYLEN], source[DRMS_MAXQUERYLEN];
+  char recset[DRMS_MAXQUERYLEN];
   char module_ident[64];
 
   int twosegs = 0;
@@ -415,6 +420,7 @@ int DoIt(void)	{
     drms_close_records (kern_set, DRMS_FREE_RECORD);
   }
 
+  strncpy (recset, in, DRMS_MAXQUERYLEN);
   if (anycr && anycl && anylon && anylat) {
 		 /*  no target range specified, assume implicit in input set  */
 			 /*  but it might be implicit in output series spec!  */
@@ -440,6 +446,8 @@ int DoIt(void)	{
     if (!anycr) {
       snprintf (source, DRMS_MAXQUERYLEN, "[?CarrRot=%d?]", cr);
       strncat (rec_query, source, DRMS_MAXQUERYLEN);
+      snprintf (source, DRMS_MAXQUERYLEN, "[%d]", cr);
+      strncat (recset, source, DRMS_MAXQUERYLEN);
     }
     if (!anycl) {
       float clmin = cl - 0.01;
@@ -456,6 +464,8 @@ int DoIt(void)	{
       } else snprintf (source, DRMS_MAXQUERYLEN, "[?CMLon>%g and CMLon<%g?]",
 	  clmin, clmax);
       strncat (rec_query, source, DRMS_MAXQUERYLEN);
+      snprintf (source, DRMS_MAXQUERYLEN, "[%03.0f]", cl);
+      strncat (recset, source, DRMS_MAXQUERYLEN);
     }
     if (!anylon) {
       float lonmin = lon - 0.01;
@@ -472,6 +482,8 @@ int DoIt(void)	{
       } else snprintf (source, DRMS_MAXQUERYLEN, "[?LonHG>%g and LonHG<%g?]",
 	  lonmin, lonmax);
       strncat (rec_query, source, DRMS_MAXQUERYLEN);
+      snprintf (source, DRMS_MAXQUERYLEN, "[%05.1f]", lon);
+      strncat (recset, source, DRMS_MAXQUERYLEN);
     }
     if (!anylat) {
       float latmin = lat - 0.01;
@@ -479,6 +491,9 @@ int DoIt(void)	{
       snprintf (source, DRMS_MAXQUERYLEN, "[?LatHG>%g and LatHG<%g?]",
 	  latmin, latmax);
       strncat (rec_query, source, DRMS_MAXQUERYLEN);
+      if (anylon) strncat (recset, "[]", 2);
+      snprintf (source, DRMS_MAXQUERYLEN, "[%+05.1f]", lat);
+      strncat (recset, source, DRMS_MAXQUERYLEN);
     }
     if (!(recordSet = drms_open_records (drms_env, rec_query, &status))) {
       fprintf (stderr, "Error: unable to open input data set %s\n", rec_query);
@@ -522,7 +537,7 @@ int DoIt(void)	{
   if (status) {
     drms_output = 0;
     fprintf (stderr,
-        "Warning: drms_create_record() returned %d for data series:\n", status);
+        "Warning: drms_template_record() returned %d for data series:\n", status);
     fprintf (stderr,
 	"       %s\n       will be interpreted as directory name\n", out);
     strncpy (odir, out, DRMS_MAXPATHLEN);
@@ -539,6 +554,7 @@ int DoIt(void)	{
 
     kstat += check_and_set_key_str (orec, "Module", module_ident);
     kstat += check_and_set_key_time (orec, "Created", CURRENT_SYSTEM_TIME);
+    kstat += check_and_set_key_str   (orec, "Source", recset);
 					       /*  module specific keywords  */
     kstat += check_and_set_key_float (orec, "amu", amu);
     kstat += check_and_set_key_float (orec, "freqmin", ob);
@@ -657,7 +673,7 @@ int DoIt(void)	{
   }
 						    /*  main processing loop  */
   for (rec_i=0; rec_i<nrec; rec_i++) {
-    if (verbose) printf ("  Processing record %i\n", rec_i);
+    if (verbose) printf ("  Processing record %i : ", rec_i);
     if (drms_input) {
       irec = recordSet->records[rec_i];
 		      /*  should use call to drms_record_directory() instead  */
@@ -681,6 +697,7 @@ int DoIt(void)	{
       strcpy (source, in);
       latc = loncm = lonhg = 0.0;
     }
+    if (verbose) printf ("%s\n", source);
     if (twosegs) {
       sprintf (outfilex, "%s/%s/%s.Ux", odir, uxseg, 
 	  printcrcl_loc (cr, loncCar, lonhg, loncm, latc));
@@ -692,9 +709,9 @@ int DoIt(void)	{
       sprintf (outfiley, "%s/%s.Uy", outdir,
 	  printcrcl_loc (cr, loncCar, lonhg, loncm, latc));
     }
-    status = process_record (filename, drms_output, outfilex, outfiley,
-	kernfile, kernel, ave, coef, qave, qcoef, verbose, ob, oe, num, rb, re, amu,
-	source, module_ident);
+    status = process_record (filename, outfilex, outfiley, kernfile, kernel,
+	ave, coef, qave, qcoef, verbose, ob, oe, num, rb, re, amu, source,
+	module_ident);
     if (status)	{
       fprintf (stderr, "Error processing record %d (%s); aborted\n", rec_i,
 	  printcrcl_loc (cr, loncCar, lonhg, loncm, latc));
@@ -741,16 +758,29 @@ int DoIt(void)	{
  *  v 0.7 frozen 2010.08.19
  *    0.8	Created 2011.04.22; Fixed typos in ola_xy.c (not yet used)
  *		Fixed bugs in printing of filenames (particularly the
- *		reversal of east and west), and dropped requirement for CMLon;
- *		heliographic option for file naming
+ *	reversal of east and west), and dropped requirement for CMLon;
+ *		Heliographic option for file naming
  *		Removed default for kernel
  *    0.9	Created 2011.12.04; Fixed typos in ola_xy.c (not yet used)
  *  v 0.8 frozen 2012.02.01 (but included in JSOC release 6.1 2011.12.05 in
- *		identical form except for comments)
- *    0.9	added (preferred) option for specifying kernel as DRMS data
- *		record rather than filename
+ *		Identical form except for comments)
+ *    0.9	Added (preferred) option for specifying kernel as DRMS data
+ *	record rather than filename
  *  v 0.9 frozen 2012.04.24
- *    0.91	similar to 0.9, but includes fixes in FORTRAN code ola_xy_v12
+ *    0.91	Similar to 0.9, but includes fixes in FORTRAN code ola_xy_v12
  *		and provision for return status
  *  v 0.91 frozen 2012.04.24
+ *    0.92	Created 2018.03.10; similar to 0.91 but including version
+ *	control for included source files; includes rdutil_v09.c rather than
+ *	old_rdutil.c; also intended to be built with ola_subs_v13.f and
+ *	ola_xy_v13.f, although this can only be controlled through the
+ *	Makefile
+ *		Added setting of source key
+ *	2018.03.24 Added verbose reporting of source record (or file) name at
+ *		each step
+ *	2018.04.13 Removed unused argument drms_output from call to
+ *		process_record()
+ *	2018.04.18 Added version control for all included C source
+ *	2018.04.25 Removed default value for out argument
+ *  v 0.92 frozen 2018.05.02
  */

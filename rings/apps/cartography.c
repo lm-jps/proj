@@ -135,6 +135,9 @@ int img2sphere (double x, double y, double ang_r, double latc, double lonc,
   *coslat = sqrt (1.0 - *sinlat * *sinlat);
   *lat = asin (*sinlat);
   sinlon = sinr * sin (*chi) / *coslat;
+		       /*  this should only occur because of roundoff errors  */
+  if (sinlon < -1.0) sinlon = -1.0;
+  if (sinlon > 1.0) sinlon = 1.0;
   *lon = asin (sinlon);
   if (cosr < (*sinlat * sinlatc)) *lon = M_PI - *lon;
   *lon += lonc;
@@ -673,4 +676,6 @@ char *proj2name(int proj_in) {
  *	bug for plane2sphere (not thoroughly tested)
  *  14.08.01	"		restored name2proj(), proj2name() from original
  *	source (but removing "Aerial")
+ *  18.05.04	"		trapped roundoff problem for arg of asin in
+ *	img2sphere (but it might still occur in other functions!)
  */
