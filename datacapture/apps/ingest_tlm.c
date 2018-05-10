@@ -212,12 +212,12 @@ void get_date()
 }
 
 
-void StartTimer(int n)
+static void StartTimer(int n)
 {
   gettimeofday (&first[n], NULL);
 }
 
-float StopTimer(int n)
+static float StopTimer(int n)
 {
   gettimeofday (&second[n], NULL);
   if (first[n].tv_usec > second[n].tv_usec) {
