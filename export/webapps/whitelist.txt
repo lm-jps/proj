@@ -1,6 +1,7 @@
 aia.flatfield
 aia.lev1_uv_24s
 aia.lev1_vis_1h
+aia.master_pointing3h
 aia.response
 aia.temperature_summary_300s
 aia_test.master_pointing3h
