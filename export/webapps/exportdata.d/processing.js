@@ -333,6 +333,7 @@ function AiaScaleCheck(fromSetProcessing)
     var AiaScaleSizeRatio = 1.0;
     var isok = true;
     var args = null;
+    var compatibleFormat = null;
 
     if (!$("OptionAiaScale").checked)
     {
@@ -360,28 +361,47 @@ function AiaScaleCheck(fromSetProcessing)
     // if the series is aia.lev1 and we are producing non-cut-outs, then data go into aia.lev1p5 (indicated by 
     // 'aia_scale' processing); otherwise, data go into SeriesName + '_mod' (indicated by 'aia_scale_mod' processing)
 
-    if (SeriesName.strip().toLowerCase() === 'aia.lev1')
+    if (IsAiaLev1)
     {
-        $("ExportFilenameFmt").value = $("ExportFilenameFmt").value.replace('T_REC','T_OBS');
+        args = 'aia_scale_aialev1';
+        
+        // the output series is aia.lev1p5, so let's use a filename format compatible with aia.lev1p5;
+        // actually, we could do this for all processing since the filename format must always be compatible 
+        // with the output series, not the input series
+        
+        // save the original in case the user un-checks aia_scale
+        $('ExportFilenameFmt').store({ 'originalFormat' : $('ExportFilenameFmt').value });
+        compatibleFormat = GetCompatibleFormat(AIA_LEV1P5, AiaLev1AttributesGlobal, AiaLev1KeywordsGlobal);
+        
+        // now, replace aia.lev1p5 with the original series name, and remove the RequestID specification (output series
+        // have this extra prime-key keyword)
+        $("ExportFilenameFmt").value = compatibleFormat.replace(AIA_LEV1P5, SeriesName.strip()).replace(/[.]{requestid}/i, '');
+    }
+    else
+    {
+        args = 'aia_scale_other';
     }
 
     // choose between cut-out and non-cut-out
     if (!$('AiaScalePerformCutoutCheckbox').checked)
     {
-        // use the default (non-cut-out) processing
-        if (SeriesName.strip().toLowerCase() == 'aia.lev1')
+        // because the prime keys of the aia series are not consistent, there is no way to use aia.lev1p5 as the output series
+        // for all aia-lev1 series
+        if (0 && SeriesName.strip().toLowerCase().search(/aia[.]lev1/) == 0)
         {
+            // scale aia-lev1 series, save results in aia.lev1p5
             args = 'aia_scale';
-        }
-        else
-        {
-            args = 'aia_scale_mod';
         }
     }
     else
     {
-        // perform a cut-out during processing
-        args = 'aia_scale_mod';
+        // because the prime keys of the aia series are not consistent, there is no way to use aia.lev1p5 as the output series
+        // for all aia-lev1 series
+        if (0 && SeriesName.strip().toLowerCase().search(/aia[.]lev1/) == 0)
+        {
+            // scale aia-lev1 series and perform cut-out, use the save results in aia.lev1p5
+            args = 'aia_scale';
+        }
     
         val = parseInt($('AiaScaleCutoutXc').value)
         if (Math.abs(val) > 4096)

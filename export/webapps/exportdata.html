@@ -36,12 +36,14 @@ var STANFORD_DOMAIN = 'stanford.edu'
 
 var KEYWORD_CTYPE1 = 'CTYPE1';
 var KEYWORD_CTYPE2 = 'CTYPE2';
+var KEYWORD_LVL_NUM = 'LVL_NUM';
 var AIA_SCALE_CTYPE1 = 'HPLN-TAN';
 var AIA_SCALE_CTYPE2 = 'HPLT-TAN';
 var KEYWORD_SPEC = '*spec*';
 var AIA_NAMESPACE = 'aia';
 var NA = 'na';
 var AIA_SCALE_NAXES = 2;
+var AIA_LEV1P5 = 'aia.lev1p5';
 
 var serverMap = new Array();
 serverMap[EXTERNAL_WEBSERVER] = EXTERNAL_SERVER;
@@ -128,6 +130,8 @@ var Host = location.host;
 var Internal = 0;
 var SeriesName;
 var SeriesInfo;
+var AiaLev1AttributesGlobal = null; // set in GetDefaultFormat()
+var AiaLev1KeywordsGlobal = null; // set in GetDefaultFormat()
 var firstRealSegment;
 var RequestID;
 var RecordLimit;
@@ -171,6 +175,8 @@ var protocolEnable;
 // Misc vars
 var firstTimePrime;
 var expURL;
+var IsAia = null;
+var IsAiaLev1 = null;
 
 // Colors
 var colorNeutral = "#D4D0C8";
@@ -818,7 +824,8 @@ function CreateRequestRSInfoCallback(callback, lastRecord)
                                 // we are assured that the CTYPE keywords will be in the jsoc_info results, 
                                 // even if the series does not have those keywords; if a keyword
                                 // does not exist in the series, jsoc_info prints 'Invalid Keylink'
-                                // for the keyword value
+                                // for the keyword value (as long as the keyword is specified in the keys argument
+                                // to jsoc_info)
                                 if (data.keywords[index].name.strip().toLowerCase() == KEYWORD_CTYPE1.toLowerCase())
                                 {
                                     for (var valIndex = 0; valIndex < data.keywords[index].values.length; valIndex++)
@@ -887,6 +894,44 @@ function CreateRequestRSInfoCallback(callback, lastRecord)
                         // this should remain disabled until all asynchronous processing completes
                         $('OptionAiaScaleLabel').innerHTML = 'aia_scale - Scale image to 0.6 arcsec/pixel';
                         $('OptionAiaScaleLabel').setStyle({ color: 'black' });
+                        
+                        // the determination of which aia_scale proc to use was already determined; in processSeriesSelection()
+                        // a check of the LVL_NUM keyword was performed; this keyword must be constant, since a series cannot be
+                        // a mix of levels
+                        if (IsAiaLev1 === null && IsAia)
+                        {
+                            if (data.hasOwnProperty('keywords'))
+                            {
+                                for (var index = 0; index < data.keywords.length; index++)
+                                {
+                                    // loop over keywords
+                                    if (data.keywords[index].name.strip().toLowerCase() == KEYWORD_LVL_NUM.toLowerCase())
+                                    {
+                                        IsAiaLev1 = true;
+
+                                        for (var valIndex = 0; valIndex < data.keywords[index].values.length; valIndex++)
+                                        {
+                                            // loop over records (one value element per DRMS record)
+                                            var lvlnumString = data.keywords[index].values[valIndex];
+                                            var lvlnum = null;
+
+                                            // the series has a LVL_NUM constant keyword
+                                            // round so we can compare floats
+                                            lvlnum = Math.floor(10 * (parseFloat(lvlnumString) + 0.02)); // level numbers should be much farther apart than 0.02
+
+                                            if (lvlnum != 10)
+                                            {
+                                                /* this is NOT an aia lev1 series */
+                                                IsAiaLev1 = false;
+                                                break;
+                                            }
+                                        }
+                                        
+                                        break; // look only at the LVL_NUM keyword
+                                    }
+                                }
+                            }
+                        }
                     }
                     else
                     {
@@ -972,12 +1017,12 @@ function RequestRSInfo(errMsg, spec, lastRecord, callback)
         if (serverMap[host] == INTERNAL_SERVER)
         {
             jsocinfoCGI = JSOC_INFO;
-            arguments = { 'ds' : spec, 'n' : RecordLimit, 'op' : 'rs_list', 'key' : KEYWORD_CTYPE1 + ',' + KEYWORD_CTYPE2 + ',' + KEYWORD_SPEC };
+            arguments = { 'ds' : spec, 'n' : RecordLimit, 'op' : 'rs_list', 'key' : KEYWORD_CTYPE1 + ',' + KEYWORD_CTYPE2 + ',' + KEYWORD_LVL_NUM + ',' + KEYWORD_SPEC };
         }
         else
         {
             jsocinfoCGI = JSOCEXTINFO;
-            arguments = { 'dbhost' : EXTERNAL_SERVER, 'ds' : spec, 'n' : RecordLimit, 'op' : 'rs_list', 'key' : KEYWORD_CTYPE1 + ',' + KEYWORD_CTYPE2 + ',' + KEYWORD_SPEC };
+            arguments = { 'dbhost' : EXTERNAL_SERVER, 'ds' : spec, 'n' : RecordLimit, 'op' : 'rs_list', 'key' : KEYWORD_CTYPE1 + ',' + KEYWORD_CTYPE2 + ',' + KEYWORD_LVL_NUM + ',' + KEYWORD_SPEC };
         }
 
         var onSuccess = CreateRequestRSInfoCallback(callback, lastRecord);
@@ -1033,6 +1078,8 @@ function CreateProcessSeriesSelection(spec, series, seriesNs, callback)
                 {
                     // successfully obtained series info
                     var compatible = null;
+                    var keywordsObj = null;
+
                     for (var segment in data[series.toLowerCase()].segments)
                     {
                         if (data[series.toLowerCase()].segments.hasOwnProperty(segment))
@@ -1049,19 +1096,28 @@ function CreateProcessSeriesSelection(spec, series, seriesNs, callback)
                         }
                     }
                     
+                    keywordsObj = data[series.toLowerCase()].keywords;
+                    
                     if (compatible === null)
                     {
                         // compatibility not yet determined
-                        if ((data[series.toLowerCase()].keywords[KEYWORD_CTYPE1.toLowerCase()]['constant-value'] != AIA_SCALE_CTYPE1 && 
-                             data[series.toLowerCase()].keywords[KEYWORD_CTYPE1.toLowerCase()]['constant-value'] != NA) ||
-                            (data[series.toLowerCase()].keywords[KEYWORD_CTYPE2.toLowerCase()]['constant-value'] != AIA_SCALE_CTYPE2 && 
-                             data[series.toLowerCase()].keywords[KEYWORD_CTYPE2.toLowerCase()]['constant-value'] != NA))
+                        if (!keywordsObj.hasOwnProperty(KEYWORD_CTYPE1.toLowerCase()) || !keywordsObj.hasOwnProperty(KEYWORD_CTYPE2.toLowerCase()))
                         {
-                            // we know that aia_scale should definitely be disabled; store that information now so we can skip
-                            // the secondary check in 
-                            $('OptionAiaScale').store({ 'disabledState' : true });
                             compatible = false;
-                        }   
+                        }
+                        else
+                        {                        
+                            if ((keywordsObj[KEYWORD_CTYPE1.toLowerCase()]['constant-value'] != AIA_SCALE_CTYPE1 && 
+                                 keywordsObj[KEYWORD_CTYPE1.toLowerCase()]['constant-value'] != NA) ||
+                                (keywordsObj[KEYWORD_CTYPE2.toLowerCase()]['constant-value'] != AIA_SCALE_CTYPE2 && 
+                                 keywordsObj[KEYWORD_CTYPE2.toLowerCase()]['constant-value'] != NA))
+                            {
+                                // we know that aia_scale should definitely be disabled; store that information now so we can skip
+                                // the secondary check in 
+                                $('OptionAiaScale').store({ 'disabledState' : true });
+                                compatible = false;
+                            }
+                        }
                     }
                     
                     // we can also determine compatibility with the MPT-selection check box
@@ -1076,6 +1132,32 @@ function CreateProcessSeriesSelection(spec, series, seriesNs, callback)
                         $('AiaScaleUseMptCheckbox').disabled = true;
                         $('AiaScaleUseMptCheckboxLabel').innerHTML = 'Use a master pointing table to scale images (instead of keyword values - compatible with AIA series only)&nbsp';
                         $('AiaScaleUseMptCheckboxLabel').setStyle({ color: 'grey' });
+                    }
+                    
+                    // finally, if KEYWORD_LVL_NUM is constant in an AIA series, then set the aia_scale processing flag that determines
+                    // which aia_scale proc is used                    
+                    if (seriesNs.toLowerCase() == AIA_NAMESPACE)
+                    {
+                        IsAia = true;
+
+                        if (keywordsObj.hasOwnProperty(KEYWORD_LVL_NUM.toLowerCase()))
+                        {
+                            var lvlnumString = keywordsObj[KEYWORD_LVL_NUM.toLowerCase()]['constant-value'];
+                            var lvlnum = null;
+
+                            if (lvlnumString != NA)
+                            {
+                                // the series has a LVL_NUM constant keyword
+                                // round so we can compare floats
+                                lvlnum = Math.floor(10 * (parseFloat(lvlnumString) + 0.02)); // level numbers should be much farther apart than 0.02
+
+                                if (lvlnum == 10)
+                                {
+                                    /* this is an aia lev1 series */
+                                    IsAiaLev1 = true;
+                                }
+                            }
+                        }
                     }
                     
                     if (callback !== null)
@@ -1120,11 +1202,10 @@ function RequestSeriesInfo(series, callback)
         url = 'http://' + INTERNAL_WEBSERVER + '.' + STANFORD_DOMAIN + '/cgi-bin/' + SERIES_INFO;
     }
 
-
     new Ajax.Request(url,
     {
         'method': 'get',
-        'parameters': { 'series' : series, 'atts' : 1, 'keys' : KEYWORD_CTYPE1 + ',' + KEYWORD_CTYPE2, 'segs' : '*' },
+        'parameters': { 'series' : series, 'atts' : 1, 'keys' : '*', 'segs' : '*' },
         'onSuccess': onSuccess, 
         'onFailure': function() { RecordCount = null; SeriesName = ''; ExportRecordSetOK = 0; $("RSCountPlace").innerHTML = 'ERROR - failure calling series-info'; $('ExportRecordSet').disabled = false; },
         'onComplete': function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
@@ -1218,7 +1299,11 @@ function GetRSCount(countCallback)
     ExportQueryOK = 0;
     ExportRecordSetOK = 0;
     SeriesName = "";
-    $('OptionAiaScale').store({ 'disabledState' : null }) // means aia_scale compatibility not determined yet
+    SeriesAttributesGlobal = null;
+    $('OptionAiaScale').store({ 'disabledState' : null }); // means aia_scale compatibility not determined yet
+    $('ExportFilenameFmt').store({ 'originalFormat' : null }); // we have neither determined the original format nor the aia.lev1p5-format yet
+    IsAia = null;
+    IsAiaLev1 = null;
 
     var recset = $("ExportRecordSet").value;
 
@@ -1239,6 +1324,39 @@ function GetRSCount(countCallback)
     $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
 
     return(0);
+}
+
+function GetCompatibleFormat(series, attributes, keywords)
+{
+    var format = null;
+    var ipkey;
+    var extPrime;
+    var dataType;
+    
+    if (attributes && keywords)
+    {
+        format = series;
+
+        for (ipkey = 0; ipkey < attributes.drmsprimekey.length; ipkey++)
+        {
+            // loop on prime keywords (remove _index from keyword name to HACKILY convert from internal name to external name)
+            extPrime = attributes.drmsprimekey[ipkey].replace(/_index/i, '');
+            dataType = keywords[extPrime.toLowerCase()]['data-type'].toLowerCase();
+        
+            if (dataType == 'time')
+            {
+                format = format + '.' + '{' + extPrime + ':A}';
+            }
+            else
+            {
+                format = format + '.' + '{' + extPrime + '}';
+            }
+        }
+    
+        format = format + '.' + '{segment}';
+    }
+    
+    return format;
 }
 
 function GetDefaultFormat()
@@ -1299,7 +1417,7 @@ function GetDefaultFormat()
 									if (SeriesInfo.keywords[j].type === "time")
 									{
 										newfmt = newfmt + "{" + thisprime + ":A}.";
-										if (firstTimePrime ==="") firstTimePrime = thisprime;
+										if (firstTimePrime ==="") firstTimePrime = thisprime; // firstTimePrime is global
 									}
 									else
 									newfmt = newfmt + "{" + thisprime + "}.";
@@ -1349,8 +1467,74 @@ function GetDefaultFormat()
 		});
 	};
 	
-	// Just call the function. It will determine if it should use the internal or external version of the CGI.
-	doInfoReqFn();
+    // Just call the function. It will determine if it should use the internal or external version of the CGI.
+    doInfoReqFn();
+	
+    if (IsAiaLev1 && (!AiaLev1AttributesGlobal || !AiaLev1KeywordsGlobal))
+	{
+        // now we have to get the default format information for aia.lev1p5; we only use this information
+        // if there is an aia_scale processing step, but do it now since we do not know if the user
+        // will check the aia_scale checkbox or not
+        var url = null;
+        var origin = null;
+
+        origin = ExportOrigin(null, Host.toLowerCase())
+
+        if (origin[0] == 'extServer')
+        {
+            url = 'http://' + EXTERNAL_WEBSERVER + '.' + STANFORD_DOMAIN + '/cgi-bin/' + SERIES_INFO;
+        }
+        else
+        {
+            url = 'http://' + INTERNAL_WEBSERVER + '.' + STANFORD_DOMAIN + '/cgi-bin/' + SERIES_INFO;
+        }
+
+        new Ajax.Request(url,
+        {
+            'method': 'get',
+            'parameters': { 'series' : AIA_LEV1P5, 'atts' : 1, 'keys' : '*' },
+            'onSuccess': function(transport) 
+                         {
+                            var response = transport.responseText;
+
+                            if (response && response.length)
+                            {
+                                var data = response.evalJSON();
+                                var errMsg = null;
+         
+                                // check for suitability for aia_scale processing
+                                if (!data || !data.hasOwnProperty('errMsg'))
+                                {
+                                    // unexpected response from seriesinfo.py
+                                    errMsg = 'unexpected response to series-info request';
+                                }
+                                else if (data.errMsg !== null)
+                                {
+                                    errMsg = data.errMsg;
+                                }
+
+                                if (errMsg)
+                                {
+                                    // don't do anything; let the process of getting the aia.lev1p5 format fail
+                                    AiaLev1AttributesGlobal = null;
+                                    AiaLev1KeywordsGlobal = null;
+                                }
+                                else
+                                {
+                                    AiaLev1AttributesGlobal = data[AIA_LEV1P5.toLowerCase()].attributes;
+                                    AiaLev1KeywordsGlobal = data[AIA_LEV1P5.toLowerCase()].keywords;
+                                }
+                            }
+                            else
+                            {
+                                AiaLev1AttributesGlobal = null;
+                                AiaLev1KeywordsGlobal = null;
+                            }
+                        }, 
+            'onFailure': function() { AiaLev1AttributesGlobal = null; AiaLev1KeywordsGlobal = null; },
+            'onComplete': function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
+        });   
+    }
 }
 
 function CreateDataTable(data, valuetable)
@@ -1770,6 +1954,23 @@ function runSetProcessing(intervalFn, spCallback)
         }
       }
     }
+    
+    // it is possible that the aia_scale box was unchecked; in this case, we must restore the original
+    // filename format (but only if it indeed was changed to one compatible with aia.lev1p5)
+    var originalFormat = $('ExportFilenameFmt').retrieve('originalFormat', null);
+    if (originalFormat !== null)
+    {
+        // the originalFormat value data has been set, so the original format was changed to one compatible with aia.levp5;
+        // restore the original if the aia_scale check box is no longer checked
+        if ($('OptionAiaScale').checked == false)
+        {
+            $('ExportFilenameFmt').value = originalFormat;
+        }
+        
+        // blow away the args-ready state so that Check() is run the next time the user checks the aia_scale checkbox
+        ExportProcessingOptions[AiaScaleOption].paramsValid = null;
+    }
+    
   if (nchecked == 0)
     {
     $(ExportProcessingOptions[0].id).checked = true; // Set no-op processing step.
@@ -1817,6 +2018,7 @@ function runSetProcessing(intervalFn, spCallback)
     CheckRediness();
 }
 
+// the processing.js code defines SetProcessing as the onChange function for the processing checkboxes
 function SetProcessing(ichecked, spCallback)
 {
 	var intervalFn;
