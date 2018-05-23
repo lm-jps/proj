@@ -363,19 +363,31 @@ function AiaScaleCheck(fromSetProcessing)
 
     if (IsAiaLev1)
     {
-        args = 'aia_scale_aialev1';
+        // hack away! what we should do is read the jsoc.export_procs out field to determine what the output series is going to be;
+        // however, it is time to move on; simply use the substitution s/lev1/lev1p5/ and if we end up with aia.lev1p5, 
+        // then change the filename format to one compatible with aia.lev1p5, and use the aia_scale_orig proc
+        outputSeries = SeriesName.strip().replace(/lev1/i, 'lev1p5');
         
-        // the output series is aia.lev1p5, so let's use a filename format compatible with aia.lev1p5;
-        // actually, we could do this for all processing since the filename format must always be compatible 
-        // with the output series, not the input series
+        if (outputSeries == AIA_LEV1P5)
+        {        
+            args = 'aia_scale_orig';
         
-        // save the original in case the user un-checks aia_scale
-        $('ExportFilenameFmt').store({ 'originalFormat' : $('ExportFilenameFmt').value });
-        compatibleFormat = GetCompatibleFormat(AIA_LEV1P5, AiaLev1AttributesGlobal, AiaLev1KeywordsGlobal);
+            // the output series is aia.lev1p5, so let's use a filename format compatible with aia.lev1p5;
+            // actually, we could do this for all processing since the filename format must always be compatible 
+            // with the output series, not the input series
         
-        // now, replace aia.lev1p5 with the original series name, and remove the RequestID specification (output series
-        // have this extra prime-key keyword)
-        $("ExportFilenameFmt").value = compatibleFormat.replace(AIA_LEV1P5, SeriesName.strip()).replace(/[.]{requestid}/i, '');
+            // save the original in case the user un-checks aia_scale
+            $('ExportFilenameFmt').store({ 'originalFormat' : $('ExportFilenameFmt').value });
+            compatibleFormat = GetCompatibleFormat(AIA_LEV1P5, AiaLev1AttributesGlobal, AiaLev1KeywordsGlobal);
+        
+            // now, replace aia.lev1p5 with the original series name, and remove the RequestID specification (output series
+            // have this extra prime-key keyword)
+            $("ExportFilenameFmt").value = compatibleFormat.replace(AIA_LEV1P5, SeriesName.strip()).replace(/[.]{requestid}/i, '');
+        }
+        else
+        {
+            args = 'aia_scale_aialev1';
+        }
     }
     else
     {
