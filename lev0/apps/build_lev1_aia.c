@@ -74,6 +74,8 @@ ModuleArgs_t module_args[] = {
   {ARG_STRING, "dsaiabad", NOTSPECIFIED, "dataset of AIA bad pixels"},
   {ARG_STRING, "mpt", "sdo.master_pointing", "Master Pointing Table series"},
   {ARG_STRING, "logfile", NOTSPECIFIED, "optional log file name. Will create one if not given"},
+  {ARG_STRING, "bscale", "1.0", "output segment BSCALE"},
+  {ARG_STRING, "bzero", "0.0", "output segment BZERO"},
   {ARG_INTS, "brec", "0", "first lev0 rec# to process. 0=error must be given by build_lev1_mgr"},
   {ARG_INTS, "erec", "0", "last lev0 rec# to process. 0=error must be given by build_lev1_mgr"},
   {ARG_INTS, "bfsn", "0", "first lev0 fsn# to process. 0=error must be given by build_lev1_mgr"},
@@ -130,7 +132,8 @@ static struct timeval first[NUMTIMERS], second[NUMTIMERS];
 static char *orbseries = "sdo.fds_orbit_vectors";
 //static char *orbseries = "sdo_ground.fds_orbit_vectors";
 
-static int nspikes, respike, fid, aiftsid, *oldvalues, *spikelocs, *newvalues;
+static int nspikes, respike, fid, aiftsid;
+static float *oldvalues, *spikelocs, *newvalues, seg_bscale, seg_bzero;
 static int hcftid, aiagp6;
 static short aifcps;
 double aiascale = 1.0;
@@ -194,13 +197,13 @@ typedef struct {
 
 int get_nspikes() { return nspikes; }
 int get_respike(void) { return respike; }
-int *get_spikelocs() { return spikelocs; }
-int *get_oldvalues() { return oldvalues; }
-int *get_newvalues() { return newvalues; }
+float *get_spikelocs() { return spikelocs; }
+float *get_oldvalues() { return oldvalues; }
+float *get_newvalues() { return newvalues; }
 void set_nspikes(int new_nspikes) { nspikes = new_nspikes; }
-void set_spikelocs(int *new_spikelocs) { spikelocs = new_spikelocs; }
-void set_oldvalues(int *new_oldvalues) { oldvalues = new_oldvalues; }
-void set_newvalues(int *new_newvalues) { newvalues = new_newvalues; }
+void set_spikelocs(float *new_spikelocs) { spikelocs = new_spikelocs; }
+void set_oldvalues(float *new_oldvalues) { oldvalues = new_oldvalues; }
+void set_newvalues(float *new_newvalues) { newvalues = new_newvalues; }
 
 //Set the QUALITY keyword for lev1
 void do_quallev1(DRMS_Record_t *rs0, DRMS_Record_t *rs1, int inx, unsigned int fsn)
@@ -308,6 +311,8 @@ int nice_intro ()
 	"erec= last lev0 rec# to process. 0=error must be given by build_lev1_mgr\n"
 	"bfsn= first fsn# to process. 0=error must be given by build_lev1_mgr\n"
 	"efsn= last fsn# to process. 0=error must be given by build_lev1_mgr\n"
+        "bscale= output segment bscale, 1.0 by  default\n"
+        "bzero= output segment bzero, 0.0 by  default\n"
 	"quicklook= 1 = quicklook mode, 0 = definitive mode\n"
 	"logfile= optional log file name. If not given uses:\n"
         "         /usr/local/logs/lev1/build_lev1_aia.<time_stamp>.log\n");
@@ -446,7 +451,8 @@ int do_ingest(long long bbrec, long long eerec, const char *dpath)
   double rsun_lf, x0_lf, y0_lf;
   int rstatus, dstatus, lstatus, ncnt, fcnt, i, j, k, qualint, nobs;
   int hshiexp, hcamid, nbad, n_cosmic;
-  int *spikedata, status, axes[2], nbytes;
+  float *spikedata;
+  int  status, axes[2], nbytes;
   uint32_t missvals, totvals;
   long long recnum0, recnum1, recnumff;
   char recrange[128], lev0name[128], flatrec[128];
@@ -607,7 +613,7 @@ int do_ingest(long long bbrec, long long eerec, const char *dpath)
 		if (l0l1->adata0[i] == 16329) l0l1->adata0[i] = 714;
 	}
 
-        l0l1->dat1.adata1A = &data1A[0];
+        l0l1->dat1.adata1 = &data1[0];
         //l0l1->himgcfid = drms_getkey_int(rs0, "AIFDBID", &rstatus);
 	l0l1->himgcfid = 90;	//!!TEMP force uncropped, no overscan
         aiftsid = drms_getkey_int(rs0, "AIFTSID", &rstatus);
@@ -643,10 +649,10 @@ int do_ingest(long long bbrec, long long eerec, const char *dpath)
         continue;
       }
       if(hmiaiaflg) {
-        segArray = drms_array_create(DRMS_TYPE_INT,
+        segArray = drms_array_create(DRMS_TYPE_FLOAT,
                                        segment->info->naxis,
                                        segment->axis,
-                                       &data1A,
+                                       &data1,
                                        &dstatus);
       }
       else {
@@ -986,12 +992,12 @@ int do_ingest(long long bbrec, long long eerec, const char *dpath)
           goto FLATERR;
         }
         for (idc=2047; idc<4096*4096; idc+=4096) {
-          if (data1A[idc] != DRMS_MISSING_INT) {
-            sumdc = sumdc + data1A[idc];
+          if (data1[idc] != DRMS_MISSING_FLOAT) {
+            sumdc = sumdc + data1[idc];
             numdc++;
           }
-          if (data1A[idc+1] != DRMS_MISSING_INT) {
-            sumdc = sumdc + data1A[idc+1];
+          if (data1[idc+1] != DRMS_MISSING_FLOAT) {
+            sumdc = sumdc + data1[idc+1];
             numdc++;
           }
         }
@@ -1045,8 +1051,8 @@ int do_ingest(long long bbrec, long long eerec, const char *dpath)
             nbytes = nspikes*sizeof(int);
             axes[0] = nspikes;
             axes[1] = 3;
-            spikedata = (int *) malloc (3*nspikes*sizeof(int));
-            ArraySpike = drms_array_create(DRMS_TYPE_INT, 2, axes,
+            spikedata = (float *) malloc (3*nspikes*sizeof(float));
+            ArraySpike = drms_array_create(DRMS_TYPE_FLOAT, 2, axes,
                        (void *) spikedata, &status);
             memcpy((void *)spikedata, (void *)spikelocs, nbytes);
             memcpy((void *)(spikedata+nspikes), (void *)oldvalues, nbytes);
@@ -1072,7 +1078,7 @@ int do_ingest(long long bbrec, long long eerec, const char *dpath)
         if(nbad != n_cosmic) {	//pretend the bad pix list is like spike
           nbytes = n_cosmic*sizeof(int);
           axes[0] = n_cosmic;
-          spikedata = (int *)malloc(nbytes);
+          spikedata = (float *)malloc(nbytes);
           ArraySpike = drms_array_create(DRMS_TYPE_INT, 1, axes,
                        (void *)spikedata, &status);
           memcpy((void *)spikedata, (void *)array_cosmic, nbytes);
@@ -1331,6 +1337,8 @@ WCSEND:
   //ftmp = StopTimer(2); //!!!TEMP
   //printf( "\nTime sec in inside loop for fsn=%u : %f\n\n", fsnx, ftmp );
     if(hmiaiaflg) {
+      segArray->bzero = seg_bzero;
+      segArray->bscale = seg_bscale;
       dstatus = drms_segment_writewithkeys(segment, segArray, 0);
       if (dstatus) {
         printk("ERROR: drms_segment_write error=%d for fsn=%u\n", dstatus,fsnx);
@@ -1464,6 +1472,8 @@ int DoIt(void)
   erec = cmdparams_get_int(&cmdparams, "erec", NULL);
   bfsn = cmdparams_get_int(&cmdparams, "bfsn", NULL);
   efsn = cmdparams_get_int(&cmdparams, "efsn", NULL);
+  seg_bscale = cmdparams_get_float(&cmdparams, "bscale", NULL);
+  seg_bzero = cmdparams_get_float(&cmdparams, "bzero", NULL);
   quicklook = cmdparams_get_int(&cmdparams, "quicklook", NULL);
 
   dpath = cmdparams_get_str(&cmdparams, kDpath, NULL);

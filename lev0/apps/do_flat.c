@@ -367,8 +367,9 @@ int do_flat_aia(LEV0LEV1 *info)
     float *flat = info->adataff;
     float *dark = info->adatadark;
     short *in = info->adata0;
-    int *out = info->dat1.adata1A;
+    float *out = info->dat1.adata1;
     short tmp;
+    int   itmp;
     float ftmp;
     double dtmp;
     double s=0.0, s2=0.0, s3=0.0, s4=0.0, ss;
@@ -412,15 +413,16 @@ int do_flat_aia(LEV0LEV1 *info)
 	for (j=0; j<c1; ++j) {
 	    tmp = in[idx++];
 	    if (DRMS_MISSING_SHORT == tmp)
-		out[IDX++] = DRMS_MISSING_INT;
+		out[IDX++] = DRMS_MISSING_FLOAT;
 	    else {
-		ftmp = roundf((tmp - dark[IDX]) / flat[IDX]);
+		ftmp = (tmp - dark[IDX]) / flat[IDX];
+                itmp = roundf(ftmp);
 		if (ftmp >= MINOUT && ftmp < MAXOUT) {
 		    out[IDX] = ftmp;
-		    ++hist[out[IDX]-MINOUT];
+		    ++hist[itmp-MINOUT];
 		    ++npix;
 		} else
-		    out[IDX] = DRMS_MISSING_INT;
+		    out[IDX] = DRMS_MISSING_FLOAT;
 		++IDX;
 	    }
 	}
@@ -431,15 +433,16 @@ int do_flat_aia(LEV0LEV1 *info)
 	for (j=c2; j<4096; ++j) {
 	    tmp = in[idx++];
 	    if (DRMS_MISSING_SHORT == tmp)
-		out[IDX++] = DRMS_MISSING_INT;
+		out[IDX++] = DRMS_MISSING_FLOAT;
 	    else {
-		ftmp = roundf((tmp - dark[IDX]) / flat[IDX]);
+		ftmp = (tmp - dark[IDX]) / flat[IDX];
+                itmp = roundf(ftmp);
 		if (ftmp >= MINOUT && ftmp < MAXOUT) {
 		    out[IDX] = ftmp;
-		    ++hist[out[IDX]-MINOUT];
+		    ++hist[itmp-MINOUT];
 		    ++npix;
 		} else
-		    out[IDX] = DRMS_MISSING_INT;
+		    out[IDX] = DRMS_MISSING_FLOAT;
 		++IDX;
 	    }
 	}
@@ -450,15 +453,16 @@ int do_flat_aia(LEV0LEV1 *info)
 	for (j=0; j<c1; ++j) {
 	    tmp = in[idx++];
 	    if (DRMS_MISSING_SHORT == tmp)
-		out[IDX++] = DRMS_MISSING_INT;
+		out[IDX++] = DRMS_MISSING_FLOAT;
 	    else {
-		ftmp = roundf((tmp - dark[IDX]) / flat[IDX]);
+		ftmp = (tmp - dark[IDX]) / flat[IDX];
+                itmp = roundf(ftmp);
 		if (ftmp >= MINOUT && ftmp < MAXOUT) {
 		    out[IDX] = ftmp;
-		    ++hist[out[IDX]-MINOUT];
+		    ++hist[itmp-MINOUT];
 		    ++npix;
 		} else
-		    out[IDX] = DRMS_MISSING_INT;
+		    out[IDX] = DRMS_MISSING_FLOAT;
 		++IDX;
 	    }
 	}
@@ -469,15 +473,16 @@ int do_flat_aia(LEV0LEV1 *info)
 	for (j=c2; j<4096; ++j) {
 	    tmp = in[idx++];
 	    if (DRMS_MISSING_SHORT == tmp)
-		out[IDX++] = DRMS_MISSING_INT;
+		out[IDX++] = DRMS_MISSING_FLOAT;
 	    else {
-		ftmp = roundf((tmp - dark[IDX]) / flat[IDX]);
+		ftmp = (tmp - dark[IDX]) / flat[IDX];
+                itmp = roundf(ftmp);
 		if (ftmp >= MINOUT && ftmp < MAXOUT) {
 		    out[IDX] = ftmp;
-		    ++hist[out[IDX]-MINOUT];
+		    ++hist[itmp-MINOUT];
 		    ++npix;
 		} else
-		    out[IDX] = DRMS_MISSING_INT;
+		    out[IDX] = DRMS_MISSING_FLOAT;
 		++IDX;
 	    }
 	}
@@ -490,20 +495,21 @@ int do_flat_aia(LEV0LEV1 *info)
     // fill in blanks around the borders
     //
     if (nr) {
-	for (i=0; i<4096*nr; ++i) out[i] = DRMS_MISSING_INT;
-	for (i=4096*(4096-nr); i<MAXPIXELS; ++i) out[i] = DRMS_MISSING_INT;
+	for (i=0; i<4096*nr; ++i) out[i] = DRMS_MISSING_FLOAT;
+	for (i=4096*(4096-nr); i<MAXPIXELS; ++i) out[i] = DRMS_MISSING_FLOAT;
     }
     if (nc) {
 	for (i=0; i<4096; ++i) {
 	    for (j=0; j<nc; ++j)
-		out[i*4096+j] = DRMS_MISSING_INT;
+		out[i*4096+j] = DRMS_MISSING_FLOAT;
 	    for (j=4096-nc; j<4096; ++j)
-		out[i*4096+j] = DRMS_MISSING_INT;
+		out[i*4096+j] = DRMS_MISSING_FLOAT;
 	}
     }
 
   {
-    int *oldvalues, *spikelocs, *newvalues;
+    float *spikelocs;
+    float *oldvalues, *newvalues;
     int aia_status, i, level = 7, niter = 3, nbads, nspikes=0, respike, rstatus;
     float frac = 0.8;
     int wl = drms_getkey_int(rs, "WAVELNTH", &rstatus);
@@ -524,7 +530,7 @@ int do_flat_aia(LEV0LEV1 *info)
     }
     if (respike) niter = 0; else niter = 3;
     nbads = ArrayBad->axis[0];
-    aia_status = aia_despike(info->dat1.adata1A, NULL, 4096, 4096, frac, level,
+    aia_status = aia_despike(info->dat1.adata1, NULL, 4096, 4096, frac, level,
                  niter, info->adatabad, nbads, &nspikes, &oldvalues,
                  &spikelocs, &newvalues);
     set_nspikes(nspikes);
@@ -547,10 +553,12 @@ int do_flat_aia(LEV0LEV1 *info)
     //
     npix = 0; memset(hist, 0, 4*NBINS);
     for (i=0; i<4096*4096; i++) {
-      if(out[i] != DRMS_MISSING_INT) { 
+      int itemp;
+      if(out[i] != DRMS_MISSING_FLOAT) { 
         if (out[i] < MINOUT) out[i] = MINOUT;
         if (out[i] > 16383) out[i] = 16383;
-        ++hist[out[i]-MINOUT]; 
+        itemp = out[i];
+        ++hist[itemp-MINOUT]; 
         ++npix; 
       }
     }

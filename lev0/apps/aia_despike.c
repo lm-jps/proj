@@ -18,15 +18,15 @@
     already had a test to avoid despiking neg pixels from 9/29/2010 mods */
  /*---------------------------------------------------------------------------*/
 int aia_despike(
-     int *array, unsigned char *mask, int nx, int ny, float frac, int level, int niter, /* void **outarray, */
+     float *array, unsigned char *mask, int nx, int ny, float frac, int level, int niter, /* void **outarray, */
      int *badblobs, int sizeofbads,
-     int *nspikes, int **oldvalues, int **spikelocs, int **newvalues);
+     int *nspikes, float **oldvalues, float **spikelocs, float **newvalues);
 int mask_erode(unsigned char *pbase, unsigned char *qbase, int n, int m);   /* erosion function */
  /*------------------------------------------------------------------------- */
 int aia_despike(            /* despike function, modified heavily for AIA */
-     int *array, unsigned char *mask, int nx, int ny, float frac, int level, int niter, /* void **outarray, */
+     float *array, unsigned char *mask, int nx, int ny, float frac, int level, int niter, /* void **outarray, */
      int *badblobs, int sizeofbads,
-     int *nspikes, int **oldvalues, int **spikelocs, int **newvalues)
+     int *nspikes, float **oldvalues, float **spikelocs, float **newvalues)
  /* the call is
   int *ptr, *oldvalues, *newvalues;
   int nx, ny, level=7, niter=3, *spikelocs;
@@ -59,14 +59,15 @@ int aia_despike(            /* despike function, modified heavily for AIA */
  int	iq, result_sym, n, m, sum, nc;
  int	lognb2, jj, jc;
  float	absmin = 4.0;
- int	nxc, nyc, offset, *lastiterendaddr;
+ int	nxc, nyc, offset;
  int	save_niter, ntotal, npix, nslocal, ndups, itercount;
- float	fsum, cfrac, tq, fdif;
- int	*p, *ptr, *p1, *p2, *p3, *spikeold, *oldptr;
+ float	fsum, cfrac, tq, fdif, *lastiterendaddr;
+ float  *p, *p1, *p2, *p3, *ptr, *base, *pps, arr[16], *ss;
+ float	*spikeold, *oldptr;
  unsigned char	*mptr, *mp, mskv, *mskbase, *eroded, *eroded2;
- int	*spikebufadd, *sptradd;
- int	*spikenew, *newptr, *base;
- int	arr[16], *pps, *ss, *spikestarts[20], *spikeends[20];
+ float	*spikebufadd, *sptradd;
+ float	*spikenew, *newptr;
+ float	*spikestarts[20], *spikeends[20];
  //double	t1, t2, t3, t4;
  //t1 = systime();
  lognb2 = (log((double) 16)*ALN2I+TINY);  /* needed for median sort */
@@ -102,10 +103,11 @@ int aia_despike(            /* despike function, modified heavily for AIA */
 
  /* flip image */
  {
-    int i, *toprow, *botrow, *tmprow;
+    int i;
+    float *toprow, *botrow, *tmprow;
     botrow = array;
     toprow = botrow + 4095*4096;
-    tmprow = (int *) malloc(sizeof(int)*4096);
+    tmprow = (float *) malloc(sizeof(int)*4096);
     for (i = 0; i < 2048; i++) {
       memcpy(tmprow, toprow, 16384);
       memcpy(toprow, botrow, 16384);
@@ -130,7 +132,7 @@ int aia_despike(            /* despike function, modified heavily for AIA */
      /* 9/29/2010 - change here to remove negative values (convert to 0) */
      /* 11/20/10 - try leaving the negative values in */
      //if (*p == 0x80000000) { *mp++ = 0; } else  { *mp++ = 1;  if (*p < 0) *p = 0; }
-     if (*p == 0x80000000) { *mp++ = 0; } else  { *mp++ = 1; }
+     if (isnan(*p)) { *mp++ = 0; } else  { *mp++ = 1; }
      p++;
    }
    /* mask gets set to "eroded" further down */
@@ -142,7 +144,7 @@ int aia_despike(            /* despike function, modified heavily for AIA */
      /* 9/29/2010 - change here to remove negative values (convert to 0) */
      /* 11/20/10 - try leaving the negative values in */
      //if (*p == 0x80000000) { *mp++ = 0; } else  { if (*p < 0) *p = 0; }
-     if (*p == 0x80000000) { *mp++ = 0; }
+     if (isnan(*p)) { *mp++ = 0; }
      p++;
    }
    eroded2 = malloc(nx*ny*sizeof(unsigned char));
@@ -165,9 +167,9 @@ int aia_despike(            /* despike function, modified heavily for AIA */
 
  /* add internal iteration 10/8/98 */
  save_niter = niter;
- spikeold = oldptr = malloc(nx*ny*sizeof(int));  /* that allows every pixel */
- spikenew = newptr = malloc(nx*ny*sizeof(int));  /* that allows every pixel */
- spikebufadd = sptradd = malloc(nx*ny*sizeof(int));  /* that allows every pixel */
+ spikeold = oldptr = malloc(nx*ny*sizeof(float));  /* that allows every pixel */
+ spikenew = newptr = malloc(nx*ny*sizeof(float));  /* that allows every pixel */
+ spikebufadd = sptradd = malloc(nx*ny*sizeof(float));  /* that allows every pixel */
  lastiterendaddr = spikebufadd;
  ndups = 0;
  //t2 = systime();
@@ -262,13 +264,13 @@ int aia_despike(            /* despike function, modified heavily for AIA */
    ntotal += nc;  nc = 0;
    npix = 0;
    if (niter < (save_niter - 1)) {
-     int	*ip, *jp, *iplast = spikebufadd;
+     float	*ip, *jp, *iplast = spikebufadd;
      int	ioff, joff,  delta1, delta2, previter;
      /* check the range spikebufadd to lastiterendaddr against lastiterendaddr+1 to sptradd-1,
      the idea here is to check if any of our new spikes have the same location from a previous
      iteration, this isn't a n*m operation because each set is monotonic, note however that
      we have to scan each iteration set separately (which is annoying) */
-     int *jprevstart[20];
+     float *jprevstart[20];
      spikestarts[itercount] = spikeends[itercount-1] + 1;
      for (previter=0; previter<itercount; previter++) { jprevstart[previter] = spikestarts[previter]; }
      for (ip=spikestarts[itercount]; ip<sptradd; ip++) {
@@ -306,7 +308,8 @@ int aia_despike(            /* despike function, modified heavily for AIA */
 //    	spikeends[itercount]);
    /* and we now set the new values from this iteration in the input array */
    {
-     int *ip, ioff, *snew, nq;
+     int ioff, nq;
+     float *snew, *ip;;
      ip=spikestarts[itercount];
      snew = spikenew + (ip - spikebufadd);
      while ( ip<sptradd ) {
@@ -325,7 +328,7 @@ int aia_despike(            /* despike function, modified heavily for AIA */
  /* the duplicates are tagged, copy only the unique ones for export */
  if (n > 0) {
    int	i;
-   int	*p1, *p2, *p3, *q1, *q2, *q3;
+   float	*p1, *p2, *p3, *q1, *q2, *q3;
    *oldvalues = p1 = malloc(n);
    q1 = spikeold;
    *newvalues = p2 = malloc(n);
