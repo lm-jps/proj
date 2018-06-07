@@ -76,6 +76,9 @@ ModuleArgs_t module_args[] = {
   {ARG_STRING, "logfile", NOTSPECIFIED, "optional log file name. Will create one if not given"},
   {ARG_STRING, "bscale", "1.0", "output segment BSCALE"},
   {ARG_STRING, "bzero", "0.0", "output segment BZERO"},
+  {ARG_INTS, "fp94", "1", "use custom BSCALE, BZERO for 94A images"},
+  {ARG_STRING, "bs94", "0.25", "94A output segment BSCALE"},
+  {ARG_STRING, "bz94", "8183.75", "94A output segment BZERO"},
   {ARG_INTS, "brec", "0", "first lev0 rec# to process. 0=error must be given by build_lev1_mgr"},
   {ARG_INTS, "erec", "0", "last lev0 rec# to process. 0=error must be given by build_lev1_mgr"},
   {ARG_INTS, "bfsn", "0", "first lev0 fsn# to process. 0=error must be given by build_lev1_mgr"},
@@ -133,7 +136,8 @@ static char *orbseries = "sdo.fds_orbit_vectors";
 //static char *orbseries = "sdo_ground.fds_orbit_vectors";
 
 static int nspikes, respike, fid, aiftsid;
-static float *oldvalues, *spikelocs, *newvalues, seg_bscale, seg_bzero;
+static float *oldvalues, *spikelocs, *newvalues;
+static float seg_bscale, seg_bzero, bs94, bz94;
 static int hcftid, aiagp6;
 static short aifcps;
 double aiascale = 1.0;
@@ -161,6 +165,7 @@ int restartflg = 0;		// set when build_lev1 is called for a restart
 int abortflg = 0;
 int sigalrmflg = 0;             // set on signal so prog will know 
 int ignoresigalrmflg = 0;       // set after a close_image()
+int fp94 = 1;                   // use special BSCALE and BZERO for 94A images.
 int quicklook;
 //global quality flags
 int flatmiss[NUMRECLEV1];
@@ -313,6 +318,9 @@ int nice_intro ()
 	"efsn= last fsn# to process. 0=error must be given by build_lev1_mgr\n"
         "bscale= output segment bscale, 1.0 by  default\n"
         "bzero= output segment bzero, 0.0 by  default\n"
+        "fp94= use custom BSCALE, BZERO for 94A images, 1 by  default\n"
+        "bs94= 94A output segment bscale, 0.25 by  default\n"
+        "bz94= 94A output segment bzero, 8183.75 by  default\n"
 	"quicklook= 1 = quicklook mode, 0 = definitive mode\n"
 	"logfile= optional log file name. If not given uses:\n"
         "         /usr/local/logs/lev1/build_lev1_aia.<time_stamp>.log\n");
@@ -1337,8 +1345,13 @@ WCSEND:
   //ftmp = StopTimer(2); //!!!TEMP
   //printf( "\nTime sec in inside loop for fsn=%u : %f\n\n", fsnx, ftmp );
     if(hmiaiaflg) {
-      segArray->bzero = seg_bzero;
-      segArray->bscale = seg_bscale;
+      if (fp94 && (94 == imageloc[i].wavelength)) {
+        segArray->bzero = bz94;
+        segArray->bscale = bs94;
+      } else {
+        segArray->bzero = seg_bzero;
+        segArray->bscale = seg_bscale;
+      }
       dstatus = drms_segment_writewithkeys(segment, segArray, 0);
       if (dstatus) {
         printk("ERROR: drms_segment_write error=%d for fsn=%u\n", dstatus,fsnx);
@@ -1474,6 +1487,9 @@ int DoIt(void)
   efsn = cmdparams_get_int(&cmdparams, "efsn", NULL);
   seg_bscale = cmdparams_get_float(&cmdparams, "bscale", NULL);
   seg_bzero = cmdparams_get_float(&cmdparams, "bzero", NULL);
+  fp94 = cmdparams_get_int(&cmdparams, "fp94" , NULL);
+  bs94 = cmdparams_get_float(&cmdparams, "bs94", NULL);
+  bz94 = cmdparams_get_float(&cmdparams, "bz94", NULL);
   quicklook = cmdparams_get_int(&cmdparams, "quicklook", NULL);
 
   dpath = cmdparams_get_str(&cmdparams, kDpath, NULL);
