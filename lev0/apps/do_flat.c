@@ -18,6 +18,8 @@ static int dvals[MAXHIMGCFGS];
 #define NBINS 1048576
 #define MINOUT -256
 #define MAXOUT 1048320
+#define MINOUT_AIA -8
+#define MAXOUT_AIA 16375
 static int hist[NBINS];
 
 #include "aia_despike.c"
@@ -417,12 +419,13 @@ int do_flat_aia(LEV0LEV1 *info)
 	    else {
 		ftmp = (tmp - dark[IDX]) / flat[IDX];
                 itmp = roundf(ftmp);
-		if (ftmp >= MINOUT && ftmp < MAXOUT) {
+		if (ftmp < MINOUT_AIA) out[IDX] = MINOUT_AIA;
+		else if (ftmp >= MAXOUT_AIA) out[IDX] = MAXOUT_AIA;
+		else {
 		    out[IDX] = ftmp;
-		    ++hist[itmp-MINOUT];
+		    ++hist[itmp-MINOUT_AIA];
 		    ++npix;
-		} else
-		    out[IDX] = DRMS_MISSING_FLOAT;
+                }
 		++IDX;
 	    }
 	}
@@ -437,12 +440,13 @@ int do_flat_aia(LEV0LEV1 *info)
 	    else {
 		ftmp = (tmp - dark[IDX]) / flat[IDX];
                 itmp = roundf(ftmp);
-		if (ftmp >= MINOUT && ftmp < MAXOUT) {
+		if (ftmp < MINOUT_AIA) out[IDX] = MINOUT_AIA;
+		else if (ftmp >= MAXOUT_AIA) out[IDX] = MAXOUT_AIA;
+		else {
 		    out[IDX] = ftmp;
-		    ++hist[itmp-MINOUT];
+		    ++hist[itmp-MINOUT_AIA];
 		    ++npix;
-		} else
-		    out[IDX] = DRMS_MISSING_FLOAT;
+                }
 		++IDX;
 	    }
 	}
@@ -457,12 +461,13 @@ int do_flat_aia(LEV0LEV1 *info)
 	    else {
 		ftmp = (tmp - dark[IDX]) / flat[IDX];
                 itmp = roundf(ftmp);
-		if (ftmp >= MINOUT && ftmp < MAXOUT) {
+		if (ftmp < MINOUT_AIA) out[IDX] = MINOUT_AIA;
+		else if (ftmp >= MAXOUT_AIA) out[IDX] = MAXOUT_AIA;
+		else {
 		    out[IDX] = ftmp;
-		    ++hist[itmp-MINOUT];
+		    ++hist[itmp-MINOUT_AIA];
 		    ++npix;
-		} else
-		    out[IDX] = DRMS_MISSING_FLOAT;
+                }
 		++IDX;
 	    }
 	}
@@ -477,12 +482,13 @@ int do_flat_aia(LEV0LEV1 *info)
 	    else {
 		ftmp = (tmp - dark[IDX]) / flat[IDX];
                 itmp = roundf(ftmp);
-		if (ftmp >= MINOUT && ftmp < MAXOUT) {
+		if (ftmp < MINOUT_AIA) out[IDX] = MINOUT_AIA;
+		else if (ftmp >= MAXOUT_AIA) out[IDX] = MAXOUT_AIA;
+		else {
 		    out[IDX] = ftmp;
-		    ++hist[itmp-MINOUT];
+		    ++hist[itmp-MINOUT_AIA];
 		    ++npix;
-		} else
-		    out[IDX] = DRMS_MISSING_FLOAT;
+                }
 		++IDX;
 	    }
 	}
@@ -495,15 +501,15 @@ int do_flat_aia(LEV0LEV1 *info)
     // fill in blanks around the borders
     //
     if (nr) {
-	for (i=0; i<4096*nr; ++i) out[i] = DRMS_MISSING_FLOAT;
-	for (i=4096*(4096-nr); i<MAXPIXELS; ++i) out[i] = DRMS_MISSING_FLOAT;
+	for (i=0; i<4096*nr; ++i) out[i] = 0.0; //DRMS_MISSING_FLOAT;
+	for (i=4096*(4096-nr); i<MAXPIXELS; ++i) out[i] = 0.0;
     }
     if (nc) {
 	for (i=0; i<4096; ++i) {
 	    for (j=0; j<nc; ++j)
-		out[i*4096+j] = DRMS_MISSING_FLOAT;
+		out[i*4096+j] = 0.0; /* instead of DRMS_MISSING_FLOAT; */
 	    for (j=4096-nc; j<4096; ++j)
-		out[i*4096+j] = DRMS_MISSING_FLOAT;
+		out[i*4096+j] = 0.0; /* instead of DRMS_MISSING_FLOAT; */
 	}
     }
 
@@ -525,8 +531,8 @@ int do_flat_aia(LEV0LEV1 *info)
        break;
     }
     for (i=0; i<4096*4096; i++) {
-//    if (out[i] < MINOUT && out[i] != DRMS_MISSING_INT) out[i] = MINOUT;
-      if (out[i] > 32767) out[i] = 32767;
+//  if (out[i] < MINOUT_AIA && out[i] != DRMS_MISSING_INT) out[i] = MINOUT_AIA;
+      if (out[i] > MAXOUT_AIA) out[i] = MAXOUT_AIA;
     }
     if (respike) niter = 0; else niter = 3;
     nbads = ArrayBad->axis[0];
@@ -545,7 +551,7 @@ int do_flat_aia(LEV0LEV1 *info)
     npix = 0; memset(hist, 0, 4*NBINS);
     /*******Original Code
     for (i=0; i<4096*4096; i++) {
-      if(out[i] != DRMS_MISSING_INT) { ++hist[out[i]-MINOUT]; ++npix; }
+      if(out[i] != DRMS_MISSING_INT) { ++hist[out[i]-MINOUT_AIA]; ++npix; }
     }
     *******************/
     //
@@ -554,11 +560,11 @@ int do_flat_aia(LEV0LEV1 *info)
     npix = 0; memset(hist, 0, 4*NBINS);
     for (i=0; i<4096*4096; i++) {
       int itemp;
-      if(out[i] != DRMS_MISSING_FLOAT) { 
-        if (out[i] < MINOUT) out[i] = MINOUT;
-        if (out[i] > 16383) out[i] = 16383;
+      if(isfinite(out[i])) { 
+        if (out[i] < MINOUT_AIA) out[i] = MINOUT_AIA;
+        if (out[i] > MAXOUT_AIA) out[i] = MAXOUT_AIA;
         itemp = out[i];
-        ++hist[itemp-MINOUT]; 
+        ++hist[itemp-MINOUT_AIA]; 
         ++npix; 
       }
     }
@@ -575,20 +581,20 @@ int do_flat_aia(LEV0LEV1 *info)
     if (npix) {
 	while (hist[min] == 0)
 	    ++min;
-	info->datamin = min + MINOUT;
+	info->datamin = min + MINOUT_AIA;
 
 	while (hist[max] == 0)
 	    --max;
-	info->datamax = max + MINOUT;
+	info->datamax = max + MINOUT_AIA;
 
 	medn = min;
 	i = hist[medn];
 	while (2*i < npix)
 	    i += hist[++medn];
-	info->datamedn = medn + MINOUT;
+	info->datamedn = medn + MINOUT_AIA;
 
 	for (i=min; i<=max; ++i) {
-	    double ii = i + MINOUT;
+	    double ii = i + MINOUT_AIA;
 	    s += (dtmp = ii*hist[i]);
 	    s2 += (dtmp *= ii);
 	    s3 += (dtmp *= ii);
@@ -619,33 +625,33 @@ int do_flat_aia(LEV0LEV1 *info)
                 sum += hist[i];
                 if (sum > dp[n]*npix/100) switch (n) {
                     case 0:
-                        drms_setkey_float(rs, "DATAP01", 1.0 + i + MINOUT);
+                        drms_setkey_float(rs, "DATAP01", 1.0 + i + MINOUT_AIA);
                         if (sum > dp[n+1]*npix/100) n++;
                     case 1:
-                        drms_setkey_float(rs, "DATAP10", 1.0 + i + MINOUT);
+                        drms_setkey_float(rs, "DATAP10", 1.0 + i + MINOUT_AIA);
                         if (sum > dp[n+1]*npix/100) n++;
                     case 2:
-                        drms_setkey_float(rs, "DATAP25", 1.0 + i + MINOUT);
+                        drms_setkey_float(rs, "DATAP25", 1.0 + i + MINOUT_AIA);
                         if (sum > dp[n+1]*npix/100) n++;
                     case 3:
-                        drms_setkey_float(rs, "DATAP75", 1.0 + i + MINOUT);
+                        drms_setkey_float(rs, "DATAP75", 1.0 + i + MINOUT_AIA);
                         if (sum > dp[n+1]*npix/100) n++;
                     case 4:
-                        drms_setkey_float(rs, "DATAP90", 1.0 + i + MINOUT);
+                        drms_setkey_float(rs, "DATAP90", 1.0 + i + MINOUT_AIA);
                         if (sum > dp[n+1]*npix/100) n++;
                     case 5:
-                        drms_setkey_float(rs, "DATAP95", 1.0 + i + MINOUT);
+                        drms_setkey_float(rs, "DATAP95", 1.0 + i + MINOUT_AIA);
                         if (sum > dp[n+1]*npix/100) n++;
                     case 6:
-                        drms_setkey_float(rs, "DATAP98", 1.0 + i + MINOUT);
+                        drms_setkey_float(rs, "DATAP98", 1.0 + i + MINOUT_AIA);
                         if (sum > dp[n+1]*npix/100) n++;
                     case 7:
-                        drms_setkey_float(rs, "DATAP99", 1.0 + i + MINOUT);
+                        drms_setkey_float(rs, "DATAP99", 1.0 + i + MINOUT_AIA);
                         n++;
                         break;
                 }
                 if (i>max) n++;
-                if (i > (15000 - MINOUT)) nsatpix += hist[i];
+                if (i > (15000 - MINOUT_AIA)) nsatpix += hist[i];
             }
             drms_setkey_int(rs, "NSATPIX", nsatpix);
         }
