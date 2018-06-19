@@ -26,7 +26,7 @@
 #define SECINDAY		(86400.)
 #define FOURK			(4096)
 #define FOURK2          (16777216)
-#define DTTHRESH        (518400.)					// 6 day
+#define DTTHRESH        (SECINDAY*7.)					// 7 day
 #define INTERPOPT       (0)         // Interpolation
 
 #define ARRLENGTH(ARR) (sizeof(ARR) / sizeof(ARR[0]))
