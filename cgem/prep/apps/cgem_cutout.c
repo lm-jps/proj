@@ -1,22 +1,22 @@
 /*
- *  cgem_cutout.c   
+ *  cgem_cutout.c
  *
- *	This module creates cutout of b vectors and v
- *	User needs to specify the detailed geometry of the cutout
- *	including the center of the reference time in lat/lon and frame size
- *	The module takes full disk b (disambuated)
- *	and differentially track for the specified time interval
- *	Adapted from sharp.c
+ *    This module creates cutout of b vectors and v
+ *    User needs to specify the detailed geometry of the cutout
+ *    including the center of the reference time in lat/lon and frame size
+ *    The module takes full disk b (disambuated)
+ *    and differentially track for the specified time interval
+ *    Adapted from sharp.c
  *
- *	Author:
- *		Xudong Sun
+ *    Author:
+ *        Xudong Sun
  *
- *	Version:
+ *    Version:
  *              v0.0 Jan 07 2016
- *	Notes:
- *		v0.0
+ *    Notes:
+ *        v0.0
  *
- *	Example Calls:
+ *    Example Calls:
  *      > cgem_cutout "b=hmi.B_720s[2011.02.15_12:00/2h]" "dop=hmi_test.doppcal_720s[2011.02.15_12:00/2h]" "out=hmi_test.bvcutout_720s" "tref=2011.02.14_12:00:00_TAI" "cols=960" "rows=960" "lonref=5.6" "latref=-20.4" "cgemnum=11158"
  *
  */
@@ -33,16 +33,18 @@
 #include "diffrot.h"        // double diffrot[3];
 
 #define PI              (M_PI)
-#define RADSINDEG		(PI/180.)
-#define RAD2ARCSEC		(648000./M_PI)
-#define SECINDAY		(86400.)
-#define FOURK			(4096)
+#define RADSINDEG        (PI/180.)
+#define RAD2ARCSEC        (648000./M_PI)
+#define SECINDAY        (86400.)
+#define FOURK            (4096)
 #define FOURK2          (16777216)
-#define DTTHRESH        (518400.)
+#define DTTHRESH        (SECINDAY*7.)
+
+#define MAXTDIFF        (10.)       // Max allowed T_REC diff in sec
 
 #define ARRLENGTH(ARR) (sizeof(ARR) / sizeof(ARR[0]))
 
-#define DISAMB_AZI		1
+#define DISAMB_AZI        1
 #define DOPPCAL         1       // Calibrate Doppler here
 
 // Some other things
@@ -69,9 +71,9 @@
 
 // Ephemeris information
 struct ephemeris {
-	double disk_lonc, disk_latc;
-	double disk_xc, disk_yc;
-	double rSun, asd, pa;
+    double disk_lonc, disk_latc;
+    double disk_xc, disk_yc;
+    double rSun, asd, pa;
     TIME t_rec;
 };
 
@@ -91,13 +93,12 @@ char *CutBunits[] = {"cm/s", "degree", "degree", "Mx/cm^2", " ", " "};
 
 /* ========================================================================================================== */
 
-/* Get all input data series */
-int getInputRS(DRMS_RecordSet_t **bRS_ptr, DRMS_RecordSet_t **dopRS_ptr,
-			   char *bQuery, char *dopQuery, struct patchInfo *pInfo);
+// Pair records in two input series
+int pairInputs(DRMS_RecordSet_t *dopRS, DRMS_RecordSet_t *bRS, int *pairedRecNums, int *npairs);
 
 /* Create Cutout record */
 int createCutRecord(DRMS_Record_t *bRec, DRMS_Record_t *dopRec,
-					DRMS_Record_t *outRec, struct patchInfo *pInfo);
+                    DRMS_Record_t *outRec, struct patchInfo *pInfo);
 
 /* Determine location of cutout */
 int findCoord(DRMS_Record_t *inRec, struct patchInfo *pInfo, int *ll, int *ur);
@@ -122,31 +123,27 @@ char *module_name = "cgem_cutout";
 ModuleArgs_t module_args[] =
 {
     {ARG_STRING, "b", kNotSpecified, "Input B series."},
-//	{ARG_STRING, "dop", kNotSpecified, "Input Doppler series."},
-	{ARG_STRING, "dop", kNotSpecified, "Data sereis containing Doppler bias correction"},
-	{ARG_STRING, "out", kNotSpecified, "Output Sharp cutout series."},
-	{ARG_INT, "cgemnum", "-1", "CGEM dataset ID."},
-	{ARG_FLOAT, "lonref", "0", "Reference patch center Stonyhurst lon, in deg."},
-	{ARG_FLOAT, "latref", "0", "Reference patch center Stonyhurst lat, in deg."},
-	{ARG_INT, "cols", "500", "Columns of output cutout."},
-	{ARG_INT, "rows", "500", "Rows of output cutout."},
-	{ARG_STRING, "tref", kNotSpecified, "Reference time."},
-	{ARG_END}
+    {ARG_STRING, "dop", kNotSpecified, "Data sereis containing Doppler bias correction"},
+    {ARG_STRING, "out", kNotSpecified, "Output Sharp cutout series."},
+    {ARG_INT, "cgemnum", "-1", "CGEM dataset ID."},
+    {ARG_FLOAT, "lonref", "0", "Reference patch center Stonyhurst lon, in deg."},
+    {ARG_FLOAT, "latref", "0", "Reference patch center Stonyhurst lat, in deg."},
+    {ARG_INT, "cols", "500", "Columns of output cutout."},
+    {ARG_INT, "rows", "500", "Rows of output cutout."},
+    {ARG_STRING, "tref", kNotSpecified, "Reference time."},
+    {ARG_END}
 };
 
 int DoIt(void)
 {
-
+    
     int status = DRMS_SUCCESS;
     
     /* Get data series */
     
-    char *bQuery = NULL, *dopQuery = NULL;      // Input query
-    char *outQuery = NULL;                      // Output query
-    
-    bQuery = (char *) params_get_str(&cmdparams, "b");
-    dopQuery = (char *) params_get_str(&cmdparams, "dop");
-    outQuery = (char *) params_get_str(&cmdparams, "out");
+    char *bQuery = (char *) params_get_str(&cmdparams, "b");
+    char *dopQuery = (char *) params_get_str(&cmdparams, "dop");
+    char *outQuery = (char *) params_get_str(&cmdparams, "out");
     
     /* Get arguments */
     
@@ -158,47 +155,66 @@ int DoIt(void)
     pInfo.tref = params_get_time(&cmdparams, "tref");
     pInfo.cgemnum = params_get_int(&cmdparams, "cgemnum");
     
-    /* Read input data, check everything */
-
-    DRMS_RecordSet_t *bRS = NULL, *dopRS = NULL;        // Input data series
-    // tref set to the first image t_rec if greater than 6 days ahead
-    if (getInputRS(&bRS, &dopRS, bQuery, dopQuery, &pInfo))
-        DIE("Input data error.");
-    int nrecs = bRS->n;
-
+    /* Input data */
+    
+    DRMS_RecordSet_t *dopRS = drms_open_records(drms_env, dopQuery, &status);        // Input data series
+    int nrecs = dopRS->n;
+    if (status || nrecs == 0 || !dopRS) DIE("Input Doppler correction data series error");
+    
+    DRMS_RecordSet_t *bRS = drms_open_records(drms_env, bQuery, &status);       // often missing frames
+    int nrecs_b = bRS->n;
+    if (status || nrecs_b == 0 || !bRS) DIE("Input B data series error");
+    
+    /* Pair two input data series through CGEMNUM, T_REC, and array sizes */
+    
+    int npairs = 0;      // Final pairs of records
+    int *pairedRecNums = (int *) (malloc(nrecs * sizeof(int))); // paired record number in bRS
+    if (pairInputs(dopRS, bRS, pairedRecNums, &npairs)) {
+        free(pairedRecNums);
+        DIE("Pairing two input data series error or no pairs exists.");
+    }
+    printf("Found %d pairs for %d frames of prep data.\n", npairs, nrecs); fflush(stdout);
+    
     /* Start */
     
-    printf("==============\nStart. %d image(s) in total.\n", nrecs);
-    
+    int ipair = 0;
     for (int irec = 0; irec < nrecs; irec++) {
-
+        
+        status = 0;     // reset
+        if (pairedRecNums[irec] >= nrecs_b) continue;     // no pairing, skip frame
+        
+        ipair++;
+        printf("==============\nProcessing rec pairs #%d of %d, ", ipair, npairs); fflush(stdout);
+        
         /* Records at work */
         
-        DRMS_Record_t *bRec = NULL, *dopRec = NULL;
-        
-        bRec = bRS->records[irec];
-		dopRec = dopRS->records[irec];         // already checked in getInputRS
+        DRMS_Record_t *dopRec = dopRS->records[irec];
+        DRMS_Record_t *bRec = bRS->records[pairedRecNums[irec]];        // already checked in getInputRS
         
         TIME trec = drms_getkey_time(bRec, "T_REC", &status);
+        if (fabs(pInfo.tref - trec) > DTTHRESH) {
+            printf("Time too far from reference, image pair #%d skipped.\n", ipair);
+            continue;
+        }
         
         /*
-        char tstr[100], queryStr[100];
-        sprint_time(tstr, trec, "TAI", 0);
-        snprintf(queryStr, 100, "%d%s[%s]\n", irec, bRec->seriesinfo->seriesname, tstr);
-        SHOW(queryStr);
+         char tstr[100], queryStr[100];
+         sprint_time(tstr, trec, "TAI", 0);
+         snprintf(queryStr, 100, "%d%s[%s]\n", irec, bRec->seriesinfo->seriesname, tstr);
+         SHOW(queryStr);
          */
         
         /* Create Cutout record */
         
         DRMS_Record_t *outRec = NULL;
         outRec = drms_create_record(drms_env, outQuery, DRMS_PERMANENT, &status);
-        if (status) {		// if failed
-            printf("Creating cutout failed, image #%d skipped.\n", irec);
+        if (status) {        // if failed
+            printf("Creating cutout failed, image pair #%d skipped.\n", ipair);
             continue;
         }
         
-        if (createCutRecord(bRec, dopRec, outRec, &pInfo)) {		// do the work
-            printf("Creating cutout failed, image #%d skipped.\n", irec);
+        if (createCutRecord(bRec, dopRec, outRec, &pInfo)) {        // do the work
+            printf("Creating cutout failed, image pair #%d skipped.\n", ipair);
             drms_close_record(outRec, DRMS_FREE_RECORD);
             continue;
         }
@@ -207,18 +223,19 @@ int DoIt(void)
         
         drms_close_record(outRec, DRMS_INSERT_RECORD);
         
-        printf("Image #%d done.\n", irec);
+        printf("Image pair #%d done.\n", ipair);
         
     }
     
     /* Clean up */
     
+    free(pairedRecNums);
     drms_close_records(bRS, DRMS_FREE_RECORD);
-//    drms_close_records(dopRS, DRMS_FREE_RECORD);
+    drms_close_records(dopRS, DRMS_FREE_RECORD);
     
-	return 0;
-	
-}	// DoIt
+    return 0;
+    
+}    // DoIt
 
 
 // ===================================================================
@@ -227,49 +244,57 @@ int DoIt(void)
 
 
 /*
- * Get input data series, including b and dop
- * Need all records to match, otherwise quit
+ * Pair records in two input series
+ * Check cgemnum, t_rec, array dims
  *
  */
 
-int getInputRS(DRMS_RecordSet_t **bRS_ptr, DRMS_RecordSet_t **dopRS_ptr, 
-			   char *bQuery, char *dopQuery, struct patchInfo *pInfo)
+int pairInputs(DRMS_RecordSet_t *dopRS, DRMS_RecordSet_t *bRS, int *pairedRecNums, int *npairs)
 {
     
     int status = 0;
     
-    *bRS_ptr = drms_open_records(drms_env, bQuery, &status);
-    if (status || (*bRS_ptr)->n == 0) return 1;
+    // Get/check times
     
-    *dopRS_ptr = drms_open_records(drms_env, dopQuery, &status);
-    if (status || (*dopRS_ptr)->n == 0) return 1;
-    
-    // Compare T_REC for b and dop, must be identical
-
-    
-    if ((*bRS_ptr)->n != (*dopRS_ptr)->n) return 1;
-    int nrecs = (*bRS_ptr)->n;
-    
-    DRMS_Record_t *bRec_t = NULL, *dopRec_t = NULL;		// temporary recs for utility
-    
-    for (int i = 0; i < nrecs; i++) {
-        bRec_t = (*bRS_ptr)->records[i];
-        dopRec_t = (*dopRS_ptr)->records[i];
-        if (drms_getkey_time(bRec_t, "T_REC", &status) !=
-             drms_getkey_time(dopRec_t, "T_REC", &status))
-            return 1;
+    int nrecs_d = dopRS->n;
+    TIME *trecs_d = (TIME *) (malloc(nrecs_d * sizeof(TIME)));       // T_REC
+    for (int irec = 0; irec < nrecs_d; irec++) {
+        trecs_d[irec] = drms_getkey_time(dopRS->records[irec], "T_REC", &status);
+        if (status) {
+            free(trecs_d); return 1;
+        }
     }
     
-    // Correct t_ref
+    int nrecs_b = bRS->n;
+    TIME *trecs_b = (TIME *) (malloc(nrecs_b * sizeof(TIME)));       // T_REC
+    for (int irec = 0; irec < nrecs_b; irec++) {
+        trecs_b[irec] = drms_getkey_time(bRS->records[irec], "T_REC", &status);
+        if (status) {
+            free(trecs_d); free(trecs_b); return 1;
+        }
+    }
     
-    TIME t0 = drms_getkey_time((*bRS_ptr)->records[0], "T_REC", &status);
-    if (fabs(pInfo->tref - t0) > DTTHRESH)
-        pInfo->tref = t0;
+    *npairs = 0;
+    for (int i = 0; i < nrecs_d; i++) {
+        pairedRecNums[i] = nrecs_b;       // no findings
+        for (int j = 0; j < nrecs_b; j++) {
+            if (fabs(trecs_b[j] - trecs_d[i]) < MAXTDIFF) {
+                pairedRecNums[i] = j;
+                (*npairs)++;
+                break;
+            }
+        }   // j
+    }   // i
+    
+    // Free
+    
+    free(trecs_d); free(trecs_b);
+    
+    if (*npairs == 0) return 1;     // failed
     
     return 0;
     
 }
-
 
 /*
  * Create Cutout record: top level subroutine
@@ -279,7 +304,7 @@ int getInputRS(DRMS_RecordSet_t **bRS_ptr, DRMS_RecordSet_t **dopRS_ptr,
  */
 
 int createCutRecord(DRMS_Record_t *bRec, DRMS_Record_t *dopRec,
-					DRMS_Record_t *outRec, struct patchInfo *pInfo)
+                    DRMS_Record_t *outRec, struct patchInfo *pInfo)
 {
     
     int status = 0;
@@ -296,12 +321,12 @@ int createCutRecord(DRMS_Record_t *bRec, DRMS_Record_t *dopRec,
     // Cutout Doppler
     
     /*
-    if (writeCutout(outRec, dopRec, ll, ur, "Dopplergram")) {
-        printf("Doppler cutout failed\n");
-        return 1;
-    }
-    printf("Dopplergram cutout done.\n");
-    */
+     if (writeCutout(outRec, dopRec, ll, ur, "Dopplergram")) {
+     printf("Doppler cutout failed\n");
+     return 1;
+     }
+     printf("Dopplergram cutout done.\n");
+     */
     
     // Coutout B
     
@@ -314,13 +339,13 @@ int createCutRecord(DRMS_Record_t *bRec, DRMS_Record_t *dopRec,
             break;
         }
     }
-    if (iSeg != nSegs) return 1;		// failed
+    if (iSeg != nSegs) return 1;        // failed
     printf("Vector B cutout done.\n");
     
     // Keywords & Links
     
     setKeys(outRec, bRec, pInfo, ll);      // set keywords
-	drms_copykey(outRec, dopRec, "DOPPBIAS");     // doppler correction
+    drms_copykey(outRec, dopRec, "DOPPBIAS");     // doppler correction
     
     return 0;
     
@@ -386,7 +411,7 @@ int getEphemeris(DRMS_Record_t *inRec, struct ephemeris *ephem)
     
     int status = 0;
     
-    float crota2 = drms_getkey_float(inRec, "CROTA2", &status);	// rotation
+    float crota2 = drms_getkey_float(inRec, "CROTA2", &status);    // rotation
     double sina = sin(crota2 * RADSINDEG);
     double cosa = cos(crota2 * RADSINDEG);
     
@@ -399,7 +424,7 @@ int getEphemeris(DRMS_Record_t *inRec, struct ephemeris *ephem)
     float crpix1 = drms_getkey_float(inRec, "CRPIX1", &status);
     float crpix2 = drms_getkey_float(inRec, "CRPIX2", &status);
     float cdelt = drms_getkey_float(inRec, "CDELT1", &status);  // in arcsec, assumimg dx=dy
-    ephem->disk_xc = PIX_X(0.0,0.0) - 1.0;		// Center of disk in pixel, starting at 0
+    ephem->disk_xc = PIX_X(0.0,0.0) - 1.0;        // Center of disk in pixel, starting at 0
     ephem->disk_yc = PIX_Y(0.0,0.0) - 1.0;
     
     float dSun = drms_getkey_float(inRec, "DSUN_OBS", &status);
@@ -436,14 +461,14 @@ int writeCutout(DRMS_Record_t *outRec, DRMS_Record_t *inRec,
     
     /* Geometry info */
     
-    int nx, ny, nxny;		// lower-left and upper right coords
+    int nx, ny, nxny;        // lower-left and upper right coords
     nx = ur[0] - ll[0] + 1;
     ny = ur[1] - ll[1] + 1;
     nxny = nx * ny;
     
     /* Read */
     
-    if (inSeg->axis[0] == FOURK && inSeg->axis[1] == FOURK) {		// for full disk ones
+    if (inSeg->axis[0] == FOURK && inSeg->axis[1] == FOURK) {        // for full disk ones
         cutoutArray = drms_segment_readslice(inSeg, DRMS_TYPE_DOUBLE, ll, ur, &status);
         if (status) return 1;
     } else {
@@ -489,17 +514,17 @@ int writeCutout(DRMS_Record_t *outRec, DRMS_Record_t *inRec,
     if (!outSeg) return 1;
     outSeg->axis[0] = cutoutArray->axis[0];
     outSeg->axis[1] = cutoutArray->axis[1];
-    cutoutArray->israw = 0;		// always compressed
+    cutoutArray->israw = 0;        // always compressed
     cutoutArray->bzero = outSeg->bzero;
-    cutoutArray->bscale = outSeg->bscale;		// Same as inArray's
+    cutoutArray->bscale = outSeg->bscale;        // Same as inArray's
     status = drms_segment_write(outSeg, cutoutArray, 0);
     drms_free_array(cutoutArray);
     if (status) return 1;
     
-//    printf("%s done\n", SegName);
+    //    printf("%s done\n", SegName);
     
     return 0;
-
+    
 }
 
 
@@ -514,7 +539,7 @@ void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *inRec, struct patchInfo *pInf
     tnow = (double)time(NULL);
     tnow += UNIX_epoch;
     drms_setkey_time(outRec, "DATE", tnow);
-
+    
     // Geometry
     
     int status = 0;
@@ -636,7 +661,7 @@ int getDoppCorr_patch(DRMS_Record_t *inRec, int *ll, int *ur, float *doppCorr)
             coslat_nobp = cos(lat_nobp[ind]);
             
             doppCorr[ind] = vr - obsv_y * sinlat_nobp * k
-                            - obsv_x * sinlon_nobp * coslat_nobp * k;        // cm/s
+            - obsv_x * sinlon_nobp * coslat_nobp * k;        // cm/s
             
             doppCorr[ind] += (rsun_ref * sinlon * coslatc * 1.e-6 *
                               (2.71390 - 0.405000 * pow(sinlat, 2) - 0.422000 * pow(sinlat, 4)));        // cm/s
