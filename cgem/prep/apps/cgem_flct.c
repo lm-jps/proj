@@ -262,11 +262,12 @@ int DoIt(void)
         
         if (pairedRecNums[irec] >= nrecs) continue;     // no pairing, skip frame
         
+        printf("==============\nProcessing rec pairs #%d of %d, ", ipair + 1, npairs); fflush(stdout);
+        
         DRMS_Record_t *inRec0 = inRS->records[irec];
         DRMS_Record_t *inRec1 = inRS->records[pairedRecNums[irec]];
         
         DRMS_Record_t *outRec = outRS->records[ipair];
-        printf("==============\nProcessing rec pairs #%d of %d, ", ipair + 1, npairs); fflush(stdout);
         
         // Time info and pixel size
         
@@ -329,6 +330,18 @@ int DoIt(void)
         }
         double *bz1 = (double *)inArray1->data;
         
+        // Substitute NaN with 0, Jun 19 2018
+        int nnan0 = 0, nnan1 = 0;
+        for (int i = 0; i < nxny; i++) {
+            if (isnan(bz0[i])) {
+                bz0[i] = 0.; nnan0++;
+            }
+            if (isnan(bz1[i])) {
+                bz1[i] = 0.; nnan1++;
+            }
+        }
+//        printf("total number = %d\nnumber of NaNs0 = %d, NaNs1 = %d\n", nxny, nnan0, nnan1);
+        
         struct ephemeris ephem0, ephem1;
         getEphemeris(inRec0, &ephem0);
         getEphemeris(inRec1, &ephem1);
@@ -377,9 +390,16 @@ int DoIt(void)
             continue;
         }
         
-        // FLCT
+        // Substitute NaN with 0, Jun 19 2018
         
         int nx_mer = dims_mer[0], ny_mer = dims_mer[1], nxny_mer = nx_mer * ny_mer;
+        for (int i = 0; i < nxny_mer; i++) {
+            if (isnan(bz0_mer[i])) bz0_mer[i] = 0.;
+            if (isnan(bz1_mer[i])) bz1_mer[i] = 0.;
+        }
+        
+        // FLCT
+        
         double *vx_mer = (double *) (malloc(nxny_mer * sizeof(double)));
         double *vy_mer = (double *) (malloc(nxny_mer * sizeof(double)));
         double *vm_mer = (double *) (malloc(nxny_mer * sizeof(double)));
