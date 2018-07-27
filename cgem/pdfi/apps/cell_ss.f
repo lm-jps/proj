@@ -7,15 +7,18 @@ c - - Usage:  call cell_ss(m,n,a,b,c,d,lon,lat)
 c
 c - - Input:  m,n - integer value of number of cell interiors in the 
 c             colat,lon directions, respectively
+c
 c - - Input:  a,b - real*8 values of colatitude range for the problem domain, 
 c             a < b [radians]
+c
 c - - Input:  c,d - real*8 values of the longitude range for the problem, 
 c             c < d [radians]
+c
 c - - Output: lon(n,m) - real*8 array of longitude values of the CE grid
 c             [radians]
+c
 c - - Output: lat(n,m) - real*8 array of latitude values of the CE grid
 c             [radians]
-c
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index

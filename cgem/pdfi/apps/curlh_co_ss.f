@@ -7,21 +7,30 @@ c               the result is evaluated on the CO grid (interior corners).
 c
 c - -  Usage:   call curlh_co_ss(m,n,bt,bp,rsun,sinth,sinth_hlf,
 c               dtheta,dphi,curl)
+c
 c - -  Input:   m,n - integer number of cell centers in theta, phi directions, 
 c               respectively.
+c
 c - -  Input:   bt(m+1,n) - real*8 array of theta component of vector 
 c               [G or G/sec].
+c
 c - -  Input:   bp(m,n+1) - real*8 array of phi component of vector 
 c               [G or G/sec].
+c
 c - -  Input:   rsun - real*8 value of radius of Sun [km].  Normally 6.96d5.
+c
 c - -  Input:   sinth(m+1) - real*8 array of sin(theta) evaluated at 
 c               theta edges.
+c
 c - -  Input:   sinth_hlf(m) - real*8 array of sin(theta) evaluated 
 c               cell centers.
+c
 c - -  Input:   dtheta - real*8 value of angular distance between 
 c               theta edges [radians]
+c
 c - -  Input:   dphi - real*8 value of angular distance between 
 c               phi edges [radians]
+c
 c - - Output:   curl(m-1,n-1) - real*8 array containing the
 c               curl evaluated at interior cell corners (CO grid). 
 c               [G/km or G/(km-sec)]

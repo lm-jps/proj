@@ -4,15 +4,23 @@ c+
 c     Purpose: calculate mask for three consecutive images.  Mask is 1 if
 c              signal above threshold in all 3 images, otherwise 0
 c
-c - - Usage:  call find_mask(m,n,bmag0,bmag1,bmag2,bthr,mask)
-c - - Input:  m,n - number of cell centers in theta, phi directions, resp.
-c - - Input:  bmag0(m+1,n+1) - |B| evaluated on interior cell corners at t=t0
-c - - Input:  bmag1(m+1,n+1) - |B| evaluated on interior cell corners at t=t1
-c - - Input:  bmag2(m+1,n+1) - |B| evaluated on interior cell corners at t=t2
-c - - Input:  bthr -  mask threshold [Gauss]
+c - - Usage:   call find_mask(m,n,bmag0,bmag1,bmag2,bthr,mask)
 c
-c - - Output: mask(m+1,n+1) - mask evaluated on interior cell corners
+c - - Input:   m,n - number of cell centers in theta, phi directions, resp.
 c
+c - - Input:   bmag0(m+1,n+1) - real*8 array of |B| evaluated on COE grid 
+c              corners at t=t0 [G]
+c
+c - - Input:   bmag1(m+1,n+1) - real*8 array of |B| evaluated on COE grid 
+c              corners at t=t1 [G]
+c
+c - - Input:   bmag2(m+1,n+1) - real*8 array of |B| evaluated on COE grid 
+c              corners at t=t2 [G]
+c
+c - - Input:   bthr -  real*8 value of mask threshold [G]
+c
+c - - Output:  mask(m+1,n+1) - real*8 array of mask values evaluated on 
+c              COE grid corners
 c-
 c - - Written: MKD 25 Jan 2016
 c     Corrected: MKD 21 Nov 2016 - corrected a bug: before mask Mij=0 only 
@@ -49,12 +57,20 @@ c
 c
       implicit none
 c
+c - - input variable declarations:
+c
       integer :: m,n
       real*8 :: bmag0(m+1,n+1)
       real*8 :: bmag1(m+1,n+1)
       real*8 :: bmag2(m+1,n+1)
-      real*8 :: mask(m+1,n+1)
       real*8 :: bthr
+c
+c - - output variable declarations:
+c
+      real*8 :: mask(m+1,n+1)
+c
+c - - local variable declarations:
+c
       real*8 :: mask0(m+1,n+1),mask1(m+1,n+1)
       real*8 :: mask2(m+1,n+1)
 c
@@ -63,8 +79,7 @@ c
       mask0(:,:)=0.d0
       mask1(:,:)=0.d0
       mask2(:,:)=0.d0
-
-
+c
       where(bmag0 .ge. bthr) 
           mask0=1.d0
       endwhere
@@ -76,8 +91,8 @@ c
       where(bmag2 .ge. bthr) 
           mask2=1.d0
       endwhere
-      
+c     
       mask=mask0*mask1*mask2
-            
+c           
       return
       end

@@ -2,42 +2,67 @@
      1 max_iter,bthr,verbose,psi,dpsi_dr,etot)
 c
 c+
-c - - Purpose: Relaxation code to compute an electric field contribution
-c - - from the gradient of a scalar
-c - - potential, which then results in the total electric field being (close to)
-c - - perpendicular to the magnetic field.  Basic relaxation algorithm 
-c - - was developed by Brian Welsch, and is 
-c - - described in section 3.2 of Fisher et al. 2010, ApJ 715, 242, with 
-c - - subsequent changes described in sections 2.2 and 4.1 of 
-c - - Kazachenko et al., 2014, ApJ 795, 17.
+c - - Purpose:  Relaxation code to compute an electric field contribution
+c               from the gradient of a scalar potential, which then results 
+c               in the total electric field being (close to)
+c               perpendicular to the magnetic field.  Basic relaxation 
+c               algorithm was developed by Brian Welsch, and is described in 
+c               section 3.2 of Fisher et al. 2010, ApJ 715, 242, with 
+c               subsequent changes described in sections 2.2 and 4.1 of 
+c               Kazachenko et al., 2014, ApJ 795, 17.
 c
-c - - Usage:  call relax_psi_3d_ss(m,n,bvec,evec,rsun,a,b,c,d,
-c    1 max_iter,bthr,verbose,psi,dpsi_dr,etot)
+c - - Usage:    call relax_psi_3d_ss(m,n,bvec,evec,rsun,a,b,c,d,
+c               max_iter,bthr,verbose,psi,dpsi_dr,etot)
 c
-c - - Input:  m,n - number of cell centers in theta, phi directions, resp.
-c - - Input:  bvec(m-1,n-1,3) - B_theta, B_phi, and B_r evaluated on interior
-c             cell corners.
-c - - Input:  evec(m-1,n-1,3) - input electric field, multiplied by the speed
-c             of light, (E_theta, E_phi, E_r), evaluated on interior cell
-c             corners [G km/s]
-c - - Input:  rsun - radius of the Sun
-c - - Input:  a,b,c,d - colatitude (a,b) and longitude (c,d) range of the
-c             exterior boundary of the problem (exterior cell corners)
-c - - Input:  max_iter - Maximum number of iterations for "iterative method"
-c             of Welsch, (see section 3.2 of Fisher et al. [2010])
-c - - Input:  bthr - magnetic field threshold for parallelizing E field
-c - - Input:  verbose - integer set to nonzero value to print diagnostics
-c - - Output: psi(m+1,n+1) - scalar potential values on COE grid corners
-c - - Output: dpsi_dr(m+1,n+1) - radial derivative of psi on COE grid 
-c             corners
-c - - Output: etot(m-1,n-1,3) - (c*evec - grad psi) on interior corners,
-c             i.e. etot is in fact electric field, multiplied by the 
-c             speed of light [G km/s]
-c - - Note:   Unlike the rest of PDFI_SS, all vector calculus operations
-c             within this subroutine use centered grid formalism.  Only
-c             the last step of setting boundary conditions for psi assumes
-c             staggered grid.
+c - - Input:    m,n - integer number of cell centers in theta, phi directions, 
+c               resp.
+c
+c - - Input:    bvec(m-1,n-1,3) - real*8 array of B_theta, B_phi, and 
+c               B_r evaluated on interior cell corners (CO grid). [G]
+c
+c - - Input:    evec(m-1,n-1,3) - real*8 input electric field, multiplied by c
+c               (the speed of light), c*E_theta, c*E_phi, c*E_r, evaluated on 
+c               interior cell corners (CO grid) [G km/s]
+c
+c - - Input:    rsun - real*8 value of radius of the Sun [km] Normally 6.96d5.
+c
+c - - Input:    a,b - real*8 values of the minimum and maximum of colatitude
+c               of the domain [radians]
+c
+c               c,d - real*8 values of the minimum and maximum longitude range 
+c               of the domain [radians]
+c
+c - - Input:    max_iter - integer number of Maximum number of iterations 
+c               for "iterative method" of Welsch, (see section 3.2 of 
+c               Fisher et al. [2010])
+c
+c - - Input:    bthr - real*8 value of magnetic field threshold for 
+c               the parallelizing E field
+c
+c - - Input:    verbose - integer value set to a nonzero value to print 
+c               diagnostics computed within this subroutine.
+c
+c - - Output:   psi(m+1,n+1) - real*8 array of the electric scalar potential 
+c               values on COE grid corners [G km^2/sec]
+c
+c - - Output:   dpsi_dr(m+1,n+1) - real*8 array of radial derivative of 
+c               electric scalar potential psi on COE grid corners [G km/sec]
+c
+c - - Output:   etot(m-1,n-1,3) - real*8 3D (theta,phi,r) array of 
+c               (evec - grad psi) on interior corners (CO grid).  etot is the 
+c               "perpendicularized" electric field multiplied by c 
+c               (speed of light) [G km/s]
+c
+c - - Note:     Unlike the rest of PDFI_SS, all vector calculus operations
+c               within this subroutine use centered grid formalism.  Only
+c               the last step of setting boundary conditions for psi assumes
+c               staggered grid.  
+c
+c               After exiting the subroutine, the output arrays psi and 
+c               dpsi_dr arrays are treated as being on the
+c               COE grid (interior corners, plus corners on boundary edges).
 c-
+c
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index
 c   Copyright (C) 2015,2016 University of California
@@ -66,12 +91,15 @@ c   59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 c
       implicit none
 c
-c - - calling argument declarations:
+c - - input calling argument declarations:
 c
       integer :: m,n,max_iter,verbose
 c
       real*8 :: bvec(m-1,n-1,3),evec(m-1,n-1,3)
       real*8 :: rsun,a,b,c,d,bthr
+c
+c - - output calling argument declarations:
+c
       real*8 :: psi(m+1,n+1),dpsi_dr(m+1,n+1),etot(m-1,n-1,3)
 c
 c - - local variable declarations

@@ -2,34 +2,49 @@
      1           ettop,etbot,eptop,epbot,er)
 c+
 c - - Purpose:  Given time derivatives of the 3 magnetic field components
-c     (btt,bpt,brt) through the corresponding voxel faces in a layer of voxels,
-c     computes the electric field on all edges of the spherical voxels. 
+c               (btt,bpt,brt) through the corresponding voxel faces in a 
+c               layer of voxels, computes the electric field on all edges of 
+c               the spherical voxels. 
 c
-c - - Usage:  call enudge3d_ss(m,n,a,b,c,d,rsun,dr,btt,bpt,brt,ettop,etbot,
-c             eptop,epbot,er)
-c - - Input:  m,n - integers denoting the numbers of cell interiors in the
-c             colatitude and longitude directions, respectively.
-c - - Input:  a,b - real*8 variables of colatitude at the northern and southern
-c             edges of the boundary
-c - - Input:  c,d - real*8 variables of longitude at the boundary edges
-c - - Input:  rsun - real*8 value of the assumed solar radius [km]
-c - - Input:  dr - real*8 value [km] of the voxel depth (in radial direction)
-c - - Input:  btt(m+1,n) - real*8 array of time derivatives of B_theta
-c - - Input:  bpt(m,n+1) - real*8 array of time derivatives of B_phi
-c - - Input:  brt(m,n) - real*8 array of time derivatives of B_r
+c - - Usage:    call enudge3d_ss(m,n,a,b,c,d,rsun,dr,btt,bpt,brt,ettop,etbot,
+c               eptop,epbot,er)
 c
-c - - Output: ettop(m,n+1),etbot(m,n+1) - arrays of E_theta, multiplied by 
-c             the speed of light, at top and bottom
-c             edges of the voxels (PE grid) [G km/s].
-c - - Output: eptop(m+1,n),epbot(m+1,n) - arrays of E_phi, multiplied by 
-c             the speed of light, at top and bottom edges of the voxels 
-c             (TE grid) [G km/s].
-c - - Output: er(m+1,n+1) - array of E_r, multiplied by 
-c              the speed of light, on the vertical rails of the voxels
-c             (COE grid) [G km/s]
+c - - Input:    m,n - integers denoting the numbers of cell interiors in the
+c               colatitude and longitude directions, respectively.
 c
-c - - NOTE:  This assumes the photospheric data is located halfway (in radius)
-c            through the layer of voxels.
+c - - Input:    a,b - real*8 values of colatitude at the northern and southern
+c               edges of the boundary [radians]
+c
+c - - Input:    c,d - real*8 variables of longitude at the boundary edges
+c               [radians]
+c
+c - - Input:    rsun - real*8 value of the assumed solar radius [km]
+c
+c - - Input:    dr - real*8 value [km] of the voxel depth (in radial direction)
+c
+c - - Input:    btt(m+1,n) - real*8 array of time derivatives of B_theta
+c               at TE grid locations [G/sec]
+c
+c - - Input:    bpt(m,n+1) - real*8 array of time derivatives of B_phi
+c               at PE grid locations [G/sec]
+c
+c - - Input:    brt(m,n) - real*8 array of time derivatives of B_r
+c               at CE grid locations [G/sec]
+c
+c - - Output:   ettop(m,n+1),etbot(m,n+1) - arrays of E_theta, multiplied by 
+c               c (the speed of light), at top and bottom
+c               edges of the voxels (PE grid) [G km/s].
+c
+c - - Output:   eptop(m+1,n),epbot(m+1,n) - arrays of E_phi, multiplied by 
+c               c (the speed of light), at top and bottom edges of the voxels 
+c               (TE grid) [G km/s].
+c
+c - - Output:   er(m+1,n+1) - array of E_r, multiplied by 
+c               c (the speed of light), on the vertical rails of the voxels
+c               (COE grid) [G km/s]
+c
+c - - NOTE:     This assumes the photospheric data is located halfway 
+c               (in radius) through the layer of voxels.
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index

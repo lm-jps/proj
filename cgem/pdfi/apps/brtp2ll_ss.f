@@ -3,12 +3,16 @@ c
 c+
 c - - Purpose: To transpose B_r data array from theta,phi to lon,lat order.
 c             Can also be used to transpose other scalar COE arrays.
+c
 c - - Usage:  call brtp2ll_ss(m,n,brtpcoe,brllcoe)
+c
 c - - Input:  m,n - number of cell centers in the theta (lat), and phi (lon)
 c             directions, respectively.
+c
 c - - Input:  brtpcoe(m+1,n+1) - real*8 array of radial magnetic field component
 c             stored in theta,phi index order on COE grid. [G]
-c - - Output: brllcoe(n+1,m+1) - array of the radial component of the
+c
+c - - Output: brllcoe(n+1,m+1) - real*8 array of the radial component of the
 c             magnetic field evaluated at COE locations, in lon,lat order.
 c             (corners plus exterior corners on boundary). [G]
 c-

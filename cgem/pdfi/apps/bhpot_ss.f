@@ -1,6 +1,7 @@
        subroutine bhpot_ss(m,n,p,a,b,c,d,rsun,rssmrs,scrb3d,btpot,bppot)
 c
-c+ - - Purpose: compute potential field value of bt,bp given the 3-d array
+c+ - - Purpose: Compute potential field value of horizontal magnetic field
+c              components bt,bp given the 3-d array of the poloidal potential
 c              scrb3d by taking horizontal gradient of d scriptB / dr.
 c              scrb3d is computed by subroutine scrbpot_ss.
 c
@@ -8,14 +9,20 @@ c - -  Usage:  call bhpot_ss(m,n,p,a,b,c,d,rsun,rssmrs,scrb3d,btpot,bppot)
 c
 c - -  Input:  m,n,p: integer values of numbers of cell centers in theta,
 c              phi, and r directions
+c
 c - -  Input:  a,b,c,d:  real*8 values of min, max colatitude, min, max
 c              values of longitude. [radians]
+c
 c - -  Input:  rsun,rssmrs: real*8 values of radius of sun, and distance 
 c              from phot to source surface. [km] Normally, rsun=6.96d5
+c
 c - -  Input:  scrb3d(m,n,p+1): real*8 array of poloidal potential scribtb
 c              [G km^2]
+c
 c - -  Output: btpot(m+1,n,p): real*8 array of theta-comp magnetic field [G]
+c
 c - -  Output: bppot(m,n+1,p): real*8 array of phi-comp magnetic field [G]
+c
 c - -  Note:   btpot,bppot are computed on theta and phi edges, and mid-way
 c              between radial shells.
 c-

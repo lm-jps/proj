@@ -2,18 +2,26 @@
 c
 c+
 c - - Purpose: Compute horizontal electric field components for a global
-c              spherical solar model on a staggered mesh.
+c              spherical solar model on a staggered mesh.  Uses lon,lat
+c              array order.
+c
 c - - Usage:   call enudge_gl_ll(m,n,rsun,brt,elon,elat)
+c
 c - - Input:   m,n - integer values of number of cell centers in latitude,
 c              and longitude, respectively.
-c - - Input:   rsun - real*8 assumed value of the Sun's radius, in km.
+c
+c - - Input:   rsun - real*8 value of the Sun's radius [km].  Normally 6.96d5.
+c
 c - - Input:   brt(n,m) - real*8 array of time derivatives of the radial
-c              magnetic field component, evaluated at cell-centers.  Note
-c              that brt is assumed to be ordered in lon,lat order on input.
+c              magnetic field component, evaluated at cell-centers (CE grid).  
+c              Note that brt is assumed to be ordered in lon,lat order on input.
+c              [G/sec]
+c
 c - - Output:  elon(n,m+1),elat(n+1,m) - real*8 arrays of the electric field
 c              on the edges surrounding each cell-center.  elon is on the TE
 c              grid, elat on the PE grid, but arranged in lon,lat order
-c              (instead of theta,phi order).
+c              (instead of theta,phi order). [G km/sec]
+c
 c - - Note:    FISHPACK's "global" boundary conditions assumed at the
 c              N and S poles, and periodic boundary conditions assumed in 
 c              longitude direction.

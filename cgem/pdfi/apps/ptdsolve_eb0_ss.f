@@ -1,18 +1,16 @@
-      subroutine ptdsolve_ss(m,n,bt,bp,br,rsun,sinth,sinth_hlf,
+      subroutine ptdsolve_eb0_ss(m,n,bt,bp,br,rsun,sinth,sinth_hlf,
      1 a,b,c,d,scrb,dscrbdr,scrj)
 c
 c - - documentation below can be seen using DOC_LIB,'ptdsolve_ss' in IDL.
 c+
-c - - Purpose:  This subroutine solves the three 2D PTD Poisson equations for 
+c - - Purpose:  This procedure solves the three 2D PTD Poisson equations for 
 c               scrb, dscrbdr, and scrj (the poloidal potential, its radial
 c               derivative, and the toroidal potential),
 c               or their respective time derivatives, from
 c               the theta, phi, and radial components of the magnetic field 
-c               (or the time derivatives of bt,bp, and br).  This version of
-c               ptdsolve tries to account for flux imbalance situation by
-c               applying a non-homogenous Neumann boundary condition.
+c               (or the time derivatives of bt,bp, and br).
 c
-c - - Usage:    call ptdsolve_ss(m,n,bt,bp,br,rsun,sinth,sinth_hlf,a,b,c,d,
+c - - Usage:    call ptdsolve_eb0_ss(m,n,bt,bp,br,rsun,sinth,sinth_hlf,a,b,c,d,
 c               scrb, dscrbdr,scrj)
 c
 c - - Input:    m,n - number of cell-centers in the theta, phi directions, resp.
@@ -55,13 +53,13 @@ c
 c - - Output:   scrb(m+2,n+1) - real*8 array of the poloidal potential (or its
 c               time derivative), located at cell-centers (CE grid), but with 
 c               one extra ghost zone on all edges of the array.
-c               Neumann boundary conditions assumed to match E on boundary.
+c               Homogenous Neumann boundary conditions assumed.
 c               [G km^2 or G km^2/sec]
 c
 c - - Output:   dscrbdr(m+2,n+2) - real*8 array of the radial derivative of
 c               the poloidal potential (or its time derivative).  
 c               Define on CE grid with ghost zones, so dimensioned same as scrb.
-c               Neumann boundary conditions assumed to match B_h on boundary.
+c               Homogenous Neumann boundary conditions assumed.
 c               [G km or G km/sec]
 c
 c - - Output:   scrj(m+1,n+1) - real*8 array of the toroidal potential,
@@ -99,10 +97,10 @@ c   59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 c
       implicit none
 c
+      integer :: m,n,mp1,np1
 c
 c - - calling argument declarations:
 c
-      integer :: m,n
       real*8 :: a,b,c,d,rsun
       real*8 :: bt(m+1,n),bp(m,n+1),br(m,n),sinth(m+1),sinth_hlf(m),
      1 scrb(m+2,n+2),dscrbdr(m+2,n+2),scrj(m+1,n+1)
@@ -113,9 +111,8 @@ c
 c
 c - - local variables to ptdsolve
 c
-      integer :: mp1,np1,i,j
       integer :: idimf,itmp,bcm,bcn,ierror
-      real*8 :: dtheta,dphi,elm,pertrb,flux,lperim,eperim
+      real*8 :: dtheta,dphi,elm,pertrb
       real*8 :: curlbh(m-1,n-1),divbh(m,n),fce(m,n),fcoe(m+1,n+1),
      1 bdas(n),bdbs(n),bdcs(m),bdds(m),bdad(n),bdbd(n),
      2 bdcd(m),bddd(m),bdaj(n+1),bdbj(n+1),bdcj(m+1),bddj(m+1)
@@ -141,42 +138,12 @@ c
       call divh_ce_ss(m,n,bt,bp,rsun,sinth,sinth_hlf,dtheta,
      1 dphi,divbh)
 c
-c - - Compute area integral of dB_r/dt: (here assumed = br).  Assumed non-zero:
+c - - set homogenous Neumann boundary conditions for scrb:
 c
-      flux=0.d0
-      do j=1,n
-         do i=1,m
-            flux=flux+br(i,j)*sinth_hlf(i)*dtheta*dphi*rsun**2
-         enddo
-      enddo
-c
-c - - compute perimeter length of spherical wedge:
-c
-      lperim=rsun*((d-c)*(sin(a)+sin(b))+2.d0*(b-a))
-c
-c - - compute amplitude of uniform electric field on boundary that generates
-c - - flux imbalance:
-c
-      eperim = -flux/lperim
-c
-c - - set Neumann boundary conditions for scrb based on E on perimeter:
-c - - (recall E = -curl scrb rhat)
-c
-c - - E_phi at theta=a = -eperim
-      bdas(1:n)= -eperim*rsun
-c - - E_phi at theta=b = eperim
-      bdbs(1:n)= eperim*rsun
-c - - E_theta at phi=c = eperim
-      bdcs(1:m)= -eperim*rsun*sinth_hlf(1:m)
-c - - E_theta at phi=d = -eperim
-      bdds(1:m)=eperim*rsun*sinth_hlf(1:m)
-c
-c - - NOTE:  The above boundary conditions should also work for the 
-c     time-independent case, where instead of eperim=-flux/lperim we'd have 
-c     aperim=+flux/lperim. Even though the sign is then wrong, it cancels with 
-c     another minus sign (in the static case A = +curl scrb rhat, instead of 
-c     E = -curl scrb rhat).  Thus it appears the correct boundary conditions 
-c     are applied to either the time derivative case or the static case.
+      bdas(1:n)=0.d0
+      bdbs(1:n)=0.d0
+      bdcs(1:m)=0.d0
+      bdds(1:m)=0.d0
 c
 c - - Set RHS for Poisson equation for scrb:
 c
@@ -217,7 +184,6 @@ c
 c
 c - - Move onto the solution for dscrbdr now:
 c - - First compute Neumann boundary condtions at colat, lon edges:
-c - - (This uses the fact that B_h = +grad_h (dscrbdr)
 c
 c - - Longitude edges:
       bdcd(1:m)=rsun*sinth_hlf(1:m)*bp(1:m,1)

@@ -3,14 +3,29 @@ c
 c+
 c - - Purpose:  To compute the Poynting flux of magnetic energy
 c
-c - - Usage: call sr_ss(m,n,et,ep,bt,bp,sr)
+c - - Usage:    call sr_ss(m,n,et,ep,bt,bp,sr)
 c
-c - - Input:  m,n - number of cell centers in theta, phi directions, resp.
-c - - Input:  et(m,n+1): theta component electric field [V/cm] on PE grid
-c - - Input:  ep(m+1,n): phi component electric field [V/cm] on TE grid
-c - - Input:  bt(m+1,n): theta component magnetic field [G] on TE grid
-c - - Input:  bp(m,n+1): phi component magnetic field [G] on PE grid
-c - - Output: sr(m,n):  Poynting flux [erg cm^-2 s^-1] computed on CE grid
+c - - Input:    m,n - integer number of cell centers in theta, phi directions, 
+c               respectively.
+c
+c - - Input:    et(m,n+1): real*8 array theta component electric field on 
+c               PE grid [V/cm]
+c
+c - - Input:    ep(m+1,n): real*8 array of phi component electric field on 
+c               TE grid [V/cm]
+c
+c - - Input:    bt(m+1,n): real*8 array of theta component magnetic field
+c               on TE grid [G]
+c
+c - - Input:    bp(m,n+1): real*8 array of phi component magnetic field on 
+c               PE grid [G]
+c
+c - - Output:   sr(m,n):  real*8 array of Poynting flux computed on CE grid
+c               [erg/(cm^2 sec)]
+c
+c - - NOTE:     If you want to use this subroutine with components of cE in
+c               units of [G km/sec], you will first need to divide et,ep by 1d3
+c               before calling this subroutine.
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index
@@ -40,11 +55,13 @@ c   59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 c
       implicit none
 c
-c - - declare pimach function (FISHPACK/FFTPACK) to compute pi
-      real*8 :: pimach
+c
+c - - input variables:
 c
       integer :: m,n
       real*8 :: et(m,n+1),ep(m+1,n),bt(m+1,n),bp(m,n+1)
+c
+c - - output variables:
 c
       real*8 :: sr(m,n)
 c
@@ -52,6 +69,10 @@ c - - local variable declarations:
 c
       real*8 :: dum,fourpim1,convfact
       integer :: i,j,iph,jph
+c
+c - - declare pimach function (FISHPACK/FFTPACK) to compute pi
+c
+      real*8 :: pimach
 c
       fourpim1=1./(4.d0*pimach(dum))
 c

@@ -7,24 +7,35 @@ c             Rsun plus distance to source surface.  Solution is returned
 c             as the poloidal potential scrb3d, from which all the magnetic
 c             field components can be recovered, along with the vector
 c             and scalar potentials.
+c
+c - - Method: Solve the equation r^2 delh^2 scriptB + r^2 d^2/dr^2(scriptB)
+c             =0 (Bercik's equation).  Convert finite difference in phi
+c             within the horizontal Laplacian
+c             to its Fourier representation, then solve equations in theta
+c             and r for the amplitude of each Fourier mode, using the
+c             blktri solution method in FISHPACK.
+c
 c   - Usage:  call scrbpot_ss(m,n,p,a,b,c,d,rsun,rssmrs,brce,scrb3d)
 c
-c - - Input: m,n,p - number of cell interiors in the theta,phi, r directions
-c - - Input: a,b - min, max values of theta (colatitude) at edges in 0,pi range 
-c - - Input: c,d - min, max values of phi edges (longitude) in 0,2*pi range
-c - - Input: rsun - radius of the Sun in assumed length units
-c - - Input: rssmrs - distance from surface to source surface
-c - - Input: brce - array of face-center interior values of B_r, 
-c - -        at photosphere, dimensioned (m,n)
-c - - Output: scrb3d - array of scriptb for potential field, 
-c             dimensioned (m,n,p+1), at cell centers in theta,phi, 
-c             and at edges in radius.
-c - - Approach:  Solve the equation r^2 delh^2 scriptB + r^2 d^2/dr^2(scriptB)
-c                =0 (Bercik's equation).  Convert finite difference in phi
-c                within the horizontal Laplacian
-c                to its Fourier representation, then solve equations in theta
-c                and r for the amplitude of each Fourier mode, using the
-c                blktri solution method in FISHPACK.
+c - - Input:  m,n,p - integer number of cell interiors in the theta,phi,r 
+c             directions, respectively.
+c
+c - - Input:  a,b - real*8 min, max values of theta (colatitude) at edges 
+c             in 0,pi range [radians]
+c
+c - - Input:  c,d - real*8 min, max values of phi edges (longitude) 
+c             in 0,2*pi range [radians]
+c
+c - - Input:  rsun - real*8 value of radius of Sun [km].  Normally 6.96d5.
+c
+c - - Input:  rssmrs - real*8 distance from surface to source surface [km]
+c
+c - - Input:  brce(m,n) - real*8 array of face-center (CE grid) values of B_r, 
+c             at photosphere, in colat,lon index order. [G]
+c
+c - - Output: scrb3d(m,n,p+1) - real*8 3D array of scriptb (poloidal potential)
+c             for a potential magnetic field, evaluated at at cell centers in 
+c             theta,phi, and at radial shells. [G km^2]
 c
 c-
 c   PDFI_SS Electric Field Inversion Software
@@ -55,12 +66,15 @@ c   59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 c
       implicit none
 c
-c - - Declarations of calling arguments:
+c - - input variables:
 c
       integer :: m,n,p
-c
       real*8 :: a,b,c,d,rsun,rssmrs
-      real*8 :: brce(m,n),scrb3d(m,n,p+1)
+      real*8 :: brce(m,n)
+c
+c - - output variables:
+c
+      real*8 :: scrb3d(m,n,p+1)
 c
 c - - Internal variables and arrays:
 c

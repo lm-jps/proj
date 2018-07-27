@@ -2,12 +2,16 @@
 c
 c+
 c - - Purpose: To transpose B_r data array from lon,lat to theta,phi order.
+c
 c - - Usage:  call bryeell2tp_ss(m,n,brllce,brtpce)
+c
 c - - Input:  m,n - number of cell centers in the theta (lat), and phi (lon)
 c             directions, respectively.
-c - - Input:  brllce(n,m) - array of radial magnetic field component
-c             stored in lon,lat index order. [G]
-c - - Output: brtpce(m,n) - array of the radial component of the
+c
+c - - Input:  brllce(n,m) - real*8 array of radial magnetic field component
+c             at cell centers, stored in lon,lat index order. [G]
+c
+c - - Output: brtpce(m,n) - real*8 array of the radial component of the
 c             magnetic field evaluated at CE locations in theta,phi order
 c             (cell-centers). [G]
 c-

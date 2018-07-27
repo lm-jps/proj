@@ -3,13 +3,20 @@ c
 c+
 c - - Purpose:  Compute the theta and phi locations of the PE grid
 c
-c - - Usage:  call petp_ss(m,n,a,b,c,d,theta,phi)
+c - - Usage:    call petp_ss(m,n,a,b,c,d,theta,phi)
 c
-c - - Input:  m,n - number of cell interiors in the theta,phi directions
-c - - Input:  a,b, - a,b are colatitude range for the problem domain, a < b
-c - - Input:  c,d - c,d are the longitude range for the problem, c < d
-c - - Output: theta(m,n+1) - the colatitude values of the PE grid
-c - - Output: phi(m,n+1) - the longitude values of the PE grid
+c - - Input:    m,n - integer number of cell interiors in the theta,phi 
+c               directions, respectively.
+c
+c - - Input:    a,b, - real*8 values of the colatitude range for the problem 
+c               domain, a < b [radians]
+c
+c - - Input:    c,d - real*8 values of the longitude range for the problem 
+c               domain, c < d [radians]
+c
+c - - Output:   theta(m,n+1) - real*8 array of colatitude values of the PE grid
+c
+c - - Output:   phi(m,n+1) - real*8 array of longitude values of the PE grid
 c
 c-
 c   PDFI_SS Electric Field Inversion Software

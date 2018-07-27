@@ -8,18 +8,24 @@ c               is done in a way that is proportional to the initial field
 c               values, rather than by subtracting the extra flux uniformly from
 c               the array.  The objective is to avoid changing the locations
 c               of PILs as much as possible.
+c
 c - - Usage:    call fluxbal_ss(m,n,a,b,c,d,rsun,brt,brtbal)
+c
 c - - Input:    m,n - integer values of the number of cell centers in the
 c               colatitude and longitude direction, respectively
+c
 c - - Input:    a,b,c,d - real*8 values of the colatitude limits (a,b)
 c               and longitude limits (c,d) of the spherical domain [radians].  
 c               Spherical wedge or global limits can be used, but if 
 c               b .eq. pi, you must use the pimach function from FISHPACK 
 c               to set b=pi.
+c
 c - - Input:    rsun - real*8 value of assumed radius for Sun [km].  Usual
 c               value is 6.96e5
+c
 c - - Input:    brt(m,n) - real*8 array of radial magnetic field values on CE
 c               grid [G].  brt(m,n) can have a flux imbalance.
+c
 c - - Output:   brtbal(m,n) - real*8 array of radial magnetic field values on
 c               CE grid, with flux imbalance removed. [G]
 c-

@@ -3,36 +3,48 @@
 c
 c+
 c - - Purpose: Given time derivatives of the 3 magnetic field components
-c     (blont,blatt,brllt) through the corresponding voxel faces in a layer 
-c     of voxels, computes the electric field on all edges of the spherical 
-c     voxels.  Here, we assume global spherical geometry, rather than a 
-c     spherical wedge domain.  In this subroutine the input arrays and output
-c     arrays are arranged into lon,lat order and orientation.
+c              (blont,blatt,brllt) through the corresponding voxel faces in 
+c              a layer of voxels, computes the electric field on all edges 
+c              of the spherical voxels.  Here, we assume global spherical 
+c              geometry, rather than a spherical wedge domain.  In this 
+c              subroutine the input arrays and output arrays are arranged into 
+c              lon,lat order and orientation.
 c
 c - - Usage:   call enudge3d_gl_ll(m,n,rsun,dr,blont,blatt,brllt,
 c              elontop,elonbot,elattop,elatbot,erll)
+c
 c - - Input:   m,n - integer values of number of cell centers in latitude,
 c              and longitude, respectively.
+c
 c - - Input:   rsun - real*8 assumed value of the Sun's radius [km].
+c
 c - - Input:   dr - real*8 value of radial distance between top and bottom of
 c              voxels [km].
+c
 c - - Input:   blont(n+1,m) - real*8 array of time derivatives of B_phi  - 
 c              PE grid [G/sec]
+c
 c - - Input:   blatt(n,m+1) - real*8 array of time derivatives of B_theta- 
 c              TE grid  [G/sec]
+c
 c - - Input:   brllt(n,m) - real*8 array of time derivatives of B_r - CE grid
 c              [G/sec]
-c - - Output:  elontop(n,m+1),elonbot(n,m+1) - arrays of c*E_lon - TE grid
-c              along the top and bottom rails of the voxels, respectively.
-c              [G km/sec]
-c - - Output:  elattop(n+1,m),elatbot(n+1,m) - arrays of c*E_lat - PE grid 
-c              along the top and bottom rails of the voxels, respectively.
-c              [G km/sec]
-c - - Output:  erll(n+1,m+1) - arrays of c*E_r - COE grid - along the vertical
-c              rails of the voxels. [G km/sec]
+c
+c - - Output:  elontop(n,m+1),elonbot(n,m+1) - real*8 arrays of c*E_lon - 
+c              TE grid along the top and bottom rails of the voxels, 
+c              respectively. [G km/sec]
+c
+c - - Output:  elattop(n+1,m),elatbot(n+1,m) - real*8 arrays of c*E_lat - 
+c              PE grid along the top and bottom rails of the voxels, 
+c              respectively. [G km/sec]
+c
+c - - Output:  erll(n+1,m+1) - real*8 array of c*E_r - COE grid - along 
+c              the vertical rails of the voxels. [G km/sec]
+c
 c - - Note1:   The photospheric layer is assumed to lie halfway between the
 c              top and bottom layer of voxels.  The top layer is at
 c              R_S+0.5*dr, and the bottom layer is at R_s-0.5*dr.
+c
 c - - Note2:   FISHPACK's "global" boundary conditions assumed at the
 c              N and S poles, and periodic boundary conditions assumed in 
 c              longitude direction.

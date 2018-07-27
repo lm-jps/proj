@@ -1,14 +1,25 @@
       subroutine interp_eh_ss(m,n,et,ep,etc,epc)
 c+
 c - - Purpose: Interpolate et and ep from edges to corners.  Designed so that
-c - - centered grid gradients and divergences computed at corners
-c - - are consistent with averages of staggered grid gradients and divergences
+c              centered grid gradients and divergences computed at corners
+c              are consistent with averages of adjacent staggered grid 
+c              gradients and divergences
 c
-c     Usage:  call interp_eh_ss(m,n,et,ep,etc,epc)
-c             m,n are number of cell centers in theta, phi directions, resp.
-c             et(m,n+1),ep(m+1,n) are input fields on edges; 
-c             etc(m-1,n-1) and epc(m-1,n-1) are output
-c             fields at the interior corners.
+c - - Usage:   call interp_eh_ss(m,n,et,ep,etc,epc)
+c
+c - - Input:   m,n are number of cell centers in theta, phi directions, resp.
+c
+c - - Input:   et(m,n+1) - real*8 array of theta component of electric field
+c              at PE grid locations. [G km/sec or V/cm]
+c
+c - - Input:   ep(m+1,n) - real*8 array of phi component of electric field
+c              at TE grid locations. [G km/sec or V/cm]
+c
+c - - Output:  etc(m-1,n-1) - real*8 array of theta component of electric field
+c              located on interior corners (CO grid) [G km/sec or V/cm]
+c
+c - - Output:  epc(m-1,n-1) - real*8 array of phi component of electric field
+c              located on interior corners (CO grid) [G km/sec or V/cm]
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index
@@ -38,9 +49,18 @@ c   59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 c
       implicit none
 c
-      integer :: m,n,i,j
+c - - input variables:
 c
-      real*8 :: et(m,n+1),ep(m+1,n),etc(m-1,n-1),epc(m-1,n-1)
+      integer :: m,n
+      real*8 :: et(m,n+1),ep(m+1,n)
+c
+c - - output variables:
+c
+      real*8 :: etc(m-1,n-1),epc(m-1,n-1)
+c
+c - - local variables:
+c
+      integer :: i,j
 c
       do i=1,m-1
          do j=1,n-1

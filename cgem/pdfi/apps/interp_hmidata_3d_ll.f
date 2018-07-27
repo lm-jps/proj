@@ -12,8 +12,10 @@ c - - Usage:    call interp_hmidata_3d_ll(m,n,data3d,m_int,n_int,data3d_int)
 c 
 c - - Input:    m,n - integers defining the number of cell-centers in the
 c               latitude (or co-latitude) direction, respectively.
+c
 c - - Input:    data3d(n+1,m+1,18) - The 18 input arrays stacked into a 3d
-c               array.  The order of the 18 input arrays is, referring to
+c               real*8 array at COE grid locations, in lon,lat index order.  
+c               The order of the 18 input arrays is, referring to
 c               the arguments of pdfi_wrapper4jsoc_ss, are:
 c               id=1: data3d(:,:,id) = bloncoe0(:,:)
 c               id=2: data3d(:,:,id) = blatcoe0(:,:)
@@ -38,8 +40,10 @@ c - - Input:    m_int,n_int - integer values of of the number of cell-centers
 c               in the latitude (co-latitude), and longitude directions, 
 c               respectively, for the interpolated grid.
 c
-c - - Output:   data3d(n_int+1,m_int+1,18):  The interpolated values for all
-c               18 input arrays using the new values m_int, n_int.
+c - - Output:   data3d(n_int+1,m_int+1,18) -  real*8 array of the interpolated 
+c               values for all 18 input arrays using the new values 
+c               m_int, n_int. COE grid locations in each 2D slice, in lon,lat
+c               index order.
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index

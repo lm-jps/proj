@@ -3,13 +3,22 @@ c
 c+
 c - - Purpose:  Compute the theta and phi locations of the TE grid
 c
-c - - Usage:  call tetp_ss(m,n,a,b,c,d,theta,phi)
+c - - Usage:    call tetp_ss(m,n,a,b,c,d,theta,phi)
 c
-c - - Input:  m,n - number of cell interiors in the theta,phi directions
-c - - Input:  a,b, - a,b are colatitude range for the problem domain, a < b
-c - - Input:  c,d - c,d are the longitude range for the problem, c < d
-c - - Output: theta(m+1,n) - the colatitude values of the TE grid
-c - - Output: phi(m+1,n) - the longitude values of the TE grid
+c - - Input:    m,n - integer number of cell interiors in the theta,phi 
+c               directions, respectively.
+c
+c - - Input:    a,b, - real*8 values of the colatitude range for the problem 
+c               domain, a < b [radians]
+c
+c - - Input:    c,d - real*8 values of the longitude range for the problem 
+c               domain, c < d [radians]
+c
+c - - Output:   theta(m+1,n) - real*8 array of the colatitude values of the 
+c               TE grid
+c
+c - - Output:   phi(m+1,n) - real*8 array of the longitude values of the 
+c               TE grid
 c
 c-
 c   PDFI_SS Electric Field Inversion Software

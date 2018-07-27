@@ -1,28 +1,39 @@
       subroutine e_laplace_ll(m,n,a,b,c,d,rsun,en,es,el,er,elon,elat)
 c+
-c - -  Purpose:  Compute horizontal electric fields etll,epll from solutions to
-c - -  Laplace equation, given boundary conditions en,es,el,er on the 4 sides.
-c - -  solution.  Output is converted to longitude, latitude format,
-c - -  including sign change from e_theta to elat.
-c - -  Assumes for boundary conditions that the tangential electric field at the
-c - -  N,S boundaries is given by en and es, and at the left and right
-c - -  longitude boundaries is given by el, er.
+c - -  Purpose: Compute horizontal electric fields elon,elat from solutions to
+c               Laplace equation, given boundary conditions en,es,el,er 
+c               on the 4 sides.  Output is converted to longitude, latitude 
+c               format, including sign change from e_theta to elat.
+c               Assumes for boundary conditions that the tangential electric 
+c               field at the N,S boundaries is given by en and es, and at 
+c               the left and right longitude boundaries is given by el, er.
 c
-c - -  Usage:  call e_laplace_ll(m,n,a,b,c,d,rsun,en,es,el,er,elon,elat)
+c - -  Usage:   call e_laplace_ll(m,n,a,b,c,d,rsun,en,es,el,er,elon,elat)
 c
-c - -  Input:  m,n - integers denoting the number of cell-centers in the
-c              colatitude and longitude directions, respectively
-c - -  Input:  a,b - the real*8 values of colatitude (theta) 
-c              at the northern and southern edges of the problem boundary
-c - -  Input:  c,d - the real*8 values of longitude edges
-c - -  Input:  rsun - real*8 - units for the radius of the Sun
-c - -  Input:  en(n),es(n),el(m),er(m) - arrays of electric field values
-c              multiplied by the speed of light
-c              at north, south, left and right edges of domain [Gauss km/s].
-c - -  Output: elon(n,m+1) - real*8 array of electric fields multiplied
-c              by the speed of light computed on theta edges [Gauss km/s].
-c - -  Output: elat(n+1,m) - real*8 array of electric fields multiplied
-c              by the speed of light computed on phi edges [Gauss km/s]..
+c - -  Input:   m,n - integers denoting the number of cell-centers in the
+c               colatitude and longitude directions, respectively
+c
+c - -  Input:   a,b - the real*8 values of colatitude (theta) 
+c               at the northern and southern edges of the problem boundary
+c               [radians]
+c
+c - -  Input:   c,d - the real*8 values of longitude edges of problem boundary
+c               [radians]
+c
+c - -  Input:   rsun - real*8 value for the radius of the Sun [km] 
+c               Normally 6.96d5
+c
+c - -  Input:   en(n),es(n),el(m),er(m) - real*8 arrays of electric field values
+c               multiplied by c (the speed of light)
+c               at north, south, left and right edges of domain [G km/s].
+c
+c - -  Output:  elon(n,m+1) - real*8 array of electric fields multiplied
+c               by the speed of light computed on theta edges (TE grid)
+c               [G km/s].
+c
+c - -  Output:  elat(n+1,m) - real*8 array of electric fields multiplied
+c               by c (the speed of light) computed on phi edges (PE grid)
+c               [G km/s]..
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index
@@ -54,12 +65,15 @@ c
 c
 c - - variable declarations:
 c
-c - - calling arguments:
+c - - input variables:
 c
       integer :: m,n
       real*8 :: en(n),es(n),el(m),er(m)
-      real*8 :: elon(n,m+1),elat(n+1,m)
       real*8 :: rsun,a,b,c,d
+c
+c - - output variables:
+c
+      real*8 :: elon(n,m+1),elat(n+1,m)
 c
 c - - local subroutine variables:
 c

@@ -8,19 +8,27 @@ c - - Usage:  call angle_be_ss(m,n,et,ep,er,btcoe,bpcoe,brcoe,cosang)
 c
 c - - Input:  m,n - integer values for the number of cell centers in 
 c             theta, phi directions, resp.
+c
 c - - Input:  et(m,n+1): real*8 array of theta component electric field 
 c             [V/cm or G km/sec] on PE grid
+c
 c - - Input:  ep(m+1,n): real*8 array of phi component electric field 
 c             [V/cm or G km/sec] on TE grid
+c
 c - - Input:  er(m+1,n+1): real*8 array of radial component of electric field 
 c             [V/cm or G km/sec] on COE grid
+c
 c - - Input:  btcoe(m+1,n+1): real*8 array of theta component magnetic 
 c             field [G] on COE grid
+c
 c - - Input:  bpcoe(m+1,n+1): real*8 array of phi component magnetic field [G] 
 c             on COE grid
+c
 c - - Input:  brcoe(m+1,n+1): real*8 array of radial component magnetic field 
 c             [G] on COE grid
+c
 c - - Input:  maskcoe(m+1,n+1): real*8 mask array for strong magnetic fields
+c
 c - - Output: cosang(m-1,n-1): real*8 array of the angle between E and B on 
 c             CO grid expressed as cos(theta)
 c-

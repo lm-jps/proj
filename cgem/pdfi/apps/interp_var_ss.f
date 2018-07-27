@@ -1,19 +1,37 @@
       subroutine interp_var_ss(m,n,btcoe,bpcoe,brcoe,
      1 a,b,bt,bp,br)
 c+
-c  Purpose: To interpolate a 3-d vector from COE grid to its proper locations
-c           on the staggered grid.
+c - -   Purpose: To interpolate a 3-d vector from COE grid to its proper 
+c                locations on the TE, PE, and CE staggered grids.
+c                Interpolation is done using straightforward linear
+c                averages, motivated by simplicity and noise reduction.
 c
-c  Usage: call interp_data_ss,m,n,btcoe,bpcoe,brcoe,vtcoe,thmin,thmax,vpcoe,
-c      bt,bp,br,brte,brpe,bhte,bhpe,vt,vp)
-c  Input:  btcoe(m+1,n+1) - Bt at the corners/edges 
-c  Input:  bpcoe(m+1,n+1) - Bp at the corners/edges 
-c  Input:  brcoe(m+1,n+1) - Br at the corners/edges 
-c  Input:  a - mininum colatitude at Brian's interp data points
-c  Input:  b - maximum colatitude at Brian's interp data points
-c Output:  bt(m+1,n) - Bt at theta edge locations
-c Output:  bp(m,n+1) - Bp at phi edge locations
-c Output:  br(m,n) - Br at cell center locations
+c - -   Usage:   call interp_data_ss(m,n,btcoe,bpcoe,brcoe,a,b,
+c                bt,bp,br)
+c
+c - -    Input:  m,n - integer number of cell centers in colat, lon directions,
+c                respectively.
+c
+c - -    Input:  btcoe(m+1,n+1) - real*8 array of theta component of B located
+c                on the COE grid (corners, including boundary corners) [G]
+c
+c - -    Input:  bpcoe(m+1,n+1) - real*8 array of phi component of B located
+c                on the COE grid [G]
+c
+c - -    Input:  brcoe(m+1,n+1) - real*8 array of the radial component of B
+c                located on the COE grid [G] 
+c
+c - -    Input:  a,b - real*8 values of the mininum and maximum colatitude on 
+c                the COE grid [radians]
+c
+c - -   Output:  bt(m+1,n) - real*8 array of theta component of B located
+c                at theta edge locations (TE grid) [G]
+c
+c - -   Output:  bp(m,n+1) - real*8 array of phi component of B located at 
+c                phi edge locations (PE grid) [G]
+c
+c - -   Output:  br(m,n) - real*8 array of the radial component of B located
+c                at cell center locations (CE grid) [G]
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index
@@ -43,11 +61,18 @@ c   59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 c
       implicit none
 c
-      integer :: m,n,i,j,jp1,jph,ip1,iph
+c - - input variable declarations:
 c
-      real*8 :: btcoe(m+1,n+1),bpcoe(m+1,n+1),brcoe(m+1,n+1),
-     1          a,b,
-     2          bt(m+1,n),bp(m,n+1),br(m,n)
+      integer :: m,n
+      real*8 :: btcoe(m+1,n+1),bpcoe(m+1,n+1),brcoe(m+1,n+1),a,b
+c
+c - - output variable declarations:
+c
+      real*8 :: bt(m+1,n),bp(m,n+1),br(m,n)
+c
+c - - local variable declarations:
+c
+      integer :: i,j,jp1,jph,ip1,iph
       real*8 sinth(m+1),sinth_hlf(m)
 c
       call sinthta_ss(a,b,m,sinth,sinth_hlf)

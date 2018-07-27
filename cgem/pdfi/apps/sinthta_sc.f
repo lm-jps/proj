@@ -2,31 +2,39 @@
      1 sinth_hlf_gh)
 c
 c+
-c - - Purpose: compute arrays of sin(theta) for the edge locations and at the
-c - - half-cell locations.  Compute arrays with and without ghost zones.
-c - - Note that this version uses centered grid, not staggered grid.
+c - - Purpose: compute arrays of sin(theta) for the grid locations and at the
+c              half-grid locations.  Compute arrays with and without ghost 
+c              zones.
 c
-c     Usage: call(sinthta_sc,thmin,thmax,m,sinth,sinth_hlf,sinth_gh,
-c    1 sinth_hlf_gh)
+c              NOTE: this version uses a centered grid, not a staggered grid,
+c              and is *NOT VALID* for the staggered grid variables.  It is
+c              used *ONLY* within the context of the relax_psi_3d_ss subroutine,
+c              which employs a centered grid formalism.
 c
-c - - input: thmin, thmax - minimum and maximum values (in radians) of
-c - - co-latitude theta at edges
+c - - Usage:   call(sinthta_sc,thmin,thmax,m,sinth,sinth_hlf,sinth_gh,
+c              sinth_hlf_gh)
 c
-c - - input: m (number of cell interiors in the theta (colatitude) direction
-c - - IMPORTANT - m is one less than the array size for the 1st (theta)
-c - - dimension of the data arrays!
+c - - Input:   thmin,thmax - real*8 values of the minimum and maximum of
+c              co-latitude grid. [radians]
 c
-c - - output: sinth, an m+1 length array of cell edge values of sin(theta)
+c              NOTE:  thmin,thmax are *NOT THE SAME* is the PDFI_SS limits a,b.
+c              see source code details in relax_psi_3d_ss.
 c
-c - - output: sinth_gh, an m+3 length array of cell edge values of sin(theta)
-c - - including one ghost-zone at each end
+c - - Input:   m - integer number of grid interiors in the theta 
+c              (colatitude) direction
 c
-c - - output:  sinth_hlf, an m length array of cell center values of sin(theta)
+c              NOTE:  The value is m here is two less than the value of m
+c              in the staggered grid formalism.
+c     
+c - - Output:  sinth(m+1), a real*8 array of grid values of sin(theta)
 c
-c - - output:  sinth_hlf_gh, an m+2 length array of cell center values of
-c - - sin(theta) including one ghost-zone at each end
-c - - Caution!!!! The use of m here is incompatible with the use of m in
-c - - PDFI_SS!  Be careful!
+c - - Output:  sinth_gh(m+3), a real*8 array of grid values of sin(theta)
+c              including one ghost-zone at each end
+c
+c - - Output:  sinth_hlf(m), a real*8 array of half-grid values of sin(theta)
+c
+c - - Output:  sinth_hlf_gh(m+2), a real*8 array of half-grid values of
+c              sin(theta) including one ghost-zone at each end
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index

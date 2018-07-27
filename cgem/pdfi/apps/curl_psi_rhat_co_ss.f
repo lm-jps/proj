@@ -10,18 +10,25 @@ c - - Usage:   call curl_psi_rhat_co_ss(m,n,psi,rsun,sinth,dtheta,
 c              dphi,curlt,curlp)
 c
 c - - Input:   m,n - number of cell centers in theta, phi directions, resp.
+c
 c - - Input:   psi(m+1,n+1) - real*8 array of the toroidal potential at 
 c              cell-corners, including boundary corners [COE grid].  
 c              [G km or G km/sec]
+c
 c - - Input:   rsun - real*8 value of radius of the Sun. [km] Normally 6.96d5
+c
 c - - Input:   sinth(m+1) - real*8 array of sin(theta) computed over the 
 c              co-latitude range, at theta cell edges.
+c
 c - - Input:   dtheta,dphi - real*8 value of the spacing of cells in 
 c              theta,phi directions [radians]
+c
 c - - Output:  curlt(m+1,n) - real*8 array equal to curl in
 c              theta direction, evaluated at theta edges (TE grid). [G or G/sec]
+c
 c - - Output:  curlp(m,n+1) - real*8 array equal to curl
 c              in phi direction, evaluated at phi edges (PE grid). [G or G/sec]
+c
 c - - NOTE:    Plate Carree grid spacing (dtheta, dphi are constants) assumed.
 c-
 c   PDFI_SS Electric Field Inversion Software

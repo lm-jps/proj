@@ -2,51 +2,63 @@
      1 et,ep,er,rsun,sinth,a,b,c,d,eti,epi,eri)
 c
 c+
-c    Purpose:  To compute the non-inductive electric field which will make
-c              the total electric field approximately perpendicular to B.
-c              This subroutine finds eti,epi,eri - the non-inductive 
-c              electric field components due to due the gradient of a scalar 
-c              potential, which, when added to the input electric field 
-c              et,ep,er minimizes the component of E parallel to B.
-c              Uses Brian Welsch's relaxation method, implemented in 
-c              relax_psi_3d_ss.f .
+c - -  Purpose:  To compute the non-inductive electric field which will make
+c                the total electric field approximately perpendicular to B.
+c                This subroutine finds eti,epi,eri - the non-inductive 
+c                electric field components due to due the gradient of a scalar 
+c                potential, which, when added to the input electric field 
+c                et,ep,er minimizes the component of E parallel to B.
+c                Uses Brian Welsch's relaxation method, implemented in 
+c                relax_psi_3d_ss.f .
 c
-c    Usage: call e_ideal_ss(m,n,btcoe,bpcoe,brcoe,
-c    1 et,ep,er,rsun,sinth,a,b,c,d,eti,epi,eri)
+c - -  Usage:    call e_ideal_ss(m,n,btcoe,bpcoe,brcoe,
+c                et,ep,er,rsun,sinth,a,b,c,d,eti,epi,eri)
 c
-c    Input: btcoe [m+1,n+1] -  COE Bt from HMI data[Gauss]
-c    Input: bpcoe [m+1,n+1] - COE Bp from HMI data [Gauss]
-c    Input: brcoe [m+1,n+1] - COE Br from HMI data [Gauss]
-c    Input: et [m,n+1] - input electric field multiplied by the speed of light 
-c                        in theta (colat) direction [Gauss km/s]
-c    Input: ep [m+1,n] - input electric field multiplied by the speed of light 
-c                        in phi (azimuth) direction [Gauss km/s]
-c    Input: er [m+1,n+1] - input electric field  multiplied by the speed of light 
-c                        in radial direction [Gauss km/s]
+c - -  Input:    btcoe(m+1,n+1) - real*8 array of theta component of B on
+c                COE grid [G]
 c
-c    Input: sinth, the value of sin(colatitude), computed for theta edge
-c    locations.  Is dimensioned m+1.
-c 
-c    Input: a,b - Minimum and maximum values of co-latitude in radians
-c    corresponding to the range of the theta (colatitude) edge values.
+c - -  Input:    bpcoe(m+1,n+1) - real*8 array of phi component of B on
+c                COE grid [G]
 c
-c    Input: c,d - Minimum and maximum values of longitude in radians 
-c    corresponding to the range of longitude (azimuth) edge values.
+c - -  Input:    brcoe(m+1,n+1) - real*8 array of radial component of B on
+c                COE grid [G]
+c
+c - -  Input:    et(m,n+1) - real*8 array of input electric field in theta 
+c                (colat) direction multiplied by c, on PE grid [G km/s]
+c
+c - -  Input:    ep(m+1,n) - real*8 array of input electric field in phi 
+c                (lon) direction multiplied by c, on TE grid [G km/s]
+c
+c - -  Input:    er(m+1,n+1) - real*8 array of input electric field in 
+c                radial direction multiplied by c, on COE grid [G km/s]
+c
+c - -  Input:    sinth(m+1) -  real*8 array of the sin(colatitude), 
+c                computed on theta edges.
+c
+c - -  Input:    a,b - real*8 values of minimum and maximum values of 
+c                co-latitude corresponding to the range of the 
+c                theta (colatitude) edge values. [radians]
+c
+c - -  Input:    c,d - real*8 values of minimum and maximum values of 
+c                longitude corresponding to the range of longitude (azimuth) 
+c                edge values. [radians]
+c
+c - - Output:    eti(m,n+1) - real*8 array of theta component of the ideal, 
+c                non-inductive electric field contribution, multiplied by c,
+c                and defined on phi edges (PE grid) [G km/s]. 
+c
+c - - Output:    epi(m+1,n) - real*8 array of phi component of the ideal, 
+c                non-inductive electric field contribution, multiplied by c,
+c                and defined on theta edges (TE grid) [G km/s].
+c
+c - - Output:    eri(m+1,n+1) - real*8 array of radial component of the ideal 
+c                non-inductive electric field contribution, multiplied by 
+c                c, and defined at COE grid locations [G km/s].
+c
+c    GHF, 2015
 c
 c    Local variable: max_iter, number of iterations for relaxation code
 c
-c    Output: eti - theta component of the ideal non-inductive electric 
-c    field contribution, multiplied by speed of light, dimensioned m,n+1 
-c    and defined on phi edges (PE) [Gauss km/s]. 
-c 
-c    Output: epi - phi component of the ideal non-inductive electric 
-c    field contribution, multiplied by speed of light, dimensioned m+1,n
-c    and defined on theta edges (TE) [Gauss km/s]. 
-c 
-c    Output: eri [m+1,n+1] (COE) - radial component of the ideal 
-c    non-inductive electric field contribution,multiplied by speed of light, 
-c    dimensioned m+1,n+1 and defined in COE locations [Gauss km/s].
-c    GHF, 2015
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index
@@ -79,7 +91,7 @@ c
 c     INPUT DATA
 c
       integer :: m,n
-      real*8 :: rsun,bthr
+      real*8 :: rsun
       real*8 :: sinth(m+1)
       real*8 :: btcoe(m+1,n+1),bpcoe(m+1,n+1),brcoe(m+1,n+1)
       real*8 :: et(m,n+1),ep(m+1,n),er(m+1,n+1)
@@ -92,7 +104,7 @@ c
 c - - local variables to e_ideal_ss:
 c
       integer :: max_iter,verbose
-      real*8 :: dtheta,dphi
+      real*8 :: dtheta,dphi,bthr
       real*8 :: btt(m-1,n-1),btp(m-1,n-1),btr(m-1,n-1)
       real*8 :: edt(m-1,n-1),edp(m-1,n-1),edr(m-1,n-1)
       real*8 :: psi(m+1,n+1)
@@ -114,6 +126,7 @@ c
       call interp_eh_ss(m,n,et,ep,edt,edp)
 c
 c - - get interior corner values of er into edr:
+c
       edr(1:m-1,1:n-1)=er(2:m,2:n)
 c 
 c - - Define evec array on interior corners
@@ -122,7 +135,7 @@ c
       evec(1:m-1,1:n-1,2)=edp
       evec(1:m-1,1:n-1,3)=edr
 c
-c    components of B on interior corners only
+c - - components of B on interior corners only
 c
       btt(1:m-1,1:n-1)=btcoe(2:m,2:n)
       btp(1:m-1,1:n-1)=bpcoe(2:m,2:n)

@@ -1,15 +1,19 @@
       subroutine fix_mask_ss(mdim,ndim,flag,mask)
 c
 c+
-c     Purpose: For mask values between 0 and 1, sets them to 0 or 1
+c - - Purpose: For mask values between 0 and 1, sets them to 0 or 1
 c              depending on the value of flag:  If flag=1, then intermediate
 c              values set to 1; if flag=0, then intermediate values set to 0
 c
-c - - Usage:  call fix_mask(mdim,ndim,flag,mask)
-c - - Input:  mdim,ndim - number of mask values in theta, phi directions, resp.
-c - - Input:  flag - integer equal to 0 or 1, which determines whether
-c             intermediate mask values are set to 0 or 1
-c - - Input and output: mask(mdim,ndim) - real*8 2d mask array
+c - - Usage:   call fix_mask(mdim,ndim,flag,mask)
+c
+c - - Input:   mdim,ndim - number of mask values in theta, phi directions, resp.
+c
+c - - Input:   flag - integer equal to 0 or 1, which determines whether
+c              intermediate mask values are set to 0 or 1
+c
+c - - Input/Output: 
+c              mask(mdim,ndim) - real*8 2d mask array
 c
 c-
 c
@@ -41,6 +45,8 @@ c   59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 c
 c
       implicit none
+c
+c - - calling argument declarations:
 c
       integer :: mdim,ndim,flag
       real*8 :: mask(mdim,ndim)

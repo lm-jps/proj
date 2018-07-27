@@ -1,34 +1,46 @@
-      subroutine divh_sc(m,n,bt,bp,rsun,sinth,dtheta,dphi,div)
+      subroutine divh_sc(m,n,et,ep,rsun,sinth,dtheta,dphi,div)
 c
 c+
-c - - Purpose: Compute divergence of the vector bt,bp using centered grid
-c - - (rather than staggered grid) formalism
+c - - Purpose: Compute divergence of the vector et,ep using centered grid
+c              (rather than staggered grid) formalism
 c
-c - - Usage:  call(divh_sc(m,n,bt,bp,rsun,sinth,dtheta,dphi,div)
+c              NOTE:  This subroutine is valid *ONLY* within the centered
+c              grid context used in subroutine relax_psi_3d_ss.f  *DO NOT USE*
+c              with staggered grid variables.
 c
-c - - compute divergence of horizontal field B_h, given rectangular arrays
-c - - of bt (B_theta), bp( B_phi).  Arrays assumed to have 1st index in
-c - - theta direction, 2nd index in phi direction.
-c - - Use standard 2nd order finite differences for interior
-c - - cells, use one-sided derivatives at edges computed from 2nd order
-c - - Lagrange interpolating polynomials.  rsun is assumed to be radius of
-c - - the Sun, dtheta and dphi are the cell sizes in the theta and phi
-c - - directions (in radians).  No ghost-zone values are used here, so
-c - - make sure sinth includes no ghost-zones.
-c - - Input: bt(m+1,n+1), bp(m+1,n+1):  (Input) Arrays of B_theta, B_phi.
-c - - Input: rsun:  user input value for radius of Sun.
-c - - Input: dtheta, dphi - distance between grid points in theta,phi
-c - - Input sinth: array of sin(theta).  Must be computed from the 
-c - - colatitudes corresponding to the 1st index of bt and bp.
-c - - Output div(m+1,n+1): The two-dimensional divergence 
-c - - NOTE:  Plate Carree grid spacing (dtheta, dphi are constants) assumed!
+c - - Usage:   call(divh_sc(m,n,et,ep,rsun,sinth,dtheta,dphi,div)
+c 
+c - - Method:  Use centered difference expressions for interior points,
+c              one-sided difference approximations to derivatives for
+c              edge and corner points derived from 2nd order Lagrange
+c              interpolating polynomials.
 c
-c - - NOTE:  Centered grid (not staggered!) assumed here.
-c - - NOTE:  The use of m,n here is *not* consistent with our use of m,n in
-c - - the PDFI_SS problem!  What we refer to as m-1 (PDFI_SS) will be the same
-c - - as m+1 (centered grid).  Similarly n-1 (PDFI_SS) will be n+1 (centered
-c - - grid).  Use Caution if using directly in staggered PDFI software!
+c - - Input:   m,n - integer number of gridpoints in colatitude and longitude
+c              directions, respectively.
+c
+c              NOTE:  m,n here are smaller by two than the value of m,n
+c              used in the standard staggered mesh formalism of PDFI_SS.
+c
+c - - Input:   et(m+1,n+1) - real*8 array of theta component of c times
+c              the electric field [G km/sec]
+c
+c - - Input:   ep(m+1,n+1) - real*8 array of phi component of c times the
+c              electric field [G km/sec]
+c
+c - - Input:   rsun - real*8 value of radius of Sun. [km] Normally 6.96d5.
+c
+c - - Input:   sinth(m+1) - real*8 array of sin(colatitude), for the 
+c              colatitude grid range.  Computed by subroutine sinthta_sc.
+c
+c - - Input:   dtheta,dphi - real*8 values of the angular gridpoint separation
+c              in the colatitude, and longitude directions, respectively.
+c              [radians]
+c 
+c - - Output:  div(m+1,n+1) - real*8 array of values of the horizontal
+c              divergence of cE_h, the horizontal components of cE.
+c              [G/s]
 c-
+c
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index
 c   Copyright (C) 2015,2016 University of California
@@ -57,9 +69,17 @@ c   59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 c
       implicit none
 c
+c - - input variables:
+c
       integer :: m,n
       real*8 :: rsun,dtheta,dphi
-      real*8 :: bt(m+1,n+1),bp(m+1,n+1),div(m+1,n+1),sinth(m+1)
+      real*8 :: et(m+1,n+1),ep(m+1,n+1),sinth(m+1)
+c
+c - - output variables:
+c
+      real*8 :: div(m+1,n+1)
+c
+c - - local variables:
 c
       integer :: ntmax,npmax,i,j
       real*8 :: halfodt,halfodp,rsuninv
@@ -76,64 +96,61 @@ c - - over i
 c
       do j=2,npmax-1
          div(2:ntmax-1,j)=
-     1   halfodt*(bt(3:ntmax,j)*sinth(3:ntmax)-
-     2   bt(1:ntmax-2,j)*sinth(1:ntmax-2))/sinth(2:ntmax-1)
-     3   +halfodp*(bp(2:ntmax-1,j+1)-bp(2:ntmax-1,j-1))/
+     1   halfodt*(et(3:ntmax,j)*sinth(3:ntmax)-
+     2   et(1:ntmax-2,j)*sinth(1:ntmax-2))/sinth(2:ntmax-1)
+     3   +halfodp*(ep(2:ntmax-1,j+1)-ep(2:ntmax-1,j-1))/
      4   sinth(2:ntmax-1)
       enddo
 
 c
 c - - one sided derivatives theta edges top and bottom:
 c
-c      write(6,*) 'divh_sc:59 sum(div) ',sum(div)
       do j=2,npmax-1
-         div(1,j)=halfodp*(bp(1,j+1)-bp(1,j-1))/sinth(1)+
-     1   (4.*bt(2,j)*sinth(2)-3.*bt(1,j)*sinth(1)-bt(3,j)
+         div(1,j)=halfodp*(ep(1,j+1)-ep(1,j-1))/sinth(1)+
+     1   (4.*et(2,j)*sinth(2)-3.*et(1,j)*sinth(1)-et(3,j)
      2   *sinth(3))*halfodt/sinth(1)   
-         div(ntmax,j)=halfodp*(bp(ntmax,j+1)-bp(ntmax,j-1))
+         div(ntmax,j)=halfodp*(ep(ntmax,j+1)-ep(ntmax,j-1))
      1   /sinth(ntmax)
-     2   +(3.*bt(ntmax,j)*sinth(ntmax)+bt(ntmax-2,j)*sinth(ntmax-2)
-     3   -4.*bt(ntmax-1,j)*sinth(ntmax-1))*halfodt/sinth(ntmax)
+     2   +(3.*et(ntmax,j)*sinth(ntmax)+et(ntmax-2,j)*sinth(ntmax-2)
+     3   -4.*et(ntmax-1,j)*sinth(ntmax-1))*halfodt/sinth(ntmax)
       enddo
-c      write(6,*) 'divh_sc: 70 sum(div) ',sum(div)
-c      write(6,*) 'divh_sc: 60 tot bt,bp',sum(bt),sum(bp)
-
 c
 c - - one sided derivatives of phi edges left and right:
-      do i=2,ntmax-1
-         div(i,1)=halfodt*(bt(i+1,1)*sinth(i+1)-bt(i-1,1)*sinth(i-1))
-     1   /sinth(i)+(4.*bp(i,2)-3.*bp(i,1)-bp(i,3))*halfodp/sinth(i)
 c
-         div(i,npmax)=halfodt*(bt(i+1,npmax)*sinth(i+1)-bt(i-1,npmax)
+      do i=2,ntmax-1
+         div(i,1)=halfodt*(et(i+1,1)*sinth(i+1)-et(i-1,1)*sinth(i-1))
+     1   /sinth(i)+(4.*ep(i,2)-3.*ep(i,1)-ep(i,3))*halfodp/sinth(i)
+c
+         div(i,npmax)=halfodt*(et(i+1,npmax)*sinth(i+1)-et(i-1,npmax)
      1   *sinth(i-1))/sinth(i)
-     2   +(3.*bp(i,npmax)+bp(i,npmax-2)-4.*bp(i,npmax-1))*halfodp
+     2   +(3.*ep(i,npmax)+ep(i,npmax-2)-4.*ep(i,npmax-1))*halfodp
      3   /sinth(i)
       enddo
 c
-c - - corners
+c - - corners (one-sided derivs in both directions)
 c
       div(1,1)=halfodt*
-     1   (4.*bt(2,1)*sinth(2)-3.*bt(1,1)*sinth(1)-bt(3,1)*sinth(3))
+     1   (4.*et(2,1)*sinth(2)-3.*et(1,1)*sinth(1)-et(3,1)*sinth(3))
      2   /sinth(1)
-     3   +halfodp*(4.*bp(1,2)-3.*bp(1,1)-bp(1,3))/sinth(1)
+     3   +halfodp*(4.*ep(1,2)-3.*ep(1,1)-ep(1,3))/sinth(1)
 c
       div(1,npmax)=halfodt*
-     1   (4.*bt(2,npmax)*sinth(2)-3.*bt(1,npmax)*sinth(1)-
-     2   bt(3,npmax)*sinth(3))/sinth(1)+
-     3   halfodp*(3.*bp(1,npmax)+bp(1,npmax-2)-4.*bp(1,npmax-1))
+     1   (4.*et(2,npmax)*sinth(2)-3.*et(1,npmax)*sinth(1)-
+     2   et(3,npmax)*sinth(3))/sinth(1)+
+     3   halfodp*(3.*ep(1,npmax)+ep(1,npmax-2)-4.*ep(1,npmax-1))
      4   /sinth(1)
 c 
-      div(ntmax,1)=halfodt*(3.*bt(ntmax,1)*sinth(ntmax)
-     1   +bt(ntmax-2,1)*sinth(ntmax-2)-4.*bt(ntmax-1,1)*
+      div(ntmax,1)=halfodt*(3.*et(ntmax,1)*sinth(ntmax)
+     1   +et(ntmax-2,1)*sinth(ntmax-2)-4.*et(ntmax-1,1)*
      2   sinth(ntmax-1))/sinth(ntmax)+
-     3   halfodp*(4.*bp(ntmax,2)-3.*bp(ntmax,1)-bp(ntmax,3))
+     3   halfodp*(4.*ep(ntmax,2)-3.*ep(ntmax,1)-ep(ntmax,3))
      4   /sinth(ntmax)
 c
-      div(ntmax,npmax)=halfodt*(3.*bt(ntmax,npmax)*sinth(ntmax)+
-     1   bt(ntmax-2,npmax)*sinth(ntmax-2)-4.*bt(ntmax-1,npmax)*
+      div(ntmax,npmax)=halfodt*(3.*et(ntmax,npmax)*sinth(ntmax)+
+     1   et(ntmax-2,npmax)*sinth(ntmax-2)-4.*et(ntmax-1,npmax)*
      2   sinth(ntmax-1))/sinth(ntmax)+
-     3   halfodp*(3.*bp(ntmax,npmax)+bp(ntmax,npmax-2)-4.*
-     4   bp(ntmax,npmax-1))/sinth(ntmax)
+     3   halfodp*(3.*ep(ntmax,npmax)+ep(ntmax,npmax-2)-4.*
+     4   ep(ntmax,npmax-1))/sinth(ntmax)
 c   
       div(:,:)=div(:,:)*rsuninv
       return

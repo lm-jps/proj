@@ -7,19 +7,28 @@ c               Result is evaluated at cell centers (CE grid).
 c
 c - -  Usage:   call curlh_ce_ss(m,n,et,ep,rsun,sinth,sinth_hlf,
 c               dtheta,dphi,curl)
+c
 c - -  Input:   m,n - integer numbers of cell-centers in theta, phi directions, 
 c               resp.
+c
 c - -  Input:   et(m,n+1) - real*8 array of theta component of cE vector.
 c               [G km/sec]
+c
 c - -  Input:   ep(m+1,n) - real*8 array of phi component of cE vector. 
 c               [G km/sec]
+c
 c - -  Input:   rsun - real*8 value of radius of Sun. [km] Normally 6.96d5.
+c
 c - -  Input:   sinth(m+1) - real*8 array of theta cell-edge values of
 c               sin(theta).
+c
 c - -  Input:   sinth_hlf(m) - real*8 array of theta-cell center values of
 c               sin(theta).
+c
 c - -  Input:   dtheta - real*8 value of distance between theta edges. [radians]
+c
 c - -  Input:   dphi - real*8 value of distance between phi edges. [radians]
+c
 c - - Output:   curl(m,n) - real*8 array of cell-center values
 c               of rhat dot curl(et,ep) [G/sec]
 c-

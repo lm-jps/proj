@@ -2,23 +2,27 @@
      1 npadl,npadr)
 c
 c+
-c - - Purpose:  compute padding on left, right, bottom, top such that
-c     n=n_orig+npadl+npadr is divisible by 12, and m=m_orig+mpadb+mpadt
-c     is also divisible by 12.  mpad0,npad0 are initial guesses as to
-c     the amounts of padding.
+c - - Purpose: Compute padding on left, right, bottom, top such that
+c              n=n_orig+npadl+npadr is divisible by 12, and m=m_orig+mpadb+mpadt
+c              is also divisible by 12.  mpad0,npad0 are initial guesses as to
+c              the amounts of padding.
 c
-c - - Usage:  call pad_int_gen_ss(m_orig,n_orig,mpad0,npad0,mpadb,mpadt,
-c             npadl,npadr)
-c - - Input:  m_orig,n_orig: integer values for the number of unpadded cells
-c             in the latitude and longitude directions, respectively.
-c - - Input:  mpad0,npad0: integer values for a "first guess" as to the 
-c             amount of desired padding in longitude and latitude directions,
-c             respectively.  These values will usually be upper limits to 
-c             the chosen values.
-c - - Output: mpadb,mpadt:  Number of padded cells in latitude on the bottom
-c             and top sides of the array, respectively.
-c - - Output: npadl, npadr:  Number of padded cells in longitude on the left
-c             and right sides of the array, respectively.
+c - - Usage:   call pad_int_gen_ss(m_orig,n_orig,mpad0,npad0,mpadb,mpadt,
+c              npadl,npadr)
+c
+c - - Input:   m_orig,n_orig: integer values for the number of unpadded cells
+c              in the latitude and longitude directions, respectively.
+c
+c - - Input:   mpad0,npad0: integer values for a "first guess" as to the 
+c              amount of desired padding in longitude and latitude directions,
+c              respectively.  These values will usually be upper limits to 
+c              the chosen values.
+c
+c - - Output:  mpadb,mpadt:  Integer values of number of padded cells in 
+c              latitude on the bottom and top sides of the array, respectively.
+c
+c - - Output:  npadl, npadr:  Integer values of number of padded cells in 
+c              longitude on the left and right sides of the array, respectively.
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index

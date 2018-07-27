@@ -1,7 +1,7 @@
       subroutine e_flct_ss(m,n,brte,brpe,bhte,bhpe,
      1 vt,vp,rsun,sinth,sinth_hlf,a,b,c,d,ezetat,ezetap)
 c
-c - - documentation below can be seen using DOC_LIB,'e_flct_ss.f'
+c - - documentation below can be seen using DOC_LIB,'e_flct_ss.f' from IDL
 c+
 c - - Purpose:  To compute non-inductive contribution to the electric field
 c               from horizontal flows determined by FLCT (correlation tracking)
@@ -9,57 +9,54 @@ c               and radial magnetic fields.  See section 2.3.2 of Kazachenko
 c               et al (2014).  Solves for ezetat, ezetap - 
 c               non-inductive electric field components due to horizontal 
 c               FLCT velocity field [vt,vp] 
-c - - Usage:  
-c - - call e_flct_ss(m,n,brte,brpe,bhte,bhpe,vt,vp,rsun,sinth,sinth_hlf,
-c    1 a,b,c,d,ezetat,ezetap)
 c
-c - - Input: brte - array of the radial component of the magnetic field,
-c - - dimensioned m+1,n and defined on theta edges, midway between
-c - - phi edges [Gauss].
+c - - Usage:    call e_flct_ss(m,n,brte,brpe,bhte,bhpe,vt,vp,rsun,sinth,
+c               sinth_hlf,a,b,c,d,ezetat,ezetap)
 c
-c - - Input: brpe - array of the radial component of the magnetic field,
-c - - dimensioned m,n+1 and defined on phi edges, midway between
-c - - theta edges [Gauss].
+c - - Input:    brte(m+1,n) - real*8 array of the radial component of the 
+c               magnetic field, defined on theta edges, midway 
+c               between phi edges (TE grid) [G].
 c
-c - - Input: bhte - array of the horizontal amplitude of the magnetic field,
-c - - dimensioned m+1,n and defined on theta edges [Gauss]
+c - - Input:    brpe(m,n+1) - real*8 array of the radial component of the 
+c               magnetic field, defined on phi edges, midway between
+c               theta edges (PE grid) [G].
 c
-c - - Input: bhpe - array of the horizontal amplitude of the magnetic field,
-c - - dimensioned m,n+1 and defined on phi edges [Gauss]
+c - - Input:    bhte(m+1,n) - real*8 array of the horizontal amplitude of the 
+c               magnetic field, defined on TE grid [G]
 c
-c - - Input:  vt - the component of the velocity field pointing in the
-c - - colatitude direction (positive is southward pointing).  
-c - - vt is dimensioned m+1,n and is defined on theta edges, midway between
-c - - phi edges [km/s]. 
+c - - Input:    bhpe(m,n+1) - real*8 array of the horizontal amplitude of 
+c               the magnetic field, defined on PE grid [G]
 c
-c - - Input:  vp - the component of the velocity field pointing in the
-c - - logitude direction, is dimensioned m,n+1 and is defined on phi edges, 
-c - - midway between theta edges [km/s].
+c - - Input:    vt(m+1,n) - real*8 array of the theta component of the 
+c               FLCT velocity field  (positive is southward pointing).  
+c               Located on TE grid [km/sec]
 c
-c - - Input: rsun - units for the radius of the Sun.
+c - - Input:    vp(m,n+1) - real*8 array of the phi component of the FLCT
+c               velocity field, defined on phi edges (PE grid) [km/sec]
 c
-c - - Input: sinth, the value of sin(colatitude), computed for theta edge
-c - - locations.  Is dimensioned m+1.
+c - - Input:    rsun - real*8 value for the radius of the Sun [km].
+c               Normally 6.96d5.
+c
+c - - Input:    sinth(m+1) - real*8 array of the sin(colatitude), computed 
+c               for theta edge locations.
 c 
-c - - Input: sinth_hlf, the value of sin(colatitude) computed for cell-center
-c - - values of theta.  Is dimensioned m.
+c - - Input:    sinth_hlf(m) - real*8 array of the sin(colatitude) computed 
+c               for cell-center values of theta.
 c
-c - - a,b:  Minimum and maximum values of co-latitude in radians
-c - - corresponding to the
-c - - range of the theta (colatitude) edge values.
+c - - Input:    a,b - real*8 values of the minimum and maximum values of 
+c               co-latitude corresponding to the north and south
+c               edges of the domain [radians]
+c - - Input:    c,d:  real*8 values of the minimum and maximum values of 
+c               longitude corresponding longitude (azimuth) edge values
+c               of the domain [radians]
 c
-c - - c,d:  Minimum and maximum values of longitude in radians corresponding
-c - - to the range of longitude (azimuth) edge values.
-c
-c - - Input: sigma, value of the width of the PIL in pixels.
-c
-c - - Output: ezetat - theta component of the FLCT non-inductive electric 
-c - - field contribution, multiplied by speed of light, dimensioned m,n+1 
-c     and defined on theta edges PE [Gauss km/s]. 
+c - - Output:   ezetat(m,n+1) - real*8 array of the theta component of the 
+c               FLCT non-inductive electric field contribution, multiplied by 
+c               c (speed of light), and defined on phi edges (PE grid) [G km/s]
 c 
-c - - Output: ezetap - phi component of the FLCT non-inductive electric 
-c - - field contribution, multiplied by speed of light, dimensioned m+1,n 
-c     and defined on theta edges TE [Gauss km/s]. 
+c - - Output:   ezetap(m+1,n) - real*8 array of the phi component of the 
+c               FLCT non-inductive electric field multiplied by c,
+c               and defined on theta edges (TE grid) [G km/s]. 
 c-
 c - - MKD, October 2015
 c   PDFI_SS Electric Field Inversion Software
@@ -90,14 +87,18 @@ c   59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 c
       implicit none
 c
+c - - input variables:
+c
       integer :: m,n
-      integer :: m1,n1
       real*8 :: rsun
       real*8 :: sinth(m+1),sinth_hlf(m)
       real*8 :: vt(m+1,n),vp(m,n+1)
       real*8 :: brte(m+1,n),brpe(m,n+1)
       real*8 :: bhte(m+1,n),bhpe(m,n+1)
-      real*8 :: a,b,c,d,sigma
+      real*8 :: a,b,c,d
+c
+c - - output variable declarations:
+c
       real*8 :: ezetat(m,n+1),ezetap(m+1,n)
 c
 c - - local allocatable work array:
@@ -106,6 +107,8 @@ c
 c      
 c - - local variables to e_flct_ss:
 c
+      integer :: m1,n1
+      real*8 :: sigma
       real*8 :: dtheta,dphi,elm,pertrb
       integer :: idimf,itmp,bcm,bcn,ierror
       real*8 :: eflctpe(m,n+1),eflctte(m+1,n),rhspe(m,n+1),rhste(m+1,n)
@@ -114,13 +117,14 @@ c
       real*8 :: ap,bpp,cp,dp
       real*8 :: divh_rhs(m-1,n-1),fce(m-1,n-1),zeta(m+1,n+1)
       real*8 :: gradt(m,n+1),gradp(m+1,n)
-
+c
+c     sigma is the value of the width of the PIL in pixels.
+c
       sigma=1.0
       dtheta=(b-a)/m
       dphi=(d-c)/n  
       m1=m-1
       n1=n-1
-  
 c
 c - - set boundary condition flags for Neumann:
 c    

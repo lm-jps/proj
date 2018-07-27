@@ -5,13 +5,20 @@ c - -  Purpose: Given input "bmap" array (m-1,n-1) corresponding to magnetogram
 c               pixels, this returns "pilmap" an (m-1, n-1) bitmap (of integer 
 c               type, with default precision) for all pixels closer to 
 c               opposite polarity than dilation_param (integer) 
+c
 c - -  Usage:   call get_pils_ss(m,n,bmap,pilmap,thresh,dilation_param)
+c
 c - -  Input:   m,n - integer no. of cell centers in colat, lon, resp.
-c - -  Input:   bmap(m-1,n-1) - real*8 magnetogram array
-c - -  Output:  pilmap(m-1,n-1) - integer array of PIL locations, equal to 1
-c               within PILs, 0 outside of PILs.
+c
+c - -  Input:   bmap(m-1,n-1) - real*8 magnetogram array at CO grid locations
+c               [G]
+c
+c - -  Output:  pilmap(m-1,n-1) - integer array of PIL locations on CO
+c               grid, equal to 1 within PILs, 0 outside of PILs.
+c
 c - -  Input:   thresh - real*8 threshold (abs. value) for defining magnetic
-c               regions.
+c               regions. [G]
+c
 c - -  Input:   dilation_param - integer value defining width of PILs.  Width
 c               is 2*dilation_param + 1.
 c-

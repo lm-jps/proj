@@ -4,30 +4,44 @@ c
 c+
 c - - Purpose:  Compute horizontal Laplacian in the centered (rather than
 c               staggered) spherical coordinate system.
-c               Use the same formulation as assumed
-c               in Fishpack.
-c - - Usage:  call delh2_sc(m,n,psi,rsun,sinth_gh,sinth_hlf_gh,dtheta,dphi,
-c    1 delh2)
+c               Use the same formulation as assumed in Fishpack.
 c
-c - - Use standard 2nd order finite differences for interior
-c - - cells. No one-sided derivatives used.  It is assumed that psi does
-c - - include ghost-zones.  It is also assumed that sinth_gh (cell-edge values
-c - - sin(theta) has ghost-zones, and that
-c - - sinth_hlf_gh (cell-interior values of sin(theta))
-c - - includes ghost-zones.  The output array, delh2, is computed only for
-c - - active zones, so this array will have dimensions that are 2 smaller
-c - - than the dimensions for the input array psi.
-c - - Input:  rsun - units for the radius of the Sun.
-c - - Input:  sinth_gh, sin(theta) computed at cell edges
-c - - over the co-latitude range.  Ghost zones assumed included.
-c - - Input:  sinth_hlf_gh, cell interior values of
-c - - sin(theta) computed over the co-latitude range.  Ghostzones assumed
-c - - included.
-c - - Input:  dtheta,dphi - the spacing of cells in theta,phi directions
-c - - Output: delh2 - The 2d horizontal Laplacian array, whose size is two less
-c - - in each direction than the psi array.
-c - - NOTE:  Plate Carree grid spacing (dtheta, dphi are constants) assumed!
-c - - NOTE: The variables m,n are not the same as m,n in PDFI_SS!
+c               NOTE:  This subroutine *is not valid* for the staggered grid,
+c               it is valid *only* within the context of the relax_psi_3d_ss
+c               subroutine, which uses a centered grid formalism.
+c
+c - - Usage:    call delh2_sc(m,n,psi,rsun,sinth_gh,sinth_hlf_gh,dtheta,dphi,
+c               delh2)
+c
+c - - Input:    m,n - integer values of the number of grid points in theta,
+c               phi directions.  
+c
+c               NOTE:  These values of m,n *are not* the
+c               same values of m,n that are in the staggered grid!  They are
+c               each smaller by two than the staggered grid values of m,n.
+c
+c - - Input:    psi(m+3,n+3) - real*8 array of scalar potential [G km^2/sec]
+c
+c - - Input:    rsun - real*8 array of radius of the Sun [km].  Normally 6.96d5
+c
+c - - Input:    sinth_gh(m+3) - real*8 array of values of sin(colatitude),
+c               including two ghost zone values.  Computed in subroutine
+c               sinthta_sc, the centered grid version of sinthta.
+c
+c - - Input:    sinth_hlf_gh(m+2) - real*8 array of values of sin(colatitude),
+c               at half-way points between the values in sinth_gh.
+c               Computed in subroutine sinthta_sc, the centered grid version
+c               of sinthta.
+c
+c - - Input:    dtheta,dphi - real*8 values of the angular separation in
+c               colatitude and longitude, respectively. [radians]
+c
+c - - Output:   delh2(m+1,n+1) - real*8 array of the horizontal Laplacian
+c               evaluated on interior grid points. [G/sec]
+c
+c     Note:     Uses standard 2nd order finite differences for interior
+c               cells. No one-sided derivatives used.  It is assumed that psi 
+c               does include ghost-zones.  
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index

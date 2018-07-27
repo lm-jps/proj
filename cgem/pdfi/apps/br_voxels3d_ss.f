@@ -22,20 +22,27 @@ c             dr,brtop,brbot)
 c
 c - - Input:  m,n - integers describing the number of radial voxel face centers
 c             in the colatitude, and longitudinal directions, respectively.
-c - - Input:  rsun:  Assumed radius of the Sun [km].  Normally 6.96e5.
-c - - Input:  sinth(m+1) : sin(colatitude) computed at theta cell edges
-c             (computed from subroutine sinthta_ss)
-c - - Input:  sinth_hlf(m) : sin(colatitude) computed at theta cell centers
-c             (computed from subroutine sinthta_ss)
-c - - Input:  dtheta,dphi: cell thickness in colatitude, longitude directions
-c             [radians]
+c
+c - - Input:  rsun:  real*8 radius of the Sun [km].  Normally 6.96e5.
+c
+c - - Input:  sinth(m+1) - real*8 array of sin(colatitude) computed at 
+c             theta cell edges (computed from subroutine sinthta_ss)
+c
+c - - Input:  sinth_hlf(m) - real*8 array of sin(colatitude) computed at 
+c             theta cell centers (computed from subroutine sinthta_ss)
+c
+c - - Input:  dtheta,dphi: - real*8 cell thickness in colatitude, longitude 
+c             directions [radians]
+c
 c - - Input:  bt(m+1,n),bp(m,n+1),br(m,n) - real*8 magnetic field variables 
 c             (or their time derivatives) on staggered mesh 
 c             (br on CE grid, bt on TE grid, bp on PE grid). [G or G/sec]
+c
 c - - Input:  dr - a real*8 scalar [km] that provides the depth of 
 c             the radial legs of the voxels.  The upper face will be 0.5*dr 
 c             above the photosphere, while the lower face will be 0.5*dr 
 c             below the photosphere.
+c
 c - - Output: brtop(m,n),brbot(m,n) - real*8 values of B_r (or B_r dot)
 c             on the CE grid, at the top layer, and bottom layer, respectively.
 c             [G or G/sec]

@@ -2,30 +2,39 @@
      1 vtcoe,vpcoe,vrcoe)
 c+
 c - - Purpose:  To compute the velocity field v given E and B such that
-c     cE is as close as possible to -v cross B.
+c               cE is as close as possible to -v cross B.
 c
-c - - Method:  v = cE cross B / B^2 (where B is above threshold),
-c              =0 otherwise.
+c - - Method:   v = cE cross B / B^2 (where B is above threshold),
+c               =0 otherwise.
 c
-c - - Usage:  call v_ideal_ss(m,n,btcoe,bpcoe,brcoe,et,ep,er,maskcoe,
-c             vtco,vpco,vrco)
+c - - Usage:    call v_ideal_ss(m,n,btcoe,bpcoe,brcoe,et,ep,er,maskcoe,
+c               vtco,vpco,vrco)
 c
-c - - Input:  m,n - integer values of the number of cell centers in co-latitude
-c             and longitude directions, respectively.
-c - - Input:  btcoe(m+1,n+1),bpcoe(m+1,n+1),brcoe(m+1,n+1) - real*8 arrays
-c             of the theta, phi, and radial components of the magnetic field
-c             evaluated on the COE grid. [G]
-c - - Input:  et(m,n+1),ep(m+1,n),er(m+1,n+1) - real*8 arrays of the theta,
-c             phi, and radial components of electic field multiplied by c, 
-c             on the PE, TE, and COE grids, respectively. [G km/s]
-c - - Input:  maskcoe(m+1,n+1) - mask array on COE grid, set to 1 where the
-c             field strength is above threshold, and to 0 otherwise.
-c - - Output: vtcoe(m+1,n+1) - real*8 array of the theta component of v. [km/s]
-c - - Output: vpcoe(m+1,n+1) - real*8 array of the phi component of v. [km/s]
-c - - Output: vrcoe(m+1,n+1) - real*8 array of the radial component of v. [km/s]
-c - - Note:   vtcoe,vpcoe,vrcoe will almost certainly be 0 on the edges, 
-c             because ercoe is 0 there, and et, ep are not interpolated
-c             to the edges.
+c - - Input:    m,n - integer values of the number of cell centers in 
+c               co-latitude and longitude directions, respectively.
+c
+c - - Input:    btcoe(m+1,n+1),bpcoe(m+1,n+1),brcoe(m+1,n+1) - real*8 arrays
+c               of the theta, phi, and radial components of the magnetic field
+c               evaluated on the COE grid. [G]
+c
+c - - Input:    et(m,n+1),ep(m+1,n),er(m+1,n+1) - real*8 arrays of the theta,
+c               phi, and radial components of electic field multiplied by c, 
+c               on the PE, TE, and COE grids, respectively. [G km/s]
+c
+c - - Input:    maskcoe(m+1,n+1) - mask array on COE grid, set to 1 where the
+c               field strength is above threshold, and to 0 otherwise.
+c
+c - - Output:   vtcoe(m+1,n+1) - real*8 array of the theta component of v. 
+c               [km/s]
+c
+c - - Output:   vpcoe(m+1,n+1) - real*8 array of the phi component of v. [km/s]
+c
+c - - Output:   vrcoe(m+1,n+1) - real*8 array of the radial component of v. 
+c               [km/s]
+c
+c - - Note:     vtcoe,vpcoe,vrcoe will almost certainly be 0 on the edges, 
+c               because ercoe is 0 there, and et, ep are not interpolated
+c               to the edges.
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index

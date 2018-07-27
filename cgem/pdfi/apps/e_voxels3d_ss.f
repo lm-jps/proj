@@ -3,45 +3,64 @@
 c
 c+
 c - - Purpose:  To compute the 3d electric field on the upper and lower rails 
-c     of a layer of spherical voxels.
+c               of a layer of spherical voxels, given the horizontal electric
+c               fields et,ep located mid-way between the layers, and ptd
+c               solutions for scrb and dscrbdr.
 c
-c - - Method:  Use electric field computed in a spherical surface, plus 
-c     the radial derivative of the time derivative of the poloidal potential 
-c     in that same
-c     surface, to compute the electric field on all the rails of the voxels.  
-c     It is assumed that the surface is placed half-way (in radius) between
-c     the top and the bottom layers of the voxels.  We shall refer to this
-c     surface layer as the "photosphere".  The radial derivative is derived
-c     from dscrbdr by taking a curl of dscrbdr times the rhat unit vector.
+c - - Method:   Use electric field computed in a spherical surface, plus 
+c               the radial derivative of the time derivative of the poloidal 
+c               potential in that same surface, to compute the electric field 
+c               on all the rails of the voxels.  
+c               It is assumed that the surface is placed half-way (in radius) 
+c               between the top and the bottom layers of the voxels.  
+c               We shall refer to this surface layer as the "photosphere".  
+c               The radial derivative is derived from dscrbdr by taking a 
+c               curl of dscrbdr times the rhat unit vector.
 c
-c - - Usage:  call e_voxels3d_ss(m,n,rsun,sinth_hlf,dtheta,dphi,et,ep,
-c     scrb,dscrbdr,dr,ettop,etbot,eptop,epbot)
+c - - Usage:    call e_voxels3d_ss(m,n,rsun,sinth_hlf,dtheta,dphi,et,ep,
+c               scrb,dscrbdr,dr,ettop,etbot,eptop,epbot)
 c
-c - - Input:  m,n - integers describing the number of radial voxel face centers
-c     in the colatitude, and longitudinal directions, respectively.
-c - - Input:  rsun:  Assumed radius of the Sun [in km]
-c - - Input:  sinth_hlf(m) : sin(colatitude) computed at cell centers
-c             (computed from subroutine sinthta_ss)
-c - - Input:  dtheta,dphi: cell thickness in colatitude, longitude directions
-c - - Input:  et(m,n+1),ep(m+1,n) - real*8 electric-field mutiplied by the speed
-c             of light variables computed from PTD, or PDFI techniques at 
-c             the photosphere [G km/s].
-c - - NOTE:  the vertical rails will have the value of er along them, but
-c     since er is unchanged, we do not include er in the calling arguments.
-c - - Input:  scrb(m+2,n+2) - real*8 array returned from ptdsolve_ss
-c     subroutine.
-c - - Input:  dscrbdr(m+2,n+2) - real*8 array returned from the ptdsolve_ss
-c     subroutine.
-c - - Input:  dr - a real*8 scalar [in km] that provides the depth of 
-c     the radial legs
-c     of the voxels.  The upper rails will be 0.5*dr above the photosphere,
-c     while the lower rails will be 0.5*dr below the photosphere.
-c - - Output:  ettop(m,n+1),etbot(m,n+1) - real*8 values of E_theta, multiplied 
-c              by the speed of light,.on the PE grid edges, at the top layer, 
-c              and bottom layer, respectively [G km/s].
-c - - Output:  eptop(m+1,n),epbot(m+1,n) - real*8 values of E_phi, multiplied 
-c              by the speed of light, on the TE grid edges, at the top and 
-c              bottom layers, respectively  [G km/s].
+c - - Input:    m,n - integers describing the number of radial voxel face 
+c               centers in the colatitude, and longitudinal directions, 
+c               respectively.
+c
+c - - Input:    rsun:  real*8 value of radius of the Sun [km] Normally 6.96d5.
+c
+c - - Input:    sinth_hlf(m) - real*8 array of  sin(colatitude) computed 
+c               at cell centers (computed from subroutine sinthta_ss)
+c
+c - - Input:    dtheta,dphi: real*8 values of cell thickness in colatitude, 
+c               longitude directions [radians]
+
+c - - Input:    et(m,n+1),ep(m+1,n) - real*8 arrays of theta and phi components
+c               of cE computed from PTD or PDFI techniques at the photosphere.  
+c               On PE, TE grid locations, respectively. [G km/s].
+c
+c - - Input:    scrb(m+2,n+2) - real*8 array of time derivative of the
+c               poloidal potential returned from ptdsolve_ss subroutine.
+c               CE grid locations plus ghost zones. [G km^2/sec]
+c
+c - - Input:    dscrbdr(m+2,n+2) - real*8 array of time derivative of radial 
+c               derivative of poloidal potential returned from the 
+c               ptdsolve_ss subroutine.  CE grid locations plus ghost zones.
+c               [G km/sec]
+c
+c - - Input:    dr - real*8 value [km] of the depth of the radial legs
+c               of the voxels.  The upper rails will be 0.5*dr above the 
+c               photosphere, while the lower rails will be 0.5*dr below the 
+c               photosphere.
+c
+c - - Output:   ettop(m,n+1),etbot(m,n+1) - real*8 arrays of E_theta, multiplied
+c               by the speed of light, on the PE grid edges, at the top layer, 
+c               and bottom layer, respectively [G km/s].
+c
+c - - Output:   eptop(m+1,n),epbot(m+1,n) - real*8 arrays of E_phi, multiplied 
+c               by the speed of light, on the TE grid edges, at the top and 
+c               bottom layers, respectively  [G km/s].
+c
+c - - NOTE:     the vertical rails will have the value of er along them, 
+c               but since er is unchanged, we do not include er in the calling 
+c               arguments.
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index

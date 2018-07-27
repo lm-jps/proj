@@ -5,16 +5,19 @@ c - - Purpose:  Compute the longitude and latitude locations of the CO grid
 c
 c - - Usage:  call coll_ss(m,n,a,b,c,d,lon,lat)
 c
-c - - Input:  m,n - number of cell interiors in the colat,lon directions
+c - - Input:  m,n - integer number of cell interiors in the colat,lon directions
+c
 c - - Input:  a,b - real*8 values of the colatitude range for the problem 
 c             domain, a < b [radians]
+c
 c - - Input:  c,d - real*8 values of the longitude range for the problem, c < d
 c             [radians]
+c
 c - - Output: lon(n-1,m-1) - real*8 array of longitude values of the CO grid
 c             [radians]
+c
 c - - Output: lat(n-1,m-1) - real*8 array of latitude values of the CO grid
 c             [radians]
-c
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index

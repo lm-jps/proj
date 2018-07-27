@@ -1,27 +1,39 @@
       subroutine divh_co_ss(m,n,et,ep,rsun,sinth,sinth_hlf,dtheta,dphi,
      1 div)
 c
-c+ spherical staggered grid version of divh evaluated on interior cell corners
-c  Purpose: Compute horizontal divergence of the vector with components et,ep
-c           evaluated at interior cell corners (CO grid).
+c+ 
+c - -  Purpose: Compute horizontal divergence of the vector cE with theta,phi 
+c               components et, (PE grid) and ep, (TE grid) evaluated at 
+c               interior cell corners (CO grid).
 c
-c  Usage:  call divh_co_ss(m,n,et,ep,rsun,sinth,sinth_hlf,dtheta,dphi,div)
-c  Input:  m,n - number of cell centers in theta and phi directions, resp.
-c  Input:  et - double prec. array of theta component of vector, dims m,n+1
-c  Input:  ep - double prec. array of phi component of vector, dims m+1,n
-c  Input:  rsun - double prec., assumed value of radius of Sun
-c  Input:  sinth - double prec. array of sin(theta) evaluated at theta edges,
-c          dimension must be m+1
-c  Input:  sinth_hlf - double prec. array of sin(theta) evaluated cell centers.
-c          dimension must be m.
-c  Input:  dtheta - double prec. value of angular distance between theta edges
-c  Input:  dphi - double prec. value of angular distance between phi edges
-c Output:  div - double prec. array of horizontal div. of et,ep evaluated
-c          at active cell corners.  Dimensions m-1,n-1.
+c - -  Usage:   call divh_co_ss(m,n,et,ep,rsun,sinth,sinth_hlf,dtheta,dphi,div)
+c
+c - -  Input:   m,n - integer number of cell centers in theta and phi 
+c               directions, resp.
+c
+c - -  Input:   et(m,n+1) - real*8 array of theta component of cE, defined 
+c               on phi edges (PE grid) [G km/sec]
+c
+c - -  Input:   ep(m+1,n) - real*8 array of phi component of cE, defined
+c               on theta edges (TE grid) [G km/sec]
+c
+c - -  Input:   rsun - real*8 value of radius of Sun [km]. Normally 6.96d5
+c
+c - -  Input:   sinth(m+1) - real*8 array of sin(theta) evaluated at 
+c               theta edges
+c
+c - -  Input:   sinth_hlf(m) - real*8 array of sin(theta) evaluated at
+c               cell centers.
+c
+c - -  Input:   dtheta,dphi - real*8 values of angular distance between theta 
+c               and phi edges, respectively. [radians]
+c
+c - - Output:   div(m-1,n-1) - real*8 array of horizontal div. of et,ep 
+c               evaluated at interior cell corners (CO grid). [G/sec]
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index
-c   Copyright (C) 2015,2016 University of California
+c   Copyright (C) 2015-2018 University of California
 c  
 c   This software is based on the concepts described in Kazachenko et al. 
 c   (2014, ApJ 795, 17).  It also extends those techniques to 
@@ -47,10 +59,20 @@ c   59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 c
       implicit none
 c
-      integer :: m,n,nm1,mm1,imh,iph,jmh,jph,i,j
-      real*8 :: rsun,dtheta,dphi,rsuninv,oneodt,oneodp
-      real*8 :: sinth(m+1),sinth_hlf(m),et(m,n+1),ep(m+1,n),
-     1          div(m-1,n-1)
+c - - input variable declarations:
+c
+      integer :: m,n
+      real*8 :: rsun,dtheta,dphi
+      real*8 :: sinth(m+1),sinth_hlf(m),et(m,n+1),ep(m+1,n)
+c
+c - - output variable declarations:
+c
+      real*8 :: div(m-1,n-1)
+c
+c - - local variable declarations:
+c
+      integer :: nm1,mm1,imh,iph,jmh,jph,i,j
+      real*8 :: rsuninv,oneodt,oneodp
 c
       mm1=m-1
       nm1=n-1

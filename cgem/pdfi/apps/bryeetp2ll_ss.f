@@ -2,14 +2,18 @@
 c
 c+
 c - - Purpose: To transpose B_r data array from theta,phi to lon,lat order.
+c
 c - - Usage:  call bryeetp2ll_ss(m,n,brtpce,brllce)
+c
 c - - Input:  m,n - number of cell centers in the theta (lat), and phi (lon)
 c             directions, respectively.
+c
 c - - Input:  brtpce(m,n) - real*8 array of the radial component of the
 c             magnetic field evaluated at CE locations in theta,phi order
 c             (cell-centers). [G]
+c
 c - - Output: brllce(n,m) - real*8 array of radial magnetic field component
-c             stored in lon,lat index order. [G]
+c             on CE grid, stored in lon,lat index order. [G]
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index

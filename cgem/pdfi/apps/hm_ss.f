@@ -3,17 +3,34 @@ c
 c+
 c - - Purpose:  To compute the magnetic helicity flux density.
 c
-c - - Usage: call hm_ss(m,n,rsun,sinth_hlf,dtheta,dphi,et,ep,scrb,hm)
+c - - Usage:    call hm_ss(m,n,rsun,sinth_hlf,dtheta,dphi,et,ep,scrb,hm)
 c
-c - - Input:  m,n - number of cell centers in theta, phi directions, resp.
-c - - Input:  rsun:  Assumed radius of the Sun [in km]
-c - - Input:  sinth_hlf(m) : sin(colatitude) computed at cell centers
-c - - Input:  dtheta,dphi: cell thickness in colatitude, longitude
-c - - Input:  et(m,n+1): theta component electric field [V/cm] on PE grid
-c - - Input:  ep(m+1,n): phi component electric field [V/cm] on TE grid
-c - - Input:  scrb(m+2,n+2): poloidal potential computed from radial mag field
-c - - Output: hm(m,n):  Magnetic helicity flux density [Mx^2 cm^-2 s^-1] 
-c             computed on CE grid
+c - - Input:    m,n - number of cell centers in theta, phi directions, resp.
+c
+c - - Input:    rsun -  real*8 value of radius of Sun [km].  Normally 6.96d5.
+c
+c - - Input:    sinth_hlf(m) - real*8 array of sin(colatitude) computed at 
+c               cell centers.
+c
+c - - Input:    dtheta,dphi - real*8 values of cell thickness in colatitude, 
+c               longitude. [radians]
+c
+c - - Input:    et(m,n+1): real*8 array of theta component electric field 
+c               at PE grid locations [V/cm]
+c
+c - - Input:    ep(m+1,n): real*8 array of phi component electric field at 
+c               TE grid locations [V/cm]
+c
+c - - Input:    scrb(m+2,n+2) - real*8 array of the poloidal potential 
+c               at cell center locations (CE grid plus ghost zones). 
+c               [G km^2]
+c
+c - - Output:   hm(m,n) - real*8 array of Magnetic helicity flux density 
+c               computed on CE grid [Mx^2 cm^-2 s^-1] 
+c
+c - - NOTE:     If you want to call this subroutine using components of cE
+c               in units of [G km/sec], divide by 1d3 to convert to [V/cm]
+c               before calling this subroutine.
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index
@@ -46,10 +63,14 @@ c
 c - - declare pimach function (FISHPACK/FFTPACK) to compute pi
 c     real*8 :: pimach
 c
+c - - input variables:
+c
       integer :: m,n
       real*8 :: rsun,dtheta,dphi
       real*8 :: sinth_hlf(m)
       real*8 :: et(m,n+1),ep(m+1,n),scrb(m+2,n+2)
+c
+c - - output variables:
 c
       real*8 :: hm(m,n)
 c

@@ -4,19 +4,25 @@ c
 c+
 c - - Purpose:  To add asymmetric buffers of zero-padding around a 
 c               2-d array containing non-zero values.
+c
 c - - Usage:    call add_padding_as_ss(m,n,mpadb,mpadt,npadl,npadr,
 c               arr,arrpadded)
+c
 c - - Input:    m,n - integers describing the number of cell interiors
 c               in latitude/colatitude, and in longitude, respectively, 
 c               of the unpadded array.  
+c
 c - - Input:    mpadb,mpadt - integers descibing the number of 0-padded
 c               cells in latitude at the bottom and top of the image, resp.
 c               that will surround the unpadded array values.
+c
 c - - Input:    npadl,npadr - integers descibing the number of 0-padded
 c               cells in longitude at the left and right of the image, resp.
 c               that will surround the unpadded array values.
+c
 c - - Input:    arr(n+1,m+1) - real*8 array of the unpadded array values,
 c               stored in lon,lat index order on the COE grid.
+c
 c - - Output:   arpadded(n+npadl+npadr+1,m+mpadb+mpadt+1) - real*8 array of 
 c               of the padded array values.  Note array is stored in lon,lat
 c               index order, same as input array, also on COE grid, but with

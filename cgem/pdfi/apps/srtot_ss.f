@@ -3,14 +3,23 @@ c
 c+
 c - - Purpose:  To integrate the Poynting flux density over photosphere
 c
-c - - Usage: call srtot_ss(m,n,rsun,sinth_hlf,dtheta,dphi,sr,srtot)
+c - - Usage:    call srtot_ss(m,n,rsun,sinth_hlf,dtheta,dphi,sr,srtot)
 c
-c - - Input:  m,n - number of cell centers in theta, phi directions, resp.
-c - - Input:  rsun:  Assumed radius of the Sun [in km]
-c - - Input:  sinth_hlf(m) : sin(colatitude) computed at cell centers
-c - - Input:  dtheta,dphi: cell thickness in colatitude, longitude
-c - - Input:  sr(m,n):  radial Poynting flux [erg cm^-2 s^-1] on CE grid
-c - - Output: srtot: real*8 value of area-integrated Poynting flux [erg s^-1]
+c - - Input:    m,n - integer number of cell centers in theta, phi directions, 
+c               respectively.
+c
+c - - Input:    rsun: - real*8 value of radius of Sun [km]. Normally 6.96d5.
+c
+c - - Input:    sinth_hlf(m) - real*8 array of sin(colatitude) computed at 
+c               cell centers
+c
+c - - Input:    dtheta,dphi - real*8 values of cell thickness in colatitude, 
+c               longitude [radians]
+c
+c - - Input:    sr(m,n) -  radial Poynting flux [erg cm^-2 s^-1] on CE grid,
+c               computed with subroutine sr_ss. 
+c
+c - - Output:   srtot: real*8 value of area-integrated Poynting flux [erg s^-1]
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index
@@ -43,10 +52,14 @@ c
 c - - declare pimach function (FISHPACK/FFTPACK) to compute pi
 c     real*8 :: pimach
 c
+c - - input variables:
+c
       integer :: m,n
       real*8 :: rsun,dtheta,dphi
       real*8 :: sinth_hlf(m)
       real*8 :: sr(m,n)
+c
+c - - output variable:
 c
       real*8 :: srtot
 c

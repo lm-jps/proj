@@ -8,17 +8,27 @@ c               bitmap (of integer type) for all pixels closer to opposite
 c               polarity than dilation_param (integer).  
 c               Magnetized regions must satisfy both radial component and 
 c               magnitude thresholds to be considered.
+c
 c - - Usage:    call get_pils_rad_ss(m,n,brad,bmag,pilmap,thresh_brad,
 c               thresh_bmag,dilation_param)
+c
 c - - Input:    m,n - integers equal to the number of cell centers in colat,lon.
-c - - Input:    brad(m-1,n-1) - real*8 array of CO radial magnetic field values
-c - - Input:    bmag(m-1,n-1) - real*8 array of CO magnetic field amplitudes
+c
+c - - Input:    brad(m-1,n-1) - real*8 array of radial magnetic field values
+c               on CO grid [G]
+c
+c - - Input:    bmag(m-1,n-1) - real*8 array of magnetic field amplitudes on
+c               CO grid [G]
+c
 c - - Output:   pilmap(m-1,n-1) - integer array of CO PIL locations (1 in PIL
 c               regions, 0 outside them)
+c
 c - - Input:    thresh_brad - real*8 variable - radial field threshold to be
-c               considered magnetized (abs. value)
+c               considered magnetized (abs. value) [G]
+c
 c - - Input:    thresh_bmag - real*8 variable - threshold for total field 
-c               strength for a pixel to be considered magnetized
+c               strength for a pixel to be considered magnetized [G]
+c
 c - - Input:    dilation_param - integer value defining width of PILs.  Width
 c               is 2*dilation_param + 1.
 c-
@@ -55,7 +65,7 @@ c
 c
       implicit none
 c
-c - - calling argument declarations:
+c - - Input calling arguments:
 c
 c no. cell centers in colat, lon:
       integer :: m,n
@@ -63,14 +73,17 @@ c input magnetogram, B_los or B_r:
       real*8 :: brad(m-1,n-1) 
 c input mag. vector field strength, |B|:
       real*8 :: bmag(m-1,n-1) 
-c output map of PIL pixels (integer):
-      integer :: pilmap(m-1,n-1) 
 c max. dist. btwn. +/- to be a PIL:
       integer :: dilation_param 
 c threshold in |B_r| below which pixel values are ignored:
       real*8 thresh_brad 
 c  threshold in |B| below which pixel values are ignored:
       real*8 thresh_bmag 
+c
+c - - output arguments:
+c
+c output map of PIL pixels (integer):
+      integer :: pilmap(m-1,n-1) 
 c  
 c - - local variable declarations:
 c

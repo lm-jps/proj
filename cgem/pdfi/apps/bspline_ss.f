@@ -11,13 +11,20 @@ c             finterp, degree)
 c
 c - - Input:  fdata(nx,ny) - real*8 array of data to be used for interpolation.
 c             [units arbitrary]
-c - - Input:  nx,ny - dimensions of input array fdata
+c
+c - - Input:  nx,ny - integer dimensions of input array fdata
+c
 c - - Input:  xnew(nxinterp) - real*8 array of desired x values in [1,nx] range
-c - - Input:  nxinterp - dimension of xnew
+c
+c - - Input:  nxinterp - integer dimension of xnew
+c
 c - - Input:  ynew(nyinterp) - real*8 array of desired y values in [1,ny] range
-c - - Input:  nyinterp - dimension of ynew
+c
+c - - Input:  nyinterp - integer dimension of ynew
+c
 c - - Output: finterp(nxinterp,nyinterp) - real*8 array of interpolated values  
 c             [units arbitrary]
+c
 c - - Input:  degree - integer value of the degree of the bspline (3 <= 9).
 c             degree must also be an odd integer: allowed values 3,5,7,9.
 c-

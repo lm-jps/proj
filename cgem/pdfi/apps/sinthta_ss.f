@@ -1,18 +1,20 @@
       subroutine sinthta_ss(thmin,thmax,m,sinth,sinth_hlf)
 c+
 c - - Purpose: compute arrays of sin(theta) for the theta edge locations and 
-c - - at the half-cell locations.  
+c              at the half-cell locations.  
 c
-c     Usage: call sinthta_ss(thmin,thmax,m,sinth,sinth_hlf)
+c - - Usage:   call sinthta_ss(thmin,thmax,m,sinth,sinth_hlf)
 c
-c - - input: thmin, thmax - real*8 minimum and maximum values (in radians) of
-c - - co-latitude theta at theta edges of domain
+c - - Input:   thmin, thmax - real*8 minimum and maximum values of
+c              co-latitude theta at theta edges of domain [radians]
 c
-c - - input: m (number of cell interiors in the theta (colatitude) direction
+c - - Input:   m -  integer number of cell interiors in the theta (colatitude) 
+c              direction
 c
-c - - output: sinth(m+1) real*8 array of cell edge values sin(theta)
+c - - Output:  sinth(m+1) - real*8 array of cell edge values sin(colatitude)
 c
-c - - output:  sinth_hlf(m), real*8 array of cell center values of sin(theta)
+c - - Output:  sinth_hlf(m) -  real*8 array of cell center values of 
+c              sin(colatitude)
 c-
 c
 c   PDFI_SS Electric Field Inversion Software
@@ -43,10 +45,24 @@ c   59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 c
       implicit none
 c
-      integer :: m,i
+c - - input variables:
+c
+      integer :: m
+      real*8 :: thmin,thmax
+c
+c - - output variables:
+c
+      real*8 :: sinth(m+1),sinth_hlf(m)
+c
+c - - local variables:
+c
+      integer :: i
       real*8 :: theta(m+1),theta_hlf(m)
-      real*8 :: thmin,thmax,dth,dth_hlf,sinth(m+1),sinth_hlf(m)
+      real*8 :: dth,dth_hlf
       real*8 :: pi,dum
+c
+c - - function declarations:
+c
       real*8 :: pimach
 c
 c - - In production runs, use pimach() from fishpack to set value of pi

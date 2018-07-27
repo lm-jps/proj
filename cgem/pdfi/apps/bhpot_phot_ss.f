@@ -13,15 +13,21 @@ c              btphot,bpphot)
 c
 c  - - Input:  m,n,p: integer values of numbers of cell centers in theta,
 c              phi, and r directions
+c
 c  - - Input:  a,b,c,d:  real*8 values of min, max colatitude, min, max
 c              values of longitude. [radians]
+c
 c  - - Input:  rsun,rssmrs: real*8 values of radius of sun, and distance 
 c              from phot to source surface. [km] Normally, rsun=6.96d5.
+c
 c  - - Input:  brce(m,n): real*8 array of photospheric magnetic field values [G]
+c
 c  - - Input:  scrb3d(m,n,p+1): real*8 array of poloidal potential scribtb
 c              [G km^2]
+c
 c  - - Output: btpot(m+1,n): real*8 array of theta-comp magnetic field at phot
 c              [G]
+c
 c  - - Output: bppot(m,n+1): real*8 array of phi-comp magnetic field at phot
 c              [G]
 c-

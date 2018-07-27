@@ -1,20 +1,23 @@
       subroutine coell_ss(m,n,a,b,c,d,lon,lat)
 c
 c+
-c - - Purpose:  Compute the longitude and latitude locations of the COE grid
+c - - Purpose: Compute the longitude and latitude locations of the COE grid
 c
 c - - Usage:  call coetp_ss(m,n,a,b,c,d,theta,phi)
 c
 c - - Input:  m,n - number of cell interiors in the colat,lon directions
+c
 c - - Input:  a,b - real*8 values of colatitude range for the problem domain, 
 c             a < b [radians]
+c
 c - - Input:  c,d - real*8 values of the longitude range for the problem, 
 c             c < d [radians]
+c
 c - - Output: lon(n+1,m+1) - real*8 array of longitude values of the COE grid
 c             [radians]
+c
 c - - Output: lat(n+1,m+1) - real*8 array of latitude values of the COE grid
 c             [radians]
-c
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index

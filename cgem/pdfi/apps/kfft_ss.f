@@ -1,14 +1,15 @@
       subroutine kfft_ss(n,k)
 c
 c+
-c - - Purpose:  compute wavenumbers for use with fftpack's fft 
-c     routines rfftf and rfftb.
+c - - Purpose:  Compute wavenumbers for use with FFTPACK's fft 
+c               routines rfftf and rfftb.
 c
-c     Usage:  call kfft_ss(n,k)
+c - - Usage:    call kfft_ss(n,k)
 c
-c     input: n - length of 1-d vector to be transformed.
-c     output: k(n) - real*8 array of wavenumbers for each
-c             fourier mode
+c - - Input:    n - integer value of length of 1-d vector to be transformed.
+c
+c - - Output:   k(n) - real*8 array of wavenumbers for each
+c               fourier mode
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index
@@ -38,10 +39,19 @@ c   59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 c
       implicit none
 c
-      integer :: n,l,i
+c - - input variables:
+c
+      integer :: n
+c
+c - - output variables:
+c
       real*8 :: k(n)
 c
-c - - conditions below inferred from FFTPACK documentation contained within
+c - - local variables:
+c
+      integer :: l,i
+c
+c - - code below inferred from FFTPACK documentation contained within
 c - - FISHPACK 4.1 documentation
 c
       if((n/2)*2 .eq. n) then

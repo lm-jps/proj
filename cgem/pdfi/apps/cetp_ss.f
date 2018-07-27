@@ -6,15 +6,18 @@ c
 c - - Usage:  call cetp_ss(m,n,a,b,c,d,theta,phi)
 c
 c - - Input:  m,n - number of cell interiors in the theta,phi directions
+c
 c - - Input:  a,b - real*8 values of colatitude range for the problem domain, 
 c             a < b [radians]
+c
 c - - Input:  c,d - real*8 values of longitude range for the problem, 
 c             c < d [radians]
+c
 c - - Output: theta(m,n) - real*8 array of colatitude values of the CE grid
 c             [radians]
+c
 c - - Output: phi(m,n) - real*8 array of longitude values of the CE grid
 c             [radians]
-c
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index

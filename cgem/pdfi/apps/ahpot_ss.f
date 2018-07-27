@@ -1,25 +1,39 @@
-       subroutine ahpot_ss(m,n,p,a,b,c,d,rsun,rssmrs,scrb3d,atpot,appot)
+      subroutine ahpot_ss(m,n,p,a,b,c,d,rsun,rssmrs,scrb3d,mflux,
+     1           atpot,appot)
 c
 c+ - - Purpose: compute potential field value of at,ap (vector potential
 c               components) given the 3-d array scrb3d by taking curl of 
 c               scriptB rhat. scrb3d is computed by subroutine scrbpot_ss.
+c               For nonzero net flux, an additional term as added to appot
+c               to account for the net flux contribution.
 c
-c - -  Usage:   call ahpot_ss(m,n,p,a,b,c,d,rsun,rssmrs,scrb3d,atpot,appot)
+c - -  Usage:   call ahpot_ss(m,n,p,a,b,c,d,rsun,rssmrs,scrb3d,mflux,
+c               atpot,appot)
 c
 c - -  Input:   m,n,p: integer values of numbers of cell centers in theta,
 c               phi, and r directions
+c
 c - -  Input:   a,b,c,d:  real*8 values of min, max colatitude, min, max
 c               values of longitude. [radians]
+c
 c - -  Input:   rsun,rssmrs: real*8 values of the radius of sun, and 
 c               distance from phot to source surface. [km] Normally rsun=6.96d5.
+c
 c - -  Input:   scrb3d(m,n,p+1): real*8 array of poloidal potential scribtb
 c               [G km^2]
+c
+c - -  Input:   mflux: real*8 value of the net radial magnetic flux [G km^2].
+c               If you wanto assume zero net flux, set mflux=0.d0 on input.
+c               mflux can be calculated with subroutine mflux_ss.
+c
 c - -  Output:  atpot(m,n+1,p+1): real*8 array of theta-comp of vector potential
 c               [G km]
+c
 c - -  Output:  appot(m+1,n,p+1): real*8 array of phi-comp of vector potential
 c               [G km]
+c
 c - -  Note:    atpot,appot are computed on phi and theta edges, and on
-c -             radial shells.
+c               radial shells.
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index
@@ -52,7 +66,7 @@ c
 c - - input variables:
 c
       integer :: m,n,p
-      real*8 :: a,b,c,d,rsun,rssmrs
+      real*8 :: a,b,c,d,rsun,rssmrs,mflux
       real*8 :: scrb3d(m,n,p+1)
 c 
 c - - output variables:
@@ -62,21 +76,45 @@ c
 c
 c - - local variables:
 c
-      integer :: q
+      integer :: q,i,j
       real*8 :: scrb(m+2,n+2),bdas(n),bdbs(n),bdcs(m),bdds(m)
       real*8 :: sinth(m+1),sinth_hlf(m),r(p+1)
+      real*8 :: costh(m+1),costh_hlf(m),theta(m+1),theta_hlf(m)
       real*8 :: curlt(m,n+1),curlp(m+1,n)
-      real*8 :: dphi,dtheta,delr
+      real*8 :: dphi,dtheta,dtheta_hlf,delr,area,b0
 c
       bdas(1:n)=0.d0
       bdbs(1:n)=0.d0
       bdcs(1:m)=0.d0
       bdds(1:m)=0.d0
 c
-      dtheta=(b-a)/m
-      dphi=(d-c)/n
-      call sinthta_ss(a,b,m,sinth,sinth_hlf)
       delr=rssmrs/p
+c
+      dtheta=(b-a)/dble(m)
+      dphi=(d-c)/dble(n)
+c
+      call sinthta_ss(a,b,m,sinth,sinth_hlf)
+c
+c - - compute cos(theta) arrays
+c
+      dtheta_hlf=0.5d0*dtheta
+      do i=1,m
+         theta(i)=a + (i-1)*dtheta
+         theta_hlf(i)=a+dtheta_hlf+(i-1)*dtheta
+      enddo
+      theta(m+1)=b
+c
+      costh(1:m+1)=cos(theta(1:m+1))
+      costh_hlf(1:m)=cos(theta_hlf(1:m))
+c
+c - - calculate area of the spherical wedge at photosphere:
+c
+      area=(d-c)*(cos(a)-cos(b))*rsun**2
+c
+c - - get value of b0 by dividing mflux by area:
+c
+      b0=mflux/area
+c
 c
 c - - define radial shell arrays:
 c
@@ -101,7 +139,15 @@ c
      1        dphi,curlt,curlp)
          atpot(1:m,1:n+1,q)=curlt(1:m,1:n+1)
          appot(1:m+1,1:n,q)=curlp(1:m+1,1:n)
-      end do
+c
+c - - put in term in A_phi to account for non-zero net flux:
+c
+         do j=1,n
+            appot(1:m+1,j,q)=appot(1:m+1,j,q)-b0*((rsun**2)/r(q))
+     1                      *costh(1:m+1)/sinth(1:m+1)
+         enddo
+c
+      enddo
 c
       return
       end

@@ -10,17 +10,26 @@ c              bppot,brpot)
 c
 c - -  Input:  m,n,p -  integer values of numbers of cell centers in 
 c              theta (colat), phi, and r directions
+c
 c - -  Input:  a,b - real*8 values of min, max of colatitude. a < b [radians]
+c
 c - -  Input:  c,d - real*8 values of min, max of longitude. c < d [radians]
+c
 c - -  Input:  rsun,rssmrs -  real*8 values of radius of sun, and distance 
 c              from phot to source surface. [km].  Normally rsun=6.96d5.
+c
 c - -  Input:  atpot(m,n+1,p+1) - real*8 array of theta-comp vector potential
 c              [G km]
+c
 c - -  Input:  appot(m+1,n,p+1) - real*8 array of phi-comp vector potential
 c              [G km]
+c
 c - -  Output: btpot(m+1,n,p) - real*8 array of theta-comp magnetic field [G]
+c
 c - -  Output: bppot(m,n+1,p) - real*8 array of phi-comp magnetic field [G]
+c
 c - -  Output: brpot(m,n,p+1) - real*8 array of r-comp magnetic field [G]
+c
 c - -  Note:   btpot,bppot are computed on theta and phi edges, and mid-way
 c              between radial shells. brpot is computed on radial shells, at
 c              cell-center in theta and phi. atpot is located on radial shells,

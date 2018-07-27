@@ -4,12 +4,16 @@ c+
 c - - Purpose: To transpose B_h data arrays from theta,phi to lon,lat order
 c              and flip sign to get B_lat.  Array values are assumed at
 c              staggered Yee grid locations.
+c
 c - - Usage:   call bhyeetp2ll_ss(m,n,btte,bppe,blon,blat)
-c - - Input:   m,n - number of cell centers in the theta (lat), and phi (lon)
-c              directions, respectively.
+c
+c - - Input:   m,n - integer number of cell centers in the theta (lat), 
+c              and phi (lon) directions, respectively.
+c
 c - - Input:   btte (m+1,n),bppe(m,n+1) - real*8 arrays of the co-latitudinal 
 c              and azimuthal components of the magnetic field evaluated at
 c              TE and PE locations (theta and phi edges, resp.) [G]
+c
 c - - Output:  blon(n+1,m),blat(n,m+1) - real*8 arrays of longitudinal and
 c              latitudinal components of magnetic field, stored in lon,lat
 c              index order. [G]
@@ -41,13 +45,17 @@ c   or write to the Free Software Foundation, Inc.,
 c   59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 c
       implicit none
-c
+c - - input variables:
       integer :: m,n
       real*8 :: btte(m+1,n),bppe(m,n+1)
-c
+c - - output variables:
       real*8 :: blat(n,m+1),blon(n+1,m)
-c
+c - - local variables:
       integer :: i,j
+c
+c - - note that colat, lat unit vectors have opposite sign, so must change 
+c     sign of latitude component from colat component.
+c
       do i=1,m+1
          do j=1,n
             blat(j,i)=-btte(m+2-i,j)

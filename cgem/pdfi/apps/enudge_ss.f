@@ -1,25 +1,33 @@
       subroutine enudge_ss(m,n,a,b,c,d,rsun,brt,et,ep)
 c+
 c - -  Purpose:  Compute horizontal electric fields et,ep from radial magnetic 
-c - -  field time derivatives brt, using the simplest PTD electric field 
-c - -  solution.
-c - -  Assumes for boundary conditions that the tangential electric field at the
-c - -  theta and phi boundaries is zero.  
+c                field time derivatives brt, using the simplest PTD electric 
+c                field solution. Assumes for boundary conditions that the 
+c                the net flux time derivative is accounted for by a constant
+c                amplitude electric field on all 4 boundaries.
 c
-c - -  Usage:  call enudge_ss(m,n,a,b,c,d,rsun,brt,et,ep)
+c - -  Usage:    call enudge_ss(m,n,a,b,c,d,rsun,brt,et,ep)
 c
-c - -  Input:  m,n - integers denoting the number of cell-centers in the
-c              colatitude and longitude directions, respectively
-c - -  Input:  a,b - the real*8 values of colatitude (theta) 
-c              at the northern and southern edges of the problem boundary
-c - -  Input:  c,d - the real*8 values of longitude edges
-c - -  Input:  rsun - real*8 - units for the radius of the Sun
-c - -  Input:  brt(m,n) - real*8 array of cell-center radial magnetic field
-c              time derivative values
-c - -  Output: et(m,n+1) - real*8 array of electric fields, multiplied by 
-c              the speed of light, computed on phi edges [G km/s].
-c - -  Output: ep(m+1,n) - real*8 array of electric fields, multiplied by 
-c              the speed of light, computed on theta edges [G km/s].
+c - -  Input:    m,n - integers denoting the number of cell-centers in the
+c                colatitude and longitude directions, respectively
+c
+c - -  Input:    a,b - the real*8 values of colatitude (theta) 
+c                at the northern and southern edges of the problem boundary
+c                [radians]
+c
+c - -  Input:    c,d - the real*8 values of longitude edges [radians]
+c
+c - -  Input:    rsun - real*8 value of radius of Sun [km]. Normally 6.96d5.
+c
+c - -  Input:    brt(m,n) - real*8 array of cell-center (CE grid) 
+c                radial magnetic field time derivative values [G/sec]
+c
+c - -  Output:   et(m,n+1) - real*8 array of electric fields, multiplied by 
+c                the speed of light, computed on phi edges [G km/s].
+c
+c - -  Output:   ep(m+1,n) - real*8 array of electric fields, multiplied by 
+c                the speed of light, computed on theta edges [G km/s].
+c
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index
@@ -51,11 +59,15 @@ c
 c
 c - - variable declarations:
 c
-c - - calling arguments:
+c - - input arguments:
 c
       integer :: m,n
-      real*8 :: brt(m,n),et(m,n+1),ep(m+1,n)
+      real*8 :: brt(m,n)
       real*8 :: rsun,a,b,c,d
+c
+c - - output arguments:
+c
+      real*8 :: et(m,n+1),ep(m+1,n)
 c
 c - - local subroutine variables:
 c
@@ -70,6 +82,10 @@ c
       integer :: bcn, bcm
       real*8 :: elm,pertrb,pi,twopi,dum
       real*8 :: dtheta,dphi,rsun2,cc,dd
+      real*8 :: flux,lperim,eperim
+c
+c - - function for setting pi in fishpack:
+c
       real*8 :: pimach
 c
 c - - set initial defaults:
@@ -94,6 +110,29 @@ c
 c
       cc=0.d0
       dd=dble(n)*dphi
+c
+c - - assign theta and sin(theta) arrays
+c
+      call sinthta_ss(a,b,m,sinth,sinth_hlf)
+c
+c - - Compute area integral of dB_r/dt: (here assumed = br).  Assumed non-zero:
+c
+      flux=0.d0
+      do j=1,n
+         do i=1,m
+            flux=flux+brt(i,j)*sinth_hlf(i)*dtheta*dphi*rsun**2
+         enddo
+      enddo
+c
+c - - compute perimeter length of spherical wedge:
+c
+      lperim=rsun*((d-c)*(sin(a)+sin(b))+2.d0*(b-a))
+c
+c - - compute amplitude of uniform electric field on boundary that generates
+c - - flux imbalance:
+c
+      eperim = -flux/lperim
+c
 
 c 
 c - - set bcm (boundary condition type at theta=a, theta=b) for Neumann:
@@ -104,23 +143,17 @@ c - - set bcn (boundary condition at phi=c, phi=d) for Neumann:
 c
       bcn=3
 c
-c - - Homogenous Neumann: set bda to 0
+c - - set Neumann boundary conditions for scrb based on E on perimeter:
+c - - (recall E = -curl scrb rhat)
 c
-      bda(1:n)=0.d0
-c
-c - - set bdb to zero (homogenous Neumann)
-c
-      bdb(1:n)=0.d0
-c
-c - - allocate bdc
-c
-c - - set bdc to zero (Homogenous Neumann):
-c
-      bdc(1:m)=0.d0
-c
-c - - set bdd to zero (Homogenous Neumann):
-c
-      bdd(1:m)=0.d0
+c - - E_phi at theta=a = -eperim
+      bda(1:n)= -eperim*rsun
+c - - E_phi at theta=b = eperim
+      bdb(1:n)= eperim*rsun
+c - - E_theta at phi=c = eperim
+      bdc(1:m)= -eperim*rsun*sinth_hlf(1:m)
+c - - E_theta at phi=d = -eperim
+      bdd(1:m)=eperim*rsun*sinth_hlf(1:m)      
 c
 c - - set elm (coefficient for Helmholtz term) to 0.
 c
@@ -169,10 +202,6 @@ c
       ughost(m+2,1)=0.5d0*(ughost(m+2,2)+ughost(m+1,1))
       ughost(1,n+2)=0.5d0*(ughost(2,n+2)+ughost(1,n+1))
       ughost(m+2,n+2)=0.5d0*(ughost(m+2,n+1)+ughost(m+1,n+2))
-c
-c - - assign theta and sin(theta) arrays
-c
-      call sinthta_ss(a,b,m,sinth,sinth_hlf)
 c
 c - - compute et:
 c

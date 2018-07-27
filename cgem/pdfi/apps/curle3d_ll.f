@@ -8,28 +8,37 @@ c               blatt, and brllt, the negative of the curl of E in the
 c               lon,lat, and radial directions.  The results can be 
 c               viewed as the time derivative of the lon ,lat, and radial 
 c               components of B through Faraday's law.
+c
 c - - Usage:    call curle3d_ll(m,n,a,b,c,d,rsun,dr,elontop,elonbot,elattop,
 c               elatbot,erll,blont,blatt,brllt)
+c
 c - - Input:    m,n - integer values of the number of cell centers in the
 c               colatitude (latitude) direction, and longitude direction, resp.
+c
 c - - Input:    a,b,c,d - real*8 values of the limits in colatitude 
 c               (a and b; 0 <= a < b <= pi) and longitude (c <=0 < d
 c               <= 2*pi) of the domain in spherical coordinates. [radians]
+c
 c - - Input:    rsun - real*8 value of the radius of the Sun [km].  Usually
 c               6.96d5.
+c
 c - - Input:    dr - real*8 value [km] of the radial distance between the top 
 c               and bottom surface of the voxels.  The top is assumed to be 
 c               0.5*dr above the photosphere, and the bottom is 0.5*dr below 
 c               the photosphere.
+c
 c - - Input:    elontop(n,m+1),elonbot(n,m+1) - real*8 arrays of the longitude
 c               component of cE [G km/sec], at the top and bottom
 c               faces, and on the TE grid, of the layer of voxels.
+c
 c - - Input:    elattop(n+1,m),elatbot(n+1,m) - real*8 arrays of lat component
 c               of cE [G km/sec], at the top and bottom faces, and on the PE
 c               grid, of the layer of voxels.
+c
 c - - Input:    erll(n+1,m+1) - real*8 array of the radial component of cE
 c               [G km/sec], at the photosphere (mid-way in radius through
 c               the layer of voxels).  erll is on COE grid in lon,lat order.
+c
 c - - Output:   blont(n+1,m),blatt(n,m+1),brtll(n,m) - real*8 arrays of the time
 c               derivative of the magnetic field components in the theta,phi,
 c               and radial directions, respectively, by setting B dot = 

@@ -1,25 +1,35 @@
       subroutine divh_ce_ss(m,n,bt,bp,rsun,sinth,sinth_hlf,dtheta,
      1 dphi,div)
 c
-c+ staggered spherical grid version of divh, evaluated at cell-centers.
-c  Purpose: Compute horizontal divergence of the vector with components bt,bp
-c          and evaluated at cell centers (CE grid).
+c+ 
+c - -  Purpose: Compute horizontal divergence of the vector with components 
+c               bt (TE grid), bp (PE grid) and evaluated at cell centers 
+c               (CE grid).
 c
-c  Usage:  call divh_ce_ss (m,n,bt,bp,rsun,sinth,sinth_hlf,dtheta,dphi,div)
-c  Input:  m,n - number of cell centers in theta and phi directions, resp.
-c  Input:  bt - double prec. array of theta component of vector, with
-c          dimensions m+1,n
-c  Input:  bp - double prec. array of phi component of vector, with
-c          dimensions m,n+1
-c  Input:  rsun - double prec., assumed value of radius of Sun.
-c  Input:  sinth - double prec. array of theta cell-edge values of sin(theta),
-c          must be dimensioned m+1
-c  Input:  sinth_hlf - double prec. array of theta-cell center values of
-c          sin(theta), must be dimensioned m
-c  Input:  dtheta - double prec. value of distance between theta edges
-c  Input:  dphi - double prec. value of distance between phi edges
-c Output:  div - double prec. array of horizontal divergence of bt,bp
-c          evaluated at cell-centers.  Dimensioned m,n.
+c - -   Usage:  call divh_ce_ss (m,n,bt,bp,rsun,sinth,sinth_hlf,dtheta,dphi,div)
+c
+c - -   Input:  m,n - integer number of cell centers in theta and phi 
+c               directions, resp.
+c
+c - -   Input:  bt(m+1,n) - real*8 array of theta component of B, or its time
+c               derivative, located on TE grid (theta edges). [G or G/sec]
+c
+c - -   Input:  bp(m,n+1) - real*8 array of phi component of B or its time
+c               derivative, located on PE grid (phi edges). [G or G/sec]
+c
+c - -   Input:  rsun - real*8 value of radius of Sun [km]. Normally 6.96d5
+c
+c - -   Input:  sinth(m+1) - real*8 array of theta cell-edge values of 
+c               sin(theta), spanning the domain of the problem.
+c
+c - -   Input:  sinth_hlf(m) - real*8 array of theta-cell center values of
+c               sin(theta).
+c
+c - -   Input:  dtheta,dphi - real*8 values of distance between theta edges
+c               and phi edges, respectively. [radians]
+c
+c - -  Output:  div(m,n) - real*8 array array of horizontal divergence of 
+c               bt,bp evaluated at cell-centers (CE grid). [G/km or G/(km-sec)]
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index
@@ -49,9 +59,21 @@ c   59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 c
       implicit none
 c
-      integer :: m,n,mp1,np1,i,j,iph,jph,ip1,jp1
-      real*8 :: rsun,dtheta,dphi,oneodt,oneodp,rsuninv
-      real*8 :: bt(m+1,n),bp(m,n+1),div(m,n),sinth_hlf(m),sinth(m+1)
+c - - input variable declarations:
+c
+      integer :: m,n
+      real*8 :: rsun,dtheta,dphi
+      real*8 :: sinth_hlf(m),sinth(m+1)
+      real*8 :: bt(m+1,n),bp(m,n+1)
+c
+c - - output variable declarations:
+c
+      real*8 :: div(m,n)
+c
+c - - local variable declarations:
+c
+      integer :: mp1,np1,i,j,iph,jph,ip1,jp1
+      real*8 :: oneodt,oneodp,rsuninv
 c
       mp1=m+1
       np1=n+1

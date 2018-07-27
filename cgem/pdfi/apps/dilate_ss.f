@@ -3,19 +3,27 @@ c
 c
 c+
 c     Purpose:  Given a 2-d integer mask array, map, and a single integer,
-c     dilation_param, this subroutine computes a new mask, dilmap, that 
-c     is dilated from the original mask on all sides by dilation_param
-c     pixels.  The width in each direction is thus expanded by 
-c     2*dilation_param +1 pixels.
+c               dilation_param, this subroutine computes a new mask, dilmap, 
+c               that is dilated from the original mask on all sides by 
+c               dilation_param pixels.  The width in each direction is thus 
+c               expanded by 2*dilation_param +1 pixels.
 c
-c - - Usage:  call dilate_ss(m,n,map,dilmap,dilation_param)
-c - - Input:  m,n - integer no. of cell centers in colatitude, longitude, resp.
-c - - Input:  map(m-1,n-1) - an integer array containing the original mask,
-c             assumed to consist of 0s or 1s.  map is assumed a CO array.
-c - - Output: dilmap(m-1,n-1) - an integer array containing the dilated mask
-c             array, consisting of 0s or 1s
-c - - Input:  dilation_param - a single integer indicating the amount of
-c             desired dilation.
+c               NOTE: - this subroutine is used by subroutines get_pils_ss and 
+c               get_pils_rad_ss.
+c
+c - - Usage:    call dilate_ss(m,n,map,dilmap,dilation_param)
+c
+c - - Input:    m,n - integer no. of cell centers in colatitude, longitude, 
+c               resp.
+c
+c - - Input:    map(m-1,n-1) - an integer array containing the original mask,
+c               assumed to consist of 0s or 1s.  map is assumed a CO array.
+c
+c - - Output:   dilmap(m-1,n-1) - an integer array on the CO grid
+c               containing the dilated mask array, consisting of 0s or 1s
+c
+c - - Input:    dilation_param - a single integer indicating the amount of
+c               desired dilation.
 c-
 c HISTORY: 2016/10/25, BT Welsch: started
 c          2017/08/01 GHF:  Modified for compatibility with pdfi_ss library
@@ -47,11 +55,18 @@ c   or write to the Free Software Foundation, Inc.,
 c   59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 c
       implicit none
+c
 c input variables:
+c
       integer :: m,n,map(m-1,n-1) 
       integer :: dilation_param 
+c
 c output dilated map 
+c
       integer :: dilmap(m-1,n-1) 
+c
+c - - local variables:
+c
 c - - shifted array
       integer :: shifted(m-1,n-1) 
 c - - counting integers:

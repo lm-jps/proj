@@ -14,23 +14,33 @@ c
 c - - Usage:   call curle_ss(m,n,rsun,a,b,c,d,et,ep,scrj,dscrbdr,btt,bpt,brt)
 c
 c - - Input:   m,n - number of cell centers in theta, phi directions, resp.
+c
 c - - Input:   rsun - real*8 value of assumed radius of Sun [km].
 c              Normally 6.96d5.
+c
 c - - Input:   a,b - real*8 colatitude limits of wedge domain in radians (a < b)
 c              [radians]
+c
 c - - Input:   c,d - real*8 longitude limits of wedge domain in radians (c < d)
 c              [radians]
+c
 c - - Input:   et(m,n+1) - real*8 array of the theta component of electric 
 c              field (cE) multiplied by the speed of light [G km/s]
+c
 c - - Input:   ep(m+1,n) - real*8 array of the phi component of electric field 
 c              (cE) multiplied by the speed of light [G km/s]
+c
 c - - Input:   scrj(m+1,n+1) - real*8 array of time derivative of the toroidal
 c              potential returned from ptdsolve_ss [G km/s]
+c
 c - - Input:   dscrbdr(m+2,n+2) - real*8 array of the time deriv. of the radial
 c              derivative of the poloidal potential returned from ptdsolve_ss.
 c              [G km/s]
+c
 c - - Output:  btt(m+1,n) - real*8 array of theta component of curl c*E [G/s]
+c
 c - - Output:  bpt(m,n+1) - real*8 array of phi component of curl c*E [G/s]
+c
 c - - Output:  brt(m,n) - real*8 array of r component of curl c*E [G/s]
 c-
 c   PDFI_SS Electric Field Inversion Software

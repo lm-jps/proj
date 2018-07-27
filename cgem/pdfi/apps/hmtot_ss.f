@@ -1,18 +1,27 @@
       subroutine hmtot_ss(m,n,rsun,sinth_hlf,dtheta,dphi,hm,hmtot)
 c
 c+
-c - - Purpose:  To integrate the Helicity flux density over photosphere
-c               to find helicity injection rate
+c - - Purpose:  To integrate the Helicity flux density over spherical wedge
+c               domain to find helicity injection rate
 c
-c - - Usage: call hmtot_ss(m,n,rsun,sinth_hlf,dtheta,dphi,hm,hmtot)
+c - - Usage:    call hmtot_ss(m,n,rsun,sinth_hlf,dtheta,dphi,hm,hmtot)
 c
-c - - Input:  m,n - number of cell centers in theta, phi directions, resp.
-c - - Input:  rsun:  Assumed radius of the Sun [in km]
-c - - Input:  sinth_hlf(m) : sin(colatitude) computed at cell centers
-c - - Input:  dtheta,dphi: cell thickness in colatitude, longitude
-c - - Input:  hm(m,n):  Helicity flux density [Mx^2 cm^-2 s^-1] on CE grid
-c - - Output: hmtot: real*8 value of area-integrated Helicity injection rate 
-c             [Mx^2 s^-1]
+c - - Input:    m,n - integer number of cell centers in theta, phi directions, 
+c               respectively.
+c
+c - - Input:    rsun - real*8 value of radius of Sun [km].  Normally 6.96d5.
+c
+c - - Input:    sinth_hlf(m) - real*8 array of sin(colatitude) computed 
+c               at cell centers
+c
+c - - Input:    dtheta,dphi - real*8 values of cell thickness in colatitude, 
+c               longitude [radians]
+c
+c - - Input:    hm(m,n) - real*8 array of Helicity flux density computed by
+c               subroutine hm_ss on CE grid. [Mx^2 cm^-2 s^-1]
+c
+c - - Output:   hmtot: real*8 value of area-integrated Helicity injection rate 
+c               [Mx^2 s^-1]
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index
@@ -45,10 +54,14 @@ c
 c - - declare pimach function (FISHPACK/FFTPACK) to compute pi
 c     real*8 :: pimach
 c
+c - - input variables:
+c
       integer :: m,n
       real*8 :: rsun,dtheta,dphi
       real*8 :: sinth_hlf(m)
       real*8 :: hm(m,n)
+c
+c - - output variable:
 c
       real*8 :: hmtot
 c

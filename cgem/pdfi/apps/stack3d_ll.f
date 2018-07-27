@@ -1,4 +1,4 @@
-      subroutine stack_3d_ll(m,n,bloncoe0,blatcoe0,brllcoe0,bloncoe1,
+      subroutine stack3d_ll(m,n,bloncoe0,blatcoe0,brllcoe0,bloncoe1,
      1 blatcoe1,brllcoe1,vloncoe0,vlatcoe0,vlosllcoe0,vloncoe1,
      2 vlatcoe1,vlosllcoe1,lloncoe0,llatcoe0,lrllcoe0,lloncoe1,
      3 llatcoe1, lrllcoe1, data_ll_3d)
@@ -8,24 +8,38 @@ c - - Purpose:  Take the 18 2D input arrays needed for pdfi_wrapper4jsoc
 c               and stack them up into a 3d array, with the 3rd dimension
 c               equal to 18.  Arrays are all in lon,lat order on COE grid.
 c
+c - - Usage:    call stack3d_ll(m,n,bloncoe0,blatcoe0,brllcoe0,bloncoe1,
+c               blatcoe1,brllcoe1,vloncoe0,vlatcoe0,vlosllcoe0,vloncoe1,
+c               vlatcoe1,vlosllcoe1,lloncoe0,llatcoe0,lrllcoe0,lloncoe1,
+c               llatcoe1, lrllcoe1, data_ll_3d)
+c
 c - - Input:    m,n - integer number of cell-centers in latitude 
 c               (or co-latitude) and longitude directions, respectively.
+c
 c - - Input:    bloncoe0,blatcoe0,brllcoe0 - real*8(n+1,m+1) arrays of magnetic
 c               field components (lon,lat,radial) at time 0
+c
 c - - Input:    bloncoe1,blatcoe1,brllcoe1 - real*8(n+1,m+1) arrays of magnetic
 c               field components (lon,lat,radial) at time 1
+c
 c - - Input:    vloncoe0,vlatcoe0 - real*8(n+1,m+1) arrays of horizontal vel.
 c               components (lon,lat) computed from FLCT at time 0
+c
 c - - Input:    vlosllcoe0 - real*8(n+1,m+1) array of Doppler shift in m/s, 
 c               positive sign is redshifted, at time 0.
+c
 c - - Input:    vloncoe1,vlatcoe1 - real*8(n+1,m+1) arrays of horizontal vel.
 c               components (lon,lat) computed from FLCT at time 1
+c
 c - - Input:    vlosllcoe1 - real*8(n+1,m+1) array of Doppler shift in m/s, 
 c               positive sign is redshifted, at time 1.
+c
 c - - Input:    lloncoe0,llatcoe0,lrllcoe0 - real*8(n+1,m+1) - the lon,lat,
 c               and radial components of the LOS unit vector, at time 0.
+c
 c - - Input:    lloncoe1,llatcoe1,lrllcoe1 - real*8(n+1,m+1) - the lon,lat,
 c               and radial components of the LOS unit vector, at time 1.
+c
 c - - Output:   data_ll_3d(n+1,m+1,18) - The 3D array consisting of the 18
 c               2D arrays described above, in that order.
 c-

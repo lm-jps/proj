@@ -2,52 +2,65 @@
      1 vlos,lt,lp,lr,rsun,sinth,a,b,c,d,edopt,edopp,edopr)
 c
 c+
-c    Purpose: To compute non-inductive contribution to the electric field
-c             from observed Doppler velocity and transverse magnetic field
-c             components.  See sections 2.3.1 and 2.3.3 of 
-c             Kazachenko et al. 2014
+c - -  Purpose: To compute non-inductive contribution to the electric field
+c               from observed Doppler velocity and transverse magnetic field
+c               components.  See sections 2.3.1 and 2.3.3 of 
+c               Kazachenko et al. 2014
 c
-c    This version masks out contributions that aren't near PILs using
-c    Welsch's get_pils_rad_ss subroutine, and then dilates the PILS.
+c               This experimental version masks out contributions that aren't 
+c               near radial PILs by using Welsch's get_pils_rad_ss subroutine, 
+c               and then further dilating the PILS.
 c
-c    Usage: call e_doppler_rpils_ss(m,n,btcoe,bpcoe,brcoe,vlos,lt,lp,lr,rsun,
-c    sinth,a,b,c,d,gradt,gradp,dpsi_dr)
+c - -  Usage:   call e_doppler_rpils_ss(m,n,btcoe,bpcoe,brcoe,vlos,lt,lp,lr,
+c               rsun,sinth,a,b,c,d,gradt,gradp,dpsi_dr)
 c
-c    This subroutine solves for gradt,gradp,dpsi_dr - the non-inductive 
-c    electric field components due to due to Doppler VLOS; See ;
-c    Input: btcoe [m+1,n+1] -  COE Bt from HMI data[Gauss]
-c    Input: bpcoe [m+1,n+1] - COE Bp from HMI data [Gauss]
-c    Input: brcoe [m+1,n+1] - COE Br from HMI data [Gauss]
-c    Input: vlos [m+1,n+1] - COE Doppler velocity from HMI data [km/s] 
-c    Input: lt [m+1,n+1] - COE co-latitudinal component of the LOS unit vector 
-c    for HMI
-c    Input: lp [m+1,n+1] - COE azimuthal component of the LOS  unit vector 
-c    for HMI
-c    Input: lr [m+1,n+1] - COE r-component of the LOS unit vector for HMI
-c    Input: rsun - units for the radius of the Sun.
-c    Input: sinth, the value of sin(colatitude), computed for theta edge
-c    locations.  Is dimensioned m+1.
+c - -  Input:   btcoe(m+1,n+1) - real*8 array of theta component of B on COE 
+c               grid [G].
+c
+c - -  Input:   bpcoe(m+1,n+1) - real*8 array of phi component of B on COE
+c               grid [G]
+c
+c - -  Input:   brcoe(m+1,n+1) - real*8 array of radial component of B on COE 
+c               grid [G]
+c
+c - -  Input:   vlos(m+1,n+1) - real*8 array of Doppler velocity from HMI 
+c               on COE grid [km/s] 
+c
+c - -  Input:   lt(m+1,n+1) - real*8 array of theta component of SDO spacecraft
+c               LOS unit vector on COE grid
+c
+c - -  Input:   lp(m+1,n+1) - real*8 array of phi component of SDO spacecraft
+c               LOS unit vector on COE grid
+c
+c - -  Input:   lr(m+1,n+1) - real*8 array of radial component SDO spacecraft
+c               LOS unit vector on COE grid
+c
+c - -  Input:   rsun - real*8 value for radius of the Sun. [km] Normally 6.96d5
+c
+c - -  Input:   sinth(m+1) - real*8 array of sin(colatitude), computed for 
+c               theta edge locations.
 c 
-c    Input: a,b - Minimum and maximum values of co-latitude in radians
-c    corresponding to the range of the theta (colatitude) edge values.
+c - -  Input:   a,b - real*8 values of minimum and maximum
+c               co-latitude of the spherical wedge domain [radians]
 c
-c    Input: c,d - Minimum and maximum values of longitude in radians 
-c    corresponding to the range of longitude (azimuth) edge values.
+c - -  Input:   c,d - real*8 values of minimum and maximum longitude 
+c               of the spherical wedge domain [radians]
 c
-c    Local variable: sigma, value of the width of the PIL in pixels.
-c    Local variable: max_iter, number of iterations for relaxation code
-c
-c    Output: edopt - theta component of the Doppler non-inductive electric 
-c    field contribution multiplied by speed of light, dimensioned m,n+1 and 
-c    defined on phi edges (PE) [Gauss km/s]
+c - -  Output:  edopt(m,n+1) - real*8 array of theta component of the 
+c               Doppler non-inductive electric field contribution multiplied 
+c               by c (speed of light) defined on phi edges (PE grid) [G km/s]
 c 
-c    Output: edopp - phi component of the Doppler non-inductive electric 
-c    field contribution multiplied by speed of light, dimensioned m+1,n and 
-c    defined on theta edges (TE) [Gauss km/s]
+c - -  Output:  edopp(m+1,n) - real*8 array of phi component of the 
+c               Doppler non-inductive electric field contribution multiplied 
+c               by c (speed of light), defined on theta edges (TE) [G km/s]
 c 
-c    Output: edopr [m+1,n+1] (COE) - radial component of the Doppler 
-c    non-inductive electric field contribution multiplied by speed of light, 
-c    dimensioned m+1,n+1 and defined in COE locations [Gauss km/s]
+c - -  Output:  edopr(m+1,n+1) - real*8 array of radial component of the 
+c               Doppler non-inductive electric field contribution multiplied 
+c               by c (speed of light), on COE grid [G km/s]
+c
+c - -  Local:   sigma, real*8 value of the width of the PIL in pixels.
+c - -  Local:   max_iter, integer number of iterations for relaxation code
+c
 c    MKD, 2015
 c-
 c   PDFI_SS Electric Field Inversion Software
@@ -78,7 +91,7 @@ c   59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 c
       implicit none
 c
-c     INPUT DATA
+c - - input variables:
 c
       integer :: m,n
       real*8 :: rsun,bthr

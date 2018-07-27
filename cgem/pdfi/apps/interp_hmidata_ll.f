@@ -1,24 +1,34 @@
       subroutine interp_hmidata_ll(m,n,data2d,m_new,n_new,
      1 data2d_new,degree)
 c+
-c - - Purpose:  Interpolate a 2D Plate Carree HMI dataset from dimension
-c - - n+1,m+1 to a new 2D array of dimension n_new+1,m_new+1.  
+c - - Purpose: Interpolate a 2D Plate Carree HMI dataset from dimension
+c              n+1,m+1 to a new 2D array of dimension n_new+1,m_new+1. COE grid
+c              locations, lon,lat index order assumed for both input and output
+c              arrays.
 c
 c - - Method:  Use bspline of order degree to interpolate from the original
-c     array to the new array.  
+c              array to the new array.  
 c
-c - - Usage:  call interp_hmidata_ll(m,n,data2d,m_new,n_new,data2d_new,
-c             degree)
-c - - Input:  m,n - integer values of the number of cell centers in the
-c             latitude and longitude directions, respectively.
-c - - Input:  data2d(n+1,m+1) - real*8 array of HMI data in longitude,
-c             latitude order, on the COE grid
-c - - Input:  m_new,n_new - integer values of cell centers in latitude and
-c             longitude directions, respectively, for the new grid
-c - - Output: data2d_new(n_new+1,m_new+1) - real*8 array of interpolated
-c             values at the new grid locations
-c - - Input:  degree - integer value of the degree of interpolation
-c             (3 <= degree <=9), odd values only.
+c - - Usage:   call interp_hmidata_ll(m,n,data2d,m_new,n_new,data2d_new,
+c              degree)
+c
+c - - Input:   m,n - integer values of the number of cell centers in the
+c              latitude and longitude directions, respectively.
+c
+c - - Input:   data2d(n+1,m+1) - real*8 array of HMI data in longitude,
+c              latitude order, on the COE grid
+c
+c - - Input:   m_new,n_new - integer values of cell centers in latitude and
+c              longitude directions, respectively, for the new grid
+c
+c - - Output:  data2d_new(n_new+1,m_new+1) - real*8 array of interpolated
+c              values at the new grid locations, also assumed COE grid,
+c              in lon,lat index order
+c
+c - - Input:   degree - integer value of the degree of interpolation
+c              (3 <= degree <=9), odd values only.
+c
+c - - Note:    degree=9 seems to work well.
 c-
 c  
 c   PDFI_SS Electric Field Inversion Software

@@ -7,16 +7,22 @@ c
 c - - Usage:   call curlehr_ss(m,n,rsun,a,b,c,d,et,ep,brt)
 c
 c - - Input:   m,n - number of cell centers in theta, phi directions, resp.
+c
 c - - Input:   rsun - real*8 value of assumed radius of Sun [km].
 c              Normally 6.96d5.
+c
 c - - Input:   a,b - real*8 values of colatitude limits of wedge domain
 c              (a < b) [radians]
+c
 c - - Input:   c,d - real*8 values of longitude limits of wedge domain 
 c              (c < d) [radians]
+c
 c - - Input:   et(m,n+1) - real*8 array of theta component of ptd electric 
 c              field, multiplied by the speed of light (cE) [G km/s]
+c
 c - - Input:   ep(m+1,n) - real*8 array of phi component of ptd electric field, 
 c              multiplied by the speed of light (cE) [G km/s]
+c
 c - - Output:  brt(m,n) - real*8 array of the radial component of curl c*E_h
 c              [G /sec]
 c-

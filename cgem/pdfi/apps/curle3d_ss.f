@@ -8,28 +8,37 @@ c               bpt,brt, the negative of the curl of E in the theta,phi,
 c               and radial directions.  The results can be viewed as the
 c               time derivative of the theta,phi, and radial components of B
 c               through Faraday's law.
+c
 c - - Usage:    call curle3d_ss(m,n,a,b,c,d,rsun,dr,ettop,etbot,eptop,epbot,er,
 c               btt,bpt,brt)
+c
 c - - Input:    m,n - integer values of the number of cell centers in the
 c               colatitude (latitude) direction, and longitude direction, resp.
+c
 c - - Input:    a,b,c,d - real*8 values of the limits in colatitude 
 c               (a and b; 0 <= a < b <= pi) and longitude (c <=0 < d
 c               <= 2*pi) of the domain in spherical coordinates. [radians]
+c
 c - - Input:    rsun - real*8 value of the radius of the Sun [km].  Usually
 c               6.96d5.
+c
 c - - Input:    dr - real*8 value [km] of the radial distance between the top 
 c               and bottom surface of the voxels.  The top is assumed to be 
 c               0.5*dr above the photosphere, and the bottom is 0.5*dr below 
 c               the photosphere.
+c
 c - - Input:    ettop(m,n+1),etbot(m,n+1) - real*8 arrays of the theta
 c               component of cE [G km/sec], at the top and bottom
 c               faces, and on the PE grid, of the layer of voxels.
+c
 c - - Input:    eptop(m+1,n),epbot(m+1,n) - real*8 arrays of the phi component
 c               of cE [G km/sec], at the top and bottom faces, and on the TE
 c               grid, of the layer of voxels.
+c
 c - - Input:    er(m+1,n+1) - real*8 array of the radial component of cE
 c               [G km/sec], at the photosphere (mid-way in radius through
 c               the layer of voxels).  er is on COE grid.
+c
 c - - Output:   btt(m+1,n),bpt(m,n+1),brt(m,n) - real*8 arrays of the time
 c               derivative of the magnetic field components in the theta,phi,
 c               and radial directions, respectively, by setting B dot = 

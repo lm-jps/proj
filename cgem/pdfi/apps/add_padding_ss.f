@@ -4,19 +4,27 @@ c+
 c - - Purpose:  To add a buffer of zero-padding around a 2-d array containing
 c               non-zero values.  Padding is assumed symmetric between 
 c               N and S edges of domain, and between left and right edges.
+c
 c - - Usage:    call add_padding_ss(m,n,npadlat,npadlon,arrs,arrpadded)
+c
 c - - Input:    m,n - integers describing the number of cell interiors
 c               in latitude/colatitude, and in longitude, respectively, 
 c               of the unpadded array.  
+c
 c - - Input:    npadlat,npadlon - integers descibing the number of 0-padded
 c               cells in latitude and longitude, respectively, that will 
 c               surround the unpadded array.
+c
 c - - Input:    arr(n+1,m+1) - real*8 array of the unpadded array values,
 c               stored in lon,lat index order on the COE grid.
+c
 c - - Output:   arpadded(n+2*npadlon+1,m+2*npadlat+1) - real*8 array of 
 c               of the padded array values.  Note array is stored in lon,lat
 c               index order, same as input array, also on COE grid, but with
 c               increase in assumed array size.
+c
+c - - Note:     This subroutine adds padding symmetrically on left and right
+c               sides, and also on north and south sides.
 c
 c-
 c   PDFI_SS Electric Field Inversion Software

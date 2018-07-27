@@ -3,14 +3,21 @@ c
 c+
 c - - Purpose:  Compute the longitude and latitude locations of the PE grid
 c
-c - - Usage:  call pell_ss(m,n,a,b,c,d,lon,lat)
+c - - Usage:    call pell_ss(m,n,a,b,c,d,lon,lat)
 c
-c - - Input:  m,n - number of cell interiors in the colat,lon directions
-c - - Input:  a,b,c,d - a,b are colatitude range for the problem domain, a < b
-c - - Input:  c,d - c,d are the longitude range for the problem, c < d
-c - - Output: lon(n+1,m) - the longitude values of the PE grid
-c - - Output: lat(n+1,m) - the latitude values of the PE grid
+c - - Input:    m,n - number of cell interiors in the colat,lon directions
 c
+c - - Input:    a,b - real*8 values of colatitude range for the problem 
+c               domain, a < b [radians]
+c
+c - - Input:    c,d - real*8 values of longitude range for the problem domain, 
+c               c < d [radians
+c
+c - - Output:   lon(n+1,m) - real*8 array of the longitude values of the 
+c               PE grid [radians]
+c
+c - - Output:   lat(n+1,m) - real*8 array of the latitude values of the 
+c               PE grid [radians]
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index

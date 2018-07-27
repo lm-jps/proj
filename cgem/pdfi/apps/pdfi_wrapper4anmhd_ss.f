@@ -1,4 +1,4 @@
-      subroutine pdfi_wrapper4jsoc_ss(m,n,rsun,a,b,c,d,
+      subroutine pdfi_wrapper4anmhd_ss(m,n,rsun,a,b,c,d,
      1 bloncoe0,blatcoe0,brllcoe0,bloncoe1,blatcoe1,brllcoe1,
      2 vloncoe0,vlatcoe0,vlosllcoe0,vloncoe1,vlatcoe1,vlosllcoe1,
      3 lloncoe0,llatcoe0,lrllcoe0,lloncoe1,llatcoe1,lrllcoe1,
@@ -11,13 +11,12 @@ c - - documentation below can be seen using DOC_LIB,'pdfi_wrapper4jsoc_ss.f'
 c - - in an IDL session.
 c+
 c    Purpose:  This is the subroutine that computes the entire PDFI_SS 
-c              solution, given the HMI input data for a pair of observation
-c              times.  This particular subroutine is designed to be called
-c              from the JSOC software, and returns the output variables to
-c              that software as part of the calling argument list, as
-c              described in further detail below.
+c              solution for the ANMHD test case, given the input data in HMI
+c              format for a pair of observation
+c              times.  It is identical to pdfi_wrapper4jsoc_ss, except for
+c              the value of bthr, which is set to 370G instead of 200G.
 c
-c    Usage:    call pdfi_wrapper4jsoc_ss(m,n,rsun,a,b,c,d,
+c    Usage:    call pdfi_wrapper4anmhd_ss(m,n,rsun,a,b,c,d,
 c              bloncoe0,blatcoe0,brllcoe0,bloncoe1,blatcoe1,brllcoe1,
 c              vloncoe0,vlatcoe0,vlosllcoe0,vloncoe1,vlatcoe1,vlosllcoe1,
 c              lloncoe0,llatcoe0,lrllcoe0,lloncoe1,llatcoe1,lrllcoe1,
@@ -243,9 +242,11 @@ c
       max_iter=25
       verbose=0
       debug=1
-      bthr=200.d0
+c     bthr=200.d0
+c - - Set bthr to 370G, to be consistent with KFW2014 threshold
+      bthr=370.d0
       bthr_relax=0.d0
-      maskflag=1
+      maskflag=0
 c      
       pi=pimach(dum)
 c - - radius of the Sun [ in km] is now set as an input parameter
@@ -333,7 +334,10 @@ c half-cell locations
 c
 c Solve for time derivatives of scrb, dscrbdr, and scrj     
 c Note that the input time derivatives are masked
-      call ptdsolve_ss(m,n,btt*mskte,bpt*mskpe,brt*mskr,
+c
+c     call ptdsolve_ss(m,n,btt*mskte,bpt*mskpe,brt*mskr,
+c    1 rsun,sinth,sinth_hlf,a,b,ci,di,scrb,dscrbdr,scrj)
+      call ptdsolve_ss(m,n,btt,bpt,brt,
      1 rsun,sinth,sinth_hlf,a,b,ci,di,scrb,dscrbdr,scrj)
 c
 c Solve for static values of scrb,dscrbdr,scrj using magnetic field values
@@ -347,17 +351,26 @@ c Calculate PTD contribution into electric field
 c
 c Calculate FLCT contribution into electric field
 c Note the input magnetic fields are masked
-      call e_flct_ss(m,n,brte*mskte,brpe*mskpe,
-     1 bhte*mskte,bhpe*mskpe,vt,vp,rsun,sinth,sinth_hlf,
+c
+c     call e_flct_ss(m,n,brte*mskte,brpe*mskpe,
+c    1 bhte*mskte,bhpe*mskpe,vt,vp,rsun,sinth,sinth_hlf,
+c    2 a,b,ci,di,ezetat,ezetap)
+      call e_flct_ss(m,n,brte,brpe,
+     1 bhte,bhpe,vt,vp,rsun,sinth,sinth_hlf,
      2 a,b,ci,di,ezetat,ezetap)
 c
 c Calculate Doppler contribution into electric field
 c Note magnetic field arrays are masked
 c
-      call e_doppler_ss(m,n,btcoeh*maskcoe,
-     1 bpcoeh*maskcoe,brtpcoeh*maskcoe,vlostpcoeh*maskcoe,
+      call e_doppler_ss(m,n,btcoeh,
+     1 bpcoeh,brtpcoeh,vlostpcoeh,
      2 ltcoeh,lpcoeh,lrtpcoeh,rsun,sinth,
      3 a,b,ci,di,edt,edp,edr)
+c
+c     call e_doppler_ss(m,n,btcoeh*maskcoe,
+c    1 bpcoeh*maskcoe,brtpcoeh*maskcoe,vlostpcoeh*maskcoe,
+c    2 ltcoeh,lpcoeh,lrtpcoeh,rsun,sinth,
+c    3 a,b,ci,di,edt,edp,edr)
 c
 c Calculate PDF electric field
       etpdf=et+ezetat+edt
@@ -366,9 +379,13 @@ c Calculate PDF electric field
 c
 c Calculate non-inductive electric field components    
 c Note that magnetic field points (corners) are masked on input.
-      call e_ideal_ss(m,n,btcoeh*maskcoe,
-     1 bpcoeh*maskcoe,brtpcoeh*maskcoe,etpdf,eppdf,erpdf,rsun,
+c
+      call e_ideal_ss(m,n,btcoeh,
+     1 bpcoeh,brtpcoeh,etpdf,eppdf,erpdf,rsun,
      2 sinth,a,b,ci,di,eti,epi,eri)
+c     call e_ideal_ss(m,n,btcoeh*maskcoe,
+c    1 bpcoeh*maskcoe,brtpcoeh*maskcoe,etpdf,eppdf,erpdf,rsun,
+c    2 sinth,a,b,ci,di,eti,epi,eri)
 c
 c Calculate PDFI electric field and then convert from cE in G-km/s to E in V/cm:
 c

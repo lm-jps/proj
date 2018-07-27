@@ -1,16 +1,21 @@
       subroutine eryeell2tp_ss(m,n,erllcoe,ertpcoe)
 c
 c+
-c   Purpose:  To transpose E_r data array from lon,lat to theta,phi order.
+c - -  Purpose:  To transpose E_r data array from lon,lat to theta,phi order.
 c
-c     Usage:  call eryeell2tp_ss(m,n,erllcoe,ertpcoe)
-c     Input:  m,n - number of cell centers in the theta (lat), and phi (lon)
-c             directions, respectively.
-c     Input:  erllcoe(n+1,m+1) - array of radial electric field component
-c             stored in lon,lat index order.
-c     Output: ertpcoe(m+1,n+1) - array of the radial component of the
-c             electric field evaluated at COE locations in theta,phi order
-c             (corners plus exterior corners on boundary).
+c - -    Usage:  call eryeell2tp_ss(m,n,erllcoe,ertpcoe)
+c
+c - -    Input:  m,n - number of cell centers in the theta (lat), and phi (lon)
+c                directions, respectively.
+c
+c - -    Input:  erllcoe(n+1,m+1) - real*8 array of radial electric field 
+c                component stored in lon,lat index order on COE grid.
+c                [G km/sec or V/cm]
+c
+c - -   Output:  ertpcoe(m+1,n+1) - real*8 array of the radial component of the
+c                electric field evaluated at COE locations in theta,phi order
+c                (corners plus exterior corners on boundary).
+c                [G km/sec or V/cm]
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index
@@ -39,12 +44,19 @@ c   or write to the Free Software Foundation, Inc.,
 c   59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
       implicit none
 c
-      integer :: m,n
-      real*8 :: ertpcoe(m+1,n+1)
+c - - input variables:
 c
+      integer :: m,n
       real*8 :: erllcoe(n+1,m+1)
 c
+c - - output variables:
+c
+      real*8 :: ertpcoe(m+1,n+1)
+c
+c - - local variables:
+c
       integer :: i,j
+c
       do i=1,m+1
          do j=1,n+1
             ertpcoe(m+2-i,j)=erllcoe(j,i)

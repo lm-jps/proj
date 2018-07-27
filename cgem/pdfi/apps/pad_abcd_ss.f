@@ -6,22 +6,31 @@ c - - Purpose:  To correct the values of a,b,c,d to reflect an added buffer of
 c               zero-padding around a 2-d array containing non-zero values. Also
 c               compute corrected values of m,n (ie mp,np) to reflect the 
 c               padding.
+c
 c - - Usage:    call pad_abcd_ss(m,n,npadlat,npadlon,a,b,c,d,
 c               mp,np,ap,bp,cp,dp)
+c
 c - - Input:    m,n - integers describing the number of cell interiors
 c               in latitude/colatitude, and in longitude, respectively, 
 c               of the unpadded array.  
+c
 c - - Input:    npadlat,npadlon - integers descibing the number of 0-padded
 c               cells in latitude and longitude, respectively, that will 
 c               surround the unpadded array.
+c
 c - - Input:    a,b,c,d - real*8 variables describing the minimum and
 c               maximum co-latitude, and minimum and maximum longitude, 
 c               respectively, spanned by the unpadded array
+c
 c - - Output:   mp,np - integers describing the number of cell interiors in 
 c               latitude/colatitude, and in longitude, respectively, of the
 c               padded array.  mp=m+2*npadlat, and np=n+2*npadlon
+c
 c - - Output:   ap,bp,cp,dp - real*8 variables describing minimum and maximum
 c               colatitude and longitude of the padded array.
+c
+c - - Note:     This this subroutine assumes symmetric padding at north and
+c               south, and symmetric padding on left and right.
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index

@@ -11,17 +11,22 @@ c - -  Usage:   call berciktest_ss(m,n,p,a,b,c,d,rsun,rssmrs,scrb3d,brh,brr)
 c
 c - -  Input:   m,n,p: integer values of numbers of cell centers in theta,
 c               phi, and r directions
+c
 c - -  Input:   a,b,c,d:  real*8 values of min, max colatitude, min, max
 c               values of longitude. [radians]
+c
 c - -  Input:   rsun,rssmrs: real*8 value for radius of sun, and distance 
 c               from photosphere to source surface. [km].  Normally rsun=6.96e5.
+c
 c - -  Input:   scrb3d(m,n,p+1): real*8 array of poloidal potential scribtb
 c               [G km^2]
+c
 c - -  Output:  brh(m,n,p-1): real*8 array of radial magnetic field values
-c               above photosphere and below the source-surface. [km]  Computed 
+c               above photosphere and below the source-surface. [G]  Computed 
 c               from horizontal Laplacian.
+c
 c - -  Output:  brr(m,n,p-1): real*8 array of radial magnetic field values above
-c               photosphere and below source-surface. [km]  Computed from radial
+c               photosphere and below source-surface. [G]  Computed from radial
 c               2nd derivative.
 c-
 c   PDFI_SS Electric Field Inversion Software

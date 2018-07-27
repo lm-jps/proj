@@ -3,13 +3,20 @@ c
 c+
 c - - Purpose:  Compute the longitude and latitude locations of the TE grid
 c
-c - - Usage:  call tell_ss(m,n,a,b,c,d,lon,lat)
+c - - Usage:    call tell_ss(m,n,a,b,c,d,lon,lat)
 c
-c - - Input:  m,n - number of cell interiors in the colat,lon directions
-c - - Input:  a,b,c,d - a,b are colatitude range for the problem domain, a < b
-c - - Input:  c,d - c,d are the longitude range for the problem, c < d
-c - - Output: lon(n,m+1) - the longitude values of the TE grid
-c - - Output: lat(n,m+1) - the latitude values of the TE grid
+c - - Input:    m,n - integer number of cell interiors in the colat,lon 
+c               directions, respectively.
+c
+c - - Input:    a,b - real*8 values of the colatitude range for the problem 
+c               domain, a < b [radians]
+c
+c - - Input:    c,d - real*8 values of the longitude range for the problem 
+c               domain, c < d [radians]
+c
+c - - Output:   lon(n,m+1) - real*8 array of longitude values of the TE grid
+c
+c - - Output:   lat(n,m+1) - real*8 array latitude values of the TE grid
 c
 c-
 c   PDFI_SS Electric Field Inversion Software

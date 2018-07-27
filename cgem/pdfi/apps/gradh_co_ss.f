@@ -3,26 +3,34 @@
 c
 c+
 c - - Purpose:  Compute the horizontal gradient of the function psi, where
-c               psi is assumed to be located on corners (COE grid)
+c               psi is assumed to be located on corners including edge
+c               corners (COE grid).  The theta component gradt is on the PE
+c               grid, and the phi component gradp is on the TE grid.
 c
-c - - Usage:  call gradh_co_ss(m,n,psi,rsun,sinth,dtheta,dphi,gradt,gradp)
+c - - Usage:    call gradh_co_ss(m,n,psi,rsun,sinth,dtheta,dphi,gradt,gradp)
 c
-c - - compute horizontal gradient of the scalar array psi
-c - - in spherical staggered coordinates.  This version computes the
-c - - gradient assuming psi is at cell-corners.  The output components
-c - - of the gradient is computed on cell edges.
-c - - Input:  m,n - number of cell centers in theta, phi directions, resp.
-c - - Input:  psi - array of the scalar potential at cell-corners, 
-c - -         including external corners.  Dimensions m+1,n+1
-c - - Input:  rsun - units for the radius of the Sun.
-c - - Input:  sinth, sin(theta) computed over the co-latitude range,
-c - -         at theta cell edges. Dimension m+1.
-c - - Input:  dtheta,dphi - the spacing of cells in theta,phi directions
-c - - Output: gradt - 2d array of size m,n+1 equal to gradient in
-c - -         theta direction.  This is computed on phi edges (PE)
-c - - Output: gradp - 2d array of size m+1,n equal to gradient
-c - -         in phi direction.  This is computed on theta edges (TE).
-c - - NOTE:  Plate Carree grid spacing (dtheta, dphi are constants) assumed!
+c - - Input:    m,n - integer number of cell centers in theta, phi directions, 
+c               resp.
+c
+c - - Input:    psi(m+1,n+1) - real*8 array of the scalar potential at 
+c               cell-corners, including external corners. [G km^2/sec]
+c
+c - - Input:    rsun - real*8 value of radius of the Sun. [km]. Normally 6.96d5
+c
+c - - Input:    sinth(m+1) -  real*8 array of sin(colatitude) computed over 
+c               the co-latitude range, at theta cell edges.
+c
+c - - Input:    dtheta,dphi - real*8 values of the spacing of cells in 
+c               theta,phi directions. [radians]
+c
+c - - Output:   gradt(m,n+1) - real*8 array equal to gradient in
+c               theta direction.  This is computed on phi edges (PE grid)
+c               [G km/sec]
+c - - Output:   gradp(m+1,n) - real*8 array equal to gradient
+c               in phi direction.  This is computed on theta edges (TE grid).
+c               [G km/sec]
+c
+c - - NOTE:     Plate Carree grid spacing (dtheta, dphi are constants) assumed.
 c-
 c   PDFI_SS Electric Field Inversion Software
 c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index
@@ -52,9 +60,21 @@ c   59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 c
       implicit none
 c
-      integer :: m,n,mp1,np1,iph,i,j,jph,jp1,ip1
-      real*8 :: rsun,dtheta,dphi,oneodt,oneodp,rsuninv
-      real*8 :: psi(m+1,n+1),gradt(m,n+1),gradp(m+1,n),sinth(m+1)
+c - - input variables:
+c
+      integer :: m,n
+      real*8 :: rsun,dtheta,dphi
+      real*8 :: sinth(m+1)
+      real*8 :: psi(m+1,n+1)
+c
+c - - output variables:
+c
+      real*8 :: gradt(m,n+1),gradp(m+1,n)
+c
+c - - local variables:
+c
+      integer :: mp1,np1,iph,i,j,jph,jp1,ip1
+      real*8 :: oneodt,oneodp,rsuninv
 c
       mp1=m+1
       np1=n+1
