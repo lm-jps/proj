@@ -45,7 +45,7 @@
 #define ARRLENGTH(ARR) (sizeof(ARR) / sizeof(ARR[0]))
 
 #define DISAMB_AZI        1
-#define DOPPCAL         1       // Calibrate Doppler here
+#define DOPPCAL         0       // Calibrate Doppler here
 
 // Some other things
 #ifndef MIN
