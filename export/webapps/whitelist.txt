@@ -11,6 +11,7 @@ hmi.B_720s_dcon
 hmi.B_720s_dconS
 hmi.b_720s_e15w1332_cea
 hmi.b_720s_e15w1332_cutout
+hmi.b_90s
 hmi.b_synoptic
 hmi.b_synoptic_small
 hmi.bharp_720s_nrt
@@ -51,6 +52,7 @@ hmi.me_720s_e15w1332_harp
 hmi.me_720s_fd10_harp
 hmi.me_720s_fd10_harp_nrt
 hmi.me_720s_fd10_nrt
+hmi.me_90s
 hmi.meanpf_720s
 hmi.meharp_720s_nrt
 hmi.mhdcorona
@@ -77,6 +79,7 @@ hmi.rdvavgpspec_fd30
 hmi.s_135s
 hmi.S_720s_dcon
 hmi.S_720s_dconS
+hmi.s_90s
 hmi.sharp_720s_nrt
 hmi.sharp_cea_720s
 hmi.sharp_cea_720s_nrt
