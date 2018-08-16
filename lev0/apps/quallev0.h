@@ -53,7 +53,7 @@
 
 #define Q_GPREGBIT0 0x10000000
 #define Q_GPREGBIT1 0x20000000
-#define Q_REOPENED 0x40000000	// image reopened during reconstruction; NPACKETS value may be incorrect
+#define Q_REOPENED 0x40000000	//image reopened during reconstruction; no impact on data quality except in rare cases where telemetry retransmission may have caused inflated NPACKETS value
 #define Q_MISSALL 0x80000000	//data is completely missing. high bit
 
 //Fits keyword and Image Status Packet (ISP) keyword translation:
