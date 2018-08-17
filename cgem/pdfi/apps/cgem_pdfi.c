@@ -70,6 +70,7 @@ struct reqInfo {
     int npadl, npadr, mpadb, mpadt;		// padding on left/right, bottom/top
     int n_o, m_o;   // n = npadl + n_o + npadr; m = mpadb + m_o + npadt
     double a, b, c, d;
+    double bmin;
     TIME t, trec;   // use T_OBS for time, trec for prime key
 };
 
@@ -79,7 +80,8 @@ struct pdfi_result {        // results from PDFI calculation
 
 // FORTRAN function
 
-extern void pdfi_wrapper4jsoc_ss_(int *m, int *n, double *rsun, double *a, double *b, double *c, double *d,
+extern void pdfi_wrapper4jsoc_ss_(int *m, int *n, double *rsun,
+                                  double *a, double *b, double *c, double *d, double *bmin,
                                   double *bloncoe0, double *blatcoe0, double *brllcoe0,
                                   double *bloncoe1, double *blatcoe1, double *brllcoe1,
                                   double *vloncoe0, double *vlatcoe0, double *vlosllcoe0,
@@ -126,7 +128,8 @@ ModuleArgs_t module_args[] =
 {
     {ARG_STRING, "in", kNotSpecified, "Input data series."},
     {ARG_STRING, "out", kNotSpecified, "Output data series."},
-    {ARG_FLOAT, "delt", "720.", "Temporal spacing between input frames"},
+    {ARG_DOUBLE, "delt", "720.", "Temporal spacing between input frames"},
+    {ARG_DOUBLE, "bmin", "250.", "Threshold of field value for masking PDFI results."},
     {ARG_INT, "npad", "50", "Initial guess of padding in column."},
     {ARG_INT, "mpad", "50", "Initial guess of padding in row."},
     {ARG_END}
@@ -147,7 +150,8 @@ int DoIt(void)
     int mpad = params_get_int(&cmdparams, "mpad"); if (mpad < 0) mpad = 0;
     int npad = params_get_int(&cmdparams, "npad"); if (npad < 0) npad = 0;
     
-    double delt = params_get_double(&cmdparams, "delt");
+    double delt = fabs(params_get_double(&cmdparams, "delt"));
+    double bmin = fabs(params_get_double(&cmdparams, "bmin"));
     
     double rsun_ref = 6.96e5;       // fixed for HMI
     
@@ -196,6 +200,7 @@ int DoIt(void)
         struct reqInfo rInfo0, rInfo1;
         rInfo0.npad0 = rInfo1.npad0 = npad;
         rInfo0.mpad0 = rInfo1.mpad0 = mpad;
+        rInfo0.bmin = rInfo1.bmin = bmin;
         
         // Patch & padding info
         
@@ -301,7 +306,7 @@ int DoIt(void)
         // Run it in FORTRAN
         // New wrapper makes sure that a, b, c, d are within bounds (Oct 21 2016)
         
-        pdfi_wrapper4jsoc_ss_(&m, &n, &rsun_ref, &a, &b, &c, &d,
+        pdfi_wrapper4jsoc_ss_(&m, &n, &rsun_ref, &a, &b, &c, &d, &bmin,
                               bloncoe0, blatcoe0, brllcoe0, bloncoe1, blatcoe1, brllcoe1,
                               vloncoe0, vlatcoe0, vlosllcoe0, vloncoe1, vlatcoe1, vlosllcoe1,
                               lloncoe0, llatcoe0, lrllcoe0, lloncoe1, llatcoe1, lrllcoe1,
@@ -580,6 +585,7 @@ int writeOutputArr(DRMS_Record_t *inRec0, DRMS_Record_t *inRec1, DRMS_Record_t *
     drms_setkey_double(outRec, "HMTOT", res->hmtot);            // Helicity flux
     printf("srtot=%lf, hmtot=%lf\n", res->srtot, res->hmtot);
     
+    drms_setkey_double(outRec, "BMIN", rInfo0->bmin);       // Bthreshold
     drms_setkey_int(outRec, "NPADL", rInfo0->npadl);		// padding sizes
     drms_setkey_int(outRec, "NPADR", rInfo0->npadr);
     drms_setkey_int(outRec, "MPADB", rInfo0->mpadb);

@@ -1,4 +1,4 @@
-      subroutine pdfi_wrapper4jsoc_ss(m,n,rsun,a,b,c,d,
+      subroutine pdfi_wrapper4jsoc_ss(m,n,rsun,a,b,c,d,bmin,
      1 bloncoe0,blatcoe0,brllcoe0,bloncoe1,blatcoe1,brllcoe1,
      2 vloncoe0,vlatcoe0,vlosllcoe0,vloncoe1,vlatcoe1,vlosllcoe1,
      3 lloncoe0,llatcoe0,lrllcoe0,lloncoe1,llatcoe1,lrllcoe1,
@@ -17,7 +17,7 @@ c              from the JSOC software, and returns the output variables to
 c              that software as part of the calling argument list, as
 c              described in further detail below.
 c
-c    Usage:    call pdfi_wrapper4jsoc_ss(m,n,rsun,a,b,c,d,
+c    Usage:    call pdfi_wrapper4jsoc_ss(m,n,rsun,a,b,c,d,bmin,
 c              bloncoe0,blatcoe0,brllcoe0,bloncoe1,blatcoe1,brllcoe1,
 c              vloncoe0,vlatcoe0,vlosllcoe0,vloncoe1,vlatcoe1,vlosllcoe1,
 c              lloncoe0,llatcoe0,lrllcoe0,lloncoe1,llatcoe1,lrllcoe1,
@@ -34,6 +34,9 @@ c              corresponding to the range of the theta (colatitude) edge values.
 c
 c     Input:   c,d - real*8 Minimum and maximum values of longitude [radians]
 c              corresponding to the range of longitude (azimuth) edge values.
+c
+c     Input:   bmin - real*8 threshold for |B| [G].  If bmin <= 0, then
+c              threshold will be set to 200G. 
 c
 c     Input:   bloncoe0(n+1,m+1),blatcoe0(n+1,m+1),brllcoe0(n+1,m+1) - real*8
 c              arrays of longitudinal, latitudinal and radial components of the 
@@ -131,7 +134,7 @@ c
 c input variables in lon, lat order
 c
       integer :: n,m
-      real*8 rsun,a,b,c,d 
+      real*8 rsun,a,b,c,d,bmin 
       real*8 tjul0,tjul1
 c
       real*8 :: bloncoe0(n+1,m+1),blatcoe0(n+1,m+1),brllcoe0(n+1,m+1)
@@ -243,7 +246,15 @@ c
       max_iter=25
       verbose=0
       debug=1
-      bthr=200.d0
+c
+c - - bthr is now determined by passed in input variable bmin:
+c
+      if(bmin .gt. 0.d0) then
+         bthr=bmin
+      else
+         bthr=200.d0
+      endif
+c
       bthr_relax=0.d0
       maskflag=1
 c      
@@ -337,13 +348,13 @@ c Note that the input time derivatives are masked
      1 rsun,sinth,sinth_hlf,a,b,ci,di,scrb,dscrbdr,scrj)
 c
 c Solve for static values of scrb,dscrbdr,scrj using magnetic field values
-c to compute vector potential [if needed]
-      call ptdsolve_ss(m,n,bt,bp,br,
+c to compute vector potential [if needed].  Uses masked magnetic field arrays.
+      call ptdsolve_ss(m,n,bt*mskte,bp*mskpe,br*mskr,
      1 rsun,sinth,sinth_hlf,a,b,ci,di,scrbs,dscrbdrs,scrjs)
 c
 c Calculate PTD contribution into electric field
       call e_ptd_ss(m,n,scrb,scrj,rsun,sinth_hlf,dtheta,dphi,
-     1 et,ep,er) 
+     1 et,ep,er)
 c
 c Calculate FLCT contribution into electric field
 c Note the input magnetic fields are masked
@@ -378,6 +389,9 @@ c
 c
 c Calculate radial Poynting flux from PDFI electric field and B_h:
       call sr_ss(m,n,etpdfi,eppdfi,bt,bp,sr)
+c
+c Multiply radial Poynting flux by CE mask (zero out low S/N points):
+      sr=sr(1:m,1:n)*mskr(1:m,1:n)
 c
 c Integrate radial Poynting flux over area:
       call srtot_ss(m,n,rsun,sinth_hlf,dtheta,dphi,sr,srtot)
