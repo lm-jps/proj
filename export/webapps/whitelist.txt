@@ -168,7 +168,9 @@ mdi.ice
 mdi.limb_figure
 mdi.meanpf_96m
 mdi.mtarp
+mdi.pfss_synop
 mdi.polar_db
+mdi.q_synop
 mdi.rdvfitsc_dp
 mdi.rdvfitsf_dp
 mdi.rdvflows_dp
