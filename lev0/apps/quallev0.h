@@ -25,7 +25,7 @@
 
 // Instrument misconfiguration, e.g. worng Aperture Selector target.
 #define Q_MISCONFIG 0x1000   // likely set manually
-
+#define Q_INSTR_ANOM 0x2000   //Instrument Anomaly - Entered by hand or ingest_lev0
 #define Q_CAM_ANOM 0x8000   //Camera Anomaly - Entered by hand - Hao QUALITY=0x00008000
 
 //HMI sepecific
