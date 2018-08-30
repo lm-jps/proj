@@ -10,8 +10,8 @@
 #define Q_NOMPD  0x08	//master pointing data not available or error
 #define Q_NOLIMB 0x10	//limb fit error
 
+#define Q_INSTR_ANOM1 0x20  // Instrument anomaly, entered by hand or build_lev1_hmi/aia
 #define Q_MISCONF1 0x40 // Instr Misconfig inhereited from lev0
-
 #define Q_CAM_ANOM1 0x80 //Camera Anomaly - Entered by hand 
 
 
