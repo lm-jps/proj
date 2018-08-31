@@ -171,6 +171,7 @@ char *module_name    = "HMI_IQUV_averaging"; //name of the module
 
 #define Q_ACS_ECLP 0x2000             //eclipse keyword for the lev1 data
 #define Q_ACS_ISSLOOP 0x20000         //ISS loop OPEN for lev1
+#define Q_INSTR_ANOM1 0x20            //HMI Instrument anomaly
 #define Q_ACS_NOLIMB 0x10             //limbfinder error for lev1
 #define Q_MISSING_SEGMENT 0x80000000  //missing image segment for lev1 record 
 #define Q_ACS_LUNARTRANSIT 0x800000   //lunar transit
@@ -213,6 +214,7 @@ char *module_name    = "HMI_IQUV_averaging"; //name of the module
 #define QUAL_NOCOSMICRAY             (0x400)                //some cosmic-ray hit lists could not be read for the level 1 filtergrams
 #define QUAL_ECLIPSE                 (0x200)                //at least one lev1 record was taken during an eclipse
 #define QUAL_LARGEFTSID              (0x100)                //HFTSACID of target filtergram > 4000, which adds noise to observables
+#define QUAL_TEMPERROR               (0x80)                 //Code error discovered, will be corrected in later versions, see notes at http://jsoc2.stanford.edu/doc/data/hmi/Quality_Bits
 #define QUAL_POORQUALITY             (0x20)                 //poor quality: careful when using these observables due to eclipse, or lunar transit, or thermal recovery, or open ISS, or other issues...
 
 
@@ -1121,7 +1123,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.56 2018/04/05 17:48:07 baldner Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.57 2018/08/31 22:42:51 phil Exp $");
 }
 
 
@@ -2978,6 +2980,11 @@ int DoIt(void)
 		  QUALITY[timeindex] = QUALITY[timeindex] | QUAL_POORQUALITY;
 		}
 
+              //TO DEAL WITH AN INSTRUMENT ANOMALY
+              if((QUALITYin[temp] & Q_INSTR_ANOM1) == Q_INSTR_ANOM1)
+                {
+                  QUALITY[timeindex] = QUALITY[timeindex] | QUAL_TEMPERROR;
+                }
       	      //TO DEAL WITH ECLIPSES AND CAMERA ANOMALY
 	      if((QUALITYin[temp] & Q_ACS_ISSLOOP) == Q_ACS_ISSLOOP)
 		{

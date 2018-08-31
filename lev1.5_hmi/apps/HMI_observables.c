@@ -176,6 +176,7 @@ char *module_name= "HMI_observables"; //name of the module
 
 #define Q_ACS_ECLP 0x2000             //eclipse keyword for the lev1 data
 #define Q_ACS_ISSLOOP 0x20000         //ISS loop OPEN for lev1
+#define Q_INSTR_ANOM1 0x20            //HMI Instrument anomaly
 #define Q_ACS_NOLIMB 0x10             //limbfinder error for lev1
 #define Q_MISSING_SEGMENT 0x80000000  //missing image segment for lev1 record 
 #define Q_ACS_LUNARTRANSIT 0x800000   //lunar transit
@@ -219,6 +220,7 @@ char *module_name= "HMI_observables"; //name of the module
 #define QUAL_LIMBFITISSUE            (0x800)                //some lev1 records were discarded because R_SUN, and/or CRPIX1/CRPIX2 were missing or too different from the median value of the other lev 1 records (too much jitter for instance)
 #define QUAL_NOCOSMICRAY             (0x400)                //some cosmic-ray hit lists could not be read for the level 1 filtergrams
 #define QUAL_ECLIPSE                 (0x100)                //at least one lev1 record was taken during an eclipse
+#define QUAL_TEMPERROR               (0x80)                 //Code error discovered, will be corrected in later versions, see notes at http://jsoc2.stanford.edu/doc/data/hmi/Quality_Bits
 #define QUAL_LARGEFTSID              (0x40)                 //HFTSACID of target filtergram > 4000, which adds noise to observables
 #define QUAL_POORQUALITY             (0x20)                 //poor quality: careful when using these observables due to eclipse, or lunar transit, or thermal recovery, or open ISS, or other issues...
 
@@ -1104,7 +1106,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.57 2018/03/30 20:25:27 baldner Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.58 2018/08/31 22:42:51 phil Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -2772,6 +2774,11 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 	    }
 
 
+	  //TO DEAL WITH AN INSTRUMENT ANOMALY
+	  if((QUALITYin[temp] & Q_INSTR_ANOM1) == Q_INSTR_ANOM1)
+	    {
+	      QUALITY = QUALITY | QUAL_TEMPERROR;
+            }
 	  //TO DEAL WITH ECLIPSES AND A CAMERA ANOMALY
 	  if((QUALITYin[temp] & Q_ACS_ISSLOOP) == Q_ACS_ISSLOOP)
 	    {
