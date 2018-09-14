@@ -74,6 +74,11 @@ hmi.Mrmap_latlon_720s_nrt
 hmi.Mrmap_lowres_latlon_720s
 hmi.mrsynop_small_720s
 hmi.offpoint_flatfield
+hmi.pfss_synframe
+hmi.pfss_synop
+hmi.polar_db
+hmi.q_synframe
+hmi.q_synop
 hmi.rdvavgpspec_fd15
 hmi.rdvavgpspec_fd30
 hmi.s_135s
