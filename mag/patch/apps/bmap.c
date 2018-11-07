@@ -1895,9 +1895,13 @@ void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *inRec, struct mapInfo *mInfo)
 	int status = 0;
 	char key[64];
 	
+    TIME val, trec, tnow, UNIX_epoch = -220924792.000; /* 1970.01.01_00:00:00_UTC */
+    tnow = (double)time(NULL);
+    tnow += UNIX_epoch;
+    
 	// Info
 	drms_setkey_string(outRec, "BLD_VERS", jsoc_version);
-	drms_setkey_time(outRec, "DATE", CURRENT_SYSTEM_TIME);
+	drms_setkey_time(outRec, "DATE", tnow);
 	
 	// All other keywords
 	copy_me_keys(inRec, outRec);
