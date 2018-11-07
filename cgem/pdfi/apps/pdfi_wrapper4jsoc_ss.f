@@ -3,7 +3,8 @@
      2 vloncoe0,vlatcoe0,vlosllcoe0,vloncoe1,vlatcoe1,vlosllcoe1,
      3 lloncoe0,llatcoe0,lrllcoe0,lloncoe1,llatcoe1,lrllcoe1,
      4 tjul0,tjul1,blon0,blat0,brll0,blon1,blat1,brll1,
-     5 elonpdfi,elatpdfi,erllpdfi,srll,srtot,hmll,hmtot,tjulhalf)
+     5 elonpdfi,elatpdfi,erllpdfi,delondr,delatdr,srll,srtot,
+     6 hmll,hmtot,tjulhalf)
 c    
 c    
 c
@@ -22,7 +23,8 @@ c              bloncoe0,blatcoe0,brllcoe0,bloncoe1,blatcoe1,brllcoe1,
 c              vloncoe0,vlatcoe0,vlosllcoe0,vloncoe1,vlatcoe1,vlosllcoe1,
 c              lloncoe0,llatcoe0,lrllcoe0,lloncoe1,llatcoe1,lrllcoe1,
 c              tjul0,tjul1,blon0,blat0,brll0,blon1,blat1,brll1,
-c              elonpdfi,elatpdfi,erllpdfi,srll,srtot,hmll,hmtot,tjulhalf)
+c              elonpdfi,elatpdfi,erllpdfi,delondr,delatdr,srll,srtot,
+c              hmll,hmtot,tjulhalf)
 c
 c     Input:   m,n - number of cell centers in the theta (lat), and phi (lon)
 c              directions, respectively. 
@@ -81,6 +83,12 @@ c              arrays of longitudinal, latidudinal and radial components of
 c              electric field, stored in lon,lat index order [V/cm].
 c              If desired, these electric fields can be converted to cE values
 c              in [G km/sec] by multiplying by 1d3.
+c
+c     Output:  delondr(n,m+1),delatdr(n+1,m) - real*8 arrays of the radial
+c              derivatives of the lontitudinal and latitudinal electric field
+c              components, stored in lon,lat index order [V/cm^2].  If desired,
+c              these arrays can be converted to cE values [G/sec], by
+c              multiplying by 1d8.
 c
 c     Output:  blon0(n+1,m),blat0(n,m+1),brll0(n,m),blon1(n+1,m),
 c              blat1(n,m+1),brll1(n,m) - real*8 arrays of magnetic field 
@@ -146,9 +154,11 @@ c
       real*8 :: lloncoe0(n+1,m+1),llatcoe0(n+1,m+1),lrllcoe0(n+1,m+1)
       real*8 :: lloncoe1(n+1,m+1),llatcoe1(n+1,m+1),lrllcoe1(n+1,m+1)
 c
-c output: electric field at TE and PE edges   
+c output: electric field and radial derivatives of E_h at TE and PE edges   
+c         E_r evaluated on COE grid
 c
       real*8 :: elonpdfi(n,m+1),elatpdfi(n+1,m)
+      real*8 :: delondr(n,m+1),delatdr(n+1,m)
       real*8 :: erllpdfi(n+1,m+1)
 c
 c output: Poynting flux, helicity flux density arrays at CE grid, lon,lat order
@@ -213,6 +223,7 @@ c  ci and di are values of c,d with c subtracted from both, for use in fishpack
       real*8 :: scrbs(m+1+1,n+1+1),dscrbdrs(m+1+1,n+1+1)
       real*8 :: scrj(m+1,n+1),scrjs(m+1,n+1)
       real*8 :: et(m,n+1),ep(m+1,n),er(m+1,n+1)     
+      real*8 :: detdr(m,n+1),depdr(m+1,n)
       real*8 :: ezetat(m,n+1),ezetap(m+1,n)
       real*8 :: edt(m,n+1),edp(m+1,n),edr(m+1,n+1)
       real*8 :: eti(m,n+1),epi(m+1,n),eri(m+1,n+1)
@@ -387,6 +398,16 @@ c
       eppdfi=(eppdf+epi)*1.0d-3
       erpdfi=(erpdf+eri)*1.0d-3
 c
+c Calculate radial derivatives of horizontal fields in units of [G/s]:
+c
+      call dehdr_ss(m,n,rsun,sinth_hlf,dtheta,dphi,
+     1     scrb,dscrbdr,detdr,depdr)
+c
+c Convert detdr,depdr from [G/s] to [V/cm^2]:
+c
+      detdr=detdr*1d-8
+      depdr=depdr*1d-8    
+c
 c Calculate radial Poynting flux from PDFI electric field and B_h:
       call sr_ss(m,n,etpdfi,eppdfi,bt,bp,sr)
 c
@@ -402,8 +423,9 @@ c
 c Integrate Helicity flux density over area to get helicity injection rate:
       call hmtot_ss(m,n,rsun,sinth_hlf,dtheta,dphi,hm,hmtot)
 c
-c Transpose E_h data arrays from theta,phi to lon,lat order 
+c Transpose E_h and dE_h/dr data arrays from theta,phi to lon,lat order 
       call ehyeetp2ll_ss(m,n,etpdfi,eppdfi,elonpdfi,elatpdfi)
+      call ehyeetp2ll_ss(m,n,detdr,depdr,delondr,delatdr)
       call eryeetp2ll_ss(m,n,erpdfi,erllpdfi)
 c
 c Calculate Bvec at t0 at TE and PE in lon, lat order

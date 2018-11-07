@@ -50,14 +50,16 @@
 char *inSegNames[] = {"Bx", "By", "Bz",
                       "Vx", "Vy", "Vz",
                       "Lx", "Ly", "Lz"};
-char *outSegNames[] = {"Expdfi", "Eypdfi", "Ezpdfi"};
+char *outSegNames[] = {"Expdfi", "Eypdfi", "Ezpdfi",
+                       "dExdz", "dEydz", "Srz", "Hmz"};
 char *outSegBNames[] = {"Bx0", "By0", "Bz0",
                         "Bx1", "By1", "Bz1"};
 #else
 char *inSegNames[] = {"Bloncoe", "Blatcoe", "Brllcoe",
                       "Vloncoe", "Vlatcoe", "Vlosllcoe",
                       "Lloncoe", "Llatcoe", "Lrllcoe"};
-char *outSegNames[] = {"Elonpdfi", "Elatpdfi", "Erllpdfi"};
+char *outSegNames[] = {"Elonpdfi", "Elatpdfi", "Erllpdfi",
+                       "dElondr", "dElatdr", "Srll", "Hmll"};
 char *outSegBNames[] = {"Blon0", "Blat0", "Brll0",
                         "Blon1", "Blat1", "Brll1"};
 #endif
@@ -92,6 +94,7 @@ extern void pdfi_wrapper4jsoc_ss_(int *m, int *n, double *rsun,
                                   double *blon0, double *blat0, double *brll0,
                                   double *blon1, double *blat1, double *brll1,
                                   double *elonpdfi, double *elatpdfi, double *erllpdfi,
+                                  double *delondr, double *delatdr,
                                   double *srll, double *srtot, double *hmll, double *hmtot,
                                   double *tjulhalf);
 
@@ -113,6 +116,7 @@ int getInputArr(DRMS_Record_t *inRec, struct reqInfo *rInfo,
 int writeOutputArr(DRMS_Record_t *inRec0, DRMS_Record_t *inRec1, DRMS_Record_t *outRec,
                    struct reqInfo *rInfo0, struct reqInfo *rInfo1,
                    double *elonpdfi, double *elatpdfi, double *erllpdfi,
+                   double *delondr, double *delatdr, double *srll, double *hmll,
                    double *blon0, double *blat0, double *brll0,
                    double *blon1, double *blat1, double *brll1,
                    struct pdfi_result *res);
@@ -297,6 +301,9 @@ int DoIt(void)
         double *elatpdfi = (double *) (calloc((n + 1) * m, sizeof(double)));
         double *erllpdfi = (double *) (calloc((n + 1) * (m + 1), sizeof(double)));
         
+        double *delondr = (double *) (calloc(n * (m + 1), sizeof(double)));
+        double *delatdr = (double *) (calloc((n + 1) * m, sizeof(double)));
+        
         double *srll = (double *) (calloc(n * m, sizeof(double)));
         double *hmll = (double *) (calloc(n * m, sizeof(double)));
         
@@ -312,7 +319,8 @@ int DoIt(void)
                               lloncoe0, llatcoe0, lrllcoe0, lloncoe1, llatcoe1, lrllcoe1,
                               &tjul0, &tjul1,
                               blon0, blat0, brll0, blon1, blat1, brll1,
-                              elonpdfi, elatpdfi, erllpdfi, srll, &srtot, hmll, &hmtot, &tjulhalf);
+                              elonpdfi, elatpdfi, erllpdfi, delondr, delatdr,
+                              srll, &srtot, hmll, &hmtot, &tjulhalf);
         res.srtot = srtot; res.hmtot = hmtot;
         
         // Output, finally save as n x m
@@ -322,10 +330,13 @@ int DoIt(void)
         if (writeOutputArr(inRec0, inRec1, outRec,
                            &rInfo0, &rInfo1,
                            elonpdfi, elatpdfi, erllpdfi,
+                           delondr, delatdr, srll, hmll,
                            blon0, blat0, brll0,
                            blon1, blat1, brll1, &res)) {
             printf("Output array error, record #%d skipped", ipair);
             free(elonpdfi); free(elatpdfi); free(erllpdfi);     // otherwise freed in function
+            free(delondr); free(delatdr);
+            free(srll); free(hmll);
             free(blon0); free(blat0); free(brll0);
             free(blon1); free(blat1); free(brll1);
         }
@@ -338,8 +349,6 @@ int DoIt(void)
         free(vloncoe1); free(vlatcoe1); free(vlosllcoe1);
         free(lloncoe0); free(llatcoe0); free(lrllcoe0);
         free(lloncoe1); free(llatcoe1); free(lrllcoe1);
-        
-        free(srll); free(hmll);     // Not written out now
         
         SHOW("done.\n")
         
@@ -536,6 +545,7 @@ int getInputArr(DRMS_Record_t *inRec, struct reqInfo *rInfo,
 int writeOutputArr(DRMS_Record_t *inRec0, DRMS_Record_t *inRec1, DRMS_Record_t *outRec,
                    struct reqInfo *rInfo0, struct reqInfo *rInfo1,
                    double *elonpdfi, double *elatpdfi, double *erllpdfi,
+                   double *delondr, double *delatdr, double *srll, double *hmll,
                    double *blon0, double *blat0, double *brll0,
                    double *blon1, double *blat1, double *brll1,
                    struct pdfi_result *res)
@@ -544,18 +554,18 @@ int writeOutputArr(DRMS_Record_t *inRec0, DRMS_Record_t *inRec1, DRMS_Record_t *
     
     // Main output
     
-    DRMS_Segment_t *outSeg[3];
-    for (int i = 0; i < 3; i++) {
+    DRMS_Segment_t *outSeg[7];
+    for (int i = 0; i < 7; i++) {
          outSeg[i] = drms_segment_lookup(outRec, outSegNames[i]);
     }
     
     int n = rInfo0->n, m = rInfo0->m;
     
-    double *outData[3] = {elonpdfi, elatpdfi, erllpdfi};
-    DRMS_Array_t *outArray[3];
-    int dims_arr[3][2] = {{n, m+1}, {n+1, m}, {n+1, m+1}};
+    double *outData[7] = {elonpdfi, elatpdfi, erllpdfi, delondr, delatdr, srll, hmll};
+    DRMS_Array_t *outArray[7];
+    int dims_arr[7][2] = {{n, m+1}, {n+1, m}, {n+1, m+1}, {n, m+1}, {n+1, m}, {n, m}, {n,m}};
     
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 7; i++) {
         int dims[2] = {dims_arr[i][0], dims_arr[i][1]};
         outArray[i] = drms_array_create(DRMS_TYPE_DOUBLE, 2, dims, outData[i], &status);
         if (status) {
@@ -571,7 +581,7 @@ int writeOutputArr(DRMS_Record_t *inRec0, DRMS_Record_t *inRec1, DRMS_Record_t *
         status = drms_segment_write(outSeg[i], outArray[i], 0);
     }
     
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 7; i++) {
         drms_free_array(outArray[i]);
     }
     

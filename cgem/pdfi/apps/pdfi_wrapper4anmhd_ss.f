@@ -245,6 +245,7 @@ c
 c     bthr=200.d0
 c - - Set bthr to 370G, to be consistent with KFW2014 threshold
       bthr=370.d0
+c     bthr=500.d0
       bthr_relax=0.d0
       maskflag=0
 c      
@@ -333,7 +334,7 @@ c half-cell locations
       call sinthta_ss(a,b,m,sinth,sinth_hlf)
 c
 c Solve for time derivatives of scrb, dscrbdr, and scrj     
-c Note that the input time derivatives are masked
+c Note that the input time derivatives are not masked for anmhd.
 c
 c     call ptdsolve_ss(m,n,btt*mskte,bpt*mskpe,brt*mskr,
 c    1 rsun,sinth,sinth_hlf,a,b,ci,di,scrb,dscrbdr,scrj)
@@ -342,7 +343,9 @@ c    1 rsun,sinth,sinth_hlf,a,b,ci,di,scrb,dscrbdr,scrj)
 c
 c Solve for static values of scrb,dscrbdr,scrj using magnetic field values
 c to compute vector potential [if needed]
-      call ptdsolve_ss(m,n,bt,bp,br,
+c     call ptdsolve_ss(m,n,bt,bp,br,
+c    1 rsun,sinth,sinth_hlf,a,b,ci,di,scrbs,dscrbdrs,scrjs)
+      call ptdsolve_ss(m,n,bt*mskte,bp*mskpe,br*mskr,
      1 rsun,sinth,sinth_hlf,a,b,ci,di,scrbs,dscrbdrs,scrjs)
 c
 c Calculate PTD contribution into electric field
@@ -350,7 +353,7 @@ c Calculate PTD contribution into electric field
      1 et,ep,er) 
 c
 c Calculate FLCT contribution into electric field
-c Note the input magnetic fields are masked
+c Note the input magnetic fields are not masked for anmhd
 c
 c     call e_flct_ss(m,n,brte*mskte,brpe*mskpe,
 c    1 bhte*mskte,bhpe*mskpe,vt,vp,rsun,sinth,sinth_hlf,
@@ -360,17 +363,17 @@ c    2 a,b,ci,di,ezetat,ezetap)
      2 a,b,ci,di,ezetat,ezetap)
 c
 c Calculate Doppler contribution into electric field
-c Note magnetic field arrays are masked
+c Note magnetic field arrays are masked for anmhd
 c
-      call e_doppler_ss(m,n,btcoeh,
-     1 bpcoeh,brtpcoeh,vlostpcoeh,
-     2 ltcoeh,lpcoeh,lrtpcoeh,rsun,sinth,
-     3 a,b,ci,di,edt,edp,edr)
-c
-c     call e_doppler_ss(m,n,btcoeh*maskcoe,
-c    1 bpcoeh*maskcoe,brtpcoeh*maskcoe,vlostpcoeh*maskcoe,
+c     call e_doppler_ss(m,n,btcoeh,
+c    1 bpcoeh,brtpcoeh,vlostpcoeh,
 c    2 ltcoeh,lpcoeh,lrtpcoeh,rsun,sinth,
 c    3 a,b,ci,di,edt,edp,edr)
+c
+      call e_doppler_ss(m,n,btcoeh*maskcoe,
+     1 bpcoeh*maskcoe,brtpcoeh*maskcoe,vlostpcoeh*maskcoe,
+     2 ltcoeh,lpcoeh,lrtpcoeh,rsun,sinth,
+     3 a,b,ci,di,edt,edp,edr)
 c
 c Calculate PDF electric field
       etpdf=et+ezetat+edt
@@ -378,7 +381,7 @@ c Calculate PDF electric field
       erpdf=er+edr
 c
 c Calculate non-inductive electric field components    
-c Note that magnetic field points (corners) are masked on input.
+c Note that magnetic field points (corners) are not masked on input for anmhd.
 c
       call e_ideal_ss(m,n,btcoeh,
      1 bpcoeh,brtpcoeh,etpdf,eppdf,erpdf,rsun,
@@ -396,14 +399,14 @@ c
 c Calculate radial Poynting flux from PDFI electric field and B_h:
       call sr_ss(m,n,etpdfi,eppdfi,bt,bp,sr)
 c
-c Integrate radial Poynting flux over area:
-      call srtot_ss(m,n,rsun,sinth_hlf,dtheta,dphi,sr,srtot)
+c Integrate radial Poynting flux over area (masked area only):
+      call srtot_ss(m,n,rsun,sinth_hlf,dtheta,dphi,sr*mskr,srtot)
 c
 c Calculate Helicity flux density from scrbs and PDFI electric field:
       call hm_ss(m,n,rsun,sinth_hlf,dtheta,dphi,etpdfi,eppdfi,scrbs,hm)
 c
 c Integrate Helicity flux density over area to get helicity injection rate:
-      call hmtot_ss(m,n,rsun,sinth_hlf,dtheta,dphi,hm,hmtot)
+      call hmtot_ss(m,n,rsun,sinth_hlf,dtheta,dphi,hm*mskr,hmtot)
 c
 c Transpose E_h data arrays from theta,phi to lon,lat order 
       call ehyeetp2ll_ss(m,n,etpdfi,eppdfi,elonpdfi,elatpdfi)

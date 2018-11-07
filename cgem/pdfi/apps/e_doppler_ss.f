@@ -123,6 +123,13 @@ c
       real*8 :: tmp1(m-1,n-1),tmp2(m-1,n-1),tmp3(m-1,n-1)
       real*8 :: psi(m+1,n+1)
       real*8 :: etot(m-1,n-1,3),ed_h(m-1,n-1,3),q(m-1,n-1,3)
+c
+c - - SDF variable declarations for debugging:
+c
+c     integer*8 :: dims(20)
+c     character*1 :: dt
+c     integer :: nbpw,ndim
+c     character*40 :: lab,fd
 c      
 c - - set sigma,max_iter,verbose:
 c
@@ -181,6 +188,19 @@ c
       ed_h(1:m-1,1:n-1,2)=edp*omega
       ed_h(1:m-1,1:n-1,3)=edr*omega
 c
+c - - debug: sdf output of ed_h
+c
+c     nbpw=8
+c     dt='f'
+c     lab='ed_h'
+c     ndim=3
+c     dims(1)=m-1
+c     dims(2)=n-1
+c     dims(3)=3
+c     fd='e_doppler_ss_debug.sdf'
+c     call sdf_rm_f77(fd)
+c     call sdf_write_f77(fd,lab,dt,nbpw,ndim,dims,ed_h)
+c
       edmag=sqrt(ed_h(1:m-1,1:n-1,1)*ed_h(1:m-1,1:n-1,1)+
      1 ed_h(1:m-1,1:n-1,2)*ed_h(1:m-1,1:n-1,2)+
      2 ed_h(1:m-1,1:n-1,3)*ed_h(1:m-1,1:n-1,3))
@@ -200,12 +220,22 @@ c
       q(1:m-1,1:n-1,1)=tmp1
       q(1:m-1,1:n-1,2)=tmp2
       q(1:m-1,1:n-1,3)=tmp3
-
+c
+c - - debug: write out q vector:
+c
+c     lab='q'
+c     call sdf_write_f77(fd,lab,dt,nbpw,ndim,dims,q)
+c
 c       input: q[m-1,n-1,3],ed_h(m-1,n-1,3)
 c       output (with ghostzones): psi(m+1,n+1),dpsi_dr(m+1,n+1),etot(m-1,n-1,3)
       call relax_psi_3d_ss(m,n,q,ed_h,rsun,a,b,c,d,
      1 max_iter,bthr,verbose,psi,dpsi_dr,etot)
-     
+c
+c - -  debug output of etot:
+c
+c     lab='etot'
+c     call sdf_write_f77(fd,lab,dt,nbpw,ndim,dims,etot)
+c    
 c  input:   psi,[m+1,n+1] sinth(m+1)
 c  output: TE, PE gradt[m,n+1], gradp[m+1,n]  
       call gradh_co_ss(m,n,psi,rsun,sinth,dtheta,
