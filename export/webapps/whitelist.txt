@@ -207,6 +207,9 @@ mdi.vw_V_sht_gf_retile
 mdi.vw_V_sht_gf_gaps_retile
 mdi.leakage
 mdi.eigenfunctions
+sdo.fds
+sdo.fds_orbit_ingesthist
+sdo.fds_orbit_vectors
 sdo.master_pointing
 sid_awe.awesome
 sid_awe.monitors
