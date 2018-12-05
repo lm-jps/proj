@@ -1076,7 +1076,6 @@ int DoIt (void) {
 
   double raddeg = M_PI / 180.0;
   double degrad = 1.0 / raddeg;
-  int scaling_override = 0;
   char *mapname[] = {"PlateCarree", "Cassini-Soldner", "Mercator",
       "LambertCylindrical", "Sanson-Flamsteed", "gnomonic", "Postel",
       "stereographic", "orthographic", "LambertAzimuthal"};
@@ -1355,16 +1354,11 @@ int DoIt (void) {
         /* All of this code is segment-dependent. It used to reside outside any loop
          * (before the record loop). It was moved here, inside the segment loop. The
          * map array was allocated outside any loop, and freed outside any loop. */
-        scaling_override = 0;
         bscale = bscaleIn;
         if (bscaleIn == 0.0) 
         {
             bscale = oseg->bscale;
             if (verbose) printf ("bscale set to output default: %g\n", bscale);
-        }
-        else
-        {
-            scaling_override = 1;
         }
     
         bzero = bzeroIn;
@@ -1372,10 +1366,6 @@ int DoIt (void) {
         {
             bzero = oseg->bzero;
             if (verbose) printf ("bzero set to output default: %g\n", bzero);
-        }
-        else
-        {
-            scaling_override = 1;
         }
     
         map->bscale = bscale;
@@ -1472,15 +1462,6 @@ int DoIt (void) {
             drms_close_records(ids, DRMS_FREE_RECORD);
             drms_close_records(ods, DRMS_FREE_RECORD);
             return 1;
-        }
-
-        // XXX PHS if scaling not given use input segment for bscale and bzero.
-        if (!scaling_override) 
-        {
-            map->bscale = inseg->bscale;
-            if (verbose) printf("bscale set to input record value: %g\n", bscale);
-            map->bzero = inseg->bzero;
-            if (verbose) printf("bzero set to input record value: %g\n", bzero);
         }
 
         // XXX PHS moved segment write to here to allow writing with headers.
