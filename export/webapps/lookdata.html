@@ -1375,10 +1375,22 @@ function GetRSCount()
         RecordCount = SummaryData.count;
         $("RSCount_Place").innerHTML = SummaryData.count;
         }
-          $("ExportRecordSetLimit").innerHTML = $("RecordLimit").value;
-          $("ExportRecordSet").innerHTML = $("RecordSet").value;
-          if (nsegsselected > 0)
-            $("ExportRecordSet").innerHTML = $("ExportRecordSet").innerHTML + "{" + SegList + "}";
+
+        $("ExportRecordSetLimit").innerHTML = $("RecordLimit").value;
+        
+        // setting the innerHTML property of the span element will ampersand-encode 'funny' characters in 
+        // the RecordSet value attribute (like the '>' character); this is necessary for the funny characters
+        // to display properly when the browser renders HTML; but when we send the record set to exportdata.html
+        // via a cookie, we do not want to send HTML since the record set is a text value, not HTML        
+        var recSetSpec = $("RecordSet").value;
+          
+        if (nsegsselected > 0 && SegList.length > 0)
+        {
+            recSetSpec += "{" + SegList + "}";
+        }
+            
+        $("ExportRecordSet").innerHTML = recSetSpec;
+            
           $("RecSetPlace").innerHTML = $("RecordSet").value;
           if (KeyValsFetched == 1)
             {
@@ -2332,24 +2344,15 @@ function GraphCreate()
 
 function Export_Recordset()
   {
-  Cookie.init({name:EXPORTDATA});
-  Cookie.setData("state",0);
-  if (nsegsselected > 0 && $("ExportRecordSet").innerHTML.indexOf("}") == -1)
-    $("ExportRecordSet").innerHTML = $("ExportRecordSet").innerHTML + "{" + SegList + "}";
-  $("ExportRecordSetLimit").innerHTML = $("RecordLimit").value;
-  var exportargs="ds="+$("ExportRecordSet").innerHTML  + "&limit=" + $("RecordLimit").value
-  Cookie.setData("search",encodeURIComponent(exportargs));
-  ExportWindow=window.open("http://" + Host + "/ajax/" + EXPORTDATA + ".html?" + encodeURIComponent(exportargs), "JSOC_Export");
-  ExportWindow.window.focus();
-  }
+  Cookie.init({ name:EXPORTDATA });
+  Cookie.setData("state", 0);
+  
+  var urlParams = { ds: $("ExportRecordSet").textContent, limit: $("RecordLimit").value.toString() };
+  var urlQueryString = Object.toQueryString(urlParams);
 
-function StartExportRequest()
-  {
-  if (nsegsselected > 0 && $("ExportRecordSet").innerHTML.indexOf("}") == -1)
-    $("ExportRecordSet").innerHTML = $("ExportRecordSet").innerHTML + "{" + SegList + "}";
-    $("ExportRecordSetLimit").innerHTML = $("RecordLimit").value;
-  $("ExportRequestFrame").src = "http://" + Host + "/ajax/" + EXPORTDATA + ".html?ds="+$("ExportRecordSet").innerHTML  +
-      "&limit=" + $("RecordLimit").value;
+  Cookie.setData("search", urlQueryString);
+  ExportWindow=window.open("http://" + Host + "/ajax/" + EXPORTDATA + ".html?" + urlQueryString, "JSOC_Export");
+  ExportWindow.window.focus();
   }
 
 function ExportRequestStarted()
@@ -2590,7 +2593,6 @@ jsoc.stanford.edu gives access to export series. Consult JSOC staff for access t
     <b> Record Limit:</b>
     <span id="ExportRecordSetLimit" style="background-color:#FFFFFF;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span >
     <input id="ExportRequestButton" type="button" value="Export" onClick="Export_Recordset();" > 
-    <!-- <input id="ExportRequestButton" type="button" value="Export" onClick="StartExportRequest();" > -->
     Click to jump to new export page.
     <p>
     <div id=iframeHideDiv style="display:block;">
