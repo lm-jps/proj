@@ -156,7 +156,7 @@ ModuleArgs_t module_args[] =
     {ARG_STRING, "poldb", "hmi.polar_db", "Polar field database, name only."},
     {ARG_NUME, "method", "TEMP_SPAT", "Correction scheme.", "TEMP_SPAT, SPAT_2D"},
     {ARG_DOUBLE, "lat0", "60.", "Start latitude used for fitting."},
-    {ARG_DOUBLE, "latfil", "75.", "Start latitude for filling in, no lower than 75."},
+    {ARG_DOUBLE, "latfil", "75.", "Start latitude for filling in."},
     {ARG_DOUBLE, "latfil1", "62.", "Start latitude for reduced noise."},
     {ARG_INT, "nflag", "1", "Filling for north pole: 1 for yes, 0 for no."},
     {ARG_INT, "sflag", "1", "Filling for south pole: 1 for yes, 0 for no."},
@@ -190,7 +190,7 @@ int DoIt(void)
     opt.interpOnly = params_isflagset(&cmdparams, "i");
     opt.amb = params_get_int(&cmdparams, "amb");
     
-    if (opt.latfil < 75.) opt.latfil = 75.;
+//    if (opt.latfil < 75.) opt.latfil = 75.;
     if (opt.latfil1 < opt.lat0) opt.latfil1 = opt.lat0;
     if (opt.latfil1 > opt.latfil) opt.latfil1 = opt.latfil;
 
