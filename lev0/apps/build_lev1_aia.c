@@ -1493,7 +1493,8 @@ int DoIt(void)
   quicklook = cmdparams_get_int(&cmdparams, "quicklook", NULL);
 
   dpath = cmdparams_get_str(&cmdparams, kDpath, NULL);
-  mpt = strdup(cmdparams_get_str(&cmdparams, "mpt", NULL));
+  if (quicklook) mpt = "sdo.master_pointing";
+  else  mpt = strdup(cmdparams_get_str(&cmdparams, "mpt", NULL));
   set_mpt_series_name(mpt);
 
   //quicklook = 1; //!!TEMP for test
