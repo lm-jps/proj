@@ -72,7 +72,7 @@ ModuleArgs_t module_args[] = {
   {ARG_STRING, "dsout", NOTSPECIFIED, "dataset of lev1 output"},
   {ARG_STRING, "dsff", NOTSPECIFIED, "dataset of darks flats bads"},
   {ARG_STRING, "dsaiabad", NOTSPECIFIED, "dataset of AIA bad pixels"},
-  {ARG_STRING, "mpt", "sdo.master_pointing", "Master Pointing Table series"},
+  {ARG_STRING, "mpt", "aia.master_pointing3h", "Master Pointing Table series"},
   {ARG_STRING, "logfile", NOTSPECIFIED, "optional log file name. Will create one if not given"},
   {ARG_STRING, "bscale", "1.0", "output segment BSCALE"},
   {ARG_STRING, "bzero", "0.0", "output segment BZERO"},
