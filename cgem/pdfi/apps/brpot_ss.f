@@ -1,4 +1,5 @@
-       subroutine brpot_ss(m,n,p,a,b,c,d,rsun,rssmrs,scrb3d,mflux,brpot)
+       subroutine brpot_ss(m,n,p,bcn,a,b,c,d,rsun,rssmrs,scrb3d,
+     1 mflux,brpot)
 c
 c+ - - Purpose: compute potential field value of br given the 3-d array
 c              scrb3d and net flux mflux by taking horizontal Laplacian at 
@@ -6,10 +7,13 @@ c              each radius value, then adding extra term from mflux.
 c              The array scrb3d is computed by subroutine scrbpot_ss.
 c              The quantity mflux is computed by subroutine mflux_ss.
 c
-c - -  Usage:  call brpot_ss(m,n,p,a,b,c,d,rsun,rssmrs,scrb3d,mflux,brpot)
+c - -  Usage:  call brpot_ss(m,n,p,bcn,a,b,c,d,rsun,rssmrs,scrb3d,mflux,brpot)
 c
 c - -  Input:  m,n,p: integer values of numbers of cell centers in theta,
 c              phi, and r directions
+c
+c - -  Input:  bcn: integer value for BC in phi:  bcn=0 => periodic BC,
+c              bcn=3 => homogenous Neumann BC
 c
 c - -  Input:  a,b,c,d:  real*8 values of min, max colatitude, min, max
 c              values of longitude [radians]. 
@@ -59,7 +63,7 @@ c
 c
 c - - input variables:
 c
-      integer :: m,n,p
+      integer :: m,n,p,bcn
       real*8 :: a,b,c,d,rsun,rssmrs,mflux
       real*8 :: scrb3d(m,n,p+1)
 c 
@@ -74,6 +78,13 @@ c
       real*8 :: sinth(m+1),sinth_hlf(m),r(p+1),brshell(m,n)
       real*8 :: curlt(m,n+1),curlp(m+1,n)
       real*8 :: dphi,dtheta,delr,area,b0
+c
+c - - test for legal values of bcn:
+c
+      if((bcn .ne. 0) .and. (bcn .ne. 3)) then
+         write(6,*) 'brpot_ss: Illegal bcn = ',bcn,' exiting'
+         stop
+      endif
 c
       bdas(1:n)=0.d0
       bdbs(1:n)=0.d0
@@ -104,11 +115,21 @@ c
          scrb(2:m+1,2:n+1)=scrb3d(1:m,1:n,q)
          scrb(1,2:n+1)=scrb(2,2:n+1)-1.d0*dtheta*bdas(1:n)
          scrb(m+2,2:n+1)=scrb(m+1,2:n+1)+1.d0*dtheta*bdbs(1:n)
-c        scrb(2:m+1,1)=scrb(2:m+1,2)-1.d0*dphi*bdcs(1:m)
-c        scrb(2:m+1,n+2)=scrb(2:m+1,n+1)+1.d0*dphi*bdds(1:m)
-c - -    Periodic BC in phi:
-         scrb(2:m+1,1)=scrb(2:m+1,n+1)
-         scrb(2:m+1,n+2)=scrb(2:m+1,2)
+c
+         if(bcn .eq. 3) then
+c - -       Neumann BC in phi
+            if(q .eq. 1) then
+              scrb(2:m+1,1)=scrb(2:m+1,2)-1.d0*dphi*bdcs(1:m)
+              scrb(2:m+1,n+2)=scrb(2:m+1,n+1)+1.d0*dphi*bdds(1:m)
+            else
+              scrb(2:m+1,1)=scrb(2:m+1,3)-2.d0*dphi*bdcs(1:m)
+              scrb(2:m+1,n+2)=scrb(2:m+1,n)+2.d0*dphi*bdds(1:m)
+            endif
+         else
+c - -       Periodic BC in phi:
+            scrb(2:m+1,1)=scrb(2:m+1,n+1)
+            scrb(2:m+1,n+2)=scrb(2:m+1,2)
+         endif
 c
          call curl_psi_rhat_ce_ss(m,n,scrb,r(q),sinth_hlf,dtheta,
      1        dphi,curlt,curlp)

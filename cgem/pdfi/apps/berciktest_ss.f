@@ -1,4 +1,4 @@
-      subroutine berciktest_ss(m,n,p,a,b,c,d,rsun,rssmrs,scrb3d,
+      subroutine berciktest_ss(m,n,p,bcn,a,b,c,d,rsun,rssmrs,scrb3d,
      1 brh,brr)
 c
 c+ - - Purpose: Compute potential field value of br above photosphere
@@ -7,10 +7,13 @@ c               (1) by taking horizontal Laplacian at each radius value, and
 c               (2) by taking 2nd deriv w/r r.  Both results should be equal,
 c               according to Bercik's equation.
 c
-c - -  Usage:   call berciktest_ss(m,n,p,a,b,c,d,rsun,rssmrs,scrb3d,brh,brr)
+c - -  Usage:   call berciktest_ss(m,n,p,bcn,a,b,c,d,rsun,rssmrs,scrb3d,brh,brr)
 c
 c - -  Input:   m,n,p: integer values of numbers of cell centers in theta,
 c               phi, and r directions
+c
+c - -  Input:   bcn: integer flag for boundary conditions in phi: bcn=0 =>
+c               periodic boundary conditions, bcn=3 => Neumann BC.
 c
 c - -  Input:   a,b,c,d:  real*8 values of min, max colatitude, min, max
 c               values of longitude. [radians]
@@ -59,7 +62,7 @@ c
 c
 c - - input variables:
 c
-      integer :: m,n,p
+      integer :: m,n,p,bcn
       real*8 :: a,b,c,d,rsun,rssmrs
       real*8 :: scrb3d(m,n,p+1)
 c 
@@ -74,6 +77,11 @@ c
       real*8 :: sinth(m+1),sinth_hlf(m),r(p+1),brshell(m,n)
       real*8 :: curlt(m,n+1),curlp(m+1,n)
       real*8 :: dphi,dtheta,delr
+c
+      if((bcn .ne. 0) .and. (bcn .ne. 3)) then
+         write(6,*), 'bercik_test_ss: Illegal bcn = ',bcn,' exiting'
+         stop
+      endif
 c
       bdas(1:n)=0.d0
       bdbs(1:n)=0.d0
@@ -96,11 +104,16 @@ c
          scrb(2:m+1,2:n+1)=scrb3d(1:m,1:n,q)
          scrb(1,2:n+1)=scrb(2,2:n+1)-1.d0*dtheta*bdas(1:n)
          scrb(m+2,2:n+1)=scrb(m+1,2:n+1)+1.d0*dtheta*bdbs(1:n)
-c        scrb(2:m+1,1)=scrb(2:m+1,2)-1.d0*dphi*bdcs(1:m)
-c        scrb(2:m+1,n+2)=scrb(2:m+1,n+1)+1.d0*dphi*bdds(1:m)
-c - -    Periodic BC in phi:
-         scrb(2:m+1,1)=scrb(2:m+1,n+1)
-         scrb(2:m+1,n+2)=scrb(2:m+1,2)
+c
+         if(bcn .eq. 3) then
+c - -       Neumann BC in phi:
+            scrb(2:m+1,1)=scrb(2:m+1,3)-2.d0*dphi*bdcs(1:m)
+            scrb(2:m+1,n+2)=scrb(2:m+1,n)+2.d0*dphi*bdds(1:m)
+         else
+c - -       Periodic BC in phi:
+            scrb(2:m+1,1)=scrb(2:m+1,n+1)
+            scrb(2:m+1,n+2)=scrb(2:m+1,2)
+         endif
 c
          call curl_psi_rhat_ce_ss(m,n,scrb,r(q),sinth_hlf,dtheta,
      1        dphi,curlt,curlp)

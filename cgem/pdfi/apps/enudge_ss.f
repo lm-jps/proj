@@ -124,9 +124,10 @@ c
          enddo
       enddo
 c
-c - - compute perimeter length of spherical wedge:
+c - - compute perimeter length of spherical wedge: (now ignoring l and r edges)
 c
-      lperim=rsun*((d-c)*(sin(a)+sin(b))+2.d0*(b-a))
+c     lperim=rsun*((d-c)*(sin(a)+sin(b))+2.d0*(b-a))
+      lperim=rsun*((d-c)*(sin(a)+sin(b)))
 c
 c - - compute amplitude of uniform electric field on boundary that generates
 c - - flux imbalance:
@@ -150,10 +151,12 @@ c - - E_phi at theta=a = -eperim
       bda(1:n)= -eperim*rsun
 c - - E_phi at theta=b = eperim
       bdb(1:n)= eperim*rsun
-c - - E_theta at phi=c = eperim
-      bdc(1:m)= -eperim*rsun*sinth_hlf(1:m)
-c - - E_theta at phi=d = -eperim
-      bdd(1:m)=eperim*rsun*sinth_hlf(1:m)      
+c - - E_theta at phi=c = eperim (now zero)
+c     bdc(1:m)= -eperim*rsun*sinth_hlf(1:m)
+      bdc(1:m)= 0.d0
+c - - E_theta at phi=d = -eperim (now zero)
+c     bdd(1:m)=eperim*rsun*sinth_hlf(1:m)      
+      bdd(1:m)= 0.d0
 c
 c - - set elm (coefficient for Helmholtz term) to 0.
 c

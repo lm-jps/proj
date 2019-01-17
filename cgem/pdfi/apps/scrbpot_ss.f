@@ -1,4 +1,4 @@
-      subroutine scrbpot_ss(m,n,p,a,b,c,d,rsun,rssmrs,brce,scrb3d)
+      subroutine scrbpot_ss(m,n,p,bcn,a,b,c,d,rsun,rssmrs,brce,scrb3d)
 c
 c+ - Purpose: Compute 3-d potential field within a spherical wedge
 c             domain, ie fixed co-latitude and azimuth boundaries, 
@@ -15,10 +15,13 @@ c             to its Fourier representation, then solve equations in theta
 c             and r for the amplitude of each Fourier mode, using the
 c             blktri solution method in FISHPACK.
 c
-c   - Usage:  call scrbpot_ss(m,n,p,a,b,c,d,rsun,rssmrs,brce,scrb3d)
+c   - Usage:  call scrbpot_ss(m,n,p,bcn,a,b,c,d,rsun,rssmrs,brce,scrb3d)
 c
 c - - Input:  m,n,p - integer number of cell interiors in the theta,phi,r 
 c             directions, respectively.
+c
+c - - Input:  bcn - integer flag for boundary conditions in phi
+c             (=0 for periodic BC, =3 for homogenous Neumann BC)
 c
 c - - Input:  a,b - real*8 min, max values of theta (colatitude) at edges 
 c             in 0,pi range [radians]
@@ -68,7 +71,7 @@ c
 c
 c - - input variables:
 c
-      integer :: m,n,p
+      integer :: m,n,p,bcn
       real*8 :: a,b,c,d,rsun,rssmrs
       real*8 :: brce(m,n)
 c
@@ -78,9 +81,10 @@ c
 c
 c - - Internal variables and arrays:
 c
-      integer :: i,j,q,iph,itmp,bcm,bcn,idimf,ierror
+      integer :: i,j,q,iph,itmp,bcm,idimf,ierror
       integer :: kk,kl,mp,np,iflag
       real*8 :: dtheta,dphi,delr,dphifft,elm,pertrb,pi,dum
+      real*8 :: rangecos
       real*8 :: brft(m,n),scrb(m,n),scrbft(m,n)
 c     real*8 :: brtest(m,n),br(m,n)
       real*8 :: fce(m,n)
@@ -99,13 +103,25 @@ c
 c - - sdf variables (temporary)
 c     integer*8 :: dims(20)
 c
+      if((bcn .ne. 0) .and. (bcn .ne. 3)) then
+         write(6,*) 'scrbpot_ss: Illegal bcn = ',bcn, ' exiting'
+         stop
+      endif
+c
       elm=0.d0
       pi=pimach(dum)
 c - - Define dtheta,dphi,dphifft,delr:
       dtheta=(b-a)/m
       dphi=(d-c)/n
 c - - dphifft needed to FT in the phi direction
-      dphifft=2.d0*pi/(n)
+c
+      if (bcn .eq. 3) then
+         dphifft=pi/dble(n)
+      else
+         dphifft=2.d0*pi/dble(n)
+      endif
+c
+      
 c - - radial spacing:
       delr=rssmrs/p
 c
@@ -147,12 +163,22 @@ c           Interior points in radius; regular 2nd derivative weightings
       end do   
 c
 c     Get fourier wave numbers stored into k array
-      call kfft_ss(n,k)
+c
+      if(bcn .eq. 3) then
+        call kcost_ss(n,k)
+      else
+        call kfft_ss(n,k)
+      endif
 c
 c - - Compute the am,bm,cm arrays needed in BLKTRI:
 c - - These are the coefficients of the finite difference expression
 c - - for the horizontal Laplacian:
 c
+      if(bcn .eq. 3) then
+        rangecos=pi
+      else
+        rangecos=2.d0*pi
+      endif
       do iph=1,m
          i=iph
          do j=1,n
@@ -176,7 +202,7 @@ c              Interior points in theta
 c           add in contribution to Laplacian from phi terms in fourier space
 c           to bm(iph,j)
             bm(iph,j)=bm(iph,j)-((2.*(1.-cos(k(j)*dphifft))
-     1     /dphifft**2)*(((2.d0*pi)/(d-c))**2)
+     1     /dphifft**2)*(((rangecos)/(d-c))**2)
      1     /sinth_hlf(iph)**2)
          end do
       enddo
@@ -201,15 +227,13 @@ c - - set boundary condition flags for Neumann (theta):
 c    
       bcm=3
 c
-c - - boundary conditions periodic in phi
+c - - boundary conditions periodic in phi (= bcn) is read in as calling arg
 c
-      bcn=0
-c
-c - - set homogenous Neumann boundary conditions for scrb:
+c - - set homogenous Neumann boundary conditions for scrb (but if bcn=0
+c - - these boundary conditions for phi=c and phi=d ignored):
 c
       bdas(1:n)=0.d0
       bdbs(1:n)=0.d0
-c - - bdcs and bdds will not actually be used in hstssp call because bcn=0
       bdcs(1:m)=0.d0
       bdds(1:m)=0.d0
 c
@@ -237,18 +261,37 @@ c
 c - - Now compute Fourier transform of scrb in phi direction:
 c
 c - - first allocate work array for Fourier transforms
+c - - (big enough for both regular fft and cost transforms)
 c
-      allocate(w(2*n+15))
+      allocate(w(3*n+15))
 c - - initialize fft work array
-      call rffti(n,w)
+c
+      if(bcn .eq. 3) then
+        call costi(n,w)
+      else
+        call rffti(n,w)
+      endif
+c
 c - transform scrb
       do i=1,m
          do j=1,n
            fr(j)=scrb(i,j)
          enddo 
-         call rfftf(n,fr,w)
+c
+         if (bcn .eq. 3) then
+            call cost(n,fr,w)
+         else
+            call rfftf(n,fr,w)
+         endif
+c
 c        Divide by n since FFT in fftpack not normalized:
-         scrbft(i,:)=fr(:)/(n)
+c
+         if(bcn .eq. 3) then
+           scrbft(i,:)=fr(:)/dble(2*(n-1))
+         else
+           scrbft(i,:)=fr(:)/dble(n)
+         endif
+c
       enddo
 c
 c - - Compute Fourier amplitude of -r^2 Br from r^2 grad_h^2 scrb = -r^2 B_r
@@ -357,7 +400,13 @@ c
       do q=1,p+1
          do i=1,m
             fr(1:n)=scrb3d(i,1:n,q)
-            call rfftb(n,fr,w)
+c
+            if(bcn .eq. 3) then
+              call cost(n,fr,w)
+            else
+              call rfftb(n,fr,w)
+            endif
+c
             scrb3d(i,1:n,q)=fr(1:n)
          end do
       end do

@@ -52,7 +52,7 @@ c - - Input:    c,d -  real*8 values of the minimum and maximum values of
 c               longitude corresponding to the range of longitude 
 c               (azimuth) edge values. [radians]
 c
-c - - Output:   scrb(m+2,n+1) - real*8 array of the poloidal potential (or its
+c - - Output:   scrb(m+2,n+2) - real*8 array of the poloidal potential (or its
 c               time derivative), located at cell-centers (CE grid), but with 
 c               one extra ghost zone on all edges of the array.
 c               Neumann boundary conditions assumed to match E on boundary.
@@ -151,8 +151,10 @@ c
       enddo
 c
 c - - compute perimeter length of spherical wedge:
+c - - (now modified to be only the length of north plus south edges)
 c
-      lperim=rsun*((d-c)*(sin(a)+sin(b))+2.d0*(b-a))
+c     lperim=rsun*((d-c)*(sin(a)+sin(b))+2.d0*(b-a))
+      lperim=rsun*((d-c)*(sin(a)+sin(b)))
 c
 c - - compute amplitude of uniform electric field on boundary that generates
 c - - flux imbalance:
@@ -161,15 +163,18 @@ c
 c
 c - - set Neumann boundary conditions for scrb based on E on perimeter:
 c - - (recall E = -curl scrb rhat)
+c     (now modified to set phi derivative to 0 at phi=c and phi=d):
 c
 c - - E_phi at theta=a = -eperim
       bdas(1:n)= -eperim*rsun
 c - - E_phi at theta=b = eperim
       bdbs(1:n)= eperim*rsun
-c - - E_theta at phi=c = eperim
-      bdcs(1:m)= -eperim*rsun*sinth_hlf(1:m)
-c - - E_theta at phi=d = -eperim
-      bdds(1:m)=eperim*rsun*sinth_hlf(1:m)
+c - - E_theta at phi=c = eperim (but now changed to zero)
+c     bdcs(1:m)= -eperim*rsun*sinth_hlf(1:m)
+      bdcs(1:m)= 0.d0
+c - - E_theta at phi=d = -eperim (but now changed to zero)
+c     bdds(1:m)=eperim*rsun*sinth_hlf(1:m)
+      bdds(1:m)= 0.d0
 c
 c - - NOTE:  The above boundary conditions should also work for the 
 c     time-independent case, where instead of eperim=-flux/lperim we'd have 
