@@ -196,6 +196,7 @@ mdi.vw_v_sht_72d
 mdi.vw_V_sht_gaps_72d
 mdi.vw_v_sht_gf_72d
 mdi.vw_v_sht_gf_gaps_72d
+mdi.vw_v_sht_modes
 mdi.vw_v_sht_modes_archive
 mdi.vw_V_sht_2drls
 mdi.vw_v_sht_modes_asym
