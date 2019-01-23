@@ -427,6 +427,10 @@ printf("preproc"); fflush(stdout);
         }
         drms_setkey_int(outRec, "RUNNUM", runnum);
         drms_setkey_int(outRec, "ND", nd);
+        drms_setkey_double(outRec, "MU1", mu1);     // added Jan 22 2019 XS
+        drms_setkey_double(outRec, "MU2", mu2);
+        drms_setkey_double(outRec, "MU3", mu3);
+        drms_setkey_double(outRec, "MU4", mu4);
 
         /* Clean up */
         if (!test) {
