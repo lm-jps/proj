@@ -93,7 +93,7 @@ int getEphemeris(DRMS_Record_t *inRec, struct ephemeris *ephem);
 
 /* Write output */
 int writeOutput(DRMS_Record_t *inRec, DRMS_Record_t *outRec, int writeImg, 
-                float *data_out, float doppcal_bias);
+                float *data_out, float doppcal_bias, double a0, double a2, double a4);
 
 /* Doppler correction */
 extern void doppcal_estimate_ (int *naxis1, int *naxis2, int *naxis3i, int *naxis3o,
@@ -211,7 +211,7 @@ int DoIt(void)
         
         DRMS_Record_t *outRec = outRS->records[irec];
         
-        status = writeOutput(inRec, outRec, writeImg, data_out, doppcal_bias);
+        status = writeOutput(inRec, outRec, writeImg, data_out, doppcal_bias, a0, a2, a4);
         
         free(data_in); free(data_out);      // Clean up regardless of status
         
@@ -345,7 +345,7 @@ int getEphemeris(DRMS_Record_t *inRec, struct ephemeris *ephem)
  */
 
 int writeOutput(DRMS_Record_t *inRec, DRMS_Record_t *outRec, int writeImg,
-                float *data_out, float doppcal_bias)
+                float *data_out, float doppcal_bias, double a0, double a2, double a4)
 {
     
     int status = 0;
@@ -404,7 +404,10 @@ int writeOutput(DRMS_Record_t *inRec, DRMS_Record_t *outRec, int writeImg,
     drms_setkey_string(outRec, "BUNIT_000", "cm/s");
     drms_setkey_string(outRec, "BUNIT_001", " ");
     drms_setkey_string(outRec, "BUNIT_002", " ");
-//    drms_setkey_string(outRec, "BUNIT_003", "cm/s");
+    
+    drms_setkey_double(outRec, "DIFFF_A0", a0);         // Jan 28 2019
+    drms_setkey_double(outRec, "DIFFF_A2", a2);
+    drms_setkey_double(outRec, "DIFFF_A4", a4);
     
     TIME val, tnow, UNIX_epoch = -220924792.000; /* 1970.01.01_00:00:00_UTC */
     tnow = (double)time(NULL);
