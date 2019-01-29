@@ -71,7 +71,7 @@ ModuleArgs_t module_args[] =
 {
     {ARG_STRING, "prep", kNotSpecified, "Input data series containing field, LOS vectors and Dopplergram."},
     {ARG_STRING, "vel", kNotSpecified, "Input data series containing FLCT result."},
-    {ARG_STRING, "out", "hmi_test.cgem_pdfi_in", "Output data series."},
+    {ARG_STRING, "out", kNotSpecified, "Output data series."},
     {ARG_END}
 };
 
