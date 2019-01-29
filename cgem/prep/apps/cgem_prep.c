@@ -15,6 +15,7 @@
 #include "astro.h"
 #include "cartography.c"
 #include "img2helioVector.c"
+#include "fresize.h"
 #include "finterpolate.h"
 #include "diffrot.h"            // double diffrot[3]
 
@@ -26,7 +27,8 @@
 #define SECINDAY		(86400.)
 #define FOURK			(4096)
 #define FOURK2          (16777216)
-#define DTTHRESH        (518400.)					// 6 day
+#define DTTHRESH        (SECINDAY*7.)					// 7 day
+#define NBIN            3
 #define INTERPOPT       (0)         // Interpolation
 
 #define ARRLENGTH(ARR) (sizeof(ARR) / sizeof(ARR[0]))
@@ -72,10 +74,11 @@ struct ephemeris {
 // Requested mapping information
 struct reqInfo {
     double lonref, latref;
-    int ncol, nrow;
+    int ncol, nrow, nbin;
     double dx, dy;
     TIME tref;
     int proj;
+    int noaa_ar, harpnum;       // requested id
 };
 
 // =====================================
@@ -125,10 +128,14 @@ void getLOSVector(struct reqInfo *req, struct ephemeris *ephem, float *mapCenter
                   float *lx, float *ly, float *lz);
 
 /* Mapping function */
-void performSampling(float *inData, float *outData, float *u, float *v, int *dims_in, int *dims_out);
+void performSampling(float *inData, float *outData, float *u0, float *v0, int *dims_in, int *dims0,
+                     struct reqInfo *req);
 
 /* Nearest neighbor interpolation */
 float nnb (float *f, int nx, int ny, float x, float y);
+
+/* Wrapper for Jesper's rebin code */
+void frebin (float *image_in, float *image_out, int nx, int ny, int nbin, int gauss);
 
 /* Azimuth correction */
 extern void azim_mindiff_jsoc_(float *azi_work, float *azi_out, int *nx, int *ny, int *nt2, int *flip_thr);
@@ -140,15 +147,18 @@ char *module_name = "cgem_prep";
 ModuleArgs_t module_args[] =
 {
     {ARG_STRING, "in", kNotSpecified, "Input data series."},
-    {ARG_STRING, "out", "hmi_test.cgem_prep", "Output data series."},
+    {ARG_STRING, "out", kNotSpecified, "Output data series."},
     {ARG_NUME, "map", "carree", "Projetion method, carree by default.",
         "carree, Cassini, Mercator, cyleqa, sineqa, gnomonic, Postel, stereographic, orthographic, Lambert"},
     {ARG_DOUBLE, "lonref", "0", "Reference patch center Stonyhurst lon, in deg."},
 	{ARG_DOUBLE, "latref", "0", "Reference patch center Stonyhurst lat, in deg."},
+    {ARG_INT, "nbin", "1", "Supersampleing rate."},
 	{ARG_INT, "cols", "480", "Columns of output cutout."},
 	{ARG_INT, "rows", "480", "Rows of output cutout."},
 	{ARG_DOUBLE, "dx", "0.03", "X pixel size, unit depending on projection (default deg)."},
 	{ARG_FLOAT, "dy", "0.03", "Y pixel size, unit depending on projection (default deg)."},
+    {ARG_INT, "noaa_ar", "-1", "Set NOAA number if positive, otherwise copy over."},
+    {ARG_INT, "harpnum", "-1", "Set HARP number if positive, otherwise copy over."},
 	{ARG_STRING, "tref", kNotSpecified, "Reference time."},
     {ARG_END}
 };
@@ -176,10 +186,13 @@ int DoIt(void)
     req.latref = params_get_double(&cmdparams, "latref") * RADSINDEG;
     req.ncol = params_get_int(&cmdparams, "cols");
     req.nrow = params_get_int(&cmdparams, "rows");
+    req.nbin = (params_get_int(&cmdparams, "nbin")) / 2 * 2 + 1;        // odd
     req.tref = params_get_time(&cmdparams, "tref");
     req.dx = params_get_double(&cmdparams, "dx") * RADSINDEG;		// deg to rad, for now
     req.dy = params_get_double(&cmdparams, "dy") * RADSINDEG;
     req.proj = params_get_int(&cmdparams, "map");
+    req.noaa_ar = params_get_int(&cmdparams, "noaa_ar");
+    req.harpnum = params_get_int(&cmdparams, "harpnum");
     
     /* Input data */
     
@@ -608,6 +621,13 @@ int getDoppCorr(DRMS_Record_t *inRec, int *dims, double *doppCorr)
     
 //    printf("diffrot=%lf, %lf, %lf\n", diffrot[0], diffrot[1], diffrot[2]);
     
+    // Jan 28 2019, Should be Read from input record
+    // If fails then fall back to diffrot
+    double a0, a2, a4;
+    a0 = drms_getkey_double(inRec, "DIFF_A0", &status); if (status) { a0 = diffrot[0]; }
+    a2 = drms_getkey_double(inRec, "DIFF_A2", &status); if (status) { a2 = diffrot[1]; }
+    a4 = drms_getkey_double(inRec, "DIFF_A4", &status); if (status) { a4 = diffrot[2]; }
+    
     for (int row = 0; row < ny; row++) {
         for (int col = 0; col < nx; col++) {
             
@@ -623,7 +643,7 @@ int getDoppCorr(DRMS_Record_t *inRec, int *dims, double *doppCorr)
                             - obsv_x * sinlon_nobp * coslat_nobp * k;        // cm/s
             
             doppCorr[ind] += (rsun_ref * sinlon * coslatc * 1.e-6 *
-                              (diffrot[0] + diffrot[1] * pow(sinlat, 2) + diffrot[2] * pow(sinlat, 4)));        // cm/s
+                              (a0 + a2 * pow(sinlat, 2) + a4 * pow(sinlat, 4)));        // cm/s
             
         }
     }
@@ -684,17 +704,20 @@ int cgem_mapping(DRMS_Record_t *inRec, struct reqInfo *req, int *dims_in, float 
     // Find position
     
     int dims_out[2] = {req->ncol, req->nrow};
-    float *u_out = (float *) (malloc(dims_out[0] * dims_out[1] * sizeof(float)));
-    float *v_out = (float *) (malloc(dims_out[0] * dims_out[1] * sizeof(float)));
+    int ncol0 = req->ncol * req->nbin + (req->nbin / 2) * 2;    // pad with nbin/2 on edge to avoid NAN
+    int nrow0 = req->nrow * req->nbin + (req->nbin / 2) * 2;
+    int dims0[2] = {ncol0, nrow0};
+    float *u0 = (float *) (malloc(dims0[0] * dims0[1] * sizeof(float)));
+    float *v0 = (float *) (malloc(dims0[0] * dims0[1] * sizeof(float)));
     
-    findCoord(req, &ephem, u_out, v_out, mapCenter);                    // no error checking; Stonyhurst
+    findCoord(req, &ephem, u0, v0, mapCenter);                    // no error checking; Stonyhurst
     
     // Sampling
     
-    performSampling(bx, bx_map, u_out, v_out, dims_in, dims_out);
-    performSampling(by, by_map, u_out, v_out, dims_in, dims_out);
-    performSampling(bz, bz_map, u_out, v_out, dims_in, dims_out);
-    performSampling(dop, dop_map, u_out, v_out, dims_in, dims_out);
+    performSampling(bx, bx_map, u0, v0, dims_in, dims0, req);
+    performSampling(by, by_map, u0, v0, dims_in, dims0, req);
+    performSampling(bz, bz_map, u0, v0, dims_in, dims0, req);
+    performSampling(dop, dop_map, u0, v0, dims_in, dims0, req);
     
     // Obtain LOS vectors
     
@@ -704,7 +727,7 @@ int cgem_mapping(DRMS_Record_t *inRec, struct reqInfo *req, int *dims_in, float 
     
     free(fld); free(inc);
     free(bx); free(by); free(bz);
-    free(u_out); free(v_out);
+    free(u0); free(v0);
     
     return 0;
     
@@ -761,6 +784,19 @@ int writeOutput(DRMS_Record_t *inRec, DRMS_Record_t *outRec, struct reqInfo *req
     // Keys
     
     drms_copykeys(outRec, inRec, 0, kDRMS_KeyClass_Explicit);     // copy all keys
+    
+    if (req->noaa_ar > 0) {
+        drms_setkey_int(outRec, "NOAA_AR", req->noaa_ar);
+    }
+    if (req->harpnum > 0) {
+        drms_setkey_int(outRec, "HARPNUM", req->harpnum);        // Jan 28 XS
+    }
+    
+    // Already copied if exists; otherwise use default
+    double a0, a2, a4;
+    a0 = drms_getkey_double(inRec, "DIFF_A0", &status); if (status) { drms_setkey_double(outRec, "DIFF_A0", diffrot[0]); }
+    a2 = drms_getkey_double(inRec, "DIFF_A2", &status); if (status) { drms_setkey_double(outRec, "DIFF_A2", diffrot[1]); }
+    a4 = drms_getkey_double(inRec, "DIFF_A4", &status); if (status) { drms_setkey_double(outRec, "DIFF_A4", diffrot[2]); }
     
     drms_setkey_float(outRec, "CRPIX1", req->ncol/2. + 0.5);
     drms_setkey_float(outRec, "CRPIX2", req->nrow/2. + 0.5);
@@ -993,17 +1029,20 @@ void findCoord(struct reqInfo *req, struct ephemeris *ephem,
     sprint_time(tstr, ephem->t_rec, "TAI", 0);
     //    printf("t_rec=%s, lonc=%f\n", tstr, lonc/RADSINDEG);
     
+    int ncol0 = req->ncol * req->nbin + (req->nbin / 2) * 2;    // pad with nbin/2 on edge to avoid NAN
+    int nrow0 = req->nrow * req->nbin + (req->nbin / 2) * 2;
+    
     double x, y;        // coordinate in final map
     double lat, lon;    // lon, lat of each pix
     double u, v;    // pixel address
     
     int ind_map;
-    for (int row = 0; row < req->nrow; row++) {
-        for (int col = 0; col < req->ncol; col++) {
+    for (int row0 = 0; row0 < nrow0; row0++) {
+        for (int col0 = 0; col0 < ncol0; col0++) {
             
-            ind_map = row * req->ncol + col;
-            x = (col + 0.5 - req->ncol/2.) * req->dx;
-            y = (row + 0.5 - req->nrow/2.) * req->dy;
+            ind_map = row0 * ncol0 + col0;
+            x = (col0 + 0.5 - ncol0/2.) * (req->dx * 1.0 / req->nbin);
+            y = (row0 + 0.5 - nrow0/2.) * (req->dy * 1.0 / req->nbin);
             
             //
             
@@ -1085,9 +1124,19 @@ void getLOSVector(struct reqInfo *req, struct ephemeris *ephem, float *mapCenter
  */
 
 
-void performSampling(float *inData, float *outData, float *u, float *v,
-                     int *dims_in, int *dims_out)
+void performSampling(float *inData, float *outData, float *u0, float *v0,
+                     int *dims_in, int *dims0, struct reqInfo *req)
 {
+    int ncol0 = dims0[0], nrow0 = dims0[1];
+    int ncol = req->ncol, nrow = req->nrow;
+    
+    float *outData0;
+    if (INTERPOPT == 3 && req->nbin == 1) {
+        outData0 = outData;
+    } else {
+        outData0 = (float *) (malloc(ncol0 * nrow0 * sizeof(float)));
+    }
+    
     // Use lib interpolation method
     struct fint_struct pars;
     
@@ -1107,19 +1156,29 @@ void performSampling(float *inData, float *outData, float *u, float *v,
     }
     
     int ind;
-    int ncol = dims_out[0], nrow = dims_out[1];
     if (INTERPOPT == 3) {            // Aug 6 2013, Xudong
-        for (int row = 0; row < nrow; row++) {
-            for (int col = 0; col < ncol; col++) {
-                ind = row * ncol + col;
-                outData[ind] = nnb(inData, dims_in[0], dims_in[1], u[ind], v[ind]);
+        for (int row0 = 0; row0 < nrow0; row0++) {
+            for (int col0 = 0; col0 < ncol0; col0++) {
+                ind = row0 * ncol0 + col0;
+                outData0[ind] = nnb(inData, dims_in[0], dims_in[1], u0[ind], v0[ind]);
             }
         }
     } else {
         // lib function
-        finterpolate(&pars, inData, u, v, outData,
-                     dims_in[0], dims_in[1], dims_in[0], ncol, nrow, ncol, DRMS_MISSING_FLOAT);
+        finterpolate(&pars, inData, u0, v0, outData0,
+                     dims_in[0], dims_in[1], dims_in[0], ncol0, nrow0, ncol0, DRMS_MISSING_FLOAT);
     }
+    
+    // Rebinning, smoothing
+    
+    if (INTERPOPT == 3 && req->nbin == 1) {
+        ;
+    } else {
+        frebin(outData0, outData, ncol0, nrow0, req->nbin, 1);        // Gaussian
+        free(outData0);        // Dec 18 2012
+    }
+    
+    //
     
 }
 
@@ -1141,6 +1200,26 @@ float nnb (float *f, int nx, int ny, float x, float y)
     int i = ((x - ilow) > 0.5) ? ilow + 1 : ilow;
     int j = ((y - jlow) > 0.5) ? jlow + 1 : jlow;
     return f[j * nx + i];
+    
+}
+
+/* ################## Wrapper for Jesper's rebin code ################## */
+
+void frebin (float *image_in, float *image_out, int nx, int ny, int nbin, int gauss)
+{
+    
+    struct fresize_struct fresizes;
+    int nxout, nyout, xoff, yoff;
+    int nlead = nx;
+    
+    nxout = nx / nbin; nyout = ny / nbin;
+    if (gauss && nbin != 1)
+    init_fresize_gaussian(&fresizes, (nbin / 2), (nbin / 2 * 2), nbin);        // for nbin=3, sigma=1, half truncate width=2
+    else
+    init_fresize_bin(&fresizes, nbin);
+    xoff = nbin / 2 + nbin / 2;
+    yoff = nbin / 2 + nbin / 2;
+    fresize(&fresizes, image_in, image_out, nx, ny, nlead, nxout, nyout, nxout, xoff, yoff, DRMS_MISSING_FLOAT);
     
 }
 
