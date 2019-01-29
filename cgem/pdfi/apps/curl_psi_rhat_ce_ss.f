@@ -62,10 +62,19 @@ c   59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 c
       implicit none
 c
+c - - input variables:
+c
       integer :: m,n
-      real*8 :: rsun,dtheta,dphi
-      real*8 :: psi(m+2,n+2),curlt(m,n+1),curlp(m+1,n),gradt(m+1,n),
-     1          gradp(m,n+1),sinth_hlf(m)
+      real*8 :: rsun,dtheta,dphi,sinth_hlf(m)
+      real*8 :: psi(m+2,n+2)
+c
+c - - output variables:
+c
+      real*8 :: curlt(m,n+1),curlp(m+1,n)
+c
+c - - local variables:
+c
+      real*8 :: gradt(m+1,n),gradp(m,n+1)
 c
       call gradh_ce_ss(m,n,psi,rsun,sinth_hlf,dtheta,dphi,gradt,gradp)
 c

@@ -59,9 +59,18 @@ c   59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 c
       implicit none
 c
+c - - input variables:
+c
       integer :: m,n
       real*8 :: rsun,dtheta,dphi
-      real*8 :: psi(m+1,n+1),sinth(m+1),curlt(m+1,n),curlp(m,n+1)
+      real*8 :: psi(m+1,n+1),sinth(m+1)
+c
+c - - output variables:
+c
+      real*8 :: curlt(m+1,n),curlp(m,n+1)
+c
+c - - local variables:
+c
       real*8 :: gradt(m,n+1),gradp(m+1,n)
 c
       call gradh_co_ss(m,n,psi,rsun,sinth,dtheta,dphi,gradt,gradp)

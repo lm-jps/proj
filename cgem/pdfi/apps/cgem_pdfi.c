@@ -58,7 +58,7 @@ char *outSegBNames[] = {"Bx0", "By0", "Bz0",
 char *inSegNames[] = {"Bloncoe", "Blatcoe", "Brllcoe",
                       "Vloncoe", "Vlatcoe", "Vlosllcoe",
                       "Lloncoe", "Llatcoe", "Lrllcoe"};
-char *outSegNames[] = {"Elonpdfi", "Elatpdfi", "Erllpdfi",
+char *outSegNames[] = {"Elonpdfi", "Elatpdfi", "Erllpdfi", "Erllind",
                        "dElondr", "dElatdr", "Srll", "Hmll"};
 char *outSegBNames[] = {"Blon0", "Blat0", "Brll0",
                         "Blon1", "Blat1", "Brll1"};
@@ -93,7 +93,7 @@ extern void pdfi_wrapper4jsoc_ss_(int *m, int *n, double *rsun,
                                   double *tjul0, double *tjul1,
                                   double *blon0, double *blat0, double *brll0,
                                   double *blon1, double *blat1, double *brll1,
-                                  double *elonpdfi, double *elatpdfi, double *erllpdfi,
+                                  double *elonpdfi, double *elatpdfi, double *erllpdfi, double *erllind,
                                   double *delondr, double *delatdr,
                                   double *srll, double *srtot, double *hmll, double *hmtot,
                                   double *tjulhalf);
@@ -115,11 +115,11 @@ int getInputArr(DRMS_Record_t *inRec, struct reqInfo *rInfo,
 // Writing 3 output arrays
 int writeOutputArr(DRMS_Record_t *inRec0, DRMS_Record_t *inRec1, DRMS_Record_t *outRec,
                    struct reqInfo *rInfo0, struct reqInfo *rInfo1,
-                   double *elonpdfi, double *elatpdfi, double *erllpdfi,
+                   double *elonpdfi, double *elatpdfi, double *erllpdfi, double *erllind,
                    double *delondr, double *delatdr, double *srll, double *hmll,
                    double *blon0, double *blat0, double *brll0,
                    double *blon1, double *blat1, double *brll1,
-                   struct pdfi_result *res);
+                   struct pdfi_result *res, int wrt_dbl);
 
 // Figure out padding sizes
 void pad_int_gen_ss(struct reqInfo *rInfo);
@@ -136,6 +136,7 @@ ModuleArgs_t module_args[] =
     {ARG_DOUBLE, "bmin", "250.", "Threshold of field value for masking PDFI results."},
     {ARG_INT, "npad", "50", "Initial guess of padding in column."},
     {ARG_INT, "mpad", "50", "Initial guess of padding in row."},
+    {ARG_FLAG, "d", "", "Output in double instead of scaled int"},
     {ARG_END}
 };
 
@@ -153,6 +154,7 @@ int DoIt(void)
     int noPadding = params_isflagset(&cmdparams, "n");
     int mpad = params_get_int(&cmdparams, "mpad"); if (mpad < 0) mpad = 0;
     int npad = params_get_int(&cmdparams, "npad"); if (npad < 0) npad = 0;
+    int wrt_dbl = params_isflagset(&cmdparams, "d");
     
     double delt = fabs(params_get_double(&cmdparams, "delt"));
     double bmin = fabs(params_get_double(&cmdparams, "bmin"));
@@ -265,7 +267,10 @@ int DoIt(void)
         // Needed parameters
         
         int n = rInfo0.n, m = rInfo0.m;
-        double a = rInfo0.a, b = rInfo0.b, c = rInfo0.c, d = rInfo0.d;
+        double a = (rInfo0.a + rInfo1.a) / 2.;      // changed to mean of two frames Jan 19 2019 XS
+        double b = (rInfo0.b + rInfo1.b) / 2.;
+        double c = (rInfo0.c + rInfo1.c) / 2.;
+        double d = (rInfo0.d + rInfo1.d) / 2.;
         TIME t0 = rInfo0.t, t1 = rInfo1.t;
         double tjul0 = t0 / SECINDAY, tjul1 = t1 / SECINDAY, tjulhalf;
         TIME trec = (rInfo0.trec + rInfo1.trec) / 2.;
@@ -300,6 +305,7 @@ int DoIt(void)
         double *elonpdfi = (double *) (calloc(n * (m + 1), sizeof(double)));
         double *elatpdfi = (double *) (calloc((n + 1) * m, sizeof(double)));
         double *erllpdfi = (double *) (calloc((n + 1) * (m + 1), sizeof(double)));
+        double *erllind = (double *) (calloc((n + 1) * (m + 1), sizeof(double)));
         
         double *delondr = (double *) (calloc(n * (m + 1), sizeof(double)));
         double *delatdr = (double *) (calloc((n + 1) * m, sizeof(double)));
@@ -319,7 +325,7 @@ int DoIt(void)
                               lloncoe0, llatcoe0, lrllcoe0, lloncoe1, llatcoe1, lrllcoe1,
                               &tjul0, &tjul1,
                               blon0, blat0, brll0, blon1, blat1, brll1,
-                              elonpdfi, elatpdfi, erllpdfi, delondr, delatdr,
+                              elonpdfi, elatpdfi, erllpdfi, erllind, delondr, delatdr,
                               srll, &srtot, hmll, &hmtot, &tjulhalf);
         res.srtot = srtot; res.hmtot = hmtot;
         
@@ -329,10 +335,10 @@ int DoIt(void)
         
         if (writeOutputArr(inRec0, inRec1, outRec,
                            &rInfo0, &rInfo1,
-                           elonpdfi, elatpdfi, erllpdfi,
+                           elonpdfi, elatpdfi, erllpdfi, erllind,
                            delondr, delatdr, srll, hmll,
                            blon0, blat0, brll0,
-                           blon1, blat1, brll1, &res)) {
+                           blon1, blat1, brll1, &res, wrt_dbl)) {
             printf("Output array error, record #%d skipped", ipair);
             free(elonpdfi); free(elatpdfi); free(erllpdfi);     // otherwise freed in function
             free(delondr); free(delatdr);
@@ -544,28 +550,28 @@ int getInputArr(DRMS_Record_t *inRec, struct reqInfo *rInfo,
 
 int writeOutputArr(DRMS_Record_t *inRec0, DRMS_Record_t *inRec1, DRMS_Record_t *outRec,
                    struct reqInfo *rInfo0, struct reqInfo *rInfo1,
-                   double *elonpdfi, double *elatpdfi, double *erllpdfi,
+                   double *elonpdfi, double *elatpdfi, double *erllpdfi, double *erllind,
                    double *delondr, double *delatdr, double *srll, double *hmll,
                    double *blon0, double *blat0, double *brll0,
                    double *blon1, double *blat1, double *brll1,
-                   struct pdfi_result *res)
+                   struct pdfi_result *res, int wrt_dbl)
 {
     int status = 0;
     
     // Main output
     
-    DRMS_Segment_t *outSeg[7];
-    for (int i = 0; i < 7; i++) {
+    DRMS_Segment_t *outSeg[8];      // added erllind Jan 28 2019
+    for (int i = 0; i < 8; i++) {
          outSeg[i] = drms_segment_lookup(outRec, outSegNames[i]);
     }
     
     int n = rInfo0->n, m = rInfo0->m;
     
-    double *outData[7] = {elonpdfi, elatpdfi, erllpdfi, delondr, delatdr, srll, hmll};
-    DRMS_Array_t *outArray[7];
-    int dims_arr[7][2] = {{n, m+1}, {n+1, m}, {n+1, m+1}, {n, m+1}, {n+1, m}, {n, m}, {n,m}};
+    double *outData[8] = {elonpdfi, elatpdfi, erllpdfi, erllind, delondr, delatdr, srll, hmll};
+    DRMS_Array_t *outArray[8];
+    int dims_arr[8][2] = {{n, m+1}, {n+1, m}, {n+1, m+1}, {n+1, m+1}, {n, m+1}, {n+1, m}, {n, m}, {n,m}};
     
-    for (int i = 0; i < 7; i++) {
+    for (int i = 0; i < 8; i++) {
         int dims[2] = {dims_arr[i][0], dims_arr[i][1]};
         outArray[i] = drms_array_create(DRMS_TYPE_DOUBLE, 2, dims, outData[i], &status);
         if (status) {
@@ -575,13 +581,18 @@ int writeOutputArr(DRMS_Record_t *inRec0, DRMS_Record_t *inRec1, DRMS_Record_t *
             return 1;
         }
         outSeg[i]->axis[0] = outArray[i]->axis[0]; outSeg[i]->axis[1] = outArray[i]->axis[1];
-        outArray[i]->israw = 0;        // always compressed
-        outArray[i]->bzero = outSeg[i]->bzero;
-        outArray[i]->bscale = outSeg[i]->bscale;
+//        if ((i < 3) && wrt_dbl == 0) {              // Added Jan 18 2019
+        if (wrt_dbl == 0) {              // Modified Jan 21 2019
+            outArray[i]->israw = 0;        // compressed
+            outArray[i]->bzero = outSeg[i]->bzero;
+            outArray[i]->bscale = outSeg[i]->bscale;
+        } else {
+            outArray[i]->israw = 1;
+        }
         status = drms_segment_write(outSeg[i], outArray[i], 0);
     }
     
-    for (int i = 0; i < 7; i++) {
+    for (int i = 0; i < 8; i++) {
         drms_free_array(outArray[i]);
     }
     
@@ -591,7 +602,7 @@ int writeOutputArr(DRMS_Record_t *inRec0, DRMS_Record_t *inRec1, DRMS_Record_t *
     
     drms_setkey_string(outRec, "PDFIVERS", pdfi_vers);        // pdfi_vers.h
     
-    drms_setkey_double(outRec, "SRTOT", res->srtot);            // Integral Poynting flux
+    drms_setkey_double(outRec, "SRTOT", res->srtot);            // Integrated Poynting flux
     drms_setkey_double(outRec, "HMTOT", res->hmtot);            // Helicity flux
     printf("srtot=%lf, hmtot=%lf\n", res->srtot, res->hmtot);
     
@@ -649,44 +660,64 @@ int writeOutputArr(DRMS_Record_t *inRec0, DRMS_Record_t *inRec1, DRMS_Record_t *
     
     drms_setkey_double(outRec, "CRVAL1", (crval1_0 + crval1_1) / 2.);
     drms_setkey_double(outRec, "CRVAL2", (crval2_0 + crval2_1) / 2.);
-    // Ex, TE grid, n*(m+1)
+    // Elonpdfi, TE grid, n*(m+1)
     drms_setkey_double(outRec, "CRPIX1_000", (1. + n) / 2.);
     drms_setkey_double(outRec, "CRPIX2_000", (2. + m) / 2.);
-    // Ey, PE grid, (n+1)*m
+    // Elatpdfi, PE grid, (n+1)*m
     drms_setkey_double(outRec, "CRPIX1_001", (2. + n) / 2.);
     drms_setkey_double(outRec, "CRPIX2_001", (1. + m) / 2.);
-    // Ez, COE grid, (n+1)*(m+1)
+    // Erllpdfi, COE grid, (n+1)*(m+1)
     drms_setkey_double(outRec, "CRPIX1_002", (2. + n) / 2.);
     drms_setkey_double(outRec, "CRPIX2_002", (2. + m) / 2.);
-    // Bx0, PE grid, (n+1)*m
+    // Erllind, COE grid, (n+1)*(m+1)
     drms_setkey_double(outRec, "CRPIX1_003", (2. + n) / 2.);
-    drms_setkey_double(outRec, "CRPIX2_003", (1. + m) / 2.);
-    // By0, TE grid, n*(m+1)
+    drms_setkey_double(outRec, "CRPIX2_003", (2. + m) / 2.);
+    // dElondr, TE grid, n*(m+1)
     drms_setkey_double(outRec, "CRPIX1_004", (1. + n) / 2.);
     drms_setkey_double(outRec, "CRPIX2_004", (2. + m) / 2.);
-    // Bz0, CE grid, n*m
-    drms_setkey_double(outRec, "CRPIX1_005", (1. + n) / 2.);
+    // dElatdr, PE grid, (n+1)*m
+    drms_setkey_double(outRec, "CRPIX1_005", (2. + n) / 2.);
     drms_setkey_double(outRec, "CRPIX2_005", (1. + m) / 2.);
-    // Bx1, PE grid, (n+1)*m
-    drms_setkey_double(outRec, "CRPIX1_006", (2. + n) / 2.);
+    // Srll, CE grid, n*m
+    drms_setkey_double(outRec, "CRPIX1_006", (1. + n) / 2.);
     drms_setkey_double(outRec, "CRPIX2_006", (1. + m) / 2.);
-    // By1, TE grid, n*(m+1)
+    // Hmll, CE grid, n*m
     drms_setkey_double(outRec, "CRPIX1_007", (1. + n) / 2.);
-    drms_setkey_double(outRec, "CRPIX2_007", (2. + m) / 2.);
-    // Bz1, CE grid, n*m
-    drms_setkey_double(outRec, "CRPIX1_008", (1. + n) / 2.);
+    drms_setkey_double(outRec, "CRPIX2_007", (1. + m) / 2.);
+    // Blon0, PE grid, (n+1)*m
+    drms_setkey_double(outRec, "CRPIX1_008", (2. + n) / 2.);
     drms_setkey_double(outRec, "CRPIX2_008", (1. + m) / 2.);
+    // Blat0, TE grid, n*(m+1)
+    drms_setkey_double(outRec, "CRPIX1_009", (1. + n) / 2.);
+    drms_setkey_double(outRec, "CRPIX2_009", (2. + m) / 2.);
+    // Brll0, CE grid, n*m
+    drms_setkey_double(outRec, "CRPIX1_010", (1. + n) / 2.);
+    drms_setkey_double(outRec, "CRPIX2_010", (1. + m) / 2.);
+    // Blon1, PE grid, (n+1)*m
+    drms_setkey_double(outRec, "CRPIX1_011", (2. + n) / 2.);
+    drms_setkey_double(outRec, "CRPIX2_011", (1. + m) / 2.);
+    // Blat1, TE grid, n*(m+1)
+    drms_setkey_double(outRec, "CRPIX1_012", (1. + n) / 2.);
+    drms_setkey_double(outRec, "CRPIX2_012", (2. + m) / 2.);
+    // Brll1, CE grid, n*m
+    drms_setkey_double(outRec, "CRPIX1_013", (1. + n) / 2.);
+    drms_setkey_double(outRec, "CRPIX2_013", (1. + m) / 2.);
     
-    drms_setkey_string(outRec, "BUNIT_000", "V/cm");
-    drms_setkey_string(outRec, "BUNIT_001", "V/cm");
-    drms_setkey_string(outRec, "BUNIT_002", "V/cm");
-    drms_setkey_string(outRec, "BUNIT_003", "G");
-    drms_setkey_string(outRec, "BUNIT_004", "G");
-    drms_setkey_string(outRec, "BUNIT_005", "G");
-    drms_setkey_string(outRec, "BUNIT_006", "G");
-    drms_setkey_string(outRec, "BUNIT_007", "G");
-    drms_setkey_string(outRec, "BUNIT_008", "G");
-    
+    drms_setkey_string(outRec, "BUNIT_000", "V cm^(-1)");
+    drms_setkey_string(outRec, "BUNIT_001", "V cm^(-1)");
+    drms_setkey_string(outRec, "BUNIT_002", "V cm^(-1)");
+    drms_setkey_string(outRec, "BUNIT_003", "V cm^(-1)");
+    drms_setkey_string(outRec, "BUNIT_004", "V cm^(-2)");
+    drms_setkey_string(outRec, "BUNIT_005", "V cm^(-2)");
+    drms_setkey_string(outRec, "BUNIT_006", "erg cm^(-2) sec^(-1)");
+    drms_setkey_string(outRec, "BUNIT_007", "Mx^2 cm^(-2) sec^(-1) ");
+    drms_setkey_string(outRec, "BUNIT_008", "Mx cm^(-2)");
+    drms_setkey_string(outRec, "BUNIT_009", "Mx cm^(-2)");
+    drms_setkey_string(outRec, "BUNIT_010", "Mx cm^(-2)");
+    drms_setkey_string(outRec, "BUNIT_011", "Mx cm^(-2)");
+    drms_setkey_string(outRec, "BUNIT_012", "Mx cm^(-2)");
+    drms_setkey_string(outRec, "BUNIT_013", "Mx cm^(-2)");
+
     // Supplementary output
     
     DRMS_Segment_t *outSegB[6];
@@ -709,9 +740,13 @@ int writeOutputArr(DRMS_Record_t *inRec0, DRMS_Record_t *inRec1, DRMS_Record_t *
             return 1;
         }
         outSegB[i]->axis[0] = outArrayB[i]->axis[0]; outSegB[i]->axis[1] = outArrayB[i]->axis[1];
-        outArrayB[i]->israw = 0;        // always compressed
-        outArrayB[i]->bzero = outSegB[i]->bzero;
-        outArrayB[i]->bscale = outSegB[i]->bscale;
+        if (wrt_dbl == 0) {
+            outArrayB[i]->israw = 0;        // always compressed
+            outArrayB[i]->bzero = outSegB[i]->bzero;
+            outArrayB[i]->bscale = outSegB[i]->bscale;
+        } else {
+            outArrayB[i]->israw = 1;
+        }
         status = drms_segment_write(outSegB[i], outArrayB[i], 0);
     }
     

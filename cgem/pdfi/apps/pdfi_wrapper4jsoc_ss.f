@@ -3,7 +3,7 @@
      2 vloncoe0,vlatcoe0,vlosllcoe0,vloncoe1,vlatcoe1,vlosllcoe1,
      3 lloncoe0,llatcoe0,lrllcoe0,lloncoe1,llatcoe1,lrllcoe1,
      4 tjul0,tjul1,blon0,blat0,brll0,blon1,blat1,brll1,
-     5 elonpdfi,elatpdfi,erllpdfi,delondr,delatdr,srll,srtot,
+     5 elonpdfi,elatpdfi,erllpdfi,erllind,delondr,delatdr,srll,srtot,
      6 hmll,hmtot,tjulhalf)
 c    
 c    
@@ -23,7 +23,7 @@ c              bloncoe0,blatcoe0,brllcoe0,bloncoe1,blatcoe1,brllcoe1,
 c              vloncoe0,vlatcoe0,vlosllcoe0,vloncoe1,vlatcoe1,vlosllcoe1,
 c              lloncoe0,llatcoe0,lrllcoe0,lloncoe1,llatcoe1,lrllcoe1,
 c              tjul0,tjul1,blon0,blat0,brll0,blon1,blat1,brll1,
-c              elonpdfi,elatpdfi,erllpdfi,delondr,delatdr,srll,srtot,
+c              elonpdfi,elatpdfi,erllpdfi,erllind,delondr,delatdr,srll,srtot,
 c              hmll,hmtot,tjulhalf)
 c
 c     Input:   m,n - number of cell centers in the theta (lat), and phi (lon)
@@ -78,9 +78,11 @@ c              (corners plus exterior corners on boundary).
 c
 c     Input:   tjul0,tjul1 - real*8 values of times t0 and t1 [days].
 c
-c     Output:  elonpdfi(n,m+1),elatpdfi(n+1,m),erllpdfi(n+1,m+1) - real*8 
+c     Output:  elonpdfi(n,m+1),elatpdfi(n+1,m),erllpdfi(n+1,m+1),
+c              erllind(n+1,m+1) - real*8 
 c              arrays of longitudinal, latidudinal and radial components of 
-c              electric field, stored in lon,lat index order [V/cm].
+c              electric field, and the ptd contribution to the radial electric
+c              field, stored in lon,lat index order [V/cm].
 c              If desired, these electric fields can be converted to cE values
 c              in [G km/sec] by multiplying by 1d3.
 c
@@ -159,7 +161,7 @@ c         E_r evaluated on COE grid
 c
       real*8 :: elonpdfi(n,m+1),elatpdfi(n+1,m)
       real*8 :: delondr(n,m+1),delatdr(n+1,m)
-      real*8 :: erllpdfi(n+1,m+1)
+      real*8 :: erllpdfi(n+1,m+1),erllind(n+1,m+1)
 c
 c output: Poynting flux, helicity flux density arrays at CE grid, lon,lat order
 c
@@ -397,6 +399,8 @@ c
       etpdfi=(etpdf+eti)*1.0d-3
       eppdfi=(eppdf+epi)*1.0d-3
       erpdfi=(erpdf+eri)*1.0d-3
+c - - convert inductive E_r to V/cm:
+      er=er*1.0d-3
 c
 c Calculate radial derivatives of horizontal fields in units of [G/s]:
 c
@@ -427,6 +431,7 @@ c Transpose E_h and dE_h/dr data arrays from theta,phi to lon,lat order
       call ehyeetp2ll_ss(m,n,etpdfi,eppdfi,elonpdfi,elatpdfi)
       call ehyeetp2ll_ss(m,n,detdr,depdr,delondr,delatdr)
       call eryeetp2ll_ss(m,n,erpdfi,erllpdfi)
+      call eryeetp2ll_ss(m,n,er,erllind)
 c
 c Calculate Bvec at t0 at TE and PE in lon, lat order
       call bhll2tp_ss(m,n,bloncoe0,blatcoe0,btcoe0,bpcoe0)
