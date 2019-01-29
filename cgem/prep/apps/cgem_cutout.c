@@ -17,7 +17,7 @@
  *        v0.0
  *
  *    Example Calls:
- *      > cgem_cutout "b=hmi.B_720s[2011.02.15_12:00/2h]" "dop=hmi_test.doppcal_720s[2011.02.15_12:00/2h]" "out=hmi_test.bvcutout_720s" "tref=2011.02.14_12:00:00_TAI" "cols=960" "rows=960" "lonref=5.6" "latref=-20.4" "cgemnum=11158"
+ *      > cgem_cutout "b=hmi.B_720s[2011.02.15_12:00/2h]" "dop=hmi_test.doppcal_720s[2011.02.15_12:00/2h]" "out=hmi_test.bvcutout_720s" "tref=2011.02.14_12:00:00_TAI" "cols=960" "rows=960" "lonref=5.6" "latref=-20.4" "cgemnum=11158" "harpnum=377"
  *
  */
 
@@ -45,7 +45,7 @@
 #define ARRLENGTH(ARR) (sizeof(ARR) / sizeof(ARR[0]))
 
 #define DISAMB_AZI        1
-#define DOPPCAL         0       // Calibrate Doppler here
+#define DOPPCAL         1       // Calibrate Doppler here
 
 // Some other things
 #ifndef MIN
@@ -82,7 +82,7 @@ struct patchInfo {
     double lonref, latref;
     int cols, rows;
     TIME tref;
-    int cgemnum;
+    int cgemnum, noaa_ar, harpnum;
     int proj;
 };
 
@@ -101,7 +101,7 @@ int createCutRecord(DRMS_Record_t *bRec, DRMS_Record_t *dopRec,
                     DRMS_Record_t *outRec, struct patchInfo *pInfo);
 
 /* Determine location of cutout */
-int findCoord(DRMS_Record_t *inRec, struct patchInfo *pInfo, int *ll, int *ur);
+int findCoord(DRMS_Record_t *inRec, struct patchInfo *pInfo, double *diff_a, int *ll, int *ur);
 
 /* Get ephemeris information */
 int getEphemeris(DRMS_Record_t *inRec, struct ephemeris *ephem);
@@ -126,6 +126,8 @@ ModuleArgs_t module_args[] =
     {ARG_STRING, "dop", kNotSpecified, "Data sereis containing Doppler bias correction"},
     {ARG_STRING, "out", kNotSpecified, "Output Sharp cutout series."},
     {ARG_INT, "cgemnum", "-1", "CGEM dataset ID."},
+    {ARG_INT, "noaa_ar", "-1", "Set NOAA number if positive, otherwise equivalent to CGEMNUM."},
+    {ARG_INT, "harpnum", "-1", "Set HARP number if positive."},
     {ARG_FLOAT, "lonref", "0", "Reference patch center Stonyhurst lon, in deg."},
     {ARG_FLOAT, "latref", "0", "Reference patch center Stonyhurst lat, in deg."},
     {ARG_INT, "cols", "500", "Columns of output cutout."},
@@ -154,6 +156,8 @@ int DoIt(void)
     pInfo.rows = params_get_int(&cmdparams, "rows");
     pInfo.tref = params_get_time(&cmdparams, "tref");
     pInfo.cgemnum = params_get_int(&cmdparams, "cgemnum");
+    pInfo.noaa_ar = params_get_int(&cmdparams, "noaa_ar"); if (pInfo.noaa_ar < 0) { pInfo.noaa_ar = pInfo.cgemnum; }
+    pInfo.harpnum = params_get_int(&cmdparams, "harpnum");
     
     /* Input data */
     
@@ -312,7 +316,11 @@ int createCutRecord(DRMS_Record_t *bRec, DRMS_Record_t *dopRec,
     // Obtain dimension of cutout in full disk
     
     int ll[2], ur[2];
-    if (findCoord(bRec, pInfo, ll, ur)) {
+    double diff_a[3];
+    diff_a[0] = drms_getkey_double(dopRec, "DIFF_A0", &status); if (status) { diff_a[0] = diffrot[0]; }
+    diff_a[1] = drms_getkey_double(dopRec, "DIFF_A2", &status); if (status) { diff_a[1] = diffrot[1]; }
+    diff_a[2] = drms_getkey_double(dopRec, "DIFF_A4", &status); if (status) { diff_a[2] = diffrot[2]; }
+    if (findCoord(bRec, pInfo, diff_a, ll, ur)) {
         printf("Coordinate unreasonable\n");
         return 1;
     }
@@ -346,6 +354,9 @@ int createCutRecord(DRMS_Record_t *bRec, DRMS_Record_t *dopRec,
     
     setKeys(outRec, bRec, pInfo, ll);      // set keywords
     drms_copykey(outRec, dopRec, "DOPPBIAS");     // doppler correction
+    drms_setkey_double(outRec, "DIFF_A0", diff_a[0]);
+    drms_setkey_double(outRec, "DIFF_A2", diff_a[1]);
+    drms_setkey_double(outRec, "DIFF_A4", diff_a[2]);
     
     return 0;
     
@@ -357,7 +368,7 @@ int createCutRecord(DRMS_Record_t *bRec, DRMS_Record_t *dopRec,
  *
  */
 
-int findCoord(DRMS_Record_t *inRec, struct patchInfo *pInfo, int *ll, int *ur)
+int findCoord(DRMS_Record_t *inRec, struct patchInfo *pInfo, double *diff_a, int *ll, int *ur)
 {
     
     int status = 0;
@@ -372,10 +383,11 @@ int findCoord(DRMS_Record_t *inRec, struct patchInfo *pInfo, int *ll, int *ur)
     
     // Rotate
     // Differential rotation rate in urad/s
+    // Use results from DOPPCAL, if fails then use
     // proj/lev1.5_hmi/libs/lev15/rotcoef_file.txt
     
     double lat_c = pInfo->latref;
-    double difr = diffrot[0] + diffrot[1] * pow(sin(lat_c),2) + diffrot[2] * pow(sin(lat_c),4);
+    double difr = diff_a[0] + diff_a[1] * pow(sin(lat_c),2) + diff_a[2] * pow(sin(lat_c),4);
     double dt = drms_getkey_time(inRec, "T_REC", &status) - pInfo->tref;
     double lon_c = pInfo->lonref + dt * difr * 1.0e-6;      // urad/s to rad
     printf("lon_c=%f\n", lon_c/RADSINDEG);
@@ -539,6 +551,11 @@ void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *inRec, struct patchInfo *pInf
     tnow = (double)time(NULL);
     tnow += UNIX_epoch;
     drms_setkey_time(outRec, "DATE", tnow);
+    
+    drms_setkey_int(outRec, "NOAA_AR",  pInfo->noaa_ar);
+    if (pInfo->harpnum > 0) {
+        drms_setkey_int(outRec, "HARPNUM",  pInfo->harpnum);
+    }
     
     // Geometry
     
