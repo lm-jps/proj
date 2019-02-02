@@ -32,7 +32,8 @@ int errorprop (float *bTotal, float *bAzim, float *bInc, float *ebT, float *ebA,
   // Xudong Oct 18 2011: Fill factor variances covariances are all NaNs. removed
   // NNB interpolation, just 1 point
   // Fixed definition of azi for all derivatives
-
+  // Feb 1 2019, dBt/dXX is actually dBy/dXX, so the sign is wrong; however they are used in pairs (squared) so final result was okay
+ 
   static double raddeg = M_PI / 180.;
   double b, inc, azim;
   double a11, a12, a13, a21, a22, a23, a31, a32, a33;
@@ -90,9 +91,9 @@ int errorprop (float *bTotal, float *bAzim, float *bInc, float *ebT, float *ebA,
   dBpdInc = b * (- a11 * cos(inc) * sin(azim) + a12 * cos(inc) * cos(azim) - a13 * sin(inc));
   dBpdAzim = b * (- a11 * sin(inc) * cos(azim) - a12 * sin(inc) * sin(azim));
   
-  dBtdBtotal = (- a21 * sin(inc) * sin(azim) + a22 * sin(inc) * cos(azim) + a23 * cos(inc));
-  dBtdInc = b * (- a21 * cos(inc) * sin(azim) + a22 * cos(inc) * cos(azim) - a23 * sin(inc));
-  dBtdAzim = b * (- a21 * sin(inc) * cos(azim) - a22 * sin(inc) * sin(azim));
+  dBtdBtotal = (- a21 * sin(inc) * sin(azim) + a22 * sin(inc) * cos(azim) + a23 * cos(inc)) * (-1);
+  dBtdInc = b * (- a21 * cos(inc) * sin(azim) + a22 * cos(inc) * cos(azim) - a23 * sin(inc)) * (-1);
+  dBtdAzim = b * (- a21 * sin(inc) * cos(azim) - a22 * sin(inc) * sin(azim)) * (-1);
   
   dBrdBtotal = (- a31 * sin(inc) * sin(azim) + a32 * sin(inc) * cos(azim) + a33 * cos(inc));
   dBrdInc = b * (- a31 * cos(inc) * sin(azim) + a32 * cos(inc) * cos(azim) - a33 * sin(inc));
