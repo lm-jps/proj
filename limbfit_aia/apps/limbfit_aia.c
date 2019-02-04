@@ -116,8 +116,11 @@ int DoIt ()
         if (sum>1) { free(sumarr); sumarr = NULL; }
         nfits++; isum = 0;
         ut = t_obs + 220924763;
-        printf("%.2f\t%.2f\t%.2f\t%d\t%s\t%.2f\n", 
+        
+        if (isfinite(sdisk_xc + sdisk_yc)) printf(
+               "%.2f\t%.2f\t%.2f\t%d\t%s\t%.2f\n", 
                sdisk_xc, sdisk_yc, sdisk_r, ut, date_obs, rguess);
+        else fprintf(stderr, "Non-finite sdisk_xc and/or sdisk_yc\n");
       }
       if (inparr) drms_free_array(inparr);
     }

@@ -505,7 +505,8 @@ int key_locations(int *array, int n, int *nv, int **counts, int **values, int **
      /* also allocate the arrays for the indices, each is count long */
      *qpbase++ = *qp++ = (int *) malloc(cq * sizeof (int));
      *pv++ = i;  i++;
-     if (i > nuniq) { printf("internal error 1 in key_locations\n");  return -1; }
+     if (i > nuniq) { fprintf(stderr, "internal error 1 in key_locations\n");
+                      return -1; }
    } else *pv++ = -1;  /* we need a pv for each value within "range" */
  }
 
@@ -516,8 +517,8 @@ int key_locations(int *array, int n, int *nv, int **counts, int **values, int **
    i = *q++ - min;  /* value in original array */
    /* get the index in the output value array, from a scratch array that covers full range */
    k = *(valueoffsets + i);
-   if (k < 0) printf("bad k = %d\n", k);
-   if (k >= nuniq) printf("bad k = %d\n", k);
+   if (k < 0) fprintf(stderr, "bad k = %d\n", k);
+   if (k >= nuniq) fprintf(stderr, "bad k = %d\n", k);
    *(qpstart[k])++ = j;     
  }
 
@@ -531,7 +532,7 @@ void mm_f(float *x, int n, float *max, float *min)
  {
  float	rmin, rmax;
  /* just return the min and max of a floating array */
- if (n <= 0 ) { printf("bad count in mm_f, n = %d\n",n); return; }
+ if (n <= 0 ) { fprintf(stderr, "bad count in mm_f, n = %d\n",n); return; }
  rmax = rmin = *x++;	n--;
  while (n--) { if (*x > rmax) rmax = *x; if (*x < rmin) rmin = *x; x++; }
  *min = rmin;	*max = rmax;
@@ -542,7 +543,7 @@ void mm_int(int *x, int n, int *max, int *min)
  {
  int	rmin, rmax;
  /* just return the min and max of a I*4 array */
- if (n <= 0 ) { printf("bad count in mm_int, n = %d\n",n); return; }
+ if (n <= 0 ) { fprintf(stderr, "bad count in mm_int, n = %d\n",n); return; }
  rmax = rmin = *x++;	n--;
  while (n--) { if (*x > rmax) rmax = *x; if (*x < rmin) rmin = *x; x++; }
  *min = rmin;	*max = rmax;
@@ -554,7 +555,7 @@ long getindexofmax(int *x, int n)
  {
  int	rmax;
  long inx, i;
- if (n <= 0 ) { printf("bad count in getindexofmax, n = %d\n",n); return -1; }
+ if (n <= 0 ) { fprintf(stderr, "bad count in getindexofmax, n = %d\n",n); return -1; }
  rmax = *x++;	n--;  inx = i = 0;
  while (n--) { i++; if (*x > rmax) { rmax = *x; inx = i; } x++; }
  return inx;
@@ -573,7 +574,7 @@ long hist_max_xvalue(float *x, int n)
  max = lrintf(xmax);
  min = lrintf(xmin);
  range = max - min + 1;
- if (range > max4histogram) { printf("values in array > %d\n", max4histogram);  return 0; }
+ if (range > max4histogram) { fprintf(stderr, "values in array > %d\n", max4histogram);  return 0; }
  //printf("max value in hist_max_xvalue %ld, range = %ld\n", max, range);
  hist = (int *) malloc(sizeof(int) * range);
  bzero((void *) hist, sizeof(int) * range);
@@ -604,7 +605,7 @@ int hist_max_freq(float *x, int n)
  max = lrintf(xmax);
  min = lrintf(xmin);
  range = max - min + 1;
- if (range > max4histogram) { printf("values in array > %d\n", max4histogram);  return 0; }
+ if (range > max4histogram) { fprintf(stderr, "values in array > %d\n", max4histogram);  return 0; }
  //printf("n %d, max value in hist_max_freq %ld, range = %ld\n", n, max, range);
  hist = (int *) malloc(sizeof(int) * range);
  bzero((void *) hist, sizeof(int) * range);
@@ -635,7 +636,7 @@ int *hist_array(float *x, int n, int *nh, int *hmin)
  min = lrintf(xmin);
  *nh = range = max - min + 1;
  *hmin = (int) min;
- if (range > max4histogram) { printf("values in array > %d\n", max4histogram);  return 0; }
+ if (range > max4histogram) { fprintf(stderr, "values in array > %d\n", max4histogram);  return 0; }
  //printf("max value in hist_max_xvalue %ld, range = %ld\n", max, range);
  hist = (int *) malloc(sizeof(int) * range);
  bzero((void *) hist, sizeof(int) * range);
@@ -741,7 +742,7 @@ float parabolicmax5(int *x, int nx)
  /* first first the max position */
  i = getindexofmax(x, nx);
  if (nx < 5) {
-    printf("parabolicmax5 input too small for fit, using max index only, no interpolation\n");
+    fprintf(stderr, "parabolicmax5 input too small for fit, using max index only, no interpolation\n");
     xq = (float) i;
     return xq;
  } else {
@@ -757,7 +758,7 @@ float parabolicmax5(int *x, int nx)
     pit( xpit, ypit, 5, 2, a, cfbase, fbase);
     /* the coefficients are in cfbase of length 3 */
     if (cfbase[2] == 0.0) {
-      printf("parabolicmax5 - singularity, using max index only, no interpolation\n");
+      fprintf(stderr, "parabolicmax5 - singularity, using max index only, no interpolation\n");
       xq = (float) i;
       return xq;
     }
@@ -1139,7 +1140,7 @@ int limbcompute(float *x, int nx, int ny, float xcguess, float ycguess, float rg
       }
       /* in2use are indices in the thann, innan, etc arrays */
       //printf("nc, num_inann = %d, %d\n", nc, num_inann);
-      if (nc > num_inann) { printf("internal error, nc, num_inann = %d, %d\n", nc, num_inann); return 1; }
+      if (nc > num_inann) { fprintf(stderr, "internal error, nc, num_inann = %d, %d\n", nc, num_inann); return 1; }
    //    /* in2use now packed with nc indices from inann, reload the other arrays
    //       note that in2use must be monotonic */
    //    p1 = annth;
@@ -1343,7 +1344,7 @@ int limbcompute(float *x, int nx, int ny, float xcguess, float ycguess, float rg
      }
    }
    /* for all the cases we now have nfaint entries in ixlimb and iylimb */
-   if (nfaint != jfaint) printf("nfaint, jfaint do not match: %d %d\n", nfaint, jfaint);
+   if (nfaint != jfaint) fprintf(stderr, "nfaint, jfaint do not match: %d %d\n", nfaint, jfaint);
    nfaint = jfaint;  /* usually the same, maybe always? */
    /* now we use the ixlimb, iylimb pairs */
    weights = malloc(sizeof(float) * nfaint);  /* weights, just all 1.0 here */ /* checked free */
