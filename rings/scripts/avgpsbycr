@@ -2,7 +2,7 @@
 # Create averages of hmi.rdv_pspec_fd* power spectra over a rotation by
 #   Stonyhurst coordinates (cf. avgpscrsyn)
 
-set SCRIPT_VERSION = 1.7
+set SCRIPT_VERSION = 1.8
 
 @ TEST = 0	# set to 1 for production in namespace hmi_test
 set TW
@@ -22,9 +22,6 @@ endif
 
 # modules, programs, and scripts
 set DATAVG = datavg
-set QSUB = qsub2
-
-set QUEUE = k.q
 
 # base naming convention for I/O series and logs
 set INMSP = hmi
@@ -43,20 +40,6 @@ if ($TEST) then
 else
   set ONMSP = hmi
 endif
-
-#  check that required scripts and programs are in path or rooted
-foreach CMD ($DATAVG)
-  which $CMD > /dev/null
-  if ($status) then
-    if (!(-x $CMD)) then
-      echo Error: command $CMD not in path\; script will fail
-      exit
-    endif
-  endif
-end
-
-# add flags
-set DATAVG = "$DATAVG -v"
 
 # select from synoptic series
 set TILESS = (  05    15    30)
@@ -87,7 +70,24 @@ if ($SYSE == 5) then
 # for now, override use of cluster 2 for massive arrays
   set QSUB = qsub
   set QUEUE = j.q
+else
+  set QSUB = qsub2
+  set QUEUE = k.q
 endif
+
+#  check that required scripts and programs are in path or rooted
+foreach CMD ($QSUB $DATAVG)
+  which $CMD > /dev/null
+  if ($status) then
+    if (!(-x $CMD)) then
+      echo Error: command $CMD not in path\; script will fail
+      exit
+    endif
+  endif
+end
+
+# add flags
+set DATAVG = "$DATAVG -v"
 
 # base naming convention for I/O series and logs
 set BASE = rdV
@@ -175,21 +175,38 @@ if ($EQCT < 2) then
 endif
 
 # get range of available CM longitudes: ordinarily 360-005
-set LON0 = `show_info -q ds= $PSER"[$CROT][][][0][0]" key= CMLon | head -1`
-set LON1 = `show_info -q ds= $PSER"[$CROT][][][0][0]" key= CMLon | tail -1`
+# set LON0 = `show_info -q ds= $PSER"[$CROT][][][0][0]" key= CMLon | head -1`
+# set LON1 = `show_info -q ds= $PSER"[$CROT][][][0][0]" key= CMLon | tail -1`
 # get list of all latitudes present: can change from start to end of rotation
-set TLATS = (`show_info -q ds= $PSER"[$CROT][$LON0,$LON1][][][0]" key= LatHG | sort -u`)
+# set TLATS = (`show_info -q ds= $PSER"[$CROT][$LON0,$LON1][][][0]" key= LatHG | sort -u`)
+# get CM longitude closest to midpoint of rotation
+@ LONM = 180
+@ FOUND = `show_info -cq ds= $PSER"[$CROT][$LONM]"`
+@ NEXT = 0
+while ($FOUND < 1)
+  @ NEXT += $SYSE
+  @ LONM = 180 + $NEXT
+  @ FOUND = `show_info -cq ds= $PSER"[$CROT][$LONM]"`
+  if ($FOUND) break
+  @ LONM = 180 - $NEXT
+  @ FOUND = `show_info -cq ds= $PSER"[$CROT][$LONM]"`
+  if ($FOUND) break
+# this should never happen
+  if ($LONM <= $SYSE) goto CLEANUP
+end
 
+# get list of all latitudes present for (nearest time to) midpoint
+set TLATS = (`show_info -q ds= $PSER"[$CROT][$LONM][][][0]" key= LatHG`)
 @ TOTEL = 0
 @ TOTCT = 0
 foreach TLAT ($TLATS)
-  @ LONCT0 = `show_info -cq ds= $PSER"[$CROT][$LON0][][$TLAT][0]"`
-  @ LONCT1 = `show_info -cq ds= $PSER"[$CROT][$LON1][][$TLAT][0]"`
-  @ LONCT = $LONCT0
-  if ($LONCT1 > $LONCT) @ LONCT = $LONCT1
-  if ($LONCT == 0) continue
+#  @ LONCT0 = `show_info -cq ds= $PSER"[$CROT][$LON0][][$TLAT][0]"`
+#  @ LONCT1 = `show_info -cq ds= $PSER"[$CROT][$LON1][][$TLAT][0]"`
+#  @ LONCT = $LONCT0
+#  if ($LONCT1 > $LONCT) @ LONCT = $LONCT1
+#  if ($LONCT == 0) continue
   set noglob
-  set LONS = (`show_info -q ds= $PSER"[$CROT][180][][$TLAT]" key= LonCM`)
+  set LONS = (`show_info -q ds= $PSER"[$CROT][$LONM][][$TLAT]" key= LonCM | sort -u`)
   unset noglob
   if ($#LONS == 0) continue
   @ EXPCT = $#LONS

@@ -8,6 +8,8 @@
 #   The intermediate input series cannot be overridden by the options file in
 #	continuation test runs
 
+set SCRIPT_VERSION = 2.3
+
 @ TEST = 0	# set to 1 for production in namespace hmi_test
 set TW
 if ("$1" =~ '-test') then
@@ -151,6 +153,8 @@ set KHIGHS = (" 38, 28, 20, 15, 12,  9" \
 set RTRGCS =  (  21   31   61)
 set RIMINS =  (0.99 0.97 0.94)
 set RIMAXS =  (1.00 1.00 1.00)
+set LIMAXS =  (2000 2000 2000)
+set NIMAXS =  (   8    8    8)
 set CFMAXS =  (5500 5500 5500)
 
 @ NT = 1
@@ -188,6 +192,8 @@ set KHIGH = "$KHIGHS[$NT]"
 @ RTGCT = $RTRGCS[$NT]
 set RIMIN = $RIMINS[$NT]
 set RIMAX = $RIMAXS[$NT]
+set LIMAX = $LIMAXS[$NT]
+set NIMAX = $NIMAXS[$NT]
 set CFMAX = $CFMAXS[$NT]
 set QMASK = 0x80004000
 @ MMISS = 1000
@@ -361,6 +367,7 @@ else
 endif
 if ($STRTSTOP) @ PBEGIN = `date +%s`
 # cat $MMSG
+@ MAIONLY = 0
 if ($CVG < $MINCV) then
   if (($CVG < $MMINCV) && ($TEST == 0)) then
     echo "Notice: effective coverage < 0.$MMINCV" >> $MMSG
@@ -369,7 +376,8 @@ if ($CVG < $MINCV) then
     echo "  ($CARTIM) Effective coverage < 0.$MMINCV; processing abandoned" >> $LOGF
     set SUBJ = "HMI ring-diagram $SYSE-deg synoptic frame processing abandoned for $CARTIM"
     @ STRTSTOP = 0
-    goto CLEANUP
+    @ MAIONLY = 1
+    goto SKIPCHECK
   endif
   echo "Warning: effective coverage < 0.$MINCV" >> $MMSG
   cat $MMSG >> $LOGF
@@ -384,7 +392,7 @@ if ($SKIPSPC) goto SKIP_PSPEC
 if ($SKIPFIT) goto SKIP_FITSF
 if ($SKIPINV) goto SKIP_INVRT
 
-# check for background average, create if necessary
+# check for background average
 @ CR60 = $CROT
 if ($CLON > 330) then
   @ CL60 = 360
@@ -415,6 +423,8 @@ if ($CVG < $MINCV) then
   echo "Warning: effective coverage < 0.$MINCV" >> $RLOG
   cat $TLIST >> $RLOG
 endif
+
+SKIPCHECK:
 # prepare appropriate target lists
 $GENTG time= $CARTIM grid= rdsyn$TILES > $TLIST
 @ STRIPCT = `wc -l $TLIST | awk '{print $1}'`
@@ -462,7 +472,7 @@ while ($STRIP < $STRIPCT)
     echo "  MAI calc failure on $HOSTID" >> $MMSG
     echo "  run log is on $RLOG"  >> $MMSG
     echo "  command executed:" >> $MMSG
-    echo "  $LSMAI ds= $MSER mai= $MAISER cr= $CROT cl= $CLON" >> $MMSG
+    echo "  $LSMAI los= $MSER mai= $MAISER cr= $CROT cl= $CLON" >> $MMSG
     echo "      scale= $MSCALE extent= $MSIZE length= $LNGTH rec_step= $MSMPLS" >> $MMSG
     echo "      qmask= $MQMASK reject= $MRJCT max_reach= $MREACH" >> $MMSG
     echo "      floor= $MFLOOR mask_in= $APODE apodize= $APODT" >> $MMSG
@@ -473,6 +483,7 @@ while ($STRIP < $STRIPCT)
     @ STRTSTOP = 0
     goto CLEANUP
   endif
+  if ($MAIONLY) continue
   set MAIS = (`head -1 $MLIST`)
   if ($#MAIS < 1) then
     set MAILIST = NaN
@@ -523,6 +534,14 @@ while ($STRIP < $STRIPCT)
   endif
   echo "  ($CARTIM) time for tracking $EXPCT regions on $HOSTID ($STRIP / $STRIPCT): $ELAPS min" >> $LOGF
 end
+
+if ($MAIONLY) then
+  @ TOTML += 30
+  @ TOTML /= 60
+  echo "  total time for MAI calc for $RGNCT regions on $HOSTID : $TOTML min" >> $MMSG
+  echo "  ($CARTIM) total time for MAI calc $RGNCT regions on $HOSTID : $TOTML min" >> $LOGF
+  goto CLEANUP
+endif
 
 if ($STRIPCT > 1) then
   @ TOTML += 30
@@ -655,7 +674,7 @@ if ($NOGO) goto TURNOUT
 @ EXIST = `show_info -bcq ds= $FLOW"[$CROT][$CLON]"`
 setenv OMP_NUM_THREADS 1
 $RVINV out= $FLOW in= $FSER cr= $CROT clon= $CLON kernel= "$KRNL" \
-    num= $RTGCT rb= $RIMIN re= $RIMAX >>& $RLOG
+    num= $RTGCT rb= $RIMIN re= $RIMAX nmax= $NIMAX lmax= $LIMAX >>& $RLOG
 if ($status) then
   set SUBJ = "HMI $SYSE-deg ring-diagram $TW processing for $CARTIM incomplete"
   echo "  rdvinv failure on $HOSTID"  >> $MMSG
@@ -868,7 +887,7 @@ else
   if ($RPCT != $EXPCT) then
     echo "  WARNING: only $RPCT fit records written!" >> $MMSG
     echo "  WARNING: only $RPCT fit records written!" >> $LOGF
-    set CTIME = $CTIME'*'
+    if ($FAIL == 0) set CTIME = $CTIME'*'
     @ STRTSTOP = 0
     set SUBJ = "HMI ring-diagram $TW processing for $CARTIM incomplete"
   endif

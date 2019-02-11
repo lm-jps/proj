@@ -21,11 +21,10 @@ MODEXE_USEF	:= $(MODEXE_USEF) $(MODEXE_USEF_$(d))
 CEXE_$(d)	:= $(addprefix $(d)/, gentargs) 
 CEXE		:= $(CEXE) $(CEXE_$(d))
 
-EXE_$(d)        := $(MODEXE_$(d)) $(MODEXE_USEF_$(d)) $(CEXE_$(d))
-OBJ_OLAXY_$(d)	:= $(addprefix $(d)/, ola_xy_v13.o ola_subs.o)
+EXE_$(d)        := $(MODEXE_$(d)) $(MODEXE_USEF_$(d) $(CEXE_$(d))
 OBJ_F_$(d)      := $(addprefix $(d)/, cart_to_polar.o fourier_filter.o ring_pass.o polyval.o multfactor.o func1.o first_deriv_1.o second_deriv.o dogleg3.o hmifits.o ringanalysis.o ccint2.o fourierlibn32.o)
 
-OBJ_$(d)	:= $(EXE_$(d):%=%.o) $(OBJ_OLAXY_$(d)) $(OBJ_F_$(d))
+OBJ_$(d)	:= $(EXE_$(d):%=%.o) $(OBJ_F_$(d))
 DEP_$(d)	:= $(OBJ_$(d):%=%.d)
 CLEAN		:= $(CLEAN) \
 		   $(OBJ_$(d)) \
@@ -43,7 +42,6 @@ $(OBJ_$(d)):		CF_TGT := $(CF_TGT) $(FFTWH)
 
 $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)):	LL_TGT := $(LL_TGT) $(FFTW3LIBS) $(FFTW3FLIBS) 
 
-$(RDVINV_$(d)):				$(OBJ_OLAXY_$(d))
 $(RDFITF_$(d)):				$(OBJ_F_$(d))
 $(RDVINV_$(d)) $(RDFITF_$(d)):				LL_TGT := $(LL_TGT) -lmkl_em64t
 

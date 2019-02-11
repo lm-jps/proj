@@ -51,6 +51,7 @@ set QMASK = 0x80004000
 set COVER = rdcover
 set SCRIPT = rdday
 set AVG120 = avg120
+set RUNMAI = runmai
 set QSUB = qsub2
 
 set QUEUE = k.q
@@ -77,7 +78,7 @@ endif
 set PLID = $NMSP\rdVsyn
 
 #  check that required scripts and programs are in path or rooted
-foreach CMD ($SCRIPT $AVG120 $COVER)
+foreach CMD ($SCRIPT $AVG120 $COVER $RUNMAI)
   which $CMD > /dev/null
   if ($status) then
     if (!(-x $CMD)) then
@@ -195,6 +196,7 @@ while ($CROT <= $CR1)
 # make sure that it wasn't a database failure
     show_info -cq ds= "$BCK" > $TLIST
     if ($status) then
+      set NOW = `date +%Y.%m.%d_%T`
       echo "$NOW database access failed, can't find background record" >> $RLOG
       echo "  Processing abandoned" >> $RLOG
       date '+%e %b %H:%M' >> $MMSG
@@ -257,6 +259,14 @@ while ($CROT <= $CR1)
     endif
   else
     echo Processing of 5-deg $CROT\:$CLON skipped: coverage = $ECVG >> $RLOG
+    set NOW = `date +%Y.%m.%d_%T`
+    set QINFO = `$QSUB -q $QUEUE -e $QRES -o $QRES $RUNMAI $ARG 5 $CROT\:$CLON`
+    if ($#QINFO) then
+      set QPID = `echo $QINFO | awk '{print $3}'`
+      echo $NOW $RUNMAI $ARG 5 $CROT\:$CLON submitted to $QUEUE as job $QPID >> $RLOG
+    else
+      echo $NOW Failed to submit $SCRIPT $ARG 5 $CROT $CLON >> $RLOG
+    endif
   endif
   if ($CLON % 15 == 0) then
 # check for coverage, skip if too low
@@ -294,6 +304,13 @@ while ($CROT <= $CR1)
       endif
     else
       echo Processing of 15-deg $CROT\:$CLON skipped: coverage = $ECVG >> $RLOG
+      set QINFO = `$QSUB -q $QUEUE -e $QRES -o $QRES $RUNMAI $ARG 15 $CROT\:$CLON`
+      if ($#QINFO) then
+	set QPID = `echo $QINFO | awk '{print $3}'`
+	echo $NOW $RUNMAI $ARG 15 $CROT\:$CLON submitted to $QUEUE as job $QPID >> $RLOG
+      else
+	echo $NOW Failed to submit $SCRIPT $ARG 15 $CROT $CLON >> $RLOG
+      endif
     endif
   endif
   if ($CLON % 30 == 0) then
@@ -332,6 +349,15 @@ while ($CROT <= $CR1)
       endif
     else
       echo Processing of 30-deg $CROT\:$CLON skipped: coverage = $ECVG >> $RLOG
+      set NOW = `date +%Y.%m.%d_%T`
+      set QINFO = `$QSUB -q $QUEUE -e $QRES -o $QRES $RUNMAI $ARG 30 $CROT\:$CLON`
+      if ($#QINFO) then
+	set QPID = `echo $QINFO | awk '{print $3}'`
+	echo $NOW $RUNMAI $ARG 30 $CROT\:$CLON submitted to $QUEUE as job $QPID >> $RLOG
+      else
+	echo $NOW Failed to submit $SCRIPT $ARG 30 $CROT $CLON >> $RLOG
+      endif
+    endif
     endif
   endif
   @ CLON -= 5

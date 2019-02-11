@@ -36,7 +36,7 @@
  *				values unacceptable
  *	copy	str	+		list of keys to be propagated as-is
  *	average	str	+		list of keys to be averaged
- *	pkey	str	T_OBS		Name of keyword to be used as index
+ *	pkey	str	T_REC		Name of keyword to be used as index
  *			over which input records are selected for averaging
  *	qual_key str	Quality		Key name of uint type keyword describing
  *			data quality
@@ -93,7 +93,7 @@
  *
  */
 
-#define MODULE_VERSION_NUMBER	("1.7")
+#define MODULE_VERSION_NUMBER	("1.8")
 #define KEYSTUFF_VERSION "keystuff_v10.c"
 #define EARTH_EPHEM_VERSION "earth_ephem_v10.c"
 
@@ -124,7 +124,7 @@ ModuleArgs_t module_args[] = {
   {ARG_STRING,  "cvno", "none", "Unacceptable value of cvkey"},
   {ARG_STRING,  "copy",  "+", "comma separated list of keys to propagate"},
   {ARG_STRING,  "average",  "+", "comma separated list of keys to average"},
-  {ARG_STRING,	"pkey", "T_OBS",
+  {ARG_STRING,	"pkey", "T_REC",
       "keyname for index over which records are selected for averaging"},
   {ARG_STRING,	"qual_key", "Quality", "keyname for 32-bit image quality field"},
   {ARG_STRING,	"roll_key", "CROTA2", "keyname for input roll-angle field"},
@@ -436,6 +436,63 @@ void report_pkey_value (FILE *out, DRMS_Record_t *rec, char *key, int recnum) {
   fflush (out);
 }
 
+void carrington_geoloc (TIME t, float *clon, float *clat, int *cr) {
+  double gcitime, gcitdt, jd, posvel[6];
+  double be, bx, ce, cx, ex, ey, ez, lx, rx;
+  double txx, txy, txz, tyx, tyy, tyz, tzx, tzy, tzz;
+  double lapp, w;
+  int icar;
+  char tablename[256];
+
+  double deg2rad = M_PI / 180;
+  double rad2deg = 1.0 / deg2rad;
+  double alpha = 16.13 * deg2rad;
+     /*  Inclination of solar equator on mean equator of 2000.0 = 26.16 deg  */
+  double delta = 26.13 * deg2rad;
+  double car0 = 1650.0;
+  double carrate = 4.2434255e-7;			  /*  rotations/sec  */
+	    /*  Get the desired earth center quantities for the target time  */
+  gcitime = t;
+  gcitdt = gcitime + 32.184;
+  jd = gcitdt / 86400.0 + 2443144.5;
+  sprintf (tablename, "%s", DEFAULT_EPHEM_FILE);
+  hc_earth_ephem (jd, posvel, tablename);
+
+  txx = cos (alpha);
+  txy = sin (alpha);
+  txz = 0.0;
+  tyx = -sin (alpha) * cos (delta);
+  tyy = cos (alpha) * cos (delta);
+  tyz = sin (delta);
+  tzx = sin (alpha) * sin (delta);
+  tzy = -cos (alpha) * sin (delta);
+  tzz = cos (delta);
+
+  ex = posvel[0];
+  ey = posvel[1];
+  ez = posvel[2];
+  lapp = car0 + carrate*gcitdt;
+  w = (84.10 + 14.1844*(jd - 2451545.0))*deg2rad;
+  rx = sqrt (ex*ex + ey*ey + ez*ez);
+  bx = asin((tzx*ex + tzy*ey + tzz*ez)/rx);
+  be = bx;
+	/*  lx is the Carrington rotation number + (1-fractional longitude)
+				this is a continously increasing number  */
+  lx = atan2 ((tyx*ex + tyy*ey + tyz*ez),(txx*ex + txy*ey + txz*ez));
+  cx = 1.0 - 0.5 * fmod (lx-w, 2 * M_PI) / M_PI;
+  icar = lapp - cx + 0.5;			/*  round off lapp-lx  */
+  ce = cx + icar;
+						       /*  Set Earth values  */
+  bx = rad2deg * be;
+  cx = ce;
+  icar = cx + 1;
+  cx = 360.0 * (icar - cx);
+  *clon = cx;
+  *clat = bx;
+  *cr = icar - cx / 360.0;
+  return;
+}
+
 int DoIt (void) {
   CmdParams_t *params = &cmdparams;
   DRMS_RecordSet_t *ids = NULL;
@@ -489,7 +546,7 @@ int DoIt (void) {
   char *psegname = strdup (params_get_str (params, "power"));
   char *logsegname = strdup (params_get_str (params, "log"));
   char *tmid_str = strdup (params_get_str (params, "tmid"));
-  float intrvl = params_get_float (params, "length");
+  double intrvl = params_get_double (params, "length");
   float pa_nom = params_get_float (params, "pa");
   float dpa_max = params_get_float (params, "dpa");
   unsigned int qmask = cmdparams_get_int64 (params, "qmask", &status);
@@ -625,6 +682,8 @@ int DoIt (void) {
 
 					     /*  process input specification  */
   if (key_params_from_dspec (inset)) {
+    double tstep;
+    float clat;
 				    /*  input specified as specific data set  */
     if (!(ids = drms_open_records (drms_env, inset, &status))) {
       fprintf (stderr, "Error: (%s) unable to open input data set %s\n",
@@ -644,8 +703,21 @@ int DoIt (void) {
       source[n] = '\0';
       break;
     }
-    tmid = clmid = fp_nan;
-    crmid = -1;
+    tfirst = 1.0 / 0.0;
+    tlast = -tfirst;
+    for (rec = 0; rec < recct; rec++) {
+      irec = ids->records[rec];
+      tobs_rec = drms_getkey_time (irec, primekey, &status);
+      if (time_is_invalid (tobs_rec)) continue;
+      if (tobs_rec < tfirst) tfirst = tobs_rec;
+      if (tobs_rec > tlast) tlast = tobs_rec;
+    }
+    tmid = 0.5 * (tfirst + tlast);
+    intrvl = tlast - tfirst;
+    tstep = intrvl / (recct - 1);
+    intrvl += tstep;
+    tmid += 0.5 * tstep;
+    carrington_geoloc (tmid, &clmid, &clat, &crmid);
   } else {
 				/*  only the input data series is named,
 				    get record specifications from arguments  */
@@ -1538,4 +1610,10 @@ int DoIt (void) {
  *		added counts of bad reads and invalid times
  *		added version control for included local source files
  *  v 1.7 frozen 18.04.20
+ *	18.08.24	changed default value of pkey from T_OBS to T_REC
+ *		set MidTime and Interval correctly when input specified as
+ *		explicit dataset based on range of pkey values; added function
+ *		for determining geocentric Carrington coordinates corresponding
+ *		to MidTime for that case
+ *  v 1.8 frozen 19.02.11
  */

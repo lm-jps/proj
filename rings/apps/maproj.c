@@ -1,7 +1,8 @@
+/******************************************************************************/
 /*
  *  maproj.c						~rick/src/maproj
  *
- *  Responsible:  Rick Bogart				RBogart@spd.aas.org
+ *  Responsible:  Rick Bogart				rick@sun.stanford.edu
  *
  *  Map a set of input solar images into a set of output maps
  *
@@ -33,7 +34,8 @@
  *				output map(s). The overlay value is -Inf where
  *				there would be valid data, +Inf where there is
  *				not. Points are considered on a grid line if
- *				they are within 0.01 * the grid spacing from it
+ *				they are within grid_ratio * the grid spacing from it
+ *	grid_ratio float 0.01		Ratio of grid line width to spacing
  *      map_pa  float   0.0             The angle between heliographic north
  *				and "up" on the output map (in the direction
  *				of increasing rows) [deg[, in the sense that a
@@ -43,6 +45,10 @@
  *				defaults to output series default
  *	bzero	float	NaN		Value offset parameter for output
  *				defaults to output series default
+ *	qmask	int	0x80000000	Quality mask for data acceptability;
+ *				records rejected if (qmask & qkey:value) != 0
+ *	qual_key str	Quality		Key name of uint type keyword describing
+ *			data quality
  *	clon_key string	CRLN_OBS	Keyname of float type keyword describing
  *				centre Carrington longitude of each input image
  *	clat_key string	CRLT_OBS	Keyname of float type keyword describing
@@ -84,23 +90,17 @@
  *
  *  Revision history is at end of file
  */
+/******************************************************************************/
+
+#define MODULE_VERSION_NUMBER	("1.3")
+#define CARTOGRAPHY_VERSION "cartography_v10.c"
+#define KEYSTUFF_VERSION "keystuff_v10.c"
 
 #include <jsoc_main.h>
-#include "cartography.c"
+#include CARTOGRAPHY_VERSION
+#include KEYSTUFF_VERSION
 #include "imginfo.c"
-#include "keystuff.c"
 #include "mdistuff.c"
-
-#define RECTANGULAR	(0)
-#define CASSINI		(1)
-#define MERCATOR	(2)
-#define CYLEQA		(3)
-#define SINEQA		(4)
-#define GNOMONIC	(5)
-#define POSTEL		(6)
-#define STEREOGRAPHIC	(7)
-#define ORTHOGRAPHIC	(8)
-#define LAMBERT		(9)
 
 #define RSUNM		(6.96e8)
 #define INTERP_NEAREST_NEIGHBOR	(1)
@@ -108,7 +108,7 @@
 						       /*  module identifier  */
 char *module_name = "maproj";
 char *module_desc = "mapping from solar images";
-char *version_id = "1.2";
+char *version_id = MODULE_VERSION_NUMBER;
 
 ModuleArgs_t module_args[] = {
   {ARG_DATASET,	"in", "", "input data set"}, 
@@ -116,17 +116,20 @@ ModuleArgs_t module_args[] = {
   {ARG_DOUBLE,	"clat", "Not Specified", "heliographic latitude of map center [deg]"},
   {ARG_DOUBLE,	"clon", "Not Specified", "Carrington longitude of map center [deg]"},
   {ARG_DOUBLE,	"scale", "Not specified", "map scale at center [deg/pxl]"},
-  {ARG_NUME, "map", "orthographic", "map projection",
-      "carree, Cassini, Mercator, cyleqa, sineqa, gnomonic, Postel, stereographic, orthographic, Lambert"},
-  {ARG_NUME, "interp", "cubiconv", "interpolation option",
-      "cubiconv, nearest, bilinear"},
-  {ARG_FLOAT, "grid", "Not Specified",
-      "if specified, spacing of grid overlay [deg]"},
   {ARG_INT,     "cols", "0", "columns in output map"},
   {ARG_INT,     "rows", "0", "rows in output map"},
+  {ARG_NUME,	"map", "orthographic", "map projection",
+      "carree, Cassini, Mercator, cyleqa, sineqa, gnomonic, Postel, stereographic, orthographic, Lambert"},
+  {ARG_NUME,	"interp", "cubiconv", "interpolation option",
+      "cubiconv, nearest, bilinear"},
+  {ARG_FLOAT,	"grid", "Not Specified",
+      "if specified, spacing of grid overlay [deg]"},
+  {ARG_FLOAT,	"grid_ratio", "0.01", "ratio of grid line width to spacing"},
   {ARG_FLOAT,	"map_pa", "0.0", "position angle of north on output map [deg]"},
   {ARG_FLOAT,	"bscale", "0.0", "output scaling factor"},
   {ARG_FLOAT,	"bzero", "Default", "output offset"},
+  {ARG_INT,	"qmask", "0x80000000", "quality bit mask for image rejection"},
+  {ARG_STRING,	"qual_key", "Quality", "keyname for 32-bit image quality field"},
   {ARG_STRING,	"clon_key", "CRLN_OBS", "keyname for image central longitude"}, 
   {ARG_STRING,	"clat_key", "CRLT_OBS", "keyname for image central latitude"}, 
   {ARG_STRING,	"rsun_key", "R_SUN", "keyname for image semi-diameter (pixel)"}, 
@@ -340,9 +343,135 @@ int near_grid_line (double lon, double lat, double grid, double near) {
   return 0;
 }
 
+int parseseglist (char *list, const char *delim, char ***parsed_list) {
+  int n, count = 0;
+  int maxct = strlen (list);
+  char **tmplist = (char **)malloc (maxct * sizeof (char *));
+  char *entry;
+  char *orig = strdup (list);
+  char c;
+
+  while (*orig != '{' && *orig != '\0') orig++;
+  if (orig[0] == '{') orig++;
+  else {
+    free (tmplist);
+    return count;
+  }
+  for (n = 0; n < strlen (orig); n++) if (orig[n] == '}') orig[n] = '\0';
+  entry = strtok (orig, delim);
+  while (entry) {
+    tmplist[count++] = strdup (entry);
+    entry = strtok (NULL, delim);
+  }
+  *parsed_list = (char **)malloc (count * sizeof (char **));
+  for (n = 0; n < count; n++) {
+    char *subs = (*parsed_list)[n] = strdup (tmplist[n]);
+    free (tmplist[n]);
+					     /*  remove leading white space  */
+    while (isspace (c = *subs)) subs++;
+    (*parsed_list)[n] = subs;
+					    /*  remove trailing white space  */
+    if (strlen (subs)) {
+      subs += strlen (subs) - 1;
+      while (isspace (c = *subs)) {
+	*subs = '\0';
+	subs--;
+      }
+    }
+  }
+  free (tmplist);
+  return count;
+}
+/*
+ *  Check for permission to write to output data series
+ */
+static int check_output_series_permission (char *series, int warnonly) {
+  DB_Text_Result_t *qres;
+  char *dbuser;
+  char cmd[DRMS_MAXQUERYLEN];
+
+  int status = 0;
+						     /*  get current db role  */
+#ifndef DRMS_CLIENT
+  dbuser = drms_env->session->db_handle->dbuser;
+#else
+  drms_send_commandcode (drms_env->session->sockfd, DRMS_GETDBUSER);
+  dbuser = receive_string(drms_env->session->sockfd);
+#endif
+					   /*  check for existence of series  */
+  if (!drms_series_exists (drms_env, series, &status)) {
+    if (warnonly) fprintf (stderr, "Warning: ");
+    else {
+      fprintf (stderr, "Error: ");
+      status = 1;
+    }
+    fprintf (stderr, "output data series %s does not exist\n", series);
+    return status;
+  }
+						    /*  check for permission  */
+  sprintf (cmd, "SELECT has_table_privilege(\'%s\', \'insert\')", series);
+  if ((qres = drms_query_txt (drms_env->session, cmd)) == NULL) {
+    fprintf (stderr, "Error: can\'t connect to DRMS database\n");
+    return 1;
+  }
+  if (strcmp (qres->field[0][0], "t")) {
+    if (warnonly) fprintf (stderr, "Warning: ");
+    else {
+      fprintf (stderr, "Error: ");
+      status = 1;
+    }
+    fprintf (stderr, "You do not have insert permission on output series %s\n",
+	series);
+  }
+  return status;
+}
+/*
+ *  Check output data series structure for the existence of segments of
+ *    appropriate protocol for array segment writes
+ */
+static int check_output_record_structure (DRMS_Record_t *rec, int rank,
+    int *axis, int *segnum, int warnonly) {
+  DRMS_Segment_t *seg;
+  int i, n, segct;
+
+  int found = 0;
+
+  segct = drms_record_numsegments (rec);
+  for (n = 0; n < segct; n++) {
+    seg = drms_segment_lookupnum (rec, n);
+    if (seg->info->protocol == DRMS_PROTOCOL_INVALID ||
+	  seg->info->protocol == DRMS_GENERIC) continue;
+    if (seg->info->naxis != rank) continue;
+    if (seg->info->scope != DRMS_VARDIM)
+      for (i = 0; i < rank; i++) if (seg->axis[i] != axis[i]) continue;
+    if (!found) *segnum = n;
+    found++;
+  }
+  if (found < 1) {
+    if (warnonly) fprintf (stderr, "Warning: ");
+    else fprintf (stderr, "Error:   ");
+    fprintf (stderr,
+	"no segment of rank %d and appropriate size in output series\n",
+	rank);
+    fprintf (stderr, "         %s\n", rec->seriesinfo->seriesname);
+  }
+  if (found > 1) {
+    fprintf (stderr,
+	"Warning: multiple segments of rank %d and appropriate size in output series\n",
+	rank);
+    fprintf (stderr, "         %s; ", rec->seriesinfo->seriesname);
+    seg = drms_segment_lookupnum (rec, *segnum);
+    fprintf (stderr, "using \"%s\"\n", seg->info->name);
+  }
+  return found;
+}
+
+/******************************************************************************/
+			/*  module body begins here  */
+/******************************************************************************/
 int DoIt (void) {
   CmdParams_t *params = &cmdparams;
-  DRMS_RecordSet_t *ids, *ods;
+  DRMS_RecordSet_t *ids;
   DRMS_Record_t *irec, *orec;
   DRMS_Segment_t *iseg, *oseg;
   DRMS_Array_t *image = NULL, *map = NULL;
@@ -354,16 +483,18 @@ int DoIt (void) {
   double grid_width;
   double ellipse_e, ellipse_pa;
   float *data;
+  unsigned int quality;
   int axes[2];
   int img, imgct, pixct, segct;
-  int isegnum, osegnum;
+  int osegnum;
   int found, kstat, status;
   int need_ephem, need_lat, need_lon;
   int x_invrt, y_invrt;
   int n, col, row;
   int MDI_correct, MDI_correct_distort;
+  char **segnames;
   unsigned char *offsun, *ongrid;
-  char *input, *isegname, *osegname;
+  char *input, *isegname;
   char source[DRMS_MAXQUERYLEN], recid[DRMS_MAXQUERYLEN];
   char module_ident[64], key[64], tbuf[64];
 
@@ -388,10 +519,13 @@ int DoIt (void) {
   float bscale = params_get_float (params, "bscale");
   float bzero = params_get_float (params, "bzero");
   float grid_spacing = params_get_float (params, "grid");
+  float grid_ratio = params_get_float (params, "grid_ratio");
+  unsigned int qmask = cmdparams_get_int64 (params, "qmask", &status);
   int map_cols = params_get_int (params, "cols");
   int map_rows = params_get_int (params, "rows");
   int proj = params_get_int (params, "map");
   int intrpopt = params_get_int (params, "interp");
+  char *qual_key = strdup (params_get_str (params, "qual_key"));
   char *clon_key = strdup (params_get_str (params, "clon_key"));
   char *clat_key = strdup (params_get_str (params, "clat_key"));
   char *rsun_key = strdup (params_get_str (params, "rsun_key"));
@@ -431,7 +565,7 @@ int DoIt (void) {
   xstp = ystp = map_scale * raddeg;
   x0 = 0.5 * (1.0 - map_cols) * xstp;
   y0 = 0.5 * (1.0 - map_rows) * ystp;
-  grid_width = 0.01 * grid_spacing;
+  grid_width = grid_ratio * grid_spacing;
 							     /*  check input  */
   if (!(ids = drms_open_records (drms_env, inset, &status))) {
     fprintf (stderr, "Error: (%s) unable to open input data set \"%s\"\n",
@@ -450,17 +584,23 @@ int DoIt (void) {
 	   /*  determine appropriate input record segment (if more than one)  */
   irec = ids->records[0];
   segct = drms_record_numsegments (irec);
-  isegnum = 0;
   if (segct) {
+    int namect = parseseglist (inset, ",", &segnames);
     found = 0;
-    for (n = 0; n < segct; n++) {
-      iseg = drms_segment_lookupnum (irec, n);
-      if (iseg->info->naxis != 2) continue;
-      if (!found) {
-        isegname = strdup (iseg->info->name);
-        isegnum = n;
+    if (namect) {
+      for (n = 0; n < namect; n++) {
+	iseg = drms_segment_lookup (irec, segnames[n]);
+	if (iseg->info->naxis != 2) continue;
+        if (!found) isegname = segnames[n];
+	found++;
       }
-      found++;
+    } else {
+      for (n = 0; n < segct; n++) {
+        iseg = drms_segment_lookupnum (irec, n);
+        if (iseg->info->naxis != 2) continue;
+        if (!found) isegname = strdup (iseg->info->name);
+        found++;
+      }
     }
     if (found > 1) {
       fprintf (stderr,
@@ -468,7 +608,7 @@ int DoIt (void) {
 	  input);
       fprintf (stderr, "       using \"%s\"\n", isegname);
     }
-    iseg = drms_segment_lookupnum (irec, isegnum);
+    iseg = drms_segment_lookup (irec, isegname);
   } else {
     fprintf (stderr, "Error: no data segments in input series %s\n", input);
     drms_close_records (ids, DRMS_FREE_RECORD);
@@ -480,49 +620,25 @@ int DoIt (void) {
     drms_close_records (ids, DRMS_FREE_RECORD);
     return 1;
   }
-						  /*  open output record set  */
-  if (verbose) printf ("creating %d records in series %s\n", imgct, outser);
-  if (!(ods = drms_create_records (drms_env, imgct, outser, DRMS_PERMANENT,
-      &status))) {
-    fprintf (stderr, "Error: unable to create %d records in series %s\n",
-	imgct, outser);
-    fprintf (stderr, "       drms_create_records() returned status %d\n",
-	status); 
-    return 1;
-  }
-	  /*  determine appropriate output record segment (if more than one)  */
-  orec = ods->records[0];
-  segct = drms_record_numsegments (orec);
-  found = 0;
-  for (n = 0; n < segct; n++) {
-    oseg = drms_segment_lookupnum (orec, n);
-    if (oseg->info->naxis != 2) continue;
-    if (oseg->info->scope == DRMS_CONSTANT) continue;
-    if (oseg->info->scope == DRMS_VARIABLE) {
-      if (oseg->axis[0] != map_cols ||
-	  oseg->axis[1] != map_rows) continue;
+						     /*  check output series  */
+  if (check_output_series_permission (outser, no_save)) return 1;
+  orec = drms_template_record (drms_env, outser, &status);
+  if (status || !orec) {
+    if (no_save) fprintf (stderr, "Warning: ");
+    else {
+      drms_close_records (ids, DRMS_FREE_RECORD);
+      fprintf (stderr, "Error: ");
     }
-    if (!found) {
-      osegname = strdup (oseg->info->name);
-      osegnum = n;
-    }
-    found++;
-  }
-  if (found < 1) {
     fprintf (stderr,
-	"Error: no data segment of dimension 2 and appropriate size in output series %s\n", outser);
-    drms_close_records (ods, DRMS_FREE_RECORD);
-    return 1;
-  }
-  if (found > 1) {
-    fprintf (stderr,
-	"Warning: multiple data segments of dimension 2 and appropriate size in output series %s\n",
+	" unable to verify appropriate structure of output series %s\n",
 	outser);
-    fprintf (stderr, "       using \"%s\"\n", osegname);
+    if (!no_save) return 1;
   }
-						 /*  create output map array  */
   axes[0] = map_cols;
   axes[1] = map_rows;
+  if (check_output_record_structure (orec, 2, axes, &osegnum, no_save) < 1)
+  return 1;
+						 /*  create output map array  */
   map = drms_array_create (DRMS_TYPE_FLOAT, 2, axes, NULL, &status);
   if (status) {
     fprintf (stderr, "Error: couldn't create output array\n");
@@ -536,6 +652,7 @@ int DoIt (void) {
   offsun = (unsigned char *)malloc (pixct * sizeof (char));
   if (overlay) ongrid = (unsigned char *)malloc (pixct * sizeof (char));
 	     /*  use output series default segment scaling if not overridden  */
+  oseg = drms_segment_lookupnum (orec, osegnum);
   if (bscale == 0.0) {
     bscale = oseg->bscale;
     if (verbose) printf ("bscale set to output default: %g\n", bscale);
@@ -582,10 +699,16 @@ int DoIt (void) {
   data = (float *)map->data;
 					  /*  process individual input mages  */
   for (img = 0; img < imgct; img++) {
-							 /*  get input image  */
     irec = ids->records[img];
+			  /*  check for record quality, reject as applicable  */
+    quality = drms_getkey_int (irec, qual_key, &status);
+    if ((quality & qmask) && !status) {
+      if (verbose) printf ("record %d skipped: quality = %08x\n", img, quality);
+      continue;
+    }
+ 							 /*  get input image  */
     drms_sprint_rec_query (source, irec);
-    iseg = drms_segment_lookupnum (irec, isegnum);
+    iseg = drms_segment_lookup (irec, isegname);
     image = drms_segment_read (iseg, DRMS_TYPE_FLOAT, &status);
 						/*  trap failed segment read  */
     if (status || !image) {
@@ -675,8 +798,8 @@ int DoIt (void) {
 img_lon *= raddeg;
 img_lat *= raddeg;
 						    /*  set up output record  */
-    orec = ods->records[img];
-    oseg = drms_segment_lookup (orec, osegname);
+    orec = drms_create_record (drms_env, outser, DRMS_PERMANENT, &status);
+    oseg = drms_segment_lookupnum (orec, osegnum);
  						     /*  perform the mapping  */
     perform_mapping (image, data, maplat, maplon, map_coslat, map_sinlat,
         pixct, offsun, img_lat, img_lon, img_xc, img_yc, img_radius, img_pa,
@@ -745,12 +868,12 @@ img_lat *= raddeg;
       fprintf (stderr, "Error writing key value(s) to record %d in series %s\n",
 	  img, outser);
       fprintf (stderr, "      series may not have appropriate structure\n");
-      drms_close_records (ods, DRMS_FREE_RECORD);
+      drms_close_record (orec, DRMS_FREE_RECORD);
       return 1;
     }
+    drms_close_record (orec, dispose);
     drms_free_array (image);
   }
-  drms_close_records (ods, dispose);
   drms_free_array (map);
   return 0;
 }
@@ -787,5 +910,14 @@ img_lat *= raddeg;
  *  16.02.09	trap failed segment reads
  *  16.02.26	added nomap option -n for testing
  *  v 1.2 frozen 16.06.20
+ *  16.09.07	added function for parsing optional segment list in input
+ *		specification; changed to use segment names rather than internal
+ *		numbers which get mangled by links
+ *  18.07.30	added optional argument grid_ratio to specify ratio of overlay
+ *		grid line width to spacing, needed for small spacings
+ *  18.09.14	added option and related arguments for checking quality key
+ *		value against bit mask; improved checking of acceptability of
+ *		output series; some version control of include files
+ *  v 1.3 frozen 19.02.11
  *
  */
