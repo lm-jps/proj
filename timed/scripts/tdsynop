@@ -26,8 +26,8 @@ if ($PROG !~ '*tdsynop*') then
     set PROG = $JOB_NAME
   endif
 endif
-if ($PROG =~ "*_ttim") @ SKIPTRK = 1
-if ($PROG =~ "*_inv") @ SKIPFIT = 1
+if ($PROG =~ *_ttim) @ SKIPTRK = 1
+if ($PROG =~ *_inv) @ SKIPFIT = 1
 
 # modules and programs
 set COVER = rdcover
@@ -244,6 +244,7 @@ if ($CVG < $MINCV) then
     set SUBJ = "HMI time-distance $TW processing abandoned for $CTIME"
     @ STRTSTOP = 0
     set STARTED = "not attempted"
+    @ RGNCT = 0
     goto CLEANUP
   endif
   echo "Warning: effective coverage < 0.$MINCV" >> $MMSG
@@ -353,6 +354,7 @@ if ($#LATS != $RGNCT || $#LONS != $RGNCT) then
   @ STRTSTOP = 0
   goto CLEANUP
 endif
+echo processing $RGNCT regions >> $LOGF
 # set noglob
 # set TSERINPS = `show_info -iq ds= $TSER\[$TMID]`
 set FILE = td`echo $CTIME | tr ':' '.'`
@@ -374,6 +376,7 @@ echo '  in= '$TSER'"['$TMID'][][$LAT][$LON]" \' >> $SCRIPT
 echo '  pxloc= '$PLOC' \' >> $SCRIPT
 echo "  out= $OSER "'>>&' $RLOG >> $SCRIPT
 qsub -sync yes -t 1-$RGNCT -q $QUEUE -e $QRES -o $QRES $SCRIPT >>& $RLOG
+echo log is $RLOG >> $LOGF
 @ QJOK = `grep "exited with exit code 0." $RLOG | wc -l`
 @ FAIL = $RGNCT - $QJOK
 @ FDCT = `show_info -cq ds= $OSER"[$TMID]"`
