@@ -43,7 +43,7 @@ $(OBJ_$(d)):	CF_TGT := $(CF_TGT) $(ADD_TGT_$(d)) -DCDIR="\"$(SRCDIR)/$(d)\"" -I$
 $(OBJ_$(d)):	%.o:	%.c
 		$(LOCALCC)
 
-$(EXE_$(d)):	LL_TGT := $(PGL) -lecpg -lpq
+$(EXE_$(d)):	LL_TGT := -L $(POSTGRES_LIBS) -lecpg -lpq
 $(EXE_$(d)):	$(LIBEGSEHMICOMP)
 $(EXE_$(d)):	%:	%.o $(EXELIBS)
 		$(LOCALLN)
