@@ -212,7 +212,7 @@ $lckfh = FileHandle->new(">$runningflag.lck");
 unless (flock($lckfh, LOCK_EX|LOCK_NB)) 
 {
    print "$0 is already running. Exiting.\n";
-   exit(1);
+   exit(2);
 }
 
 #if (-e $runningflag)
