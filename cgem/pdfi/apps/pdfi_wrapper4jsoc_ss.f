@@ -3,8 +3,8 @@
      2 vloncoe0,vlatcoe0,vlosllcoe0,vloncoe1,vlatcoe1,vlosllcoe1,
      3 lloncoe0,llatcoe0,lrllcoe0,lloncoe1,llatcoe1,lrllcoe1,
      4 tjul0,tjul1,blon0,blat0,brll0,blon1,blat1,brll1,
-     5 elonpdfi,elatpdfi,erllpdfi,erllind,delondr,delatdr,srll,srtot,
-     6 hmll,hmtot,tjulhalf)
+     5 elonpdfi,elatpdfi,erllpdfi,erllind,delondr,delatdr,
+     6 srll,srtot,hmll,hmtot,mcoell,mcoll,mcell,mtell,mpell,tjulhalf)
 c    
 c    
 c
@@ -24,7 +24,7 @@ c              vloncoe0,vlatcoe0,vlosllcoe0,vloncoe1,vlatcoe1,vlosllcoe1,
 c              lloncoe0,llatcoe0,lrllcoe0,lloncoe1,llatcoe1,lrllcoe1,
 c              tjul0,tjul1,blon0,blat0,brll0,blon1,blat1,brll1,
 c              elonpdfi,elatpdfi,erllpdfi,erllind,delondr,delatdr,srll,srtot,
-c              hmll,hmtot,tjulhalf)
+c              hmll,hmtot,mcoell,mcoll,mcell,mtell,mpell,tjulhalf)
 c
 c     Input:   m,n - number of cell centers in the theta (lat), and phi (lon)
 c              directions, respectively. 
@@ -98,6 +98,7 @@ c              values at the staggered grid locations at both the t0 and t1
 c              times, in (lon,lat) order. blon0,blon1 on PE grid, blat0,blat1
 c              on TE grid, brll0,brll1 on CE grid. [G]
 c
+c
 c     Output:  srll(n,m) - real*8 array of radial component of Poynting flux 
 c              values in lon,lat order on CE grid [erg/(cm^2-sec)]
 c
@@ -108,6 +109,11 @@ c              order.  [Mx^2/(cm^2-sec)]
 c
 c     Output:  hmtot - real*8 value of the area integral of hmll. [Mx^2/sec]
 c
+c     Output:  mcoell(n+1,m+1),mcoll(n-1,m-1),mcell(n,m),mtell(n,m+1),
+c              mpell(n+1,m) - real*8 arrays of strong-field mask arrays,
+c              equal to 0 if neighboring points are below threshold, and to
+c              unity if all points are above threshold.
+c              
 c     Output:  tjulhalf - real*8 value of time halfway between t0 and t1 [days].
 c
 c - - MKD, January 2016
@@ -162,6 +168,8 @@ c
       real*8 :: elonpdfi(n,m+1),elatpdfi(n+1,m)
       real*8 :: delondr(n,m+1),delatdr(n+1,m)
       real*8 :: erllpdfi(n+1,m+1),erllind(n+1,m+1)
+      real*8 :: mcoell(n+1,m+1), mcoll(n-1,m-1),mcell(n,m)
+      real*8 :: mtell(n,m+1), mpell(n+1,m)
 c
 c output: Poynting flux, helicity flux density arrays at CE grid, lon,lat order
 c
@@ -464,6 +472,15 @@ c
 c - - rotate sr and hm into lon, lat order using brtp2ll_ss subroutine:
       call bryeetp2ll_ss(m,n,sr,srll)
       call bryeetp2ll_ss(m,n,hm,hmll)
+c
+c - - transpose mask arrays to lon-lat order:
+      call brtp2ll_ss(m,n,maskcoe,mcoell)
+      call bryeetp2ll_ss(m,n,mskr,mcell)
+      call bhyeetp2ll_ss(m,n,mskte,mskpe,mpell,mtell)
+c - - change sign on mtell since bhyeetp2ll_ss flips sign of lat component:
+      mtell(:,:)=-mtell(:,:)
+c - - strip out edges of mcoell mask array to get mcoll array:
+      mcoll(:,:)=mcoell(2:n,2:m)
 c
 c Compute time at half-way between vector magnetograms:
 c
