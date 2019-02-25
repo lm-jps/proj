@@ -6,6 +6,8 @@ aia.response
 aia.temperature_summary_300s
 aia_test.master_pointing3h
 cgem.lorentz
+cgem.pdfi_input
+cgem.pdfi_output
 hmi.b_135s
 hmi.B_720s_dcon
 hmi.B_720s_dconS
