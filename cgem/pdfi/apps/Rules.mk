@@ -10,6 +10,7 @@ d := $(dir)
 # module name(s) to be generated and file name(s) to be compiled
 
 ## C-wrapper name (name must end with .c)
+MODEXE_USEF_$(d) := 
 ifeq ($(JSOC_MACHINE), linux_avx)
 MODEXE_USEF_$(d) := $(addprefix $(d)/, cgem_pdfi)
 endif
