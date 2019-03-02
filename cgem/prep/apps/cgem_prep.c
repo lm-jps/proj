@@ -1014,11 +1014,9 @@ void findCoord(struct reqInfo *req, struct ephemeris *ephem,
 {
     
     // Rotate
-    // Differential rotation rate in urad/s
-    // proj/lev1.5_hmi/libs/lev15/rotcoef_file.txt
     
     double latc = req->latref;
-    double difr = diffrot[0] - diffrot[1] * pow(sin(latc),2) - diffrot[2] * pow(sin(latc),4);
+    double difr = diffrot[0] + diffrot[1] * pow(sin(latc),2) + diffrot[2] * pow(sin(latc),4);
     double dt = ephem->t_rec - req->tref;
     double lonc = req->lonref + dt * difr * 1.0e-6;      // urad/s to rad
     mapCenter[0] = lonc / RADSINDEG;
