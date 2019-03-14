@@ -210,17 +210,21 @@ void  minihough(int nc, float *xlimb, float *ylimb, int niter)
    dy = iy - (float) (NYC/2);
    //printf("ix, iy, dx, dy = %d, %d, %g, %g\n", ix, iy, dx, dy);
    /* check if on the edge and bail out if so */
+   /* 3/13/2019 - except for y, we can save some bad y estimates */
    if (ix <= 0 || ix >= (NXC-1)) {
       fprintf(stderr, "x center max at edge, ix = %d\n", ix); return;   }
    if (iy <= 0 || iy >= (NYC-1)) {
-      fprintf(stderr, "y center max at edge, iy = %d\n", iy); return;   }
-   /* get the new center in the image from these */
-   /* call getmin9 */
-   getmin9(mhcount, ix, iy, NXC, &xc1, &yc1);
-   //printf("xc1, yc1 = %g, %g\n", xc1, yc1);
-   /* damp */
-   dx = (dx + xc1) * 0.5;
-   dy = (dy + yc1) * 0.5;
+      /* y is more frequently a problem than x, so use an edge for y and continue, it may work */
+      fprintf(stderr, "y center max at edge, iy = %d\n", iy);
+   }  else {
+      /* get the new center in the image from these */
+      /* call getmin9 */
+      getmin9(mhcount, ix, iy, NXC, &xc1, &yc1);
+      //printf("xc1, yc1 = %g, %g\n", xc1, yc1);
+      /* damp */
+      dx = (dx + xc1) * 0.5;
+      dy = (dy + yc1) * 0.5;
+   }
    /* also prevent dx and dy from growing */
 //    if (fabsf(dx) > dxprev) { if (dx < 0) dx = -dxprev * 0.75; else dx = dxprev * 0.75; }
 //    if (fabsf(dy) > dyprev) { if (dy < 0) dx = -dyprev * 0.75; else dy = dyprev * 0.75; }
