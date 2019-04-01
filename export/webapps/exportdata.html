@@ -40,6 +40,8 @@ var KEYWORD_LVL_NUM = 'LVL_NUM';
 var AIA_SCALE_CTYPE1 = 'HPLN-TAN';
 var AIA_SCALE_CTYPE2 = 'HPLT-TAN';
 var KEYWORD_SPEC = '*spec*';
+var KEYWORD_ONLINE = '*online*';
+var KEYWORD_SIZE = '*size*';
 var AIA_NAMESPACE = 'aia';
 var NA = 'na';
 var AIA_SCALE_NAXES = 2;
@@ -55,6 +57,7 @@ var JSOCEXTINFO = 'jsocextinfo';
 var JSOC_INFO = 'jsoc_info';
 var JSOCEXTFETCH = 'jsocextfetch';
 var JSOC_FETCH = 'jsoc_fetch';
+var DRMS_EXPORT = 'drms-export.sh';
 var SERIES_INFO = 'series_info';
 var PARSE_RECSET = 'drms_parserecset';
 var LOOKDATA = "lookdata";
@@ -87,10 +90,12 @@ span.tip { background-color:blue;font-family:verdana;color:white;font-size:1em;f
 <script type="text/javascript">
 
 // Protect page from accidental BACK button
-window.onbeforeunload = function () 
-  {
-  return "Did you really mean to leave exportdata? Use CANCEL to stay here";
-  }
+var ON_BEFORE_UNLOAD_FXN = function () 
+{
+    return "Did you really mean to leave exportdata? Use CANCEL to stay here";
+};
+
+window.onbeforeunload = ON_BEFORE_UNLOAD_FXN;
 
 function OnEnterKey(evt,action)
   {
@@ -141,7 +146,6 @@ var ExportRecordSetOK;
 var ExportRedinessStatus;
 var ExportFromFileList;
 var ExportMethodOK;
-var ExportMethodIsDirect;
 var ExportFilenameFmtOK;
 var ExportProcessingOptions;
 var ExportUserOK;
@@ -209,7 +213,6 @@ function initVars()
   ExportRedinessStatus = 0;
   ExportFromFileList = 0;
   ExportMethodOK = 1;
-  ExportMethodIsDirect = 0;
   ExportFilenameFmtOK = 1;
   ExportUserOK = 0;
   ExportNotifyOK = 0;
@@ -803,73 +806,119 @@ function CreateRequestRSInfoCallback(callback, lastRecord)
                 }
                 else
                 {
+                    var aiaScaleCompatibilityChecked = false;
+                    
                     RecordCount = data.count; // global
+                    $('ExportRecordSet').store({ 'count': RecordCount });
                     $("RSCountPlace").innerHTML = data.count;
                     ExportRecordSetOK = 1; // global
                     
+                    aiaScaleCompatibilityChecked = ($('OptionAiaScale').retrieve('disabledState', null) !== null);
+                    
                     // check for compatibility with aia_scale processing
-                    if ($('OptionAiaScale').retrieve('disabledState', null) === null)
+
+                    // aia_scale compatibility has not yet been determined; check now
+                    // loop through all records, checking the keyword criteria; jsoc_info
+                    // does not provide hash-accessibility to keyword info, so must
+                    // loop through all keywords
+                    var compatible = null;
+                    var online = null;
+                    var size = null;
+                    
+                    if (data.hasOwnProperty('keywords'))
                     {
-                        // aia_scale compatibility has not yet been determined; check now
-                        // loop through all records, checking the keyword criteria; jsoc_info
-                        // does not provide hash-accessibility to keyword info, so must
-                        // loop through all keywords
-                        var compatible = null;
+                        var ctype1Checked = false;
+                        var ctype2Checked = false;
                         
-                        if (data.hasOwnProperty('keywords'))
+                        if (aiaScaleCompatibilityChecked)
                         {
-                            compatible = true;
-                            for (var index = 0; index < data.keywords.length; index++)
-                            {
-                                // we are assured that the CTYPE keywords will be in the jsoc_info results, 
-                                // even if the series does not have those keywords; if a keyword
-                                // does not exist in the series, jsoc_info prints 'Invalid Keylink'
-                                // for the keyword value (as long as the keyword is specified in the keys argument
-                                // to jsoc_info)
-                                if (data.keywords[index].name.strip().toLowerCase() == KEYWORD_CTYPE1.toLowerCase())
-                                {
-                                    for (var valIndex = 0; valIndex < data.keywords[index].values.length; valIndex++)
-                                    {
-                                        // loop over records
-                                        if (data.keywords[index].values[valIndex] != AIA_SCALE_CTYPE1)
-                                        {
-                                            compatible = false;
-                                            break;
-                                        }
-                                    }
-                                }
-                        
-                                if (!compatible)
-                                {
-                                    break;
-                                }
-                            
-                                if (data.keywords[index].name.strip().toLowerCase() == KEYWORD_CTYPE2.toLowerCase())
-                                {
-                                    for (var valIndex = 0; valIndex < data.keywords[index].values.length; valIndex++)
-                                    {
-                                        // loop over records
-                                        if (data.keywords[index].values[valIndex] != AIA_SCALE_CTYPE2)
-                                        {
-                                            compatible = false;
-                                            break;
-                                        }
-                                    }
-                                }
-                            
-                                if (!compatible)
-                                {
-                                    break;
-                                }
-                            }
+                            ctype1Checked = true;
+                            ctype2Checked = true;
                         }
                         else
                         {
-                            // no keyword information was returned by jsoc_info, so we cannot tell if this series;
-                            // this happens if no rows were returned
-                            compatible = false;
+                            compatible = true;
                         }
-                        
+
+                        for (var index = 0; index < data.keywords.length; index++)
+                        {
+                            // we are assured that the CTYPE keywords will be in the jsoc_info results, 
+                            // even if the series does not have those keywords; if a keyword
+                            // does not exist in the series, jsoc_info prints 'Invalid Keylink'
+                            // for the keyword value (as long as the keyword is specified in the keys argument
+                            // to jsoc_info)
+                            if (compatible && !ctype1Checked && data.keywords[index].name.strip().toLowerCase() == KEYWORD_CTYPE1.toLowerCase())
+                            {
+                                for (var valIndex = 0; compatible && valIndex < data.keywords[index].values.length; valIndex++)
+                                {
+                                    // loop over records
+                                    if (data.keywords[index].values[valIndex] != AIA_SCALE_CTYPE1)
+                                    {
+                                        compatible = false;
+                                        break;
+                                    }
+                                }
+                                
+                                ctype1Checked = true;
+                            }
+
+                            if (compatible && !ctype2Checked && data.keywords[index].name.strip().toLowerCase() == KEYWORD_CTYPE2.toLowerCase())
+                            {
+                                for (var valIndex = 0; compatible && valIndex < data.keywords[index].values.length; valIndex++)
+                                {
+                                    // loop over records
+                                    if (data.keywords[index].values[valIndex] != AIA_SCALE_CTYPE2)
+                                    {
+                                        compatible = false;
+                                        break;
+                                    }
+                                }
+                                
+                                ctype2Checked = true;
+                            }
+                            
+                            // check to see if all SUs are online
+                            if (online === null && data.keywords[index].name.strip().toLowerCase() == KEYWORD_ONLINE.toLowerCase())
+                            {
+                                online = true;
+
+                                for (var valIndex = 0; valIndex < data.keywords[index].values.length; valIndex++)
+                                {
+                                    // loop over records
+                                    if (data.keywords[index].values[valIndex].toLowerCase() != 'y')
+                                    {
+                                        online = false;
+                                        break;
+                                    }
+                                }
+                            }
+                            
+                            if (size === null && data.keywords[index].name.strip().toLowerCase() == KEYWORD_SIZE.toLowerCase())
+                            {
+                                size = 0;
+
+                                for (var valIndex = 0; valIndex < data.keywords[index].values.length; valIndex++)
+                                {
+                                    // loop over records
+                                    size += data.keywords[index].values[valIndex];
+                                }
+                            }
+                            
+                            if (ctype1Checked && ctype2Checked && online !== null && size != null)
+                            {
+                                break;
+                            }
+                        }
+                    }
+                    else if (!aiaScaleCompatibilityChecked)
+                    {
+                        // no keyword information was returned by jsoc_info, so we cannot tell if this series;
+                        // this happens if no rows were returned
+                        compatible = false;
+                    }
+                    
+                    if (!aiaScaleCompatibilityChecked)
+                    {
                         // we definitively know whether or not aia_scale processing should be disabled
                         if (compatible)
                         {
@@ -880,10 +929,17 @@ function CreateRequestRSInfoCallback(callback, lastRecord)
                             $('OptionAiaScale').store({ 'disabledState' : true });
                         }
                     }
+                    
+                    if (online)
+                    {
+                        $('ExportRecordSet').store({ 'allSUsOnline' : true });
+                    }
                     else
                     {
-                        // processSeriesSelection determined that the series is not aia_scale compatible
+                        $('ExportRecordSet').store({ 'allSUsOnline' : false });
                     }
+
+                    $('ExportRecordSet').store({ 'sizeSU' : size });
                     
                     if (!$('OptionAiaScale').retrieve('disabledState', false))
                     {
@@ -1017,12 +1073,12 @@ function RequestRSInfo(errMsg, spec, lastRecord, callback)
         if (serverMap[host] == INTERNAL_SERVER)
         {
             jsocinfoCGI = JSOC_INFO;
-            arguments = { 'ds' : spec, 'n' : RecordLimit, 'op' : 'rs_list', 'key' : KEYWORD_CTYPE1 + ',' + KEYWORD_CTYPE2 + ',' + KEYWORD_LVL_NUM + ',' + KEYWORD_SPEC };
+            arguments = { 'ds' : spec, 'n' : RecordLimit, 'op' : 'rs_list', 'key' : KEYWORD_CTYPE1 + ',' + KEYWORD_CTYPE2 + ',' + KEYWORD_LVL_NUM + ',' + KEYWORD_SPEC + ',' + KEYWORD_ONLINE + ',' + KEYWORD_SIZE };
         }
         else
         {
             jsocinfoCGI = JSOCEXTINFO;
-            arguments = { 'dbhost' : EXTERNAL_SERVER, 'ds' : spec, 'n' : RecordLimit, 'op' : 'rs_list', 'key' : KEYWORD_CTYPE1 + ',' + KEYWORD_CTYPE2 + ',' + KEYWORD_LVL_NUM + ',' + KEYWORD_SPEC };
+            arguments = { 'dbhost' : EXTERNAL_SERVER, 'ds' : spec, 'n' : RecordLimit, 'op' : 'rs_list', 'key' : KEYWORD_CTYPE1 + ',' + KEYWORD_CTYPE2 + ',' + KEYWORD_LVL_NUM + ',' + KEYWORD_SPEC + ',' + KEYWORD_ONLINE + ',' + KEYWORD_SIZE };
         }
 
         var onSuccess = CreateRequestRSInfoCallback(callback, lastRecord);
@@ -1035,6 +1091,64 @@ function RequestRSInfo(errMsg, spec, lastRecord, callback)
             'onFailure': function() { RecordCount = null; $("RSCountPlace").innerHTML = 'ERROR - failure calling jsoc_info'; ExportRecordSetOK = 0; SeriesName = ''; $('ExportRecordSet').disabled = false; },
             'onComplete': function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
         });
+    }
+}
+
+// called after the click on "Submit Export Request" button when url_direct is the selected export method
+function CreateExportDownloadLink(err, callback)
+{
+    // extract arguments
+    var args = $('ExportRecordSet').retrieve('exportArgs', null);
+    var argsStr = null;
+    var host = null;
+    var drmsexportCGI = null;
+    var url = null;
+    var linkUrl = null;
+    var errMsg = null;
+    
+    if (err && err.length > 0)
+    {
+        errMsg = err;
+    }
+    else if (args === null)
+    {        
+        errMsg = 'arguments to drms-export CGI missing';
+    }
+    else
+    {
+        var count = $('ExportRecordSet').retrieve('count');
+        var sizeSU = $('ExportRecordSet').retrieve('sizeSU');
+        
+        Cookie.setData("state", 0);
+        Cookie.setData("requestid", "");    
+
+        $("ExportButtonMsg").innerHTML = 'Please use the link below to download data prior to initiating a new request';
+        ExportReadyOK = 2;
+        $("ExportButton").value = 'Submit Export Request'; // if user clicks, then export-complete message displays
+        $("ExportButton").style.backgroundColor = "#D8D8D8"; // grey
+
+        RequestID = 'N/A';
+        $("RequestIdPlace").update(RequestID);
+        $("RequestIDDesc").update("");
+        $("ExportStatus").update("Download size = " + Math.round(10 * sizeSU/1024/1024) / 10 + " MB");
+
+        host = Host.toLowerCase();
+        args.dbhost = serverMap[host];
+        args.webserver = host;
+
+        argsStr = Object.keys(args).map(function(key) { return key + '=' + encodeURIComponent(args[key]); }).join('&');    
+        url = 'http://' + host + '/cgi-bin/' + DRMS_EXPORT + '?' + argsStr;
+
+        // make an href - when the user clicks on this link, either a save-file dialog will display or, if the user
+        // has set-up their mime-type file association, the file will display in a viewer like ds9
+        $('DataLocation').update('Download');
+        linkUrl = new Element('a', { 'href' : url } ).update(args.spec);
+        $('ExportLocation').update(linkUrl);
+    }
+
+    if (callback !== null)
+    {
+        callback(errMsg);
     }
 }
 
@@ -1119,7 +1233,7 @@ function CreateProcessSeriesSelection(spec, series, seriesNs, callback)
                             }
                         }
                     }
-                    
+
                     // we can also determine compatibility with the MPT-selection check box
                     if (seriesNs.toLowerCase() == AIA_NAMESPACE)
                     {
@@ -1697,67 +1811,83 @@ function SetRecordLimit(callbackAfterJsocinfo)
   }
 
 function SetExportMethod(byWhom)
-  {
-  // byWhom = 0 for user click, else 1
-  if (byWhom == 0)
-    ExportQueryOK = 0;
-  var ExportMethodIndex = $("ExportMethod").selectedIndex;
-  ExportMethodValue = $("ExportMethod").options[ExportMethodIndex].value;
-  if (ExportMethodValue == "url_direct" || ExportMethodValue == "url_quick")
-    {
-    ExportMethodOK = 1;
-    $("ProcessRow").style.display="none";
-    var nProcs = ExportProcessingOptions.length;
-    $(ExportProcessingOptions[0].id).checked = true;
-    for (var iProc=1; iProc < nProcs; iProc++)
-      { 
-      var ExpOpt = ExportProcessingOptions[iProc];
-      $(ExpOpt.id).checked = false;
-      $(ExpOpt.rowid).style.display = "none";
-      }
-    if (ExportMethodValue == "url_direct")
-      {
-      $("ProtocolRow").style.display="table-row";
-      ExportMethodIsDirect = 1;
-      }
-    else
-      {
-      $("ProtocolRow").style.display="none";
-      ExportMethodIsDirect = 0;
-      }
-    $("FilenameFmtRow").style.display="none";
-    ExportProtocolValue = "as-is";
-    $("ExportProtocol").selectedIndex = 0;
-    ExportCompressValue = "";
-    // $("ExportCompress").selectedIndex = 1;
-    $("CompressRow").style.display="none";
-    $("RequestorRow").style.display="table-row";
-    $("NotifyRow").style.display="table-row";
-    }
-  else if (ExportMethodValue == "url" ||
-           ExportMethodValue == 'ftp' ||
-           ExportMethodValue == "url-tar" ||
-           ExportMethodValue == 'ftp-tar')
-    {
-    ExportMethodOK = 1;
-    $("ProcessRow").style.display="table-row";
-    $("ProtocolRow").style.display="table-row";
-    $("FilenameFmtRow").style.display="table-row";
-    $("RequestorRow").style.display="table-row";
-    $("NotifyRow").style.display="table-row";
-    // PHS turn off compression option
-    // if(ExportProtocolValue == "FITS")
-       // $("CompressRow").style.display="table-row";
+{
+    // byWhom = 0 for user click, else 1
     if (byWhom == 0)
-      $("ExportCompress").selectedIndex = 0;
-    }
-  else
     {
-    alert("Please set Method to url_quick, url_direct,  url, or ftp");
-    ExportMethodOK = 0;
+        ExportQueryOK = 0;
     }
-  CheckRediness();
-  }
+    
+    $("RequestIdPlace").update("");
+    $("RequestIDDesc").update("This is the ID tag for your export request. Use the Status Request button below to retrieve the links to the data.");  
+    $("ExportStatus").update("");
+    $("DataLocation").update("Data Location");
+    $("ExportLocation").update("");
+
+    ExportMethodValue = $("ExportMethod").options[$("ExportMethod").selectedIndex].value;
+    
+    if (ExportMethodValue == "url_direct" || ExportMethodValue == "url_quick")
+    {
+        ExportMethodOK = 1;
+
+        $("ProcessRow").style.display="none";
+        $(ExportProcessingOptions[0].id).checked = true;
+
+        for (var iProc=1; iProc < ExportProcessingOptions.length; iProc++)
+        { 
+            $(ExportProcessingOptions[iProc].id).checked = false;
+            $(ExportProcessingOptions[iProc].rowid).style.display = "none";
+        }
+
+        if (ExportMethodValue == "url_direct")
+        {
+            $("ProtocolRow").style.display="table-row";
+
+            // hide export status section - we will display a link only in the SubmitResponseDiv.ExportLocation span
+            $('ExportDataDiv').hide()      
+        }
+        else
+        {
+            $("ProtocolRow").style.display="none";
+        }
+
+        $("FilenameFmtRow").style.display="none";
+        ExportProtocolValue = "as-is";
+        $("ExportProtocol").selectedIndex = 0;
+        ExportCompressValue = "";
+        $("CompressRow").style.display="none";
+        $("RequestorRow").style.display="table-row";
+        $("NotifyRow").style.display="table-row";
+    }
+    else if (ExportMethodValue == "url" || ExportMethodValue == 'ftp' || ExportMethodValue == "url-tar" || ExportMethodValue == 'ftp-tar')
+    {
+        ExportMethodOK = 1;
+        $("ProcessRow").style.display="table-row";
+        $("ProtocolRow").style.display="table-row";
+        $("FilenameFmtRow").style.display="table-row";
+        $("RequestorRow").style.display="table-row";
+        $("NotifyRow").style.display="table-row";
+        // PHS turn off compression option
+        // if(ExportProtocolValue == "FITS")
+           // $("CompressRow").style.display="table-row";
+
+        // show export status section
+        $('ExportDataDiv').show();
+
+        if (byWhom == 0)
+        {
+            $("ExportCompress").selectedIndex = 0;
+        }
+    }
+    else
+    {
+        alert("Please set Method to url_quick, url_direct,  url, or ftp");
+        ExportMethodOK = 0;
+    }
+
+    CheckRediness();
+}
+
 
 function SetExportFilenameFmt()
   {
@@ -2384,33 +2514,80 @@ function CheckExportParamsInternal()
   {
       isOK = isOK * (ExportProcessingOK ? 1 : 0) * (ProcessingOK() ? 1 : 0);
   }
-  
-  if (isOK)
-    {
-    var protocolparam = $("ExportProtocolHidden").value;
-    var RecordSet = $("ExportRecordSet").value;
-    
-    exportparameters = new Hash( {"op" : $("ExportOpID").value,
-                 		      "ds" : RecordSet, 
-                                      "sizeratio" : $("ExportSizeRatio").value,
-                 		      "process" :  ExportProcessingArgs,
-                 		      "requestor" : $("ExportRequestor").value,
-                 		      "notify" : $("ExportNotify").value,
-                                      "method" : ExportMethodValue,
-                                      "filenamefmt" : $("ExportFilenameFmt").value,
-			 	      "format" : "json",
-                 		      "protocol" : protocolparam });
 
-    ExportShowQuery();
-    ExportQueryOK = 1;
-    }
-  else
+    if (isOK)
     {
-    exportparameters = null;
-    $("ExportParameters").innerHTML = "";
-    ExportQueryOK = 0;
+        if ($("ExportMethod").options[$("ExportMethod").selectedIndex].value == 'url_direct')
+        {
+            // if export method == 'url_quick':
+            //   1. make sure all SUs are online (use results of jsoc_info call used when the record-set was selected)
+            //   2. determine if we want to stream a tar file (if num fits files > 1) or fits file (if num fits files == 1)
+            //   3. call exportCGI, which calls drms-export-to-stdout with the arguments determined in #2, 
+            //      opening a pipe to receive results
+            //   4. stream an HTTP header back to the export user
+            //   5. stream the file (tar or fits)
+            if ($('ExportRecordSet').retrieve('count') > 1)
+            {
+                $("ExportCheckMsg").innerHTML = 'url_direct can only be used if exporting a single FITS file';
+                isOK = false;
+            }
+            else
+            {
+                if ($('ExportRecordSet').retrieve('allSUsOnline', false))
+                {
+                    var args = {};
+
+                    // call drms-export-to-stdout CGI
+                    // the tar file will have the name of the file; there will be only one image file in the tar file
+                    args.skiptar = 'true'; 
+                    args.spec = $('ExportRecordSet').value;
+                    args.filename = $("ExportFilenameFmt").value;
+                    // dbhost added to args when submit button clicked
+                
+                    // no compression - url_direct is for streaming a single FITS file, uncompressed
+                    args.compression = 'none';
+
+                    $('ExportRecordSet').store({ 'exportArgs' : args });
+                }
+            }
+        }
+        else
+        {
+            var protocolparam = $("ExportProtocolHidden").value;
+            var RecordSet = $("ExportRecordSet").value;
+    
+            exportparameters = new Hash( {  "op" : $("ExportOpID").value,
+                                            "ds" : RecordSet, 
+                                            "sizeratio" : $("ExportSizeRatio").value,
+                                            "process" :  ExportProcessingArgs,
+                                            "requestor" : $("ExportRequestor").value,
+                                            "notify" : $("ExportNotify").value,
+                                            "method" : ExportMethodValue,
+                                            "filenamefmt" : $("ExportFilenameFmt").value,
+                                            "format" : "json",
+                                            "protocol" : protocolparam });
+
+        }
+        
+        ExportShowQuery();
+        ExportQueryOK = 1;
     }
-  var isOK = CheckRediness();
+    else
+    {
+        exportparameters = null;
+        $("ExportParameters").innerHTML = "";
+        ExportQueryOK = 0;
+    }
+
+    if (isOK)
+    {
+        isOK = CheckRediness();
+    }
+    else
+    {
+        ExportQueryOK = 0;
+    }
+
   return isOK;
   }
   
@@ -2430,7 +2607,6 @@ function GetExport() // This is the code executed when the user clicks on the "S
   //  1 ready for status request
   //  2 export complete, OK or failure.
   //  3 Process started, waiting response
-
   $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   if (ExportReadyOK == 3)
     {
@@ -2462,6 +2638,20 @@ function GetExport() // This is the code executed when the user clicks on the "S
     ExportRedinessStatus = 0;
     $("ExportCheckMsg").innerHTML = "Export Request Complete, Please check updated export params before making another export request";
     return;
+    }
+    
+    if ($('ExportMethod').options[$('ExportMethod').selectedIndex].value == 'url_direct')
+    {
+        if ($('ExportRecordSet').retrieve('count') > 1)
+        {
+            $("ExportLocation").innerHTML =  '<b>Multiple files were requested - use the url_direct export method to request a single file only.<\/b><p>';
+        }
+        else
+        {
+            CreateExportDownloadLink(null, null);
+        }
+
+        return;
     }
 
     var doFetchReqFn = function()
@@ -2742,22 +2932,9 @@ function ProcessExportResponse(response)
     $("ExportLocation").innerHTML =  valuetable + "<br>";
     $("FileUploadInfo").innerHTML = "File upload done, " + data.rcount + " records requested.";
     if (ExportMethodValue == "url_quick")
-      {
-      if (ExportMethodIsDirect) // was url_direct on call
-        {
-        if (count > 1)
-            $("ExportLocation").innerHTML =  "<b>Multiple files returned, direct fetch not possible. <\/b><p>" +
-              valuetable + "<br>";
-        else
-            {
-            var path = encodeURI("http://jsoc.stanford.edu" + data.dir + "/" + data.data[0].filename);
-    //      doucment.write("<link type=\"application/fits\" href="+path+" />");
-    //      fetch image
-            }
-        }
-      else // url_quick on call
+    {
         $("ExportLocation").innerHTML = valuetable + "<br>";
-      }
+    }
     else
       $("ExportLocation").innerHTML =  valuetable + "<br>";
     if (ExportFromFileList == 1)
@@ -3031,7 +3208,7 @@ access the data.
   <tr>
     <td>RequestID</td>
     <td colspan="2"><span id="RequestIdPlace" style="width:12em;background-color:#FFF8DC;">&nbsp;</span></td>
-    <td>This is the ID tag for your export request.  Use the Status Request button below to retrieve the links to the data.</td>
+    <td id="RequestIDDesc">This is the ID tag for your export request.  Use the Status Request button below to retrieve the links to the data.</td>
   </tr>
 
   <tr>
@@ -3040,7 +3217,7 @@ access the data.
   </tr>
 
   <tr>
-    <td>Data Location</td>
+    <td id="DataLocation">Data Location</td>
     <td colspan="3"><span id="ExportLocation" style="background-color:#FFF8DC;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span ></td>
   </tr>
 
