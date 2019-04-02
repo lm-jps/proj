@@ -90,12 +90,21 @@ span.tip { background-color:blue;font-family:verdana;color:white;font-size:1em;f
 <script type="text/javascript">
 
 // Protect page from accidental BACK button
-var ON_BEFORE_UNLOAD_FXN = function () 
+var ON_BEFORE_UNLOAD_FXN = function (event) 
 {
-    return "Did you really mean to leave exportdata? Use CANCEL to stay here";
+    if ($('FileUploadFormID').retrieve('beforeunloadOverride', false))
+    {
+        $('FileUploadFormID').store({ 'beforeunloadOverride' : false })
+        window.onbeforeunload = null;
+    }
+    
+    if ($('FileUploadFormID').retrieve('beforeunloadEnabled', false))
+    {
+        // this message will never display - all browsers disallow this now; 
+        // return "Did you really mean to leave exportdata? Use CANCEL to stay here";
+        window.onbeforeunload = function() { return 'this does not matter - never gets executed'; };
+    }
 };
-
-window.onbeforeunload = ON_BEFORE_UNLOAD_FXN;
 
 function OnEnterKey(evt,action)
   {
@@ -382,6 +391,14 @@ function OnLoadInit()
   $("TipsOnOffButton").value = "Turn Help Off";
   
   $('RSCountPlace').up().setStyle({ 'max-width': '22em', 'overflow-wrap': 'break-word', 'word-wrap': 'break-word', 'word-break': 'break-all' });
+  
+    // make a handler for the form-changed event; if the form changes, we want to set a flag that enables the beforeunload handler;
+    // initially disable the beforeunload handler
+    $('FileUploadFormID').observe('change', function(event) { $('FileUploadFormID').store({ 'beforeunloadEnabled': true }); });
+    $('FileUploadFormID').store({ 'beforeunloadEnabled': false });
+    
+    // deal with onbeforeunload bs - can't figure out any other way to do this
+    setInterval(ON_BEFORE_UNLOAD_FXN, 500);
   
   window.focus();
   }
@@ -1142,8 +1159,13 @@ function CreateExportDownloadLink(err, callback)
         // make an href - when the user clicks on this link, either a save-file dialog will display or, if the user
         // has set-up their mime-type file association, the file will display in a viewer like ds9
         $('DataLocation').update('Download');
+                
+        // disable the beforeunload event handler
+        $('ExportLocation').observe('click', function(event) { window.onbeforeunload = null; $('FileUploadFormID').store({ 'beforeunloadOverride' : true }); });        
+        // make an href - when the user clicks on this link, either a save-file dialog will display or, if the user
+        // has set-up their mime-type file association, the file will display in a viewer like ds9
         linkUrl = new Element('a', { 'href' : url } ).update(args.spec);
-        $('ExportLocation').update(linkUrl);
+        $('ExportLocation').update(linkUrl);        
     }
 
     if (callback !== null)
