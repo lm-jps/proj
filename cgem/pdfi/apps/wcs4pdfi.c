@@ -97,10 +97,10 @@ void wcs2pdfi(int n, int m,
     int cols, rows;
     sizeofGrid(grid, n, m, &cols, &rows);
     
-    double minlat = crval2 + (0.5 - crpix2) * cdelt2;           // Edge is at 0.5 and rows+0.5
-    double maxlat = crval2 + (rows + 0.5 - crpix2) * cdelt2;
-    double minlon = crval1 + (0.5 - crpix1) * cdelt1;
-    double maxlon = crval1 + (cols + 0.5 - crpix1) * cdelt1;
+    double minlat = crval2 - m / 2. * cdelt2;
+    double maxlat = crval2 + m / 2. * cdelt2;
+    double minlon = crval1 - n / 2. * cdelt1;
+    double maxlon = crval1 + n / 2. * cdelt1;
     
     *a = (90. - maxlat) * DTOR;
     *b = (90. - minlat) * DTOR;
