@@ -495,10 +495,11 @@ int getInputArr(DRMS_Record_t *inRec, struct reqInfo *rInfo,
     double cdelt1 = drms_getkey_double(inRec, "CDELT1", &status); if (status) return 1;
     double cdelt2 = drms_getkey_double(inRec, "CDELT2", &status); if (status) return 1;
     
-    rInfo->c = (crval1 + (0.5 - rInfo->npadl - crpix1) * cdelt1) * RADSINDEG;						// min lon; original edge at 0.5
-    rInfo->d = (crval1 + (rInfo->n_o + 0.5 + rInfo->npadr - crpix1) * cdelt1) * RADSINDEG;			// max lon; orignal edge at col+0.5
-    rInfo->a = (90. - (crval2 + (rInfo->m_o + 0.5 + rInfo->mpadt - crpix2) * cdelt2)) * RADSINDEG;	// min co-lat; orignal edge at row+0.5
-    rInfo->b = (90. - (crval2 + (0.5 - rInfo->mpadb - crpix2) * cdelt2)) * RADSINDEG;				// max co-lat; original edge at 0.5
+    // Fixed Apr 6 2019
+    rInfo->c = (crval1 + (1.0 - rInfo->npadl - crpix1) * cdelt1) * RADSINDEG;   					// min lon
+    rInfo->d = (crval1 + (rInfo->n_o + 1.0 + rInfo->npadr - crpix1) * cdelt1) * RADSINDEG;			// max lon
+    rInfo->a = (90. - (crval2 + (rInfo->m_o + 1.0 + rInfo->mpadt - crpix2) * cdelt2)) * RADSINDEG;	// min co-lat
+    rInfo->b = (90. - (crval2 + (1.0 - rInfo->mpadb - crpix2) * cdelt2)) * RADSINDEG;			    // max co-lat
     
 //    printf("n=%d, m=%d\n", rInfo->n, rInfo->m);
 //    printf("n_o=%d, m_o=%d\n", rInfo->n_o, rInfo->m_o);
