@@ -17,7 +17,7 @@
 #include "img2helioVector.c"
 #include "fresize.h"
 #include "finterpolate.h"
-#include "diffrot.h"            // double diffrot[3]
+#include "diffrot.h"            // double diffrot_dop[3], diffrot[3]
 
 // Legacy macros
 
@@ -619,14 +619,11 @@ int getDoppCorr(DRMS_Record_t *inRec, int *dims, double *doppCorr)
     double sinlon;
     double sinlat_nobp, sinlon_nobp, coslat_nobp;
     
-//    printf("diffrot=%lf, %lf, %lf\n", diffrot[0], diffrot[1], diffrot[2]);
-    
-    // Jan 28 2019, Should be Read from input record
-    // If fails then fall back to diffrot
+    // Apr 27 2019, set to Snodgrass rate {2.83640,-0.3441, -0.5037}
     double a0, a2, a4;
-    a0 = drms_getkey_double(inRec, "DIFF_A0", &status); if (status) { a0 = diffrot[0]; }
-    a2 = drms_getkey_double(inRec, "DIFF_A2", &status); if (status) { a2 = diffrot[1]; }
-    a4 = drms_getkey_double(inRec, "DIFF_A4", &status); if (status) { a4 = diffrot[2]; }
+    a0 = diffrot_dop[0];
+    a2 = diffrot_dop[1];
+    a4 = diffrot_dop[2];
     
     for (int row = 0; row < ny; row++) {
         for (int col = 0; col < nx; col++) {
@@ -792,11 +789,10 @@ int writeOutput(DRMS_Record_t *inRec, DRMS_Record_t *outRec, struct reqInfo *req
         drms_setkey_int(outRec, "HARPNUM", req->harpnum);        // Jan 28 XS
     }
     
-    // Already copied if exists; otherwise use default
-    double a0, a2, a4;
-    a0 = drms_getkey_double(inRec, "DIFF_A0", &status); if (status) { drms_setkey_double(outRec, "DIFF_A0", diffrot[0]); }
-    a2 = drms_getkey_double(inRec, "DIFF_A2", &status); if (status) { drms_setkey_double(outRec, "DIFF_A2", diffrot[1]); }
-    a4 = drms_getkey_double(inRec, "DIFF_A4", &status); if (status) { drms_setkey_double(outRec, "DIFF_A4", diffrot[2]); }
+    // Tracking rate, not Doppler correction DR rate
+    drms_setkey_double(outRec, "DIFF_A0", diffrot[0]);
+    drms_setkey_double(outRec, "DIFF_A2", diffrot[1]);
+    drms_setkey_double(outRec, "DIFF_A4", diffrot[2]);
     
     drms_setkey_float(outRec, "CRPIX1", req->ncol/2. + 0.5);
     drms_setkey_float(outRec, "CRPIX2", req->nrow/2. + 0.5);
@@ -1016,7 +1012,7 @@ void findCoord(struct reqInfo *req, struct ephemeris *ephem,
     // Rotate
     
     double latc = req->latref;
-    double difr = diffrot[0] + diffrot[1] * pow(sin(latc),2) + diffrot[2] * pow(sin(latc),4);
+    double difr = diffrot[0] + diffrot[1] * pow(sin(latc),2) + diffrot[2] * pow(sin(latc),4);       // pipeline rate {2.71390, -0.4050, -0.4220}
     double dt = ephem->t_rec - req->tref;
     double lonc = req->lonref + dt * difr * 1.0e-6;      // urad/s to rad
     mapCenter[0] = lonc / RADSINDEG;

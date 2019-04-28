@@ -36,7 +36,7 @@
 #include <sys/time.h>
 #include <math.h>
 #include <string.h>
-#include "diffrot.h"        // double diff_rot[3];
+#include "diffrot.h"        // double diffrot_dop[3], diffrot[3];
 #include "jsoc_main.h"
 
 // Macros
@@ -127,7 +127,7 @@ int DoIt(void)
     char *outQuery = (char *) params_get_str(&cmdparams, "out");
     int writeImg = params_isflagset(&cmdparams, "w");
     
-    double a0 = diffrot[0], a2 = diffrot[1], a4 = diffrot[2];
+    double a0 = diffrot_dop[0], a2 = diffrot_dop[1], a4 = diffrot_dop[2];
 //    printf("a0=%lf, a2=%lf, a4=%lf\n", a0, a2, a4);
     
     /* Input data */
