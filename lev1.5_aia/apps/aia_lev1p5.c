@@ -287,7 +287,12 @@ int DoIt ()
        cdelt2 = drms_getkey_float(inprec, "CDELT2", &status);
        if (status) DIE("CDELT2 not found!");
        if (rescale) {
+         float r_sun =  drms_getkey_float(inprec, "R_SUN", &status);
          mag = fabs(cdelt1 / scale_to);
+         if (!status) {
+           r_sun *= mag;
+           drms_setkey_float(outrec, "R_SUN", r_sun);
+         }
          cdelt1 /= mag;
          cdelt2 /= mag;
          drms_setkey_float(outrec, "CDELT1", cdelt1);
