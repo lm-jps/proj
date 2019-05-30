@@ -25,9 +25,8 @@ $to_list = join ",", $to_list, 'green@lmsal.com',
         'wolfsonjake@gmail.com', 'mbobra@sun.stanford.edu',
         'aanorton@stanford.edu', 'baldner@sun.stanford.edu',
         'william.d.pesnell@nasa.gov', 'cheung@lmsal.com',
-        '4084317110@txt.att.net', 'lan.lai@lmco.com',
-        '4086125678@vtext.com', 'thomas.j.cruz@lmco.com',
-        'sunspotk@aol.com', '4089338703@txt.att.net'
+        '4084317110@txt.att.net', '4086125678@vtext.com', 
+        '4089338703@txt.att.net'
         unless $test;
 
 $msg_file = "$ENV{HOME}/hmi_cam_anomaly.txt";
