@@ -752,16 +752,14 @@ int do_ingest(long long bbrec, long long eerec, const char *dpath)
         float tempccd, tempgt, tempsmir, tempfpad;
         if(fabs(tobs[i] - t_obs0) > 300.0) {
           char *dstemp = "aia.temperature_summary_300s";
-          char *selstr = "select max(t_start) from ";
-          char *whrstr = "where t_start <= ";
+          char tobs_str[32];
           int nr;
           if(rs_t) {
             drms_close_records(rs_t, DRMS_FREE_RECORD);
             rs_t = NULL;
           }
-          sprintf(open_dsname, "%s[? t_start=(%s %s %s %f) ?]",
-                  dstemp, selstr, dstemp, whrstr, tobs[i]);
-          //printf(" %s\n", open_dsname);
+          sprint_time(tobs_str, tobs[i], "Z", 0);
+          sprintf(open_dsname, "%s[%s]", dstemp, tobs_str);
           rt = NULL;
           rs_t = drms_open_records(drms_env, open_dsname, &rstatus);
           if(rstatus) printk("Can not open temperature series.\n");
