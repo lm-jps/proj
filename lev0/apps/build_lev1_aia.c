@@ -758,7 +758,7 @@ int do_ingest(long long bbrec, long long eerec, const char *dpath)
             drms_close_records(rs_t, DRMS_FREE_RECORD);
             rs_t = NULL;
           }
-          sprint_time(tobs_str, tobs[i], "Z", 0);
+          sprint_time(tobs_str, tobs[i], "TAI", 0);
           sprintf(open_dsname, "%s[%s]", dstemp, tobs_str);
           rt = NULL;
           rs_t = drms_open_records(drms_env, open_dsname, &rstatus);
