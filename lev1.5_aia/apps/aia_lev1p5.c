@@ -383,7 +383,7 @@ int DoIt ()
         if (status) DIE("drms_array_create failed!");
         for (i=0; i<wide*high; i++) {
           if (is_aia) {
-            if (*(output_array+i)<0) *(output_array+i)=0;
+            if (*(output_array+i) < -8) *(output_array+i) = -8;
             if (*(output_array+i)>z) *(output_array+i)=z;
             }
           *((float *)(outarr->data)+i) = *(output_array+i);
