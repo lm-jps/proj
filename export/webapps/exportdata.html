@@ -158,7 +158,6 @@ var ExportMethodOK;
 var ExportFilenameFmtOK;
 var ExportProcessingOptions;
 var ExportUserOK;
-var ExportNotifyOK;
 var ExportReadyOK;
 var TipsEnabled;
 var TipsCreated = 0;
@@ -198,11 +197,14 @@ var colorOptionSet = "#FFCC66";
 var colorPink = "#FFD8D8";
 var colorDarkPink = "#FFB0B0";
 var colorRed = "#D88080";
-var colorDarkRed = "#FF8080";
+var colorDarkRed = "#C00000";
 var colorRealRed = "#FF0000";
+var colorDarkishRed = "#FF8080"
+var colorDarkBlue = "#0000B0";
 var colorWhite = "#FFFFFF";
 var colorBlack = "#000000";
 var colorGreen = "#80FF80";
+var colorDarkGreen = "#009000";
 var colorYellow = "#FFF8DC";
 
 
@@ -224,7 +226,6 @@ function initVars()
   ExportMethodOK = 1;
   ExportFilenameFmtOK = 1;
   ExportUserOK = 0;
-  ExportNotifyOK = 0;
   ExportReadyOK = 2;
   TipsEnabled = 1;
   uploadOndoneAction = 0;
@@ -1153,7 +1154,7 @@ function CreateExportDownloadLink(err, callback)
         args.dbhost = serverMap[host];
         args.webserver = host;
 
-        argsStr = Object.keys(args).map(function(key) { return key + '=' + encodeURIComponent(args[key]); }).join('&');    
+        argsStr = Object.keys(args).map(function(key) { return key + '=' + encodeURIComponent(args[key]); }).join('&');
         url = 'http://' + host + '/cgi-bin/' + DRMS_EXPORT + '?' + argsStr;
 
         // make an href - when the user clicks on this link, either a save-file dialog will display or, if the user
@@ -1598,7 +1599,7 @@ function GetDefaultFormat()
 				}
 				$("AjaxBusy").innerHTML = Ajax.activeRequestCount;
 			},
-			onFailure: function() { alert('Something went wrong...'); },
+			onFailure: function() { alert('[ GetDefaultFormat ] Something went wrong...'); },
 			onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
 		});
 	};
@@ -1991,7 +1992,6 @@ function runSetProcessing(intervalFn, spCallback)
 	if (typeof ichecked == 'undefined')
 	{
 		// nothing to do; should not get here because each function instance handles one SetProcessing() call
-		alert('bad')
 		clearInterval(intervalFn);
 		setProcessingRunning = false;
 		return;
@@ -2380,8 +2380,9 @@ function ExportShowQuery()
   }
 
 function CheckRediness()
-  {
-  var status = ExportQueryOK * ExportRecordSetOK * ExportMethodOK * ExportFilenameFmtOK * ExportProtocolOK * (ExportNotifyOK==1);
+{
+    var notificationAddressOK = NotificationAddressRegistered();
+    var status = ExportQueryOK * ExportRecordSetOK * ExportMethodOK * ExportFilenameFmtOK * ExportProtocolOK * notificationAddressOK;
   
   if ($("ProcessingCheckbox").checked)
   {
@@ -2405,13 +2406,13 @@ function CheckRediness()
     }
   ExportRedinessStatus = status;
   return(status);
-  }
+}
 
 // This is a callback function. It is invoked after the email check has completed.
 function SetExportParams()
 {
-    // All these variables on the RHS are global.
-    var isOK = ExportRecordSetOK * ExportMethodOK * ExportFilenameFmtOK * ExportProtocolOK * (ExportNotifyOK==1);
+    var notificationAddressOK = NotificationAddressRegistered();
+    var isOK = ExportRecordSetOK * ExportMethodOK * ExportFilenameFmtOK * ExportProtocolOK * notificationAddressOK;
     
     if ($("ProcessingCheckbox").checked)
     {
@@ -2453,7 +2454,7 @@ function SetExportParams()
 // button. 
 // A lot of the calls in this function are asynchronous. 
 function CheckExportParamsInternal()
-  {
+{
     // complete the SetProcessing part of this check
     // If there was an error in the processing options, then ExportProcessingOK is not true.
     // ProcessingOK() is synchronous.
@@ -2463,79 +2464,80 @@ function CheckExportParamsInternal()
     }
     else
     {
-  
-  
-  if ($("ExportRecordSet").value.length == 0)
-  {
-    $("ExportCheckButton").style.backgroundColor = colorYellow;
-    $("ExportCheckMsg").innerHTML = "Please enter a record-set specification.";
-    return 0;
-  }
-  
-  if (RecordCount === null)
-    {
-    $("ExportCheckButton").style.backgroundColor = colorYellow;
-    $("ExportCheckMsg").innerHTML = "Still counting records, wait a second then retry";
-    return(0);
-    }
+        if ($("ExportRecordSet").value.length == 0)
+        {
+            $("ExportCheckButton").style.backgroundColor = colorYellow;
+            $("ExportCheckMsg").innerHTML = "Please enter a record-set specification.";
+            return 0;
+        }
+
+        if (RecordCount === null)
+        {
+            $("ExportCheckButton").style.backgroundColor = colorYellow;
+            $("ExportCheckMsg").innerHTML = "Still counting records, wait a second then retry";
+            return(0);
+        }
     
-  while (1) // use with break instead of goto done.
-    {
-    if (ExportRecordSetOK == 0)
-      {
-        $("ExportCheckMsg").innerHTML = "Invalid record-set specification";
-        break;
-      }
-    SetExportMethod(1);
-    if (ExportMethodOK == 0)
-      {
-      $("ExportCheckMsg").innerHTML = "Method not given, Enter export method then retry export request.";
-      break;
-      }
-    SetExportFilenameFmt();
-    if (ExportFilenameFmtOK == 0)
-      {
-      $("ExportCheckMsg").innerHTML = "FilenameFmt not given, Enter FilenameFmt then retry export request.";
-      break;
-      }
-      
-    SetExportProtocol(1);
-    if (ExportProtocolOK == 0)
-      {
-      $("ExportCheckMsg").innerHTML = "Protocol not given, Enter export protocol then retry export request.";
-      break;
-      }
-    if ((ExportProtocolValue == "FITS" || ExportProtocolValue == "as-is") && ExportMethodValue != "url_quick")
-      {
-      SetExportCompress();
-      }
-    else if (protocolEnable)
-      {
-      ProtocolImageCheck();
-      }      
-      
-    if (ExportNotifyOK == 0 || ExportNotifyOK == 2)
-      {
-      // This is an asynchronous call, so we need to put the following "isOK" check into a
-      // callback function. Return isOK == 0 since we do not know if it is OK to do an export
-      // at this point.
-      startEmailCheck(SetExportParams);
-      return false;
-      break;
-      }
-    $("ExportCheckMsg").innerHTML = "OK to proceed";
-    break;
-    }
-    
+        while (1) // use with break instead of goto done.
+        {
+            if (ExportRecordSetOK == 0)
+            {
+                $("ExportCheckMsg").innerHTML = "Invalid record-set specification";
+                break;
+            }
+        
+            SetExportMethod(1);
+            if (ExportMethodOK == 0)
+            {
+                $("ExportCheckMsg").innerHTML = "Method not given - enter export method then retry export request.";
+                break;
+            }
+        
+            SetExportFilenameFmt();
+            if (ExportFilenameFmtOK == 0)
+            {
+                $("ExportCheckMsg").innerHTML = "FilenameFmt not given, Enter FilenameFmt then retry export request.";
+                break;
+            }
+
+            SetExportProtocol(1);
+            if (ExportProtocolOK == 0)
+            {
+                $("ExportCheckMsg").innerHTML = "Protocol not given, Enter export protocol then retry export request.";
+                break;
+            }
+        
+            if ((ExportProtocolValue == "FITS" || ExportProtocolValue == "as-is") && ExportMethodValue != "url_quick")
+            {
+                SetExportCompress();
+            }
+            else if (protocolEnable)
+            {
+                ProtocolImageCheck();
+            }      
+
+            // This is an asynchronous call, so we need to put the following "isOK" check into a
+            // callback function. Return isOK == 0 since we do not know if it is OK to do an export
+            // at this point.
+
+            // this may or may not be an asynchronous call; $("ExportNotify").retrieve('valid', false) will either synchronously
+            // return the acceptability of the notification address, or it will be updated when the asynchronous call completes; 
+            // if this is an asynchronous call, then $("ExportNotify").retrieve('valid', false) below will indicate that
+            // the notification address is not acceptable, and the user will need to click on "Check Params for Export"
+            // again
+            startEmailCheck(SetExportParams);
+            break;
+        }
     }
 
     // note - ExportQueryOK is missing here
-  var isOK = ExportRecordSetOK * ExportMethodOK * ExportFilenameFmtOK * ExportProtocolOK * (ExportNotifyOK==1);
-  
-  if ($("ProcessingCheckbox").checked)
-  {
+    var notificationAddressOK = NotificationAddressRegistered();
+    var isOK = ExportRecordSetOK * ExportMethodOK * ExportFilenameFmtOK * ExportProtocolOK * notificationAddressOK;
+
+    if ($("ProcessingCheckbox").checked)
+    {
       isOK = isOK * (ExportProcessingOK ? 1 : 0) * (ProcessingOK() ? 1 : 0);
-  }
+    }
 
     if (isOK)
     {
@@ -2591,8 +2593,12 @@ function CheckExportParamsInternal()
 
         }
         
-        ExportShowQuery();
-        ExportQueryOK = 1;
+        if (isOK)
+        {
+            $("ExportCheckMsg").innerHTML = "OK to proceed";
+            ExportShowQuery();
+            ExportQueryOK = 1;
+        }
     }
     else
     {
@@ -2646,7 +2652,7 @@ function GetExport() // This is the code executed when the user clicks on the "S
     $("ExportLocation").innerHTML = "";
     $("ExportButtonMsg").innerHTML = "Export request submitted, please wait...";
     $("ExportButton").value = "Processing ...";
-    $("ExportButton").style.backgroundColor = colorDarkRed;
+    $("ExportButton").style.backgroundColor = colorDarkishRed;
     $("ExportCheckButton").style.backgroundColor = colorYellow;
     }
   else if (ExportReadyOK == 1)
@@ -2715,7 +2721,7 @@ function GetExport() // This is the code executed when the user clicks on the "S
                 $("ExportButton").value = "FAILURE ...";
                 $("ExportButton").style.backgroundColor = colorDarkPink;
                 ExportReadyOK = 2;
-                alert('Something went wrong...');
+                alert('[ GetExport ] Something went wrong...');
             },
             onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
         });
@@ -2844,7 +2850,7 @@ function GetReExport()
             ExportReadyOK = 2;
             $("ReExportButton").value = "FAILURE ...";
             $("ReExportButton").style.backgroundColor = colorDarkPink;
-            alert('Something went wrong...');
+            alert('[ GetReExport ] Something went wrong...');
         },
         onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
     });
@@ -3163,7 +3169,7 @@ function GetStatus()
       $("StatusButtonMsg").innerHTML = "Export Failure, Problem at JSOC facility.";
       $("StatusButton").value = "FAILURE ...";
       $("StatusButton").style.backgroundColor = colorDarkPink;
-      alert('Something went wrong...');
+      alert('[ GetStatus ] Something went wrong...');
       ExportReadyOK = 2;
       },
     onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
