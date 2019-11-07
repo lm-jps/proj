@@ -637,6 +637,9 @@ int do_ingest(long long bbrec, long long eerec, const char *dpath)
 	// Patch 5 - camera 2 lookup table corruption 30 May 2019
 	if (NEED_PATCH5(fsnx))
 	    do_patch5(l0l1->adata0);
+	// Patch 6 - camera 1 lookup table corruption 06 Nov 2019
+	if (NEED_PATCH6(fsnx))
+	    do_patch6(l0l1->adata0);
 
         l0l1->dat1.adata1 = &data1;
         l0l1->himgcfid = drms_getkey_int(rs0, "HIMGCFID", &rstatus);

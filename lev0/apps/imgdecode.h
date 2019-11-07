@@ -101,5 +101,7 @@ int imgstat(IMG *img, STAT *stat);
 #define NEED_PATCH4(fsn) (!(fsn%2) && (fsn<=124174986) && (fsn>=124146982))
 // Patch 5: camera 2 lookup table corruption 30 May 2019
 #define NEED_PATCH5(fsn) ((fsn%2) && (fsn<=157177859) && (fsn>=157165643))
+// Patch 6: camera 1 lookup table corruption 06 Nov 2019
+#define NEED_PATCH6(fsn) (!(fsn%2) && (fsn<=164520196) && (fsn>=164517734))
 
 #endif
