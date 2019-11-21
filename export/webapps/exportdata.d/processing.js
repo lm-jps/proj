@@ -1600,6 +1600,8 @@ function ProcessingInit()
   ExpOpt.Size = 1.0;
     ExpOpt.argsReady = true;
     ExpOpt.paramsValid = null;
+    // to determine if checkbox is disabled, must check record-set keyword values
+    ExpOpt.disabled_state_rec_dep = true;
   ExportProcessingOptions[iOpt] = ExpOpt;
   AiaScaleOption = iOpt;
 
@@ -1691,15 +1693,25 @@ function ProcessingInit()
 
   var nOpt = iOpt + 1;
 
-for (iOpt=1; iOpt<nOpt; iOpt++)
+    for (iOpt=1; iOpt<nOpt; iOpt++)
     {
-    var id;
-    ExpOpt = ExportProcessingOptions[iOpt];
-    ExpOpt.Init(1);
-    $(ExpOpt.id).checked = false;
-    $(ExpOpt.rowid).style.display = "none";
+        var id;
+
+        ExpOpt = ExportProcessingOptions[iOpt];
+        ExpOpt.Init(1);
+        $(ExpOpt.id).checked = false;
+        $(ExpOpt.rowid).style.display = "none";
+    
+        if (ExpOpt.hasOwnProperty('disabled_state_rec_dep'))
+        {
+            $(ExpOpt.id).store({ 'disabled_state_rec_dep' : ExpOpt.disabled_state_rec_dep });
+        }
+        else
+        {
+            $(ExpOpt.id).store({ 'disabled_state_rec_dep' : false });
+        }
     }
-  }
+}
 
 function ProcessingOK()
 {

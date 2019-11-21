@@ -199,7 +199,8 @@ var colorDarkPink = "#FFB0B0";
 var colorRed = "#D88080";
 var colorDarkRed = "#C00000";
 var colorRealRed = "#FF0000";
-var colorDarkishRed = "#FF8080"
+var colorDarkishRed = "#FF8080";
+var colorBrightOrange = '#F9441F';
 var colorDarkBlue = "#0000B0";
 var colorWhite = "#FFFFFF";
 var colorBlack = "#000000";
@@ -1896,9 +1897,15 @@ function ProcessRSChange(error)
                     // start asynchronous call to determine the processing option's disabledState value; the record-set will have
                     // already been entered, and the [$] resolved into an actual record specification; this asynchronous call
                     // could take a long time to complete
-                    RequestRSInfo('', $("ExportRecordSet").value, $("ExportRecordSet").retrieve('last_record', false), function(errMsg) { $('ProcessingCheckbox').disabled = false; });
+                    RequestRSInfo('', $("ExportRecordSet").value, $("ExportRecordSet").retrieve('last_record', false), function(errMsg) { $('ProcessingCheckbox').disabled = false; $('ProcessingCheckboxLabel').style.color = 'black'; $('ProcessingCheckboxLabel').style['font-weight'] = 'normal'; $('ProcessingWaitMessage').style.display = 'none'; });
                     need_rs_info = true;
                     break; // call RequestRSInfo 1x
+                }
+                else
+                {
+                    $('ProcessingCheckboxLabel').style.color = 'black';
+                    $('ProcessingCheckboxLabel').style['font-weight'] = 'normal';
+                    $('ProcessingWaitMessage').style.display = 'none';
                 }
             }
         }
@@ -1977,10 +1984,18 @@ function ExportNewRS()
     // disable the 'Enable Processing' checkbox - will be enabled once the record-set has been examined for processing-step checkbox 
     // disabled state
     $('ProcessingCheckbox').disabled = true;
-    
+    $('ProcessingCheckboxLabel').style.color = 'grey';
+        
     // close the processing checkboxes
     $("ProcessingCheckbox").checked = false;
     ProcessingEnabled();
+
+    // display a message notifying user that we are working on enabling processing options (must examine all records)
+    $('ProcessingWaitMessage').style.color = colorBrightOrange;
+    $('ProcessingWaitMessage').style['font-weight'] = 'bold';
+    $('ProcessingWaitMessage').style.opacity = 1.0;
+    $('ProcessingWaitMessage').innerHTML = 'Determining applicable processing steps...please wait...';
+    $('ProcessingWaitMessage').style.display = 'table-row';
 
     // disable processing step checkboxes for now, since we are about to change the record-set, and some processing steps
     // need the record-set to be present

@@ -67,20 +67,16 @@
 
     <!-- Processing Select -->
     <tr id="ProcessRow">
+      <td>Processing</td>
+      <td><span id="ProcessingHelp" class="tip">?</span></td>
       <td>
-        Processing
-      </td>
-      <td>
-        <span id="ProcessingHelp" class="tip">?</span>
-      </td>
-      <td colspan="2">
         <span id="ProcessingShowCheckbox">
           <input id="ProcessingCheckbox" type="checkbox" checked="0" onChange="ProcessingEnabled();" >
-          &nbsp; Enable Processing
+          <label id='ProcessingCheckboxLabel' for='ProcessingCheckbox'>&nbsp; Enable Processing</label>
         </span>
-        <span id="ProcessingWaitMessage" style="display:none">Select RecordSet before selecting processing</span>
         <span id="ExportProcessing" style="display:none" ></span>
       </td>
+      <td><span id="ProcessingWaitMessage" style="display:none">Select RecordSet before selecting processing</span></td>
     </tr>
     <!-- END Processing Select -->
 
