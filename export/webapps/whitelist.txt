@@ -5,6 +5,7 @@ aia.master_pointing3h
 aia.response
 aia.temperature_summary_300s
 aia_test.master_pointing3h
+cgem.doppcal_720s
 cgem.lorentz
 cgem.pdfi_input
 cgem.pdfi_output
