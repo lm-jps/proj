@@ -155,7 +155,7 @@ int DoIt(void)
         
     // Process info
     
-    int index_start = 0, index_end = nrecs - 1, index_ref = 0;
+    int index_start = nrecs - 1, index_end = 0, index_ref = 0;
     
     for (int irec = 0; irec < nrecs; irec++) {
         
