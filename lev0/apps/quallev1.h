@@ -27,7 +27,7 @@
 #define Q_ACS_SAFE 0x8000	//ACS_SAFE == 'YES' . safemode flag set
 #define Q_IMG_TYPE 0x10000	//Dark image
 #define Q_LOOP_OPEN 0x20000	//HWLTNSET == "OPEN" or AISTATE == "OPEN"
-#				//ISS Loop Open
+/*				//ISS Loop Open */
 //#18    Calibration Image	//based on FID range. See Rock
 #define Q_CAL_IMG 0x40000	//Calibration image
 #define Q_CALM_IMG 0x80000	//HMI cal mode image
