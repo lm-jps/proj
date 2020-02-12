@@ -8,7 +8,6 @@ $to_list = join ",", 'jps@lmsal.com',
           '6507436500@tmomail.net',
           '6509968590@txt.att.net',
           '4088964682@messaging.sprintpcs.com',
-          '7192333079@vmobl.com',
           'mark.cheung@gmail.com';
 
 $to_list = join ",", $to_list, 'green@lmsal.com',
