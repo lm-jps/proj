@@ -4,7 +4,7 @@
 <meta HTTP-EQUIV="Content-Type" content="text/html; charset=iso-8859-1">
 <title>JSOC E-Mail Registry</title>
 
-<script type="text/javascript" src="js/prototype-1.6.0.3.js"></script>
+<script type="text/javascript" src="js/prototype-1.6.1.js"></script>
 <script type="text/javascript" src="js/cookies.js"></script>
 <script type="text/javascript" src="js/prototip.js"></script>
 <link rel="stylesheet" type="text/css" href="css/prototip.css" >
@@ -38,7 +38,7 @@ function initVars()
   $("ExportRequestor").value = "";
   $("ExportNotify").value = "solarmail";
   email_initVars();
-  
+
   }
 
 function getargs()
@@ -89,7 +89,7 @@ function CreateTips()
 
   MainTips(tipstyle);
   TipsCreated = 1;
-  $$("span.tip").each(function(showspan){showspan.show();}); 
+  $$("span.tip").each(function(showspan){showspan.show();});
   }
 </script>
 
@@ -109,10 +109,10 @@ JSOC data exports require an email address to be validated before an export requ
 This page can be used to pre-register an email address so that future export requests using the
 registered email address can proceed without interruption.
 Please enter the email address you will use to be notified of completed data export requests
-in the "Notify" box. 
+in the "Notify" box.
 <p>
 If you have a current SolarMail address you may put "solarmail" in the Notify
-box (no quotes) put your SolarMail name in the "Requester" box. 
+box (no quotes) put your SolarMail name in the "Requester" box.
 <p>
 If you are not using SolarMail for data export  notification then you may
 leave the Requester field blank or fill it with your name so we can use it in any communication with
