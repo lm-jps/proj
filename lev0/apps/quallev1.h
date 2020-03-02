@@ -36,8 +36,10 @@
 
 #define Q_THERM_RECOV 0x400000	//HMI thermal recovery
 #define Q_LUNAR_TRAN 0x800000	//HMI lunar transit
+#define Q_OCCULT 0x1000000      // Hard shadow in AIA FOV
+#define Q_ATMOS_EUV_ABS 0x2000000  // Earth atmospheric EUV absorption
 
-//#bits 24 - 29 spare
+//#bits 26 - 29 spare
 
 //#30 near real time mode (formerly quicklook)
 #define Q_NRT	  0x40000000	//near real time mode (formerly quicklook)
