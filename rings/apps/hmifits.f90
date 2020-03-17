@@ -234,7 +234,7 @@
 
       if (verbose .eq. 1) then
         write(*,'("emult = ",1pd13.4)') emult
-	write(*,'("kmin = ",1pd10.4,"kmax = ",1pd10.4)') kmin,kmax
+	write(*,'("kmin = ",1pd13.4,"kmax = ",1pd13.4)') kmin,kmax
       endif
       
 !

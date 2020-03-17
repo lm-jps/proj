@@ -5,6 +5,8 @@
 #   i.e. about 9 hours for the 5-deg series, every 15 deg (27 hours) for
 #   the 15-deg series, and 30 deg (54 hours) for the 30-deg series
 
+set SCRIPT_VERSION = 2.3
+
 @ TEST = 0	# set to 1 for production in namespace hmi_test
 set TW
 if ("$1" =~ '-test') then
@@ -239,17 +241,17 @@ while ($CROT <= $CR1)
     @ CVG += `echo $ECVG | awk -F. '{print $2}' | sed  -e "s/^0*//"`
   endif
   rm $TLIST
-  if ($CVG > $MINCV) then
 # check gatekeeper for permission to proceed
-    if ($TEST) then
+  if ($TEST) then
       set RES = (`$TURN $PIKE -test`)
-    else
+  else
       set RES = (`$TURN $PIKE`)
-    endif
-    @ NOGO = $RES[1]
-    if ($NOGO) goto TURNOUT
-    @ RUNNING++
-    set NOW = `date +%Y.%m.%d_%T`
+  endif
+  @ NOGO = $RES[1]
+  if ($NOGO) goto TURNOUT
+  @ RUNNING++
+  set NOW = `date +%Y.%m.%d_%T`
+  if ($CVG > $MINCV) then
     set QINFO = `$QSUB -q $QUEUE -e $QRES -o $QRES $SCRIPT $ARG 5 $CROT $CLON`
     if ($#QINFO) then
       set QPID = `echo $QINFO | awk '{print $3}'`
@@ -259,13 +261,12 @@ while ($CROT <= $CR1)
     endif
   else
     echo Processing of 5-deg $CROT\:$CLON skipped: coverage = $ECVG >> $RLOG
-    set NOW = `date +%Y.%m.%d_%T`
     set QINFO = `$QSUB -q $QUEUE -e $QRES -o $QRES $RUNMAI $ARG 5 $CROT\:$CLON`
     if ($#QINFO) then
       set QPID = `echo $QINFO | awk '{print $3}'`
       echo $NOW $RUNMAI $ARG 5 $CROT\:$CLON submitted to $QUEUE as job $QPID >> $RLOG
     else
-      echo $NOW Failed to submit $SCRIPT $ARG 5 $CROT $CLON >> $RLOG
+      echo $NOW Failed to submit $RUNMAI $ARG 5 $CROT\:$CLON >> $RLOG
     endif
   endif
   if ($CLON % 15 == 0) then
@@ -283,18 +284,9 @@ while ($CROT <= $CR1)
       @ CVG += `echo $ECVG | awk -F. '{print $2}' | sed  -e "s/^0*//"`
     endif
     rm $TLIST
+    @ RUNNING++
+    set NOW = `date +%Y.%m.%d_%T`
     if ($CVG > $MINCV) then
-# check gatekeeper for permission to proceed
-      if ($TEST) then
-	set RES = (`$TURN $PIKE -test`)
-      else
-	set RES = (`$TURN $PIKE`)
-      endif
-      @ NOGO = $RES[1]
-      if ($NOGO) goto TURNOUT
-
-      @ RUNNING++
-      set NOW = `date +%Y.%m.%d_%T`
       set QINFO = `$QSUB -q $QUEUE -e $QRES -o $QRES $SCRIPT $ARG 15 $CROT $CLON`
       if ($#QINFO) then
 	set QPID = `echo $QINFO | awk '{print $3}'`
@@ -309,7 +301,7 @@ while ($CROT <= $CR1)
 	set QPID = `echo $QINFO | awk '{print $3}'`
 	echo $NOW $RUNMAI $ARG 15 $CROT\:$CLON submitted to $QUEUE as job $QPID >> $RLOG
       else
-	echo $NOW Failed to submit $SCRIPT $ARG 15 $CROT $CLON >> $RLOG
+	echo $NOW Failed to submit $RUNMAI $ARG 15 $CROT\:$CLON >> $RLOG
       endif
     endif
   endif
@@ -328,18 +320,9 @@ while ($CROT <= $CR1)
       @ CVG += `echo $ECVG | awk -F. '{print $2}' | sed  -e "s/^0*//"`
     endif
     rm $TLIST
+    @ RUNNING++
+    set NOW = `date +%Y.%m.%d_%T`
     if ($CVG > $MINCV) then
-# check gatekeeper for permission to proceed
-      if ($TEST) then
-	set RES = (`$TURN $PIKE -test`)
-      else
-	set RES = (`$TURN $PIKE`)
-      endif
-      @ NOGO = $RES[1]
-      if ($NOGO) goto TURNOUT
-
-      @ RUNNING++
-      set NOW = `date +%Y.%m.%d_%T`
       set QINFO = `$QSUB -q $QUEUE -e $QRES -o $QRES $SCRIPT $ARG 30 $CROT $CLON`
       if ($#QINFO) then
 	set QPID = `echo $QINFO | awk '{print $3}'`
@@ -355,15 +338,15 @@ while ($CROT <= $CR1)
 	set QPID = `echo $QINFO | awk '{print $3}'`
 	echo $NOW $RUNMAI $ARG 30 $CROT\:$CLON submitted to $QUEUE as job $QPID >> $RLOG
       else
-	echo $NOW Failed to submit $SCRIPT $ARG 30 $CROT $CLON >> $RLOG
+	echo $NOW Failed to submit $RUNMAI $ARG 30 $CROT\:$CLON >> $RLOG
       endif
-    endif
     endif
   endif
   @ CLON -= 5
   if ($CLON <= 0) then
     @ CROT++
     @ CLON += 360
+    if ($CROT > $CR1) break
   endif
   if ($RUNNING) then
     if ($CROT < $CR1) then

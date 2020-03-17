@@ -101,7 +101,7 @@
 
 char *module_name = "maicalc";
 char *module_desc = "integration of mapped and tracked magnetogram data";
-char *version_id = "2.1";
+char *version_id = "2.2";
 
 ModuleArgs_t module_args[] = {
   {ARG_STRING,	"los", "",
@@ -852,6 +852,11 @@ return 1;
 		   /*  use template record to determine segment if necessary  */
     } else {
       rec = drms_template_record (drms_env, losset, &status);
+      if (status || !rec) {
+	fprintf (stderr, "Error: unable to open template record in series %s\n",
+	    losset);
+	return 1;
+      }
       seglist = ndimsegments (rec, 2, &segct);
       if (segct > 1) {
 	fprintf (stderr, "Warning: series %s contains %d segments of rank 2\n",
@@ -1375,8 +1380,8 @@ printf ("sf = %f, sb = %f\n", sf[0], sb[0]);
     kstat += check_and_set_key_float (rec, "Size", map_size);
     kstat += check_and_set_key_float (rec, "BFloor", noise_floor);
     kstat += check_and_set_key_float (rec, "Apode_t", apode_edge);
-    kstat += check_and_set_key_float (rec, "Apode_Min", apode_inner);
-    kstat += check_and_set_key_float (rec, "Apode_Max", apode_outer);
+    kstat += check_and_set_key_float (rec, "Apod_Min", apode_inner);
+    kstat += check_and_set_key_float (rec, "Apod_Max", apode_outer);
     if (muct[map]) {
       kstat +=
 	  check_and_set_key_float (rec, "MeanMu", muavg[map] / muct[map]);
@@ -1452,6 +1457,8 @@ printf ("sf = %f, sb = %f\n", sf[0], sb[0]);
  *	parameters in those cases
  *		Added setting of keywords Samples, MeanMu, MeanPA, COMMENT
  *  v 2.1 frozen 2018.02.09
+ *  2018.07.24	Fixed "bug" in setting of Apodization limits keywords
+ *  2018.09.20	Added check for validity of input data series  
  *		
  */
 /******************************************************************************/
