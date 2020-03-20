@@ -34,31 +34,31 @@ c
 c  - - Output: bppot(m,n+1): real*8 array of phi-comp magnetic field at phot
 c              [G]
 c-
-c   PDFI_SS Electric Field Inversion Software
-c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index
-c   Copyright (C) 2015-2018 University of California
-c  
-c   This software is based on the concepts described in Kazachenko et al. 
-c   (2014, ApJ 795, 17).  It also extends those techniques to 
-c   spherical coordinates, and uses a staggered, rather than a centered grid.
-c   If you use the software in a scientific publication, 
-c   the authors would appreciate a citation to this paper and any future papers 
-c   describing updates to the methods.
-c  
-c   This is free software; you can redistribute it and/or
-c   modify it under the terms of the GNU Lesser General Public
-c   License as published by the Free Software Foundation;
-c   either version 2.1 of the License, or (at your option) any later version.
-c  
-c   This software is distributed in the hope that it will be useful,
-c   but WITHOUT ANY WARRANTY; without even the implied warranty of
-c   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-c   See the GNU Lesser General Public License for more details.
-c  
-c   To view the GNU Lesser General Public License visit
-c   http://www.gnu.org/copyleft/lesser.html
-c   or write to the Free Software Foundation, Inc.,
-c   59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+c - -  PDFI_SS electric field inversion software
+c - -  http://cgem.ssl.berkeley.edu/~fisher/public/software/PDFI_SS
+c - -  Copyright (C) 2015-2019 Regents of the University of California
+c 
+c - -  This software is based on the concepts described in Kazachenko et al.
+c - -  (2014, ApJ 795, 17).  A detailed description of the software is in
+c - -  Fisher et al. (2019, arXiv:1912.08301 ).
+c - -  If you use the software in a scientific 
+c - -  publication, the authors would appreciate a citation to these papers 
+c - -  and any future papers describing updates to the methods.
+c
+c - -  This is free software; you can redistribute it and/or
+c - -  modify it under the terms of the GNU Lesser General Public
+c - -  License as published by the Free Software Foundation,
+c - -  version 2.1 of the License.
+c
+c - -  This software is distributed in the hope that it will be useful,
+c - -  but WITHOUT ANY WARRANTY; without even the implied warranty of
+c - -  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+c - -  See the GNU Lesser General Public License for more details.
+c
+c - -  To view the GNU Lesser General Public License visit
+c - -  http://www.gnu.org/copyleft/lesser.html
+c - -  or write to the Free Software Foundation, Inc.,
+c - -  59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 c
       implicit none
 c
@@ -81,7 +81,7 @@ c
       real*8 :: scrbmh(m+2,n+2),scrbph(m+2,n+2)
       real*8 :: sinth(m+1),sinth_hlf(m)
       real*8 :: gradp(m,n+1),gradt(m+1,n),brcegh(m+2,n+2)
-      real*8 :: dphi,dtheta,delr
+      real*8 :: dphi,dtheta,delr,mflux,area,b0
 c
 c - - check for illegal values of bcn:
 c
@@ -145,10 +145,21 @@ c
       scrb(1:m+2,1:n+2)=(scrb1(1:m+2,1:n+2)-scrb0(1:m+2,1:n+2))
      1   /delr
 c
+c - - Since scrb is inconsistent with a net radial flux, find the net radial
+c - - flux so it can be removed from brcegh:
+c
+      call mflux_ss(m,n,a,b,c,d,rsun,brce,mflux)
+c
+      area=(d-c)*(cos(a)-cos(b))*rsun**2
+c
+c - - get value of b0 by dividing mflux by area:
+c
+      b0=mflux/area
+c
 c - - brcegh is just brce with ghost zones filled in, using same boundary
 c - - conditions as applied to scrb:
 c
-      brcegh(2:m+1,2:n+1)=brce(1:m,1:n)
+      brcegh(2:m+1,2:n+1)=brce(1:m,1:n) - b0
 c - - fill in ghost zones in theta direction for brce:
       brcegh(1,2:n+1)=brcegh(2,2:n+1)-1.d0*dtheta*bdas(1:n)
       brcegh(m+2,2:n+1)=brcegh(m+1,2:n+1)+1.d0*dtheta*bdbs(1:n)

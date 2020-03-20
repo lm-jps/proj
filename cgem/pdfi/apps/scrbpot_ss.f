@@ -41,31 +41,31 @@ c             for a potential magnetic field, evaluated at at cell centers in
 c             theta,phi, and at radial shells. [G km^2]
 c
 c-
-c   PDFI_SS Electric Field Inversion Software
-c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index
-c   Copyright (C) 2015,2016 University of California
-c  
-c   This software is based on the concepts described in Kazachenko et al. 
-c   (2014, ApJ 795, 17).  It also extends those techniques to 
-c   spherical coordinates, and uses a staggered, rather than a centered grid.
-c   If you use the software in a scientific publication, 
-c   the authors would appreciate a citation to this paper and any future papers 
-c   describing updates to the methods.
-c  
-c   This is free software; you can redistribute it and/or
-c   modify it under the terms of the GNU Lesser General Public
-c   License as published by the Free Software Foundation;
-c   either version 2.1 of the License, or (at your option) any later version.
-c  
-c   This software is distributed in the hope that it will be useful,
-c   but WITHOUT ANY WARRANTY; without even the implied warranty of
-c   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-c   See the GNU Lesser General Public License for more details.
-c  
-c   To view the GNU Lesser General Public License visit
-c   http://www.gnu.org/copyleft/lesser.html
-c   or write to the Free Software Foundation, Inc.,
-c   59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+c - -  PDFI_SS electric field inversion software
+c - -  http://cgem.ssl.berkeley.edu/~fisher/public/software/PDFI_SS
+c - -  Copyright (C) 2015-2019 Regents of the University of California
+c 
+c - -  This software is based on the concepts described in Kazachenko et al.
+c - -  (2014, ApJ 795, 17).  A detailed description of the software is in
+c - -  Fisher et al. (2019, arXiv:1912.08301 ).
+c - -  If you use the software in a scientific 
+c - -  publication, the authors would appreciate a citation to these papers 
+c - -  and any future papers describing updates to the methods.
+c
+c - -  This is free software; you can redistribute it and/or
+c - -  modify it under the terms of the GNU Lesser General Public
+c - -  License as published by the Free Software Foundation,
+c - -  version 2.1 of the License.
+c
+c - -  This software is distributed in the hope that it will be useful,
+c - -  but WITHOUT ANY WARRANTY; without even the implied warranty of
+c - -  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+c - -  See the GNU Lesser General Public License for more details.
+c
+c - -  To view the GNU Lesser General Public License visit
+c - -  http://www.gnu.org/copyleft/lesser.html
+c - -  or write to the Free Software Foundation, Inc.,
+c - -  59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 c
       implicit none
 c
@@ -325,7 +325,7 @@ c - - Now, we're finally ready to do the solution to Bercik's equation
 c - - in theta and r, using brft values at the photosphere for each Fourier
 c - - mode:
 c 
-      kk=int(log(real(p+1)/log(real(2))))+1
+      kk=int(log(real(p+1))/log(real(2)))+2
       kl=2**(kk+1)
       itmp=(kk-2)*kl+5+max(2*(p+1),6*m)
 c - - allocate work array for blktri:
@@ -343,6 +343,10 @@ c RHS = 0 everwhere except the photosphere
       y(1:m,2:p+1)=0.d0
       call blktri(iflag,np,p+1,an,bn,cn,mp,m,am(1:m,1),bm(1:m,1),
      1 cm(1:m,1),m,y,ierror,wb)
+      if(wb(1) .gt. dble(itmp)) then
+         write(6,*) 'scrbpot_ss: itmp too small for wb, exiting'
+         stop
+      endif
       if(ierror .ne. 0) then
          write(6,*) 'scrbpot blktri init ierror .ne. 0, = ',ierror
          stop

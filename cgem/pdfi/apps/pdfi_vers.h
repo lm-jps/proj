@@ -6,4 +6,5 @@
 // const char *pdfi_vers = "b9bac98652";            // Nov 07 2018 XS
 // const char *pdfi_vers = "11e3eaee40";            // Jan 16 2019 XS
 // const char *pdfi_vers = "24a11b79e7";            // Jan 28 2019 XS
-const char *pdfi_vers = "f050aeb623";               // Jan 28 2019 XS
+// const char *pdfi_vers = "f050aeb623";            // Jan 28 2019 XS
+const char *pdfi_vers = "44f7dd47cd";               // Mar 19 2020 XS
