@@ -15,9 +15,12 @@
  *
  *  Version:
  *      v0.0 Dec 27 2019
+ *      v0.1 Mar 23 2020
  *
  *  Notes:
- *      v0.0
+ *      v0.1
+ *      Declare success even no unique NOAA AR is found, as we decide
+ *      CGEMNUM=HARPNUM+100000
  *
  *  Example Calls:
  *      > cgem_harpinfo "harpnum=377" -h -i    # h for readable format
@@ -172,7 +175,8 @@ int DoIt(void)
         
     }
     
-    if (nGoodRecs == 0 || isnan(noaa_ar) || noaa_num == 0) { result = 0; }
+//    if (nGoodRecs == 0 || isnan(noaa_ar) || noaa_num == 0) { result = 0; }
+    if (nGoodRecs == 0) { result = 0; }     // Mar 23 2020
     
     lonc_start = recInfoArr[index_start].lonc;
     latc_start = recInfoArr[index_start].latc;
