@@ -42,7 +42,7 @@
 #define FOURK           (4096)
 #define FOURK2          (16777216)
 #define NMAXSTR         (256)       // max string length
-#define LON_THRESH      (70.)       // longitude threshold
+#define LON_THRESH      (60.)       // longitude threshold
 #define NPAD            (50)        // padding columns on each size
 #define MPAD            (50)        // padding rows on each size
 #define DPC             (0.03)      // Plate-Carree map resolution
