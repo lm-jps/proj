@@ -132,6 +132,7 @@ ModuleArgs_t module_args[] =
     {ARG_FLOAT, "latref", "0", "Reference patch center Stonyhurst lat, in deg."},
     {ARG_INT, "cols", "500", "Columns of output cutout."},
     {ARG_INT, "rows", "500", "Rows of output cutout."},
+    {ARG_FLAG, "m", "", "Set manual mode."},
     {ARG_STRING, "tref", kNotSpecified, "Reference time."},
     {ARG_END}
 };
@@ -156,8 +157,12 @@ int DoIt(void)
     pInfo.rows = params_get_int(&cmdparams, "rows");
     pInfo.tref = params_get_time(&cmdparams, "tref");
     pInfo.cgemnum = params_get_int(&cmdparams, "cgemnum");
-    pInfo.noaa_ar = params_get_int(&cmdparams, "noaa_ar"); if (pInfo.noaa_ar < 0) { pInfo.noaa_ar = pInfo.cgemnum; }
+    pInfo.noaa_ar = params_get_int(&cmdparams, "noaa_ar");
     pInfo.harpnum = params_get_int(&cmdparams, "harpnum");
+    
+    int manual = params_isflagset(&cmdparams, "m");
+    // NOAA_AR == CGEMNUM if manual mode, Mar 26 2020
+    if (manual && pInfo.noaa_ar < 0) { pInfo.noaa_ar = pInfo.cgemnum; }
     
     /* Input data */
     
