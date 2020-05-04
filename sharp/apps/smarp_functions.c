@@ -7,24 +7,44 @@
  MEANGBZ Mean value of the vertical field gradient, in Gauss/Mm
  R_VALUE Karel Schrijver's R parameter
  
- The indices are calculated on the pixels in which the conf_disambig segment is greater than 70 and
- pixels in which the bitmap segment is greater than 42. These ranges are selected because the CCD
- coordinate bitmaps are interpolated for certain data (at the time of this CVS submit, all data
- prior to 2013.08.21_17:24:00_TAI contain interpolated bitmaps; data post-2013.08.21_17:24:00_TAI
- contain nearest-neighbor bitmaps).
+ The indices are calculated on the pixels in which the bitmap segment is greater than 36. 
  
- In the CCD coordinates, this means that we are selecting the pixels that that equal 33 or 34 in bitmap. Here are the definitions of the pixel values:
+ The SMARP bitmap has 13 unique values because they describe three different characteristics: 
+ the location of the pixel (whether the pixel is off disk or a member of the patch), the 
+ character of the magnetic field (quiet or active), and the character of the continuum 
+ intensity data (quiet, part of faculae, part of a sunspot). 
+
+ Here are all the possible values:
  
- 
- For bitmap:
- 1  : weak field outside smooth bounding curve
- 2  : strong field outside smooth bounding curve
- 33 : weak field inside smooth bounding curve
- 34 : strong field inside smooth bounding curve
- 
- Written by Monica Bobra 15 August 2012
- Potential Field code (appended) written by Keiji Hayashi
- Error analysis modification 21 October 2013
+ Value 	 Keyword         Definition
+ 0       OFFDISK         The pixel is located somewhere off the solar disk.
+ 1       QUIET           The pixel is associated with weak line-of-sight magnetic field.
+ 2       ACTIVE          The pixel is associated with strong line-of-sight magnetic field.
+ 4       SPTQUIET        The pixel is associated with no features in the continuum intensity data.
+ 8       SPTFACUL        The pixel is associated with faculae in the continuum intensity data.
+ 16      SPTSPOT         The pixel is associated with sunspots in the continuum intensity data.
+ 32      ON_PATCH        The pixel is inside the patch.
+
+ Here are all the possible permutations:
+
+ Value   Definition
+ 0       The pixel is located somewhere off the solar disk.
+ 5       The pixel is located outside the patch, associated with weak line-of-sight magnetic field, and no features in the continuum intensity data.
+ 9       The pixel is located outside the patch, associated with weak line-of-sight magnetic field, and faculae in the continuum intensity data.
+ 17      The pixel is located outside the patch, associated with weak line-of-sight magnetic field, and sunspots in the continuum intensity data.
+ 6       The pixel is located outside the patch, associated with strong line-of-sight magnetic field, and no features in the continuum intensity data.
+ 10      The pixel is located outside the patch, associated with strong line-of-sight magnetic field, and faculae in the continuum intensity data.
+ 18      The pixel is located outside the patch, associated with strong line-of-sight magnetic field, and sunspots in the continuum intensity data.
+ 37      The pixel is located inside the patch, associated with weak line-of-sight magnetic field, and no features in the continuum intensity data.
+ 41      The pixel is located inside the patch, associated with weak line-of-sight magnetic field, and faculae in the continuum intensity data.
+ 49      The pixel is located inside the patch, associated with weak line-of-sight magnetic field, and sunspots in the continuum intensity data.
+ 38      The pixel is located inside the patch, associated with strong line-of-sight magnetic field, and no features in the continuum intensity data.
+ 42      The pixel is located inside the patch, associated with strong line-of-sight magnetic field, and faculae in the continuum intensity data.
+ 50      The pixel is located inside the patch, associated with strong line-of-sight magnetic field, and sunspots in the continuum intensity data.
+
+ Thus pixels with a value greater than 36 are located inside the patch.
+
+ Written by Monica Bobra
  
  ===========================================*/
 #include <math.h>
@@ -70,7 +90,7 @@ int computeAbsFlux(float *bz, int *dims, float *absFlux,
 	{
 	   for (j = 0; j < ny; j++)
 	   {
-	    if ( bitmask[j * nx + i] < 42 ) continue;
+	    if ( bitmask[j * nx + i] < 36 ) continue;
             if isnan(bz[j * nx + i]) continue;
             sum += (fabs(bz[j * nx + i]));
             count_mask++;
@@ -154,7 +174,7 @@ int computeBzderivative(float *bz, int *dims, float *mean_derivative_bz_ptr, int
     {
         for (j = 0; j <= ny-1; j++)
         {
-            if ( bitmask[j * nx + i] < 42 ) continue;
+            if ( bitmask[j * nx + i] < 36 ) continue;
             if ( (derx_bz[j * nx + i] + dery_bz[j * nx + i]) == 0) continue;
             if isnan(bz[j * nx + i])      continue;
             if isnan(bz[(j+1) * nx + i])  continue;
