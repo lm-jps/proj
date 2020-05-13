@@ -18,6 +18,15 @@ span.tip { background-color:blue;font-family:verdana;color:white;font-size:1em;f
 .prototip { font:0.8em Arial, Helvetica, sans-serif; }
 </style>
 
+<!--
+the href path in the <script> tag is relative to the web root, not relative to the current directory;
+we can change the path to which the href is relative by setting the <base> tag
+-->
+<script type="text/javascript">
+var base_path = location.pathname.sub(".html", "");
+document.write('<base id="basepath" href="' + base_path + '/">');
+</script>
+
 <!-- Add export email checking code. -->
 <script type="text/javascript" src="exportdata.d/export_email_verify.js"></script>
 

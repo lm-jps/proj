@@ -68,6 +68,7 @@ function email_getargs()
     }
 }
 
+// [both exportdata.html and register_email.html]
 function startEmailCheck(callbackFxn)
 {   // This is called when the check params button is pressed.
     // if not ready, complain and do nothing.
@@ -87,7 +88,7 @@ function startEmailCheck(callbackFxn)
         $("ExportCheckMsg").innerHTML = 'Submitted email address is: "' + address + '".';
 
         // will avoid making an AJAX call if possible (checked email addresses are cached in $("ExportNotify").retrieve('addresses')
-        CheckAddressRegistration(address.slice(0), callbackFxn, true);
+        CheckAddressRegistration(address.slice(0), callbackFxn, false);
     }
 }
 
@@ -150,7 +151,7 @@ function ValidateExportRequestor()
     return valid;
 }
 
-// This function gets called when the Notify field gets modified.
+// This function gets called when the Notify field gets modified [exportdata.html only]
 function SetExportNotify(clickedByUser)
 {
     var address = null;
@@ -185,6 +186,7 @@ function SetExportNotify(clickedByUser)
 // SetExportUser is called from change in either the Requester or Notify input text boxes.
 // There is no call made to check the validity of the notification email address provided
 // however. Instead, the user must click on the "Check Params for Export" button.
+// [register_email.html only]
 function SetExportUser(clickedByUser)
 {
     var requestor = null;
@@ -407,7 +409,6 @@ function CheckAddressRegistration(address, callbackFxn, checkOnly)
             addressInternal = address.slice(0);
             if (status == 1)
             {
-                alert('starting a reg');
                 // registration check initiated (email not found in db, and checkOnly == false)
                 RegistrationTimeLeft = MAX_REGISTRATION_TIME + 5; // 5 seconds so the user can read the message from checkAddress
                 RegistrationTimer = setInterval(function () { RegistrationTimeout(addressInternal) }, 1000);
