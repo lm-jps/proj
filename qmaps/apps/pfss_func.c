@@ -93,7 +93,7 @@ void pdpth (double th, int lmax, double *leg, double *D_leg, double *mlegs)
         for (int mi = 0; mi < m; mi++) {
             expmi = sqrt((2.0 * mi + 1.0) / (2.0 * mi + 2.0));
             t1 *= (sint * expmi);
-            if (mi != 0) {       // take care of the case t=0 or pi
+            if (m != 0) {       // take care of the case t=0 or pi
                 dt1 *= sint;    // one less sinth
                 t1s *= sint;
             }

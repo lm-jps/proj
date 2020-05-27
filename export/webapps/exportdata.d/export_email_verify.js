@@ -1,506 +1,322 @@
 function email_initVars()
-{
-    // 'valid' indicates if the string currently in the field is valid or not; this gets set only when the field value
-    //     changes
-    // 'addresses' is an object of validated email address (the properties are email addresses, and the values are booleans that
-    //     indicate a registered email address or not, or 'pending' when checkAddress is in the process of checking
-    //     the address registration status):
-    //       'addresses' : { 'fred@bedrock.com' : true, 'barney@bedrock.com' : false, 'mrslate@bedrock.com' : 'pending' }
-    $("ExportNotify").store({ 'valid' : null, 'addresses' : {} });
-    $("ExportRequestor").store({ 'valid' : null });
-
-    ExportNotifyTimeLeft = 0;
-    ExportNotifyTimeDelta = 2000;
-
-    // we want to hold of on auto-checking notification email address until the user has touched both of these the first time;
-    // after that, we can check when they modify one or the other
-    UserEnteredNotify = false;
-    UserEnteredRequestor = false;
-}
+  {
+  ExportNotifyOK = 0;
+  ExportNotifyTimeLeft = 0;
+  ExportNotifyTimeDelta = 2000;
+  ExportNotifyValid = -9;
+  cookieState = 0;
+  }
 
 // Global vars
 var JSOC_CHECK_EMAIL = "checkAddress.sh";
-var MAX_NOTIFY_TIMER = 16; // seconds
-var ExportNotifyTimer = null;
-var ExportNotifyTimeLeft;  // Max seconds before giveup on any AJAX checkAddress call
+var MAX_NOTIFY_TIMER = 180;
+var ExportEmail = "not set"; // current email to test
+var EXPORTUSER;
+var EXPORTNOTIFY;
+var ExportNotifyValid;
+var ExportNotifyTimer;
+var ExportNotifyTimeLeft;  // Max seconds before giveup
 var ExportNotifyTimeDelta; // milliseconds between checking
-var MAX_REGISTRATION_TIME = 180; // seconds
-var RegistrationTimer = null;
-var RegistrationTimeLeft; // Max seconds before giveup on waiting for pending registration to complete
-var UserEnteredNotify;
-var UserEnteredRequestor;
-
+var cookieState; 
 
 function email_getargs()
-{
-    var cookieState = Cookie.getData("emailOK");
-    var addresses = null;
-
-    if (cookieState == "undefined")
+  {
+  cookieState = Cookie.getData("emailOK");
+  if (cookieState == "undefined")
+    cookieState=0;
+  $("ExportRequestor").value = Cookie.getData("user");
+  $("ExportNotify").value = Cookie.getData("notify");
+  if ($("ExportRequestor").value == "undefined")
+    $("ExportRequestor").value = "";
+  if ($("ExportRequestor").value == "undefined")
+    $("ExportRequestor").value = "solarmail";
+  if (cookieState == 2)
     {
-        cookieState = 0;
+    ExportNotifyOK = 1;
+    $("ExportNotifyMsg").innerHTML = "OK";
     }
-
-    // these cookies return undefined if they are not set
-    $("ExportRequestor").value = Cookie.getData("user");
-    $("ExportNotify").value = Cookie.getData("notify");
-
-    if ($("ExportRequestor").value == "undefined")
+  else
     {
-        $("ExportRequestor").value = "";
+    cookieState=1;
+    Cookie.setData("emailOK",cookieState);
+    Cookie.setData("user", $("ExportRequestor").value);
+    Cookie.setData("notify", $("ExportNotify").value);
     }
+  }
 
-    if (cookieState == 2)
-    {
-        // valid and registered email address (we store only a valid and registered email address and requestor in the cookie)
-        addresses = $("ExportNotify").retrieve('addresses', {});
-        addresses[$("ExportNotify").value.trim()] = true;
-        $("ExportNotify").store({ 'valid' : true, 'addresses' : addresses });
-        $("ExportRequestor").store('valid', true);
-        $("ExportNotifyMsg").style.color = colorDarkGreen;
-        $("ExportNotifyMsg").innerHTML = "OK";
-        $("ExportCheckMsg").innerHTML = "Email address " + $("ExportNotify").value.trim() + " is registered.";
-    }
-    else
-    {
-        // unregistered email in cookie (if any address in cookie) - make sure the state is 1, and not 0 or undefined
-        Cookie.setData("emailOK", 1);
-    }
-}
-
-// [both exportdata.html and register_email.html]
 function startEmailCheck(callbackFxn)
-{   // This is called when the check params button is pressed.
+  { // This is called when the check params button is pressed.
     // if not ready, complain and do nothing.
-    var requestor = null;
-    var isRequestorValid = null;
-    var address = null;
-    var isAddressValid = null;
+  if ( $("ExportNotify").value.toUpperCase() ===  "SOLARMAIL" )
+    ExportEmail = $("ExportRequestor").value + "@spd.aas.org";
+  else
+    ExportEmail = $("ExportNotify").value;
 
+  $("ExportCheckMsg").innerHTML = "Ready to verify email, press Check Params.";
 
-    requestor = $("ExportRequestor").value.trim();
-    isRequestorValid = ValidateExportRequestor();
-    address = $("ExportNotify").value;
-    isAddressValid = ValidateNotificationAddress();
-
-    if (isRequestorValid && isAddressValid)
+  if (ExportNotifyOK == 0)
     {
-        $("ExportCheckMsg").innerHTML = 'Submitted email address is: "' + address + '".';
-
-        // will avoid making an AJAX call if possible (checked email addresses are cached in $("ExportNotify").retrieve('addresses')
-        CheckAddressRegistration(address.slice(0), callbackFxn, false);
+    SetExportUser();
+    if (ExportNotifyOK == 0)
+      {
+      $("ExportCheckMsg").innerHTML = "Notify field must be set before submit.";
+      return;
+      }
     }
-}
-
-function ValidateNotificationAddress()
-{
-    var retrievedValid = null;
-    var address = $("ExportNotify").value.trim();
-    var valid = true;
-
-
-    retrievedValid = $("ExportNotify").retrieve('valid', null);
-
-    if (retrievedValid === null)
+  if (ExportNotifyOK == 1)
     {
-        if (address.indexOf("@") == -1 || address.indexOf("@") == 0 || address.indexOf("@") != address.lastIndexOf("@"))
-        {
-            $("ExportCheckMsg").innerHTML = "Invalid notification address: missing or invalid domain name.";
-            valid = false;
-        }
-
-        $("ExportNotify").store('valid', valid);
+    $("ExportCheckMsg").innerHTML = 'The current address, "' + ExportEmail + '", has been verified OK.  You are done.';
+    return;
     }
-    else
+  else if (ExportNotifyOK == 4)
     {
-        valid = retrievedValid;
-    }
-
-    return valid;
-}
-
-function ValidateExportRequestor()
-{
-    var address = $("ExportNotify").value.trim();
-    var requestor = $("ExportRequestor").value.trim();
-    var retrievedValid = null;
-    var valid = true;
-
-
-    retrievedValid = $("ExportRequestor").retrieve('valid', null);
-
-    if (retrievedValid === null)
+    $("ExportCheckMsg").innerHTML = "Still waiting for reply to our email, wait or change Notify or Requester fields.";
+    return;
+    } 
+  else if (ExportNotifyOK == 5)
     {
-        if (requestor.indexOf("@") >= 0)
-        {
-            $("RequestorMessage").innerHTML = "An email address belongs in the Notify field, not in the Requestor field.";
-            valid = false;
-        }
-        else
-        {
-            // valid!
-        }
-
-        $("ExportRequestor").store('valid', valid);
-    }
-    else
-    {
-        valid = retrievedValid;
-    }
-
-    return valid;
-}
-
-// This function gets called when the Notify field gets modified [exportdata.html only]
-function SetExportNotify(clickedByUser)
-{
-    var address = null;
-    var requestor = null;
-    var doValidation = true;
-    var valid = false;
-
-
-    if (clickedByUser)
-    {
-        UserEnteredNotify = true;
-    }
-
-    // invalidate address
-    $("ExportNotify").store('valid', null);
-
-    address = $("ExportNotify").value.trim();
-    requestor = $("ExportRequestor").value.trim();
-    $("RequestorMessage").innerHTML = "Provide an optional identifier."
-
-    if (doValidation)
-    {
-        valid = ValidateNotificationAddress();
-        if (valid)
-        {
-            $("ExportNotify").store('valid', true);
-            CheckAddressRegistration(address.slice(0), null, false);
-        }
-    }
-}
+    $("ExportCheckMsg").innerHTML = 'Submitted address, "' + ExportEmail + '", is not a valid email address format, fix and try again.';
+    return;
+    } 
+    $("ExportCheckMsg").innerHTML = 'Submitted address is: "' + ExportEmail + '".';
+  ExportNotifyOK = CheckNotifyValidity(callbackFxn);
+  }
 
 // SetExportUser is called from change in either the Requester or Notify input text boxes.
 // There is no call made to check the validity of the notification email address provided
 // however. Instead, the user must click on the "Check Params for Export" button.
-// [register_email.html only]
-function SetExportUser(clickedByUser)
-{
-    var requestor = null;
-    var address = null;
-    var newAddress = null;
-    var valid = false;
-
-
-    if (clickedByUser)
+function SetExportUser()
+  {  
+  if (ExportNotifyOK == 4)
     {
-        UserEnteredRequestor = true;
+    ExportNotifyOK = 0;
+    // Previous verify submit still in progress.
     }
-
-    // invalidate requestor
-    $("ExportRequestor").store('valid', null);
-
-    requestor = $("ExportRequestor").value.trim();
-    address = $("ExportNotify").value.trim();
-
-    valid = ValidateExportRequestor();
-    if (valid)
+  ExportUserOK = 0;
+  EXPORTUSER = $("ExportRequestor").value.toUpperCase();
+  EXPORTNOTIFY = $("ExportNotify").value.toUpperCase();
+  if (EXPORTUSER.length != 0 && EXPORTUSER !== "NONE")
     {
-        // used to do spd stuff
-    }
-}
-
-function CallCheckAddressRegistration(address)
-{
-    ExportNotifyTimeLeft -= ExportNotifyTimeDelta/1000;
-
-    // always do a simple check for the registration or check process to be complete; do not start a new registration
-    // process
-    CheckAddressRegistration(address, null, true);
-}
-
-function RegistrationTimeout(address)
-{
-    RegistrationTimeLeft -= 1;
-
-    if (RegistrationTimeLeft <= MAX_REGISTRATION_TIME)
-    {
-        $("ExportCheckMsg").innerHTML = RegistrationTimeLeft + " seconds remaining, still waiting for your email reply from " + address;
-    }
-
-    if (RegistrationTimeLeft <= 0)
-    {
-        // timer expired, address check failed.
-        addresses = $("ExportNotify").retrieve('addresses', {});
-        addresses[address] = 'timeout';
-        $("ExportNotify").store( 'addresses', addresses );
-        $("ExportNotifyMsg").style.color = colorDarkRed;
-        $("ExportNotifyMsg").innerHTML = "Timeout";
-        $("ExportCheckMsg").innerHTML = "Timeout - the registration process did not complete in the allowed time. Try again with a correct Notify address.";
-
-        clearInterval(RegistrationTimer);
-        RegistrationTimer = null;
-    }
-}
-
-// checkOnly is true if an email registration check is pending (CheckAddressRegistration() was called with checkOnly == false,
-// and the checkAddress.sh CGI has not completed the registration process); otherwise, the user has clicked on the "check
-// params for export" button after CheckAddressRegistration(checkOnly == false) has been called
-//
-// it is possible that the user changed the email address while a registration process or check was pending; make sure
-// to examine ExportNotifyTimer - if it not null and the user is attempting to register a different address
-function CheckAddressRegistration(address, callbackFxn, checkOnly)
-{
-    var cgiArgs = null;
-    var pending = false;
-
-
-    // if this is a new registration (checkOnly == false), then end the existing ExportNotifyTimer (yes, orphan it) and let it
-    // play out; then go ahead and pretend that there is not an existing registration pending
-    if (!checkOnly)
-    {
-        if (ExportNotifyTimer !== null)
-        {
-            clearInterval(ExportNotifyTimer);
-            ExportNotifyTimer = null;
-        }
-
-        if (RegistrationTimer !== null)
-        {
-            // stop the countdown-till-timeout message
-            clearInterval(RegistrationTimer);
-            RegistrationTimer = null;
-            $("ExportCheckMsg").innerHTML = "";
-        }
-    }
-
-    // this is called when a valid format Notify is present.
-    // address = $("ExportNotify").value.trim();
-
-    // make sure the email address is valid
-    if (!$("ExportNotify").retrieve('valid', false))
-    {
-        if (ExportNotifyTimer !== null)
-        {
-            clearInterval(ExportNotifyTimer);
-            ExportNotifyTimer = null;
-        }
-
-        return;
-    }
-
-    // check to see if the email address already got registration-checked (the results are cached)
-    addresses = $("ExportNotify").retrieve('addresses', {});
-    if (addresses.hasOwnProperty(address))
-    {
-        // the AJAX call has completed
-        if (ExportNotifyTimer !== null)
-        {
-            clearInterval(ExportNotifyTimer);
-            ExportNotifyTimer = null;
-        }
-
-        // email has already been checked for registration
-        if (typeof(addresses[address]) === 'string')
-        {
-            if (addresses[address] === 'pending')
-            {
-                // we can remove timer since the asynchronous call has completed - this is done below
-                pending = true;
-            }
-            else if (addresses[address] === 'timeout')
-            {
-                // registration process timeout (not timeout due to no response from AJAX call)
-                return;
-            }
-        }
-        else if (typeof(addresses[address]) === 'boolean')
-        {
-            if (addresses[address])
-            {
-                // registered
-                $("ExportNotifyMsg").style.color = colorDarkGreen;
-                $("ExportNotifyMsg").innerHTML = "OK";
-                $("ExportCheckMsg").innerHTML = "Email address " + address + " is registered.";
-            }
-            else
-            {
-                // not registered
-                $("ExportNotifyMsg").style.color = colorDarkRed;
-                $("ExportNotifyMsg").innerHTML = "Failed";
-                $("ExportCheckMsg").innerHTML = address + ' is not a registered address - please provide a registered address and retry.';
-            }
-
-            // we have our answer
-            return;
-        }
-        else
-        {
-            // error
-            $("ExportCheckMsg").innerHTML = address + ' invalid email-registration state.';
-            return;
-        }
-    }
-    else if (ExportNotifyTimer !== null)
-    {
-        // AJAX call has not completed; see if it has been too long
-        if (ExportNotifyTimeLeft <= 0)
-        {
-            // time-out waiting for any response from checkAddress server
-            addresses = $("ExportNotify").retrieve('addresses', {});
-            addresses[address] = 'timeout';
-            $("ExportNotify").store('addresses', addresses);
-            $("ExportNotifyMsg").style.color = colorDarkRed;
-            $("ExportNotifyMsg").innerHTML = "Timeout";
-            $("ExportCheckMsg").innerHTML = "Timeout - A reply from the address-registration server was not received in the allowed time.";
-
-            if (ExportNotifyTimer !== null)
-            {
-                clearInterval(ExportNotifyTimer);
-                ExportNotifyTimer = null;
-            }
-
-            // do not continue checking for registration completion
-            return;
-        }
-    }
-
-    if (ExportNotifyTimer === null)
-    {
-        // we need to do either a registration check (checkOnly == true), or a check followed by a registration (checkOnly == false)
-        ExportNotifyTimeLeft = MAX_NOTIFY_TIMER;
-        ExportNotifyTimer = setInterval(function () { CallCheckAddressRegistration(address.slice(0)); }, ExportNotifyTimeDelta);
-        // timer will run until valid email found or time limit expired or user changes email address
-        // *** JS will NOT call CallCheckAddressRegistration() until after CheckAddressRegistration() because JS does not
-        // interrupt function calls to switch to a different function call; so we do not need to worry about entering
-        // CheckAddressRegistration() while CheckAddressRegistration() is already executing
-    }
+    if (EXPORTUSER.indexOf("@") >= 0)
+      {
+      $("RequestorMessage").innerHTML = "Name only here, E-mail address goes in the Notify field";
+      ExportUserOK = 0;
+      }
     else
+      {
+      ExportUserOK = 1;
+      $("RequestorMessage").innerHTML = "Provide your identifier, e.g. your SolarMail name.";
+      }
+    }
+  else
     {
-        // there is a either registration check or registration process in progress - do not issue a new one
-        return;
+    $("RequestorMessage").innerHTML = "Provide your identifier, e.g. your SolarMail name.";
+    $("ExportRequestor").value = "none";
+    EXPORTUSER = "NONE";
+    ExportUserOK = 0;
+    }
+  SetExportNotify();
+  }
+
+// This function gets called when the Notify field gets modified.
+function SetExportNotify()
+  {
+  // ExportNotifyOK values:
+  //  0 - not OK to proceed
+  //  1 - OK to proceed, email is validated 
+  //  2 - OK, email is SolarMail and Requestor not empty, address not yet validated
+  //  3 - OK, quick or direct and no RequestID expected.
+  //  4 - Notify address pending validation.
+  //  5 - Notify address failed verification within allowed time, MAX_NOTIFY_TIMER seconds.
+  //  At exit from SetExportNotify, only 0 or 2 will be set.
+
+  ExportNotifyOK = 0;
+  ExportNotifyValid = 0;  // Any change in text boxes invalidates knowledge of email
+  var tmp1 = $("ExportNotify").value.toUpperCase();
+  if (EXPORTNOTIFY.length == 0)
+    {
+    ExportNotifyOK = 0;
+    $("ExportNotify").value = "solarmail";
+    EXPORTNOTIFY = "SOLARMAIL";
+    if (EXPORTUSER.length > 0 && EXPORTUSER != "NONE")
+      ExportUserOK = 1;
+    else
+      ExportUserOK = 0;
+    }
+  if (EXPORTNOTIFY === "SOLARMAIL")
+    {
+    if (ExportUserOK)
+      ExportNotifyOK = 2;  // is SolarMail and Requestor may be valid.
+    else
+      ExportNotifyOK = 0;
+    }
+  else if (EXPORTNOTIFY == "NONE" || tmp1 == "NO")
+    {
+    ExportNotifyOK = 0;
+    }
+  else if (EXPORTNOTIFY.indexOf("@") > 0 && 
+           EXPORTNOTIFY.indexOf("@") == EXPORTNOTIFY.lastIndexOf("@"))
+    {
+    $("ExportNotifyMsg").innerHTML = "Checking";
+    ExportNotifyOK = 2;
+    }
+  else
+    {
+    ExportNotifyOK = 0; // this case eliminates two '@' in Notify 
+    }
+  if ( EXPORTNOTIFY ===  "SOLARMAIL" )
+    ExportEmail = $("ExportRequestor").value + "@spd.aas.org";
+  else
+    ExportEmail = $("ExportNotify").value;
+  }
+
+function NotifyTimer()
+  {
+  ExportNotifyTimeLeft -= ExportNotifyTimeDelta/1000;
+  CheckNotifyValidity();
+  }
+
+
+function CheckNotifyValidity(callbackFxn)
+  {
+  // this is called when a valid format Notify or Requestor and Notify==solarmail is present.
+  // On entry ExportNotifyOK is 2 or 4.
+  // If 2 then initiate address check, if 4 then sleep a bit and test for completion of verification.
+  // If validity check completed OK then return OK
+
+  var checkOnly = 1; // default
+  $("ExportNotifyMsg").innerHTML = "";
+
+  cookieState=1;
+  Cookie.setData("emailOK",cookieState);
+
+  if (ExportNotifyOK != 4)
+    {
+    clearInterval(ExportNotifyTimer);
     }
 
-    if (!pending)
+  if (ExportNotifyOK == 0)
     {
-        // if we are doing a fresh check or check + register, then set to Checking..., but if we are checking on a pending
-        // check or check + register, then $("ExportNotifyMsg").value will already be appropriate (e.g., Registering...)
-        $("ExportNotifyMsg").style.color = colorDarkBlue;
-        $("ExportNotifyMsg").innerHTML = "Checking...";
+    $("ExportCheckMsg").innerHTML = ExportEmail + " not verified within, fix or try again.";
+    $("ExportNotifyMsg").innerHTML = "";
+    return;
     }
 
-    cgiArgs = { "address" : address, "checkonly" : checkOnly ? 1 : 0 };
-
-    new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + JSOC_CHECK_EMAIL,
+  if (ExportNotifyValid == 1) // If already verified, done.
     {
-        method: 'post',
-        parameters: cgiArgs,
-        onSuccess: function(transport, json)
+    $("ExportNotifyMsg").innerHTML = "OK";
+    ExportNotifyOK = 1;
+    return;
+    }
+
+  if (ExportNotifyOK == 5)
+    {
+    $("ExportCheckMsg").innerHTML = "Notify address " + ExportEmail + " not verified within " + MAX_NOTIFY_TIMER + " seconds, try again or correct email address then try again.";
+    $("ExportNotifyMsg").innerHTML = "";
+    ExportNotifyOK = 0;
+    return;
+    }
+
+  if (ExportNotifyOK == 2)  // New check of validity required
+    {
+    checkOnly = 0;
+    $("ExportNotifyMsg").innerHTML = "";
+    ExportNotifyTimeLeft = MAX_NOTIFY_TIMER;
+    ExportNotifyTimer = setInterval(function () {NotifyTimer()}, ExportNotifyTimeDelta);
+    // timer will run until valid email found or time limit expired or user changes email address
+    }
+    
+  // Always set to pending before starting the verify process
+  ExportNotifyOK = 4;
+
+  var paramObj = {"address" : ExportEmail, "checkonly" : checkOnly};
+  exportparameters = new Hash(paramObj);
+  
+  new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + JSOC_CHECK_EMAIL,
+    {
+    method: 'post',
+    parameters: exportparameters.toObject(),
+    onSuccess: function(transport, json)
+      {
+      // if Notify or Requester has been changed then ExportNotifyOK will
+      // have been changed so ignore this now obsolete response.
+      if (ExportNotifyOK == 4)
         {
-            var response = transport.responseText || null;
-            var parseInfo = response.evalJSON();
-            var status = parseInfo.status;
-            var addressInternal = null;
-
-
-            addressInternal = address.slice(0);
-            if (status == 1)
-            {
-                // registration check initiated (email not found in db, and checkOnly == false)
-                RegistrationTimeLeft = MAX_REGISTRATION_TIME + 5; // 5 seconds so the user can read the message from checkAddress
-                RegistrationTimer = setInterval(function () { RegistrationTimeout(addressInternal) }, 1000);
-
-                addresses = $("ExportNotify").retrieve('addresses', {});
-                addresses[addressInternal] = 'pending';
-                $("ExportNotify").store( 'addresses', addresses );
-                $("ExportCheckMsg").innerHTML = parseInfo.msg;
-                $("ExportNotifyMsg").style.color = colorDarkBlue;
-                $("ExportNotifyMsg").innerHTML = "Registering...";
-
+        var response = transport.responseText || null;
+        var parseInfo = response.evalJSON();
+        var status = parseInfo.status;
+        if (status == 1) // check initiated OK
+          {
+          ExportNotifyValid = 0;
+          $("ExportCheckMsg").innerHTML = parseInfo.msg;
+          $("ExportNotifyMsg").innerHTML = "";
+          }
+        else if (status == 2) // address is valid
+          {
+          clearInterval(ExportNotifyTimer);
+          ExportNotifyValid = 1;
+          ExportNotifyOK = 1;
+          $("ExportCheckMsg").innerHTML = parseInfo.msg;
+          $("ExportNotifyMsg").innerHTML = "OK";
+          cookieState=2;
+          Cookie.setData("emailOK",cookieState);
+          Cookie.setData("user", $("ExportRequestor").value);
+          Cookie.setData("notify", $("ExportNotify").value);
+          }
+        else if (status == 3)
+          {
+          $("ExportNotifyMsg").innerHTML = "";
+          if (ExportNotifyTimeLeft <= 0)
+            { // timer expired, address check failed.
+            clearInterval(ExportNotifyTimer);
+            ExportNotifyValid = -1;
+            ExportNotifyOK = 5;
+            $("ExportCheckMsg").innerHTML = "Timeout - A reply was not received in the allowed time.  Try again with a correct Notify address.";
             }
-            else if (status == 2)
+          else
             {
-                // address is valid
-                addresses = $("ExportNotify").retrieve('addresses', {});
-                addresses[addressInternal] = true;
-                $("ExportNotify").store( 'addresses', addresses );
-                $("ExportNotifyMsg").style.color = colorDarkGreen;
-                $("ExportNotifyMsg").innerHTML = "OK";
-                // $("ExportCheckMsg") is set during callback
-
-                Cookie.setData("emailOK", 2);
-                Cookie.setData("user", $("ExportRequestor").value);
-                Cookie.setData("notify", $("ExportNotify").value);
-            }
-            else if (status == 3)
-            {
-                // registration pending
-                $("ExportNotifyMsg").innerHTML = "";
-
-                // keep waiting, check each ExportNotifyTimeDelta seconds
-                addresses = $("ExportNotify").retrieve('addresses', {});
-                addresses[addressInternal] = 'pending';
-                $("ExportNotify").store( 'addresses', addresses );
-                $("ExportNotifyMsg").style.color = colorDarkBlue;
-                $("ExportNotifyMsg").innerHTML = "Pending...";
-            }
+            if (ExportNotifyOK != 4)
+              { // User abort of checking due to change of box contents.
+              clearInterval(ExportNotifyTimer);
+              $("ExportCheckMsg").innerHTML = "Current attempt cancelled by typing, try again when ready.";
+              }
             else
+              { // keep waiting, check each ExportNotifyTimeDelta seconds
+              ExportNotifyValid = 0;
+              $("ExportCheckMsg").innerHTML = ExportNotifyTimeLeft + " seconds remaining, still waiting for your email reply from "+ExportEmail;
+              }
+	    }
+	  }
+        else
+          {
+          ExportNotifyValid = -2; // immediate failure
+          ExportNotifyOK = 0;
+          clearInterval(ExportNotifyTimer);
+          $("ExportNotifyMsg").innerHTML = "";
+          $("ExportCheckMsg").innerHTML = 'Notify address provided, "' + ExportEmail + '" is not a valid address, correct and retry.';
+          if (status == 4)
             {
-                // status == 4 ==> invalid address
-                addresses = $("ExportNotify").retrieve('addresses', {});
-                addresses[addressInternal] = false;
-                $("ExportNotify").store( 'addresses', addresses );
-                $("ExportNotifyMsg").style.color = colorDarkRed;
-                $("ExportNotifyMsg").innerHTML = "Failed";
-                $("ExportCheckMsg").innerHTML = 'Notify address provided, "' + addressInternal + '" is not a valid address, correct and retry.';
-                if (status == 4)
-                {
-                    $("ExportCheckMsg").innerHTML += '<br>A prior attempt timed-out before email Reply';
-                }
-            }
-
-            if (callbackFxn)
-            {
-                callbackFxn();
-            }
-        },
-        onFailure: function()
-        {
-            alert('oops, our code is broken');
-
-            $("ExportCheckMsg").innerHTML = 'Internal failure checking for email registration.';
-
-            if (ExportNotifyTimer !== null)
-            {
-                clearInterval(ExportNotifyTimer);
-                ExportNotifyTimer = null;
-            }
+		    $("ExportCheckMsg").innerHTML += '<br>A prior attempt timed-out before email Reply';
+	    }
+          }
         }
+      else
+        {
+        clearInterval(ExportNotifyTimer);
+        ExportNotifyOK = 0;
+        $("ExportNotifyMsg").innerHTML = "";
+        $("ExportCheckMsg").innerHTML = "Current attempt cancelled by typing, try again when ready.";
+        }
+        
+        if (callbackFxn)
+        {
+            callbackFxn();
+        }
+      },
+      onFailure: function() { alert('oops, our code is broken'); }
     });
 
   retval = 4;
   return(retval);
   }
 
-function NotificationAddressRegistered()
-{
-    var addresses;
-    var address;
-
-    address = $("ExportNotify").value.trim();
-
-    if ($("ExportNotify").retrieve('valid', false))
-    {
-        // email address is valid, but is it registered?
-        addresses = $("ExportNotify").retrieve('addresses', {});
-        if (addresses.hasOwnProperty(address))
-        {
-            return addresses[address];
-        }
-    }
-
-    return false;
-}

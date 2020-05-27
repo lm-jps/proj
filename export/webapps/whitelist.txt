@@ -5,10 +5,7 @@ aia.master_pointing3h
 aia.response
 aia.temperature_summary_300s
 aia_test.master_pointing3h
-cgem.doppcal_720s
 cgem.lorentz
-cgem.pdfi_input
-cgem.pdfi_output
 hmi.b_135s
 hmi.B_720s_dcon
 hmi.B_720s_dconS
@@ -222,9 +219,12 @@ sid_awe.sidarchive
 sid_awe.sites
 sid_awe.supersidarchive
 sid_awe.timezone
-su_jeneen.mharp_720s
-su_jeneen.sharp_720s
-su_jeneen.sharp_cea_720s
+su_mbobra.sharp_720s_clean_v2
+su_mbobra.sharp_cea_720s_clean_v2
+su_mbobra.sharp_cea_flux_720s
+su_mbobra.sharp_flux_720s
+su_mbobra.smarp_96m
+su_mbobra.smarp_cea_96m
 su_phil.hmi_M_1k_720s
 su_phil.hmi_M_remap_720s
 su_phil.mdi_lowl_gf

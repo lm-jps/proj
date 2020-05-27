@@ -12,7 +12,7 @@ d		:= $(dir)
 EXTRADEPS_$(d)          := $(addprefix $(d)/, synop-saveparm.o synop-timing.o synop-set_history.o synop-calversfunctions.o)
 
 # NOTE: Add the base of the module's filename below (next to mymod)
-MODEXE_$(d)	:= $(addprefix $(d)/, mrmlosdailysynframe4mdi mrmlossynoptic4mdi hmib3compsynoptic4cr2136 hmib3dailysynframe vectmag2helio3comp_radial vectmag2helio3comp_poten hmib3compsynoptic resizeb3comp vectmag2helio3comp_random maprojlonat02deg maproj3comperrorlonat02deg resizeb3compwitherror maproj3comperror dailysynframe dailysynframe_nrt hmisynoptic mdidailysynframe mdisynop brblossynoptic brblosdailysynframe brblosdailysynframe_nrt mrmlossynoptic mrmlosdailysynframe mrmlosdailysynframe_nrt)
+MODEXE_$(d)	:= $(addprefix $(d)/, mrmlosdailysynframe4mdi mrmlossynoptic4mdi hmib3compsynoptic4cr2136 hmib3dailysynframe vectmag2helio3comp_radial vectmag2helio3comp_poten hmib3compsynoptic resizeb3comp vectmag2helio3comp_random maprojlonat02deg maproj3comperrorlonat02deg resizeb3compwitherror maproj3comperror dailysynframe dailysynframe_nrt hmisynoptic mdidailysynframe mdisynop brblossynoptic brblosdailysynframe brblosdailysynframe_nrt maprojbrfromblos mrmlossynoptic mrmlosdailysynframe mrmlosdailysynframe_nrt)
 MODEXE		:= $(MODEXE) $(MODEXE_$(d))
 
 MODEXE_SOCK_$(d):= $(MODEXE_$(d):%=%_sock)

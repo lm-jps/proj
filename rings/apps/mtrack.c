@@ -7,7 +7,7 @@
  *  Generate multiple mapped tracked data cubes at different locations from
  *    a common time sequence of solar images
  *
- *  (Main module body begins around line 1160)
+ *  (Main module body begins around line 1083)
  *
  *  Parameters: (type   default         description)
  *	in	DataSet none            Input dataset
@@ -217,17 +217,12 @@
  */
 /******************************************************************************/
 
-#define MODULE_VERSION_NUMBER	("2.2")
-#define KEYSTUFF_VERSION "keystuff_v10.c"
-#define EARTH_EPHEM_VERSION "earth_ephem_v10.c"
-
 #include <jsoc_main.h>
-#include KEYSTUFF_VERSION
-#include EARTH_EPHEM_VERSION
+
 						      /*  module identifier  */
 char *module_name = "mtrack";
 char *module_desc = "track multiple regions from solar image sequences";
-char *version_id = MODULE_VERSION_NUMBER;
+char *version_id = "2.0";
 
 #define CARR_RATE       (2.86532908457)
 #define RSUNM		(6.96e8)
@@ -301,8 +296,6 @@ ModuleArgs_t module_args[] = {
   {ARG_FLAG,	"v",	"", "verbose mode"}, 
   {ARG_FLAG,	"w",	"", "experimental mode (do not save output nor process images)"}, 
   {ARG_FLAG,	"x",	"", "experimental mode (do not save output)"}, 
-  {ARG_FLAG,	"G",	"",
-  	"use geocentric times for meridian crossing time and locations"}, 
   {ARG_FLAG,	"M",	"",
       "use MDI keywords for input and correct for MDI distortion"}, 
   {ARG_FLAG,	"Z",	"", "log times in UTC rather than TAI"}, 
@@ -311,6 +304,8 @@ ModuleArgs_t module_args[] = {
        /*  list of keywords to propagate (if possible) from input to output  */
 char *propagate[] = {"CONTENT"};
 
+#include "keystuff.c"
+#include "earth_ephem.c"
 #include "soho_ephem.c"
 #include "cartography.c"
 #include "imginfo.c"
@@ -1049,11 +1044,7 @@ int get_cadence (DRMS_Record_t *rec, const char *source, const char *tstp_key,
 	*cadence = *tstep;
       }
     }
-    if (*tstep > 0) *tstep *= *cadence;
-    else *tstep = *cadence;
-fprintf (stderr, " tstep set to %f\n", *tstep);
   } else {
-fprintf (stderr, " tstp_key = %s not found\n", tstp_key);
 			     /* cadence key missing, use trec_key if slotted  */
     drms_free_keyword_struct (keywd);
     if ((keywd = drms_keyword_lookup (rec, trec_key, 1))) {
@@ -1084,49 +1075,6 @@ fprintf (stderr, " tstp_key = %s not found\n", tstp_key);
 		       /*  set a missing output cadence to the input cadence  */
   if (isnan (*tstep)) *tstep = *cadence;
   return 0;
-}
-
-static int platform_info (DRMS_Record_t *rec, char *source_series) {
-  int platform = LOC_UNKNOWN;
-  int status;
-  DRMS_Keyword_t *keywd;
-
-  if ((keywd = drms_keyword_lookup (rec, "TELESCOP", 1))) {
-						      /*  should be constant  */
-    if (keywd->info->recscope != 1)
-      fprintf (stderr, "Warning: TELESCOP is variable in input series %s\n",
-	  source_series);
-    if (!strcmp (drms_getkey_string (rec, "TELESCOP", &status), "SDO/HMI"))
-    platform = LOC_SDO;
-    else if (!strcmp (drms_getkey_string (rec, "TELESCOP", &status), "SOHO"))
-      platform = LOC_SOHO;
-    else if (!strcmp (drms_getkey_string (rec, "TELESCOP", &status),
-	"NSO-GONG")) {
-      if ((keywd = drms_keyword_lookup (rec, "SITE", 1))) {
-	if (!strcmp (drms_getkey_string (rec, "SITE", &status), "MR"))
-	  platform = LOC_GONG_MR;
-	else if (!strcmp (drms_getkey_string (rec, "SITE", &status), "LE"))
-	  platform = LOC_GONG_LE;
-	else if (!strcmp (drms_getkey_string (rec, "SITE", &status), "UD"))
-	  platform = LOC_GONG_UD;
-	else if (!strcmp (drms_getkey_string (rec, "SITE", &status), "TD"))
-	  platform = LOC_GONG_TD;
-	else if (!strcmp (drms_getkey_string (rec, "SITE", &status), "CT"))
-	  platform = LOC_GONG_CT;
-	else if (!strcmp (drms_getkey_string (rec, "SITE", &status), "BB"))
-	  platform = LOC_GONG_BB;
-	else if (!strcmp (drms_getkey_string (rec, "SITE", &status), "ML"))
-	  platform = LOC_GONG_ML;
-	else {
-	  platform = LOC_GONG_MR;
-	}
-      } else {
-        fprintf (stderr, "Warning: unspecified GONG site: MR assumed\n");
-	platform = LOC_GONG_MR;
-      }
-    }
-  }
-  return platform;
 }
 
 static int cleanup (int error, DRMS_RecordSet_t *ids, DRMS_RecordSet_t *ods,
@@ -1288,11 +1236,12 @@ int DoIt (void) {
   int ut_times = params_isflagset (params, "Z");
   int filt_on_calver = (cvreject || ~cvaccept);
 
+need_limb_dist = 1;
+
   snprintf (module_ident, 64, "%s v %s", module_name, version_id);
   if (verbose) printf ("%s: JSOC version %s\n", module_ident, jsoc_version);
   verbose_logs = (dispose == DRMS_INSERT_RECORD) ? verbose : 0;
-					/*  process and check arguments for:  */
-				     /*  (un)acceptable calibration versions  */
+
   cvused = 0;
   cvmaxct = 64;
   cvfound = (int *)malloc (cvmaxct * sizeof (int));
@@ -1311,8 +1260,7 @@ int DoIt (void) {
   rgnct = (latct > lonct) ? latct : lonct;
   if (rgnct > 300) {
     fprintf (stderr,
-	"Error: requested number of regions (%d) exceeds cfitsio limit\n",
-	rgnct);
+	"Error: requested number of regions (%d) exceeds cfitsio limit\n", rgnct);
     fprintf (stderr, "       of 300 open file pointers.\n");
     return 1;
   }
@@ -1323,7 +1271,7 @@ int DoIt (void) {
     fprintf (stderr, "       scale parameter must be set.\n");
     return 1;
   }
-							  /*  tracking rates  */
+
   if (no_track) {
     a0 = -(CARR_RATE);
     a2 = a4 = merid_v = 0.0;
@@ -1350,10 +1298,22 @@ int DoIt (void) {
   xstp = ystp = map_scale * raddeg;
   x0 = 0.5 * (1.0 - map_cols) * xstp;
   y0 = 0.5 * (1.0 - map_rows) * ystp;
-		       /*  check validity and compatability of output series  */
-  orec = drms_template_record (drms_env, outser, &status);
-  if (status) {
-    fprintf (stderr, "Error: no information about output series %s\n", outser);
+
+  if (!(ods = drms_create_records (drms_env, rgnct, outser, DRMS_PERMANENT,
+      &status))) {
+    fprintf (stderr, "Error: unable to create %d records in series %s\n",
+	rgnct, outser);
+    fprintf (stderr, "       drms_create_records() returned status %d\n", status); 
+    return 1;
+  }
+  if (verbose) printf ("creating %d record(s) in series %s\n", rgnct, outser);
+  if (verbose && dispose == DRMS_FREE_RECORD)
+      printf ("experimental run, output records will not be saved\n");
+					 /*  check output data series struct  */
+  orec = drms_recordset_getrec (ods, 0);
+  if (!orec) {
+    fprintf (stderr, "Error accessing record %d in series %s\n", 0, outser);
+    drms_close_records (ods, DRMS_FREE_RECORD);
     return 1;
   }
   segct = drms_record_numsegments (orec);
@@ -1371,14 +1331,15 @@ int DoIt (void) {
     found++;
   }
   if (found < 1) {
-    fprintf (stderr, "Error: no data segment of dimension 3 and ");
-    fprintf (stderr, "appropriate size in output series\n  %s\n", outser);
+    fprintf (stderr,
+	"Error: no data segment of dimension 3 and appropriate size in output series %s\n", outser);
+    drms_close_records (ods, DRMS_FREE_RECORD);
     return 1;
   }
   record_segment = drms_segment_lookup (orec, osegname);
   if (found > 1) {
-    fprintf (stderr, "Warning: multiple data segments of dimension 3 and ");
-    fprintf (stderr, "appropriate size in output series\n  %s\n", outser);
+    fprintf (stderr,
+	"Warning: multiple data segments of dimension 3 and appropriate size in output series %s\n", outser);
     fprintf (stderr, "       using \"%s\"\n", osegname);
   }
 	     /*  use output series default segment scaling if not overridden  */
@@ -1393,14 +1354,13 @@ int DoIt (void) {
     bzero_override = 0;
   }
 					   /*  check for segment named "Log"  */
-  if (verbose_logs) {
-    logseg = drms_segment_lookup (orec, "Log");
-    if (!logseg) {
-      fprintf (stderr,
-	  "Warning: segment \"Log\" not present in output series %s\n", outser);
-      fprintf (stderr, "         verbose logging turned off\n");
-      verbose_logs = 0;
-    }
+  logseg = drms_segment_lookup (orec, "Log");
+  if (logseg) drms_segment_filename (logseg, logfilename);
+  else if (verbose) {
+    fprintf (stderr,
+	"Warning: segment \"Log\" not present in output series %s\n", outser);
+    fprintf (stderr, "         verbose logging turned off\n");
+    verbose_logs = 0;
   }
   if ((keywd = drms_keyword_lookup (orec, "CMLon", 1)))
     sprintf (ctimefmt, "%%d:%s", keywd->info->format);
@@ -1430,27 +1390,6 @@ int DoIt (void) {
     max_scaled += bzero;
     min_scaled += bzero;
   }
-					/*  check if limb distance is needed  */
-  need_limb_dist = (drms_keyword_lookup (orec, "MeanMu", 1) ||
-      drms_keyword_lookup (orec, "MeanPA", 1));
-  drms_free_record (orec);
-
-  if (!(ods = drms_create_records (drms_env, rgnct, outser, DRMS_PERMANENT,
-      &status))) {
-    fprintf (stderr, "Error: unable to create %d records in series %s\n",
-	rgnct, outser);
-    fprintf (stderr, "       drms_create_records() returned status %d\n", status); 
-    return 1;
-  }
-  if (verbose) printf ("creating %d record(s) in series %s\n", rgnct, outser);
-  if (verbose && dispose == DRMS_FREE_RECORD)
-      printf ("experimental run, output records will not be saved\n");
-  orec = drms_recordset_getrec (ods, 0);
-  if (!orec) {
-    fprintf (stderr, "Error accessing record %d in series %s\n", 0, outser);
-    drms_close_records (ods, DRMS_FREE_RECORD);
-    return 1;
-  }
 
   input = strdup (inset);
   source_series = strdup (inset);
@@ -1461,10 +1400,7 @@ int DoIt (void) {
   if (eoser) *eoser = '\0';
 
   if (key_params_from_dspec (inset)) {
-    double tstep_inp;
 				    /*  input specified as specific data set  */
-			/*  this overrides any time specification via the
-				arguments tstart, tstop, tmis, and/or length  */
     if (!time_is_invalid (tstrt) || !time_is_invalid (tstop) ||
         strcmp (tmid_str, "Not Specified") || (length > 0)) {
       fprintf (stderr, "Warning: input record set explicitly specified:\n");
@@ -1501,20 +1437,16 @@ int DoIt (void) {
     }
     tstrt = drms_getkey_time (irec, trec_key, &status);
     tstop = drms_getkey_time (ids->records[recct - 1], trec_key, &status);
+    length = (tstop - tstrt + 1.01 * tstep) / tstep;
     tmid = 0.5 * (tstrt + tstop);
-    if (get_cadence (irec, source_series, tstp_key, trec_key, &tstep_inp,
-	&data_cadence)) {
-      fprintf (stderr, "Error: unable to determine input cadence: tstep must be supplied\n");
+/*
+    segct = drms_record_numsegments (irec);
+*/
+    seglist = ndimsegments (irec, 2, &segct);
+    if (get_cadence (irec, source_series, tstp_key, trec_key, &tstep, &data_cadence)) {
       drms_close_records (ids, DRMS_FREE_RECORD);
       return 1;
     }
-    if (isnan (tstep) || tstep <= 0.0) tstep = tstep_inp;
-    else tstep *= data_cadence;
-    length = (tstop - tstrt + 1.01 * tstep) / tstep;
-    seglist = ndimsegments (irec, 2, &segct);
-    platform = platform_info (irec, source_series);
-    if (platform == LOC_UNKNOWN) fprintf (stderr,
-	"Warning: observing location unknown, assumed geocenter\n");
 /*
  *  End of time range evaluation when input specified as specific data set
  */
@@ -1550,7 +1482,42 @@ int DoIt (void) {
       return 1;
     }
     t_eps = 0.5 * data_cadence;
-    platform = platform_info (irec, source_series);
+
+    if ((keywd = drms_keyword_lookup (irec, "TELESCOP", 1))) {
+						     /*  should be constant  */
+      if (keywd->info->recscope != 1)
+	fprintf (stderr, "Warning: TELESCOP is variable in input series %s\n",
+	    source_series);
+      if (!strcmp (drms_getkey_string (irec, "TELESCOP", &status), "SDO/HMI"))
+	platform = LOC_SDO;
+      else if (!strcmp (drms_getkey_string (irec, "TELESCOP", &status), "SOHO"))
+	platform = LOC_SOHO;
+      else if (!strcmp (drms_getkey_string (irec, "TELESCOP", &status),
+	  "NSO-GONG")) {
+	if ((keywd = drms_keyword_lookup (irec, "SITE", 1))) {
+	  if (!strcmp (drms_getkey_string (irec, "SITE", &status), "MR"))
+	    platform = LOC_GONG_MR;
+	  else if (!strcmp (drms_getkey_string (irec, "SITE", &status), "LE"))
+	    platform = LOC_GONG_LE;
+	  else if (!strcmp (drms_getkey_string (irec, "SITE", &status), "UD"))
+	    platform = LOC_GONG_UD;
+	  else if (!strcmp (drms_getkey_string (irec, "SITE", &status), "TD"))
+	    platform = LOC_GONG_TD;
+	  else if (!strcmp (drms_getkey_string (irec, "SITE", &status), "CT"))
+	    platform = LOC_GONG_CT;
+	  else if (!strcmp (drms_getkey_string (irec, "SITE", &status), "BB"))
+	    platform = LOC_GONG_BB;
+	  else if (!strcmp (drms_getkey_string (irec, "SITE", &status), "ML"))
+	    platform = LOC_GONG_ML;
+	  else {
+	    platform = LOC_GONG_MR;
+	  }
+	} else {
+          fprintf (stderr, "Warning: unspecified GONG site: MR assumed\n");
+	  platform = LOC_GONG_MR;
+	}
+      }
+    }
     if (platform == LOC_UNKNOWN) fprintf (stderr,
 	"Warning: observing location unknown, assumed geocenter\n");
 /*
@@ -1584,13 +1551,6 @@ int DoIt (void) {
         tmid = sscan_time (tmid_str);
       tbase = drms_getkey_time (irec, trec_key, &status);
       phase = fmod ((tmid - tbase), data_cadence);
-      if (length <= 0) {
-	fprintf (stderr,
-	    "Error: if tmid is specified, length in units of cadence must also be specified\n");
-	if (ods) drms_close_records (ods, DRMS_FREE_RECORD);
-	drms_close_records (ids, DRMS_FREE_RECORD);
-	return 1;
-      }
       tstrt = tmid - 0.5 * length * tstep;
       tstop = tstrt + (length - 1) * tstep;
       if (tstop <= tstrt) {
@@ -1601,7 +1561,6 @@ int DoIt (void) {
 	sprint_time (ptbuf, tstrt, "", 0);
 	fprintf (stderr, "%s for length = %d, tstep = %.2f\n", ptbuf, length,
 	    tstep);
-	if (ods) drms_close_records (ods, DRMS_FREE_RECORD);
 	drms_close_records (ids, DRMS_FREE_RECORD);
 	return 1;
       }
@@ -1684,6 +1643,7 @@ int DoIt (void) {
     if (!(ids = drms_open_records (drms_env, rec_query, &status))) {
       fprintf (stderr, "Error: unable to open input data set \"%s\\n", rec_query);
       fprintf (stderr, "       status = %d\n", status);
+      drms_close_records (ids, DRMS_FREE_RECORD);
       return 1;
     }
     if ((recct = ids->n) < 2) {
@@ -1700,8 +1660,8 @@ int DoIt (void) {
   }
 
   if (verbose) {
-    sprint_time (ptbuf, tstrt, "TAI", 0);
-    sprint_time (tbuf, tstop, "TAI", 0);
+    sprint_time (ptbuf, tstrt, "", 0);
+    sprint_time (tbuf, tstop, "", 0);
     printf ("tracking data from %s - %s at cadence of %.1f s\n", ptbuf, tbuf,
 	tstep);
   }
@@ -1849,11 +1809,10 @@ int DoIt (void) {
       tmid_cr = drms_getkey_int (irec, crot_key, &status);
       if (isnan (tmid_cl) || tmid_cr < 0) {
 	if (geo_times)
-	  status = getctrloc_from_time (tobs, &img_lat, &tmid_cl, &tmid_cr, LOC_GEOC);
+	  getctrloc_from_time (tobs, &img_lat, &cm_lon_first, &cr_first, LOC_GEOC);
 	else
-	  status = getctrloc_from_time (tobs, &img_lat, &tmid_cl, &tmid_cr, platform);
+	  getctrloc_from_time (tobs, &img_lat, &cm_lon_first, &cr_first, platform);
       }
-      found_mid = 1;
     }
   }
   if (!found_last) {
@@ -1924,8 +1883,6 @@ int DoIt (void) {
       if (cm_lon_stop > cm_lon_start) cr_stop++;
     }
 */
-  if (need_crcl && !found_mid) {
-  }
   lon_span = cm_lon_start - cm_lon_stop;
   while (cr_start < cr_stop) {
     cr_start++;
@@ -2668,7 +2625,6 @@ int DoIt (void) {
   }
 
   coverage = (double)valid / (double)length;
-  if (tstep != data_cadence) coverage *= data_cadence / tstep;
   if (verbose) {
     printf ("End tracking: %d of %d possible input records accepted\n",
         valid, recct);
@@ -3034,19 +2990,6 @@ int DoIt (void) {
  *	use of geocentric ephemeris for meridian crossing times, and specific
  *	location for geocenter
  *  v 2.0 frozen 2016.11.29
- *  v 2.1	Fixed bug requiring tstep to be explictly set when input
- *	dataset fully specified; fixed reporting of coverage when output
- *	and input step sizes differ; added versioning of some included code
- *	(2019.11.04)
- *  v 2.1 frozen 2019.11.26
- *  v 2.2	Added -G flag to arg list for description; fixed bug causing
- *	failure to properly set keys for Carrington coordinates when target
- *	midpoint specified as date_time or by dataset specification and
- *	input record for midpoint missing data; added check for limb-distance
- *	calculation; fixed bug requiring tstep to be explictly set when
- *	when input dataset fully specified (not fully fixed in previous
- *	version
- *  v 2.2 frozen 2019.01.14
  */
 /******************************************************************************/
 

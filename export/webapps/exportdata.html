@@ -14,7 +14,7 @@
 
 <script type="text/javascript">
 // Global variables and initialize page locations
-var exportdata = location.pathname.sub(".html","");
+var exportdata = location.pathname.sub(".html",""); 
 </script>
 <script type="text/javascript">
 document.write('<base id="basepath" href="'+exportdata+'/"><\/base>');
@@ -40,8 +40,6 @@ var KEYWORD_LVL_NUM = 'LVL_NUM';
 var AIA_SCALE_CTYPE1 = 'HPLN-TAN';
 var AIA_SCALE_CTYPE2 = 'HPLT-TAN';
 var KEYWORD_SPEC = '*spec*';
-var KEYWORD_ONLINE = '*online*';
-var KEYWORD_SIZE = '*size*';
 var AIA_NAMESPACE = 'aia';
 var NA = 'na';
 var AIA_SCALE_NAXES = 2;
@@ -57,7 +55,6 @@ var JSOCEXTINFO = 'jsocextinfo';
 var JSOC_INFO = 'jsoc_info';
 var JSOCEXTFETCH = 'jsocextfetch';
 var JSOC_FETCH = 'jsoc_fetch';
-var DRMS_EXPORT = 'drms-export.sh';
 var SERIES_INFO = 'series_info';
 var PARSE_RECSET = 'drms_parserecset';
 var LOOKDATA = "lookdata";
@@ -90,21 +87,10 @@ span.tip { background-color:blue;font-family:verdana;color:white;font-size:1em;f
 <script type="text/javascript">
 
 // Protect page from accidental BACK button
-var ON_BEFORE_UNLOAD_FXN = function (event)
-{
-    if ($('FileUploadFormID').retrieve('beforeunloadOverride', false))
-    {
-        $('FileUploadFormID').store({ 'beforeunloadOverride' : false })
-        window.onbeforeunload = null;
-    }
-
-    if ($('FileUploadFormID').retrieve('beforeunloadEnabled', false))
-    {
-        // this message will never display - all browsers disallow this now;
-        // return "Did you really mean to leave exportdata? Use CANCEL to stay here";
-        window.onbeforeunload = function() { return 'this does not matter - never gets executed'; };
-    }
-};
+window.onbeforeunload = function () 
+  {
+  return "Did you really mean to leave exportdata? Use CANCEL to stay here";
+  }
 
 function OnEnterKey(evt,action)
   {
@@ -127,7 +113,7 @@ function NotifyProcessingCode()
   // Set flags to alert processing or method options here.
   // variables here will usually be defined in exportdata.d/processing.js
   // or exportdata.d/export_request_form.html
-
+  
   // SeriesName is determined asynchronously.
   if (SeriesName == previousSeries)
     SetProcessing(-1, null); // Do not initialize all processing options to their defaults.
@@ -155,9 +141,11 @@ var ExportRecordSetOK;
 var ExportRedinessStatus;
 var ExportFromFileList;
 var ExportMethodOK;
+var ExportMethodIsDirect;
 var ExportFilenameFmtOK;
 var ExportProcessingOptions;
 var ExportUserOK;
+var ExportNotifyOK;
 var ExportReadyOK;
 var TipsEnabled;
 var TipsCreated = 0;
@@ -188,7 +176,7 @@ var protocolEnable;
 var firstTimePrime;
 var expURL;
 var IsAia = null;
-var IsAiaLev1 = null; // is true, then we need to use the default file format string for aia.lev1p5
+var IsAiaLev1 = null;
 
 // Colors
 var colorNeutral = "#D4D0C8";
@@ -197,15 +185,11 @@ var colorOptionSet = "#FFCC66";
 var colorPink = "#FFD8D8";
 var colorDarkPink = "#FFB0B0";
 var colorRed = "#D88080";
-var colorDarkRed = "#C00000";
+var colorDarkRed = "#FF8080";
 var colorRealRed = "#FF0000";
-var colorDarkishRed = "#FF8080";
-var colorBrightOrange = '#F9441F';
-var colorDarkBlue = "#0000B0";
 var colorWhite = "#FFFFFF";
 var colorBlack = "#000000";
 var colorGreen = "#80FF80";
-var colorDarkGreen = "#009000";
 var colorYellow = "#FFF8DC";
 
 
@@ -219,15 +203,16 @@ function initVars()
   SeriesName = "";
   RequestID = "";
   RecordCount = null;
-  $('ExportRecordSet').store({ 'count': RecordCount });
   RecordLimit = 0;
   ExportRecordSetOK = 0;
   ExportQueryOK = 0;
   ExportRedinessStatus = 0;
   ExportFromFileList = 0;
   ExportMethodOK = 1;
+  ExportMethodIsDirect = 0;
   ExportFilenameFmtOK = 1;
   ExportUserOK = 0;
+  ExportNotifyOK = 0;
   ExportReadyOK = 2;
   TipsEnabled = 1;
   uploadOndoneAction = 0;
@@ -246,7 +231,7 @@ function initVars()
   protocolEnable = 0;
   ProtocolOptionsSet = 0;
 
-    // If the page is being loaded, then exportdataLoaded is true. If the reset page button was clicked, then
+    // If the page is being loaded, then exportdataLoaded is true. If the reset page button was clicked, then 
     // exportdataLoaded is true as well. So, there is no need to check for a true value for exportdataLoaded.
     ProcessingInit();
     ProcessingEnabled()
@@ -259,6 +244,7 @@ function initVars()
   // Form init
     {
     $("ExportRequestor").value = "";
+    $("ExportNotify").value = "solarmail";
     $("RequestIdPlace").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
     $("StatusLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
     $("TarFileLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
@@ -354,7 +340,7 @@ function OnLoadInit()
   {
   var needcount = 0;
   Cookie.init({name:exportdata, expires:14});
-  initVars(); // This call runs code that requires RecordSet to be set. However, that is not true
+  initVars(); // This call runs code that requires RecordSet to be set. However, that is not true  
               // before it is set below [ $("ExportRecordSet").value = args.ds ]
   if (Internal)
     {
@@ -374,7 +360,7 @@ function OnLoadInit()
     {
     RequestID = args.id;
     }
-  if (args.limit)
+  if (args.limit) 
     {
     $("ExportRecordLimit").value = args.limit;
     if (args.limit == "none") RecordLimit = 0;
@@ -391,17 +377,9 @@ function OnLoadInit()
 
   CreateTips();
   $("TipsOnOffButton").value = "Turn Help Off";
-
+  
   $('RSCountPlace').up().setStyle({ 'max-width': '22em', 'overflow-wrap': 'break-word', 'word-wrap': 'break-word', 'word-break': 'break-all' });
-
-    // make a handler for the form-changed event; if the form changes, we want to set a flag that enables the beforeunload handler;
-    // initially disable the beforeunload handler
-    $('FileUploadFormID').observe('change', function(event) { $('FileUploadFormID').store({ 'beforeunloadEnabled': true }); });
-    $('FileUploadFormID').store({ 'beforeunloadEnabled': false });
-
-    // deal with onbeforeunload bs - can't figure out any other way to do this
-    setInterval(ON_BEFORE_UNLOAD_FXN, 500);
-
+  
   window.focus();
   }
 
@@ -511,12 +489,12 @@ function CreateTips()
   MainTips(tipstyle);
   AddOnTips(tipstyle, Tip);
   TipsCreated = 1;
-  $$("span.tip").each(function(showspan){showspan.show();});
+  $$("span.tip").each(function(showspan){showspan.show();}); 
   }
 
 function HideTips()
   {
-  $$("span.tip").each(function(hidespan){hidespan.hide();});
+  $$("span.tip").each(function(hidespan){hidespan.hide();}); 
   Tips.hideAll();
   }
 
@@ -571,7 +549,7 @@ function FileUploadCleanup()
   $("RecordCountRow").style.display="table-row";
   $("ExportOpID").value = "exp_request";
   }
-
+  
 function FileUploadWanted()
   {
   ExportQueryOK = 0;
@@ -644,7 +622,7 @@ function FinishFileUpload()
   }
 
 function CallLookdata()
-  {
+  { 
   var recset = $("ExportRecordSet").value;
   var posbracket = recset.indexOf("[");
   var posRbracket = recset.lastIndexOf("]");
@@ -659,13 +637,13 @@ function CallLookdata()
         // This is the filter used to select a series in lookdata.html, step 1.
         lookdataargs += "&rs=" + recfilt
     }
-
+    
     // I guess the RecordCount can never be negative.
     if (RecordCount !== null && RecordCount > 0)
     {
         lookdataargs += "&n=" + RecordCount.toString();
     }
-
+    
   LookdataWindow=window.open("http://" + Host + "/ajax/" + LOOKDATA + ".html?" + encodeURIComponent(lookdataargs), "JSOC Lookdata");
   LookdataWindow.window.focus();
   }
@@ -679,7 +657,7 @@ function WlSeriesInfo()
 
 // Parse record-set specification (spec) to get a list of all series names in the spec. This function sends that list to the WlSeriesInfo.getServer() method.
 // THAT method finds out which database server contains the DRMS series information.
-// To use extract names, do this.
+// To use extract names, do this. 
 // This callback assumes that you want to call the getServer method in the 'this' object (an instance of the WlSeriesInfo class).
 // So if you want to call extractSnames from outside of the 'this' object, you have to create a wrapper in WlSeriesInfo, then
 // instantiate it (outside of 'this') with var wlInfo = new WlSeriesInfo(), then call the wrapper wlInfo.wrapper(args).
@@ -700,9 +678,9 @@ WlSeriesInfo.prototype.extractSnames = function(args)
     var callbackObjMeth = args.cbfnobjmeth; // getServer
     var callbackArgs = args.cbargs;
     var snames = [];
-
+    
     $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
-
+    
     new Ajax.Request('http://' + Host + '/cgi-bin/' + PARSE_RECSET,
     {
         method: 'get',
@@ -732,15 +710,15 @@ WlSeriesInfo.prototype.extractSnames = function(args)
         onFailure: function() { alert('Unable to parse record-set specficiation ' + "'" + spec + "'."); },
         onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
      });
-
+     
      $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
 };
 
 function CreateParseSpecResponse(processSpec)
 {
     var parseSpecResponseCallback = processSpec;
-
-    var ParseSpecResponse =
+    
+    var ParseSpecResponse = 
         function(transport)
         {
             var response = transport.responseText;
@@ -748,7 +726,7 @@ function CreateParseSpecResponse(processSpec)
             var errMsg = null;
 
             if (response && response.length)
-            {
+            {   
                 data = response.evalJSON();
             }
             else
@@ -764,18 +742,18 @@ function CreateParseSpecResponse(processSpec)
                 parseSpecResponseCallback(errMsg, data);
             }
         };
-
+                            
     return ParseSpecResponse;
 }
 
 function ParseSpec(spec, processSpec)
-{
+{    
     var onSuccess = CreateParseSpecResponse(processSpec);
     var url = null;
     var origin = null;
-
+    
     origin = ExportOrigin(null, Host.toLowerCase())
-
+    
     if (origin[0] == 'extServer')
     {
         url = 'http://' + EXTERNAL_WEBSERVER + '.' + STANFORD_DOMAIN + '/cgi-bin/' + PARSE_RECSET;
@@ -785,7 +763,7 @@ function ParseSpec(spec, processSpec)
         url = 'http://' + INTERNAL_WEBSERVER + '.' + STANFORD_DOMAIN + '/cgi-bin/' + PARSE_RECSET;
     }
 
-    new Ajax.Request(url,
+    new Ajax.Request(url, 
     {
         'method' : 'get',
         'parameters' : { 'spec' : spec },
@@ -795,10 +773,9 @@ function ParseSpec(spec, processSpec)
     });
 }
 
-// callback is processRecordCount
 function CreateRequestRSInfoCallback(callback, lastRecord)
-{
-    var processRSInfo =
+{    
+    var processRSInfo = 
         function(transport)
         {
             var response = transport.responseText;
@@ -815,11 +792,10 @@ function CreateRequestRSInfoCallback(callback, lastRecord)
                         errMsg = data.error;
                     }
                     RecordCount = null; // global
-                    $('ExportRecordSet').store({ 'count': RecordCount });
                     $("RSCountPlace").innerHTML = errMsg;
                     ExportRecordSetOK = 0; // global
                     SeriesName = ''; // global
-
+                    
                     if (callback !== null)
                     {
                         callback(errMsg);
@@ -827,151 +803,98 @@ function CreateRequestRSInfoCallback(callback, lastRecord)
                 }
                 else
                 {
-                    var aiaScaleCompatibilityChecked = false;
-
                     RecordCount = data.count; // global
-                    $('ExportRecordSet').store({ 'count': RecordCount });
                     $("RSCountPlace").innerHTML = data.count;
                     ExportRecordSetOK = 1; // global
-
-                    aiaScaleCompatibilityChecked = ($('OptionAiaScale').retrieve('disabled_state', null) !== null);
-
+                    
                     // check for compatibility with aia_scale processing
-
-                    // aia_scale compatibility has not yet been determined; check now
-                    // loop through all records, checking the keyword criteria; jsoc_info
-                    // does not provide hash-accessibility to keyword info, so must
-                    // loop through all keywords
-                    var compatible = null;
-                    var online = null;
-                    var size = null;
-
-                    if (data.hasOwnProperty('keywords'))
+                    if ($('OptionAiaScale').retrieve('disabledState', null) === null)
                     {
-                        var ctype1Checked = false;
-                        var ctype2Checked = false;
-
-                        if (aiaScaleCompatibilityChecked)
+                        // aia_scale compatibility has not yet been determined; check now
+                        // loop through all records, checking the keyword criteria; jsoc_info
+                        // does not provide hash-accessibility to keyword info, so must
+                        // loop through all keywords
+                        var compatible = null;
+                        
+                        if (data.hasOwnProperty('keywords'))
                         {
-                            ctype1Checked = true;
-                            ctype2Checked = true;
+                            compatible = true;
+                            for (var index = 0; index < data.keywords.length; index++)
+                            {
+                                // we are assured that the CTYPE keywords will be in the jsoc_info results, 
+                                // even if the series does not have those keywords; if a keyword
+                                // does not exist in the series, jsoc_info prints 'Invalid Keylink'
+                                // for the keyword value (as long as the keyword is specified in the keys argument
+                                // to jsoc_info)
+                                if (data.keywords[index].name.strip().toLowerCase() == KEYWORD_CTYPE1.toLowerCase())
+                                {
+                                    for (var valIndex = 0; valIndex < data.keywords[index].values.length; valIndex++)
+                                    {
+                                        // loop over records
+                                        if (data.keywords[index].values[valIndex] != AIA_SCALE_CTYPE1)
+                                        {
+                                            compatible = false;
+                                            break;
+                                        }
+                                    }
+                                }
+                        
+                                if (!compatible)
+                                {
+                                    break;
+                                }
+                            
+                                if (data.keywords[index].name.strip().toLowerCase() == KEYWORD_CTYPE2.toLowerCase())
+                                {
+                                    for (var valIndex = 0; valIndex < data.keywords[index].values.length; valIndex++)
+                                    {
+                                        // loop over records
+                                        if (data.keywords[index].values[valIndex] != AIA_SCALE_CTYPE2)
+                                        {
+                                            compatible = false;
+                                            break;
+                                        }
+                                    }
+                                }
+                            
+                                if (!compatible)
+                                {
+                                    break;
+                                }
+                            }
                         }
                         else
                         {
-                            compatible = true;
+                            // no keyword information was returned by jsoc_info, so we cannot tell if this series;
+                            // this happens if no rows were returned
+                            compatible = false;
                         }
-
-                        for (var index = 0; index < data.keywords.length; index++)
-                        {
-                            // we are assured that the CTYPE keywords will be in the jsoc_info results,
-                            // even if the series does not have those keywords; if a keyword
-                            // does not exist in the series, jsoc_info prints 'Invalid Keylink'
-                            // for the keyword value (as long as the keyword is specified in the keys argument
-                            // to jsoc_info)
-                            if (compatible && !ctype1Checked && data.keywords[index].name.strip().toLowerCase() == KEYWORD_CTYPE1.toLowerCase())
-                            {
-                                for (var valIndex = 0; compatible && valIndex < data.keywords[index].values.length; valIndex++)
-                                {
-                                    // loop over records
-                                    if (data.keywords[index].values[valIndex] != AIA_SCALE_CTYPE1)
-                                    {
-                                        compatible = false;
-                                        break;
-                                    }
-                                }
-
-                                ctype1Checked = true;
-                            }
-
-                            if (compatible && !ctype2Checked && data.keywords[index].name.strip().toLowerCase() == KEYWORD_CTYPE2.toLowerCase())
-                            {
-                                for (var valIndex = 0; compatible && valIndex < data.keywords[index].values.length; valIndex++)
-                                {
-                                    // loop over records
-                                    if (data.keywords[index].values[valIndex] != AIA_SCALE_CTYPE2)
-                                    {
-                                        compatible = false;
-                                        break;
-                                    }
-                                }
-
-                                ctype2Checked = true;
-                            }
-
-                            // check to see if all SUs are online
-                            if (online === null && data.keywords[index].name.strip().toLowerCase() == KEYWORD_ONLINE.toLowerCase())
-                            {
-                                online = true;
-
-                                for (var valIndex = 0; valIndex < data.keywords[index].values.length; valIndex++)
-                                {
-                                    // loop over records
-                                    if (data.keywords[index].values[valIndex].toLowerCase() != 'y')
-                                    {
-                                        online = false;
-                                        break;
-                                    }
-                                }
-                            }
-
-                            if (size === null && data.keywords[index].name.strip().toLowerCase() == KEYWORD_SIZE.toLowerCase())
-                            {
-                                size = 0;
-
-                                for (var valIndex = 0; valIndex < data.keywords[index].values.length; valIndex++)
-                                {
-                                    // loop over records
-                                    size += data.keywords[index].values[valIndex];
-                                }
-                            }
-
-                            if (ctype1Checked && ctype2Checked && online !== null && size != null)
-                            {
-                                break;
-                            }
-                        }
-                    }
-                    else if (!aiaScaleCompatibilityChecked)
-                    {
-                        // no keyword information was returned by jsoc_info, so we cannot tell if this series;
-                        // this happens if no rows were returned
-                        compatible = false;
-                    }
-
-                    if (!aiaScaleCompatibilityChecked)
-                    {
+                        
                         // we definitively know whether or not aia_scale processing should be disabled
                         if (compatible)
                         {
-                            $('OptionAiaScale').store({ 'disabled_state' : false });
+                            $('OptionAiaScale').store({ 'disabledState' : false });
                         }
                         else
                         {
-                            $('OptionAiaScale').store({ 'disabled_state' : true });
+                            $('OptionAiaScale').store({ 'disabledState' : true });
                         }
-                    }
-
-                    if (online)
-                    {
-                        $('ExportRecordSet').store({ 'allSUsOnline' : true });
                     }
                     else
                     {
-                        $('ExportRecordSet').store({ 'allSUsOnline' : false });
+                        // processSeriesSelection determined that the series is not aia_scale compatible
                     }
-
-                    $('ExportRecordSet').store({ 'sizeSU' : size });
-
-                    if (!$('OptionAiaScale').retrieve('disabled_state', false))
+                    
+                    if (!$('OptionAiaScale').retrieve('disabledState', false))
                     {
                         // this series' first segment has a 2D-image with a CTYPE1 value of 'HPLN-TAN' and a CTYPE2 value of 'HPLT-TAN' so
-                        // it is compatible with aia_scale processing; the code to determine this is split between processSeriesSelection and
-                        // processRSInfo
+                        // it is compatible with aia_scale processing; the code to determine this is split between processSeriesSelection and 
+                        // processRSInfo                    
 
                         // this should remain disabled until all asynchronous processing completes
                         $('OptionAiaScaleLabel').innerHTML = 'aia_scale - Scale image to 0.6 arcsec/pixel';
                         $('OptionAiaScaleLabel').setStyle({ color: 'black' });
-
+                        
                         // the determination of which aia_scale proc to use was already determined; in processSeriesSelection()
                         // a check of the LVL_NUM keyword was performed; this keyword must be constant, since a series cannot be
                         // a mix of levels
@@ -1003,7 +926,7 @@ function CreateRequestRSInfoCallback(callback, lastRecord)
                                                 break;
                                             }
                                         }
-
+                                        
                                         break; // look only at the LVL_NUM keyword
                                     }
                                 }
@@ -1017,14 +940,14 @@ function CreateRequestRSInfoCallback(callback, lastRecord)
                         // this should remain disabled until all asynchronous processing completes
                         $('OptionAiaScaleLabel').innerHTML = 'aia_scale - Scale image to 0.6 arcsec/pixel (compatible with 2D dataseries with CTYPE1 == HPLN-TAN and CTYPE2 == HPLT-TAN only)'
                         $('OptionAiaScaleLabel').setStyle({ color: 'grey' });
-
+                        
                         // uncheck the aia_scale checkbox if it is currently checked
                         if ($('OptionAiaScale').checked)
                         {
                             $('OptionAiaScale').checked = false;
                         }
                     }
-
+                    
                     // if the user has specified the current record with [$], then replace [$] with the record-specification
                     if (lastRecord && data.hasOwnProperty('keywords'))
                     {
@@ -1045,9 +968,8 @@ function CreateRequestRSInfoCallback(callback, lastRecord)
             {
                 errMsg = 'invalid jsoc_info response';
                 RecordCount = null;
-                $('ExportRecordSet').store({ 'count': RecordCount });
                 $("RSCountPlace").innerHTML = errMsg;
-                ExportRecordSetOK = 0; // global
+                ExportRecordSetOK = 0; // global  
                 SeriesName = ''; // global
 
                 if (callback !== null)
@@ -1068,125 +990,11 @@ function CreateRequestRSInfoCallback(callback, lastRecord)
                 callback(errMsg);
             }
         };
-
+        
     return processRSInfo;
 }
 
-// callback is processRecordCount
-function CreateObtainFastRecordCountCallback(callback)
-{
-    // assuming that we have not already gotten the record count
-    var obtainFastRecordCount =
-        function(transport)
-        {
-            var response = transport.responseText;
-
-            if (response && response.length)
-            {
-                var data = response.evalJSON();
-
-                if (!data || !data.hasOwnProperty('status') || data.status != 0)
-                {
-                    errMsg = 'failure running jsoc_info';
-                    if (data.hasOwnProperty('error'))
-                    {
-                        errMsg = data.error;
-                    }
-
-                    RecordCount = null; // global
-                    $('ExportRecordSet').store({ 'count': RecordCount });
-                    $("RSCountPlace").innerHTML = errMsg;
-                    ExportRecordSetOK = 0; // global
-
-                    if (callback !== null)
-                    {
-                        callback(errMsg);
-                    }
-                }
-                else
-                {
-                    RecordCount = data.count; // global
-                    $('ExportRecordSet').store({ 'count': RecordCount });
-                    $("RSCountPlace").innerHTML = data.count;
-                    ExportRecordSetOK = 1; // global
-                }
-            }
-            else
-            {
-                errMsg = 'invalid jsoc_info response';
-                RecordCount = null;
-                $('ExportRecordSet').store({ 'count': RecordCount });
-                $("RSCountPlace").innerHTML = errMsg;
-                ExportRecordSetOK = 0; // global
-
-                if (callback !== null)
-                {
-                    callback(errMsg);
-                }
-            }
-
-            if (callback !== null)
-            {
-                var errMsg = null;
-
-                if (!ExportRecordSetOK)
-                {
-                    errMsg = $("RSCountPlace").innerHTML;
-                }
-
-                callback(errMsg);
-            }
-        };
-
-    return obtainFastRecordCount;
-}
-
-// if errMsg, then do not call jsoc_info, but we still have to call the callback (which is processRecordCount)
-function ObtainFastRecordCount(errMsg, spec, callback)
-{
-    var arguments = null;
-    var jsocinfoCGI = null;
-    var host = null;
-
-    if (errMsg && errMsg.length != 0)
-    {
-        if (callback !== null)
-        {
-            callback(errMsg);
-        }
-    }
-    else
-    {
-        // if this is the external host, then use jsocinfointext; this CGI will choose the correct db server to handle the series;
-        // if this is the internal host, then use jsoc_info, which will use the internal db server; Host, RecordLimit and EXTERNAL_SERVER
-        // are globals
-        host = Host.toLowerCase();
-        if (serverMap[host] == INTERNAL_SERVER)
-        {
-            jsocinfoCGI = JSOC_INFO;
-            arguments = { 'ds' : spec, 'n' : RecordLimit, 'op' : 'rs_summary' };
-        }
-        else
-        {
-            jsocinfoCGI = JSOCEXTINFO;
-            arguments = { 'dbhost' : EXTERNAL_SERVER, 'ds' : spec, 'n' : RecordLimit, 'op' : 'rs_summary' };
-        }
-
-        // callback is processRecordCount
-        var onSuccess = CreateObtainFastRecordCountCallback(callback);
-
-        new Ajax.Request('http://' + host + '/cgi-bin/ajax/' + jsocinfoCGI,
-        {
-            'method': 'get',
-            'parameters': arguments,
-            'onSuccess': onSuccess,
-            'onFailure': function() { RecordCount = null; $('ExportRecordSet').store({ 'count': RecordCount }); $("RSCountPlace").innerHTML = 'ERROR - failure calling jsoc_info'; ExportRecordSetOK = 0; SeriesName = ''; $('ExportRecordSet').disabled = false; },
-            'onComplete': function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
-        });
-    }
-}
-
-// if errMsg, then do not call jsoc_info, but we still have to call the callback (which is processRecordCount)
+// if errMsg, then do not call jsoc_info, but we still have to call the callback
 function RequestRSInfo(errMsg, spec, lastRecord, callback)
 {
     var arguments = null;
@@ -1203,101 +1011,36 @@ function RequestRSInfo(errMsg, spec, lastRecord, callback)
     else
     {
         // if this is the external host, then use jsocinfointext; this CGI will choose the correct db server to handle the series;
-        // if this is the internal host, then use jsoc_info, which will use the internal db server; Host, RecordLimit and EXTERNAL_SERVER
+        // if this is the internal host, then use jsoc_info, which will use the internal db server; Host, RecordLimit and EXTERNAL_SERVER 
         // are globals
         host = Host.toLowerCase();
         if (serverMap[host] == INTERNAL_SERVER)
         {
             jsocinfoCGI = JSOC_INFO;
-            arguments = { 'ds' : spec, 'n' : RecordLimit, 'op' : 'rs_list', 'key' : KEYWORD_CTYPE1 + ',' + KEYWORD_CTYPE2 + ',' + KEYWORD_LVL_NUM + ',' + KEYWORD_SPEC + ',' + KEYWORD_ONLINE + ',' + KEYWORD_SIZE };
+            arguments = { 'ds' : spec, 'n' : RecordLimit, 'op' : 'rs_list', 'key' : KEYWORD_CTYPE1 + ',' + KEYWORD_CTYPE2 + ',' + KEYWORD_LVL_NUM + ',' + KEYWORD_SPEC };
         }
         else
         {
             jsocinfoCGI = JSOCEXTINFO;
-            arguments = { 'dbhost' : EXTERNAL_SERVER, 'ds' : spec, 'n' : RecordLimit, 'op' : 'rs_list', 'key' : KEYWORD_CTYPE1 + ',' + KEYWORD_CTYPE2 + ',' + KEYWORD_LVL_NUM + ',' + KEYWORD_SPEC + ',' + KEYWORD_ONLINE + ',' + KEYWORD_SIZE };
+            arguments = { 'dbhost' : EXTERNAL_SERVER, 'ds' : spec, 'n' : RecordLimit, 'op' : 'rs_list', 'key' : KEYWORD_CTYPE1 + ',' + KEYWORD_CTYPE2 + ',' + KEYWORD_LVL_NUM + ',' + KEYWORD_SPEC };
         }
 
         var onSuccess = CreateRequestRSInfoCallback(callback, lastRecord);
-
+        
         new Ajax.Request('http://' + host + '/cgi-bin/ajax/' + jsocinfoCGI,
-        {
+        {        
             'method': 'get',
             'parameters': arguments,
-            'onSuccess': onSuccess,
-            'onFailure': function() { RecordCount = null; $('ExportRecordSet').store({ 'count': RecordCount }); $("RSCountPlace").innerHTML = 'ERROR - failure calling jsoc_info'; ExportRecordSetOK = 0; SeriesName = ''; $('ExportRecordSet').disabled = false; },
+            'onSuccess': onSuccess, 
+            'onFailure': function() { RecordCount = null; $("RSCountPlace").innerHTML = 'ERROR - failure calling jsoc_info'; ExportRecordSetOK = 0; SeriesName = ''; $('ExportRecordSet').disabled = false; },
             'onComplete': function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
         });
     }
 }
 
-// called after the click on "Submit Export Request" button when url_direct is the selected export method
-function CreateExportDownloadLink(err, callback)
-{
-    // extract arguments
-    var args = $('ExportRecordSet').retrieve('exportArgs', null);
-    var argsStr = null;
-    var host = null;
-    var drmsexportCGI = null;
-    var url = null;
-    var linkUrl = null;
-    var errMsg = null;
-
-    if (err && err.length > 0)
-    {
-        errMsg = err;
-    }
-    else if (args === null)
-    {
-        errMsg = 'arguments to drms-export CGI missing';
-    }
-    else
-    {
-        // XXX check to see if count is null - if so, then run requestRSInfo()
-        var count = $('ExportRecordSet').retrieve('count', null);
-        var sizeSU = $('ExportRecordSet').retrieve('sizeSU', null);
-
-        Cookie.setData("state", 0);
-        Cookie.setData("requestid", "");
-
-        $("ExportButtonMsg").innerHTML = 'Please use the link below to download data prior to initiating a new request';
-        ExportReadyOK = 2;
-        $("ExportButton").value = 'Submit Export Request'; // if user clicks, then export-complete message displays
-        $("ExportButton").style.backgroundColor = "#D8D8D8"; // grey
-
-        RequestID = 'N/A';
-        $("RequestIdPlace").update(RequestID);
-        $("RequestIDDesc").update("");
-        $("ExportStatus").update("Download size = " + Math.round(10 * sizeSU/1024/1024) / 10 + " MB");
-
-        host = Host.toLowerCase();
-        args.dbhost = serverMap[host];
-        args.webserver = host;
-
-        argsStr = Object.keys(args).map(function(key) { return key + '=' + encodeURIComponent(args[key]); }).join('&');
-        url = 'http://' + host + '/cgi-bin/' + DRMS_EXPORT + '?' + argsStr;
-
-        // make an href - when the user clicks on this link, either a save-file dialog will display or, if the user
-        // has set-up their mime-type file association, the file will display in a viewer like ds9
-        $('DataLocation').update('Download');
-
-        // disable the beforeunload event handler
-        $('ExportLocation').observe('click', function(event) { window.onbeforeunload = null; $('FileUploadFormID').store({ 'beforeunloadOverride' : true }); });
-        // make an href - when the user clicks on this link, either a save-file dialog will display or, if the user
-        // has set-up their mime-type file association, the file will display in a viewer like ds9
-        linkUrl = new Element('a', { 'href' : url } ).update(args.spec);
-        $('ExportLocation').update(linkUrl);
-    }
-
-    if (callback !== null)
-    {
-        callback(errMsg);
-    }
-}
-
-// callback is requestRSInfo
 function CreateProcessSeriesSelection(spec, series, seriesNs, callback)
 {
-    var processSeriesSelection =
+    var processSeriesSelection = 
         function(transport)
         {
             var response = transport.responseText;
@@ -1306,7 +1049,7 @@ function CreateProcessSeriesSelection(spec, series, seriesNs, callback)
             {
                 var data = response.evalJSON();
                 var errMsg = null;
-
+         
                 // check for suitability for aia_scale processing
                 if (!data || !data.hasOwnProperty('errMsg'))
                 {
@@ -1321,11 +1064,10 @@ function CreateProcessSeriesSelection(spec, series, seriesNs, callback)
                 if (errMsg)
                 {
                     RecordCount = null; // global
-                    $('ExportRecordSet').store({ 'count': RecordCount });
                     $("RSCountPlace").innerHTML = errMsg;
                     ExportRecordSetOK = 0; // global
                     SeriesName = ''; // global
-
+                    
                     // need to call GetRSCount callback by calling the series-selection callback (with an error message)
                     if (callback !== null)
                     {
@@ -1347,15 +1089,15 @@ function CreateProcessSeriesSelection(spec, series, seriesNs, callback)
                             {
                                 // we know that aia_scale should definitely be disabled; store that information now so we can skip
                                 // the secondary check in processRSInfo
-                                $('OptionAiaScale').store({ 'disabled_state' : true });
+                                $('OptionAiaScale').store({ 'disabledState' : true });
                                 compatible = false;
                                 break;
                             }
                         }
                     }
-
+                    
                     keywordsObj = data[series.toLowerCase()].keywords;
-
+                    
                     if (compatible === null)
                     {
                         // compatibility not yet determined
@@ -1364,20 +1106,20 @@ function CreateProcessSeriesSelection(spec, series, seriesNs, callback)
                             compatible = false;
                         }
                         else
-                        {
-                            if ((keywordsObj[KEYWORD_CTYPE1.toLowerCase()]['constant-value'] != AIA_SCALE_CTYPE1 &&
+                        {                        
+                            if ((keywordsObj[KEYWORD_CTYPE1.toLowerCase()]['constant-value'] != AIA_SCALE_CTYPE1 && 
                                  keywordsObj[KEYWORD_CTYPE1.toLowerCase()]['constant-value'] != NA) ||
-                                (keywordsObj[KEYWORD_CTYPE2.toLowerCase()]['constant-value'] != AIA_SCALE_CTYPE2 &&
+                                (keywordsObj[KEYWORD_CTYPE2.toLowerCase()]['constant-value'] != AIA_SCALE_CTYPE2 && 
                                  keywordsObj[KEYWORD_CTYPE2.toLowerCase()]['constant-value'] != NA))
                             {
                                 // we know that aia_scale should definitely be disabled; store that information now so we can skip
-                                // the secondary check in
-                                $('OptionAiaScale').store({ 'disabled_state' : true });
+                                // the secondary check in 
+                                $('OptionAiaScale').store({ 'disabledState' : true });
                                 compatible = false;
                             }
                         }
                     }
-
+                    
                     // we can also determine compatibility with the MPT-selection check box
                     if (seriesNs.toLowerCase() == AIA_NAMESPACE)
                     {
@@ -1391,9 +1133,9 @@ function CreateProcessSeriesSelection(spec, series, seriesNs, callback)
                         $('AiaScaleUseMptCheckboxLabel').innerHTML = 'Use a master pointing table to scale images (instead of keyword values - compatible with AIA series only)&nbsp';
                         $('AiaScaleUseMptCheckboxLabel').setStyle({ color: 'grey' });
                     }
-
+                    
                     // finally, if KEYWORD_LVL_NUM is constant in an AIA series, then set the aia_scale processing flag that determines
-                    // which aia_scale proc is used
+                    // which aia_scale proc is used                    
                     if (seriesNs.toLowerCase() == AIA_NAMESPACE)
                     {
                         IsAia = true;
@@ -1417,7 +1159,7 @@ function CreateProcessSeriesSelection(spec, series, seriesNs, callback)
                             }
                         }
                     }
-
+                    
                     if (callback !== null)
                     {
                         callback(null);
@@ -1428,11 +1170,10 @@ function CreateProcessSeriesSelection(spec, series, seriesNs, callback)
             {
                 errMsg = 'unable to obtain series information';
                 RecordCount = null; // global
-                $('ExportRecordSet').store({ 'count': RecordCount });
                 $("RSCountPlace").innerHTML = errMsg;
                 ExportRecordSetOK = 0; // global
                 SeriesName = ''; // global
-
+                
                 // need to call GetRSCount callback by calling the series-selection callback (with an error message)
                 if (callback !== null)
                 {
@@ -1440,7 +1181,7 @@ function CreateProcessSeriesSelection(spec, series, seriesNs, callback)
                 }
             }
         };
-
+        
     return processSeriesSelection;
 }
 
@@ -1449,9 +1190,9 @@ function RequestSeriesInfo(series, callback)
     var onSuccess = callback;
     var url = null;
     var origin = null;
-
+    
     origin = ExportOrigin(null, Host.toLowerCase())
-
+    
     if (origin[0] == 'extServer')
     {
         url = 'http://' + EXTERNAL_WEBSERVER + '.' + STANFORD_DOMAIN + '/cgi-bin/' + SERIES_INFO;
@@ -1465,17 +1206,17 @@ function RequestSeriesInfo(series, callback)
     {
         'method': 'get',
         'parameters': { 'series' : series, 'atts' : 1, 'keys' : '*', 'segs' : '*' },
-        'onSuccess': onSuccess,
-        'onFailure': function() { RecordCount = null; $('ExportRecordSet').store({ 'count': RecordCount }); SeriesName = ''; ExportRecordSetOK = 0; $("RSCountPlace").innerHTML = 'ERROR - failure calling series-info'; $('ExportRecordSet').disabled = false; },
+        'onSuccess': onSuccess, 
+        'onFailure': function() { RecordCount = null; SeriesName = ''; ExportRecordSetOK = 0; $("RSCountPlace").innerHTML = 'ERROR - failure calling series-info'; $('ExportRecordSet').disabled = false; },
         'onComplete': function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
     });
 }
 
-// callback - called after record-set specification has been successfully parsed (this does not mean that the
-// series is valid - it just means the specification has valid syntax); callback is generally processRecordCount
-function CreateProcessSpec(spec, fastCallback, callback)
-{
-    var processSpec =
+// callback - called after record-set specification has been successfully parsed (this does not mean that the 
+// series is valid - it just means the specification has valid syntax)
+function CreateProcessSpec(spec, processRecordCount)
+{    
+    var processSpec = 
         function(errMsg, data)
         {
             var errMsgActual = null;
@@ -1489,16 +1230,15 @@ function CreateProcessSpec(spec, fastCallback, callback)
             {
                 errMsgActual = prefix + ': ' + errMsg;
             }
-
+            
             if (errMsgActual)
             {
                 RecordCount = null;
-                $('ExportRecordSet').store({ 'count': RecordCount });
                 ExportRecordSetOK = 0;
                 $('RSCountPlace').innerHTML = errMsgActual;
-
-                // if an error occurred, we still need to call the callback callback
-                callback(errMsgActual);
+                
+                // if an error occurred, we still need to call the processRecordCount callback
+                processRecordCount(errMsgActual);
             }
             else
             {
@@ -1521,46 +1261,27 @@ function CreateProcessSpec(spec, fastCallback, callback)
                         lastRecord = true;
                     }
                 }
-
-                // store this determination for use later when determining the disabledState of processing steps
-                $("ExportRecordSet").store({ 'last_record' : lastRecord });
+                
                 $("ExportRecordSet").value = validSpec;
 
                 // use the parsed series name to call the jsocInfoCGI to get the series information;
                 // disable the aia_scale processing option if the series selected is not suitable for that
                 // processing option; NOTE: the series info might not be sufficient to make this determination;
                 // if this is the case, then we need to consult the actual record metadata to do so; check
-                // series info first since this is a simpler, quicker test;
+                // series info first since this is a simpler, quicker test; 
                 //
                 // series suitable for the aia_scale processing option have these properties:
                 //   1. They are 2-D time series
                 //   2. CTYPE1 == 'HPLN-TAN'
                 //   3. CTYPE2 == 'HPLT-TAN'
                 //
-                // the RequestSeriesInfo callback needs to call RequestRSInfo with callback as the callback
-
-                // if we want the callback to return results quickly, then we need to skip running requestRSInfo() since
-                // that could be a slow asynchronous call;
-                var actualCB = null;
-
-                if (fastCallback)
-                {
-                    // we only need to do this if the record count has not yet been obtained
-                    actualCB = function(errMsg) { ObtainFastRecordCount(errMsg, validSpec, callback); };
-
-                    // if we have skipped the requestRSInfo callback, then we need to do that later
-                }
-                else
-                {
-                    // gets record count too, but could be slow async call
-                    actualCB = function(errMsg) { RequestRSInfo(errMsg, validSpec, lastRecord, callback); };
-                }
-
-                var processSeriesSelection = CreateProcessSeriesSelection(validSpec, series, seriesNs, actualCB);
+                // the RequestSeriesInfo callback needs to call RequestRSInfo with processRecordCount as the callback
+                var requestRSInfo = function(errMsg) { RequestRSInfo(errMsg, validSpec, lastRecord, processRecordCount); };
+                var processSeriesSelection = CreateProcessSeriesSelection(validSpec, series, seriesNs, requestRSInfo);
                 RequestSeriesInfo(series, processSeriesSelection);
             }
         };
-
+        
     return processSpec;
 }
 
@@ -1579,6 +1300,7 @@ function GetRSCount(countCallback)
     ExportRecordSetOK = 0;
     SeriesName = "";
     SeriesAttributesGlobal = null;
+    $('OptionAiaScale').store({ 'disabledState' : null }); // means aia_scale compatibility not determined yet
     $('ExportFilenameFmt').store({ 'originalFormat' : null }); // we have neither determined the original format nor the aia.lev1p5-format yet
     IsAia = null;
     IsAiaLev1 = null;
@@ -1595,11 +1317,10 @@ function GetRSCount(countCallback)
     // we need not only the series name, but we need the CTYPE1 and CTYPE2 keyword values so that
     // we can determine if the series is suitable for aia_scale processing; from recset, we can
     // extract the seriesname
-    var cb = CreateProcessSpec(recset, true, countCallback);
+    var cb = CreateProcessSpec(recset, countCallback);
     ParseSpec(recset, cb);
 
-    RecordCount = null; // To indicate that the RecordCount has not been set yet.
-    $('ExportRecordSet').store({ 'count': RecordCount });
+    RecordCount = null; // To indicate that the RecordCount has not been set yet.  
     $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
 
     return(0);
@@ -1611,7 +1332,7 @@ function GetCompatibleFormat(series, attributes, keywords)
     var ipkey;
     var extPrime;
     var dataType;
-
+    
     if (attributes && keywords)
     {
         format = series;
@@ -1621,7 +1342,7 @@ function GetCompatibleFormat(series, attributes, keywords)
             // loop on prime keywords (remove _index from keyword name to HACKILY convert from internal name to external name)
             extPrime = attributes.drmsprimekey[ipkey].replace(/_index/i, '');
             dataType = keywords[extPrime.toLowerCase()]['data-type'].toLowerCase();
-
+        
             if (dataType == 'time')
             {
                 format = format + '.' + '{' + extPrime + ':A}';
@@ -1631,10 +1352,10 @@ function GetCompatibleFormat(series, attributes, keywords)
                 format = format + '.' + '{' + extPrime + '}';
             }
         }
-
+    
         format = format + '.' + '{segment}';
     }
-
+    
     return format;
 }
 
@@ -1644,7 +1365,7 @@ function GetDefaultFormat()
 	// $("RSCountPlace").innerHTML = RSCountActiveMSg; why?
 	// RecordCount = null; why?
 	var RecordSet = $("ExportRecordSet").value;
-
+  
 	var doInfoReqFn = function()
 	{
 		var arguments = null;
@@ -1667,7 +1388,7 @@ function GetDefaultFormat()
 		{
 			method: 'get',
 			parameters: arguments,
-
+			   
 			onSuccess: function(transport, json)
 			{
 				var response = transport.responseText || "no response text";
@@ -1741,14 +1462,14 @@ function GetDefaultFormat()
 				}
 				$("AjaxBusy").innerHTML = Ajax.activeRequestCount;
 			},
-			onFailure: function() { alert('[ GetDefaultFormat ] Something went wrong...'); },
+			onFailure: function() { alert('Something went wrong...'); },
 			onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
 		});
 	};
-
+	
     // Just call the function. It will determine if it should use the internal or external version of the CGI.
     doInfoReqFn();
-
+	
     if (IsAiaLev1 && (!AiaLev1AttributesGlobal || !AiaLev1KeywordsGlobal))
 	{
         // now we have to get the default format information for aia.lev1p5; we only use this information
@@ -1772,7 +1493,7 @@ function GetDefaultFormat()
         {
             'method': 'get',
             'parameters': { 'series' : AIA_LEV1P5, 'atts' : 1, 'keys' : '*' },
-            'onSuccess': function(transport)
+            'onSuccess': function(transport) 
                          {
                             var response = transport.responseText;
 
@@ -1780,7 +1501,7 @@ function GetDefaultFormat()
                             {
                                 var data = response.evalJSON();
                                 var errMsg = null;
-
+         
                                 // check for suitability for aia_scale processing
                                 if (!data || !data.hasOwnProperty('errMsg'))
                                 {
@@ -1809,10 +1530,10 @@ function GetDefaultFormat()
                                 AiaLev1AttributesGlobal = null;
                                 AiaLev1KeywordsGlobal = null;
                             }
-                        },
+                        }, 
             'onFailure': function() { AiaLev1AttributesGlobal = null; AiaLev1KeywordsGlobal = null; },
             'onComplete': function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
-        });
+        });   
     }
 }
 
@@ -1854,19 +1575,12 @@ function ExportRSChanged()
   {
   ExportQueryOK = 0;
   RecordCount = null; // This will cause the record-count global to be updated later.
-  $('ExportRecordSet').store({ 'count': RecordCount });
   $("CountButton").style.backgroundColor = colorYellow;
-  ExportNewRS(); // to fix operator not pressing enter or count
+  ExportNewRS(); // to fix opeator not pressing enter or count.
   }
-
-// called after the record count is complete (always gets called when the user changes the record-set specification)
+  
 function ProcessRSChange(error)
 {
-    var option_index;
-    var processing_option_id;
-    var disabled_state_rec_dep;
-    var need_rs_info = false;
-
     // GetDefaultFormat() starts another jsoc_info asnchronously. It sets firstTimePrime. firstTimePrime is used in processing.js.
     // GetDefaultFormat() requires SeriesName, which is set in the first jsoc_info.
     // ProcessRSChange() is now not called until the first jsoc_info has completed.
@@ -1880,39 +1594,14 @@ function ProcessRSChange(error)
         // It also requires that SetProcessing() has completed its asynchronous running.
         NotifyProcessingCode();
         CheckRediness();
-
-        // check each export processing step's disabled_state (except for processing option 0 - that is no_op)
-        for (option_index = 1; option_index < ExportProcessingOptions.length; option_index++)
+    
+        // re-enable the processing step checkboxes
+        for (iProc = 0; iProc < ExportProcessingOptions.length; iProc++)
         {
-            processing_option_id = ExportProcessingOptions[option_index].id;
-            disabled_state_rec_dep = $(processing_option_id).retrieve('disabled_state_rec_dep', false);
+            var ExpOpt = ExportProcessingOptions[iProc];
 
-            if (disabled_state_rec_dep)
-            {
-                // SET disabled state (if it is not set already - null means that true/false value has not yet been determined); the
-                // way we do this is to get rs info
-                if ($(processing_option_id).retrieve('disabled_state', null) === null)
-                {
-                    // start asynchronous call to determine the processing option's disabledState value; the record-set will have
-                    // already been entered, and the [$] resolved into an actual record specification; this asynchronous call
-                    // could take a long time to complete
-                    RequestRSInfo('', $("ExportRecordSet").value, $("ExportRecordSet").retrieve('last_record', false), function(errMsg) { $('ProcessingCheckbox').disabled = false; $('ProcessingCheckboxLabel').style.color = 'black'; $('ProcessingCheckboxLabel').style['font-weight'] = 'normal'; $('ProcessingWaitMessage').style.display = 'none'; });
-                    need_rs_info = true;
-                    break; // call RequestRSInfo 1x
-                }
-                else
-                {
-                    $('ProcessingCheckboxLabel').style.color = 'black';
-                    $('ProcessingCheckboxLabel').style['font-weight'] = 'normal';
-                    $('ProcessingWaitMessage').style.display = 'none';
-                }
-            }
-        }
-
-        if (!need_rs_info)
-        {
-            // we don't have to wait to enable 'enable processing' checkbox
-            $('ProcessingCheckbox').disabled = false;
+            // if disabledState metadata do not exist, then set disabled to false (the second arg to retrieve() is the default
+            $(ExpOpt.id).disabled = $(ExpOpt.id).retrieve('disabledState', false);
         }
     }
     else
@@ -1929,72 +1618,34 @@ function ProcessRSChange(error)
                 $(ExpOpt.rowid).style.display = "none";
             }
         }
-
+        
         CheckRediness();
     }
-
+    
     // Re-enable the RecordSet text box.
     $('ExportRecordSet').disabled = false;
-
+    
     // must set to false every time the user enters a specification, even on error, otherwise the user will never
     // be able to enter a new specification
     newRSRunning = false;
 }
 
-// Called when record-set changes, when user clicks on Recount button, when user clicks on enter key in RecordSet field;
+// Called when record-set changes, when user clicks on Recount, when user clicks on enter key in RecordSet field.
 var newRSRunning = false;
 function ExportNewRS()
   {
-    // This took forever to figure out. JS event handlers CAN interrupt each other at alert()s.
+    // This took forever to figure out. JS event handlers CAN interrupt each other at alert()s. 
     // ExportRecordSet has both an onchange and an onclick handler that fire when you click on the Recount
     // button after you enter a record-set specification. As a result, ExportNewRS() is called twice.
-    // IFF you have an alert anywhere between the checking for newRSRunning and the setting of
+    // IFF you have an alert anywhere between the checking for newRSRunning and the setting of 
     // newRSRunning in ExportNewRS(), then the onchange handler
-    // will be interrupted at the alert() statement, and the onclick handler will run.
-    var old_set = null;
-    var set_changed = true;
-
+    // will be interrupted at the alert() statement, and the onclick handler will run. 
     if (newRSRunning)
     {
         return;
     }
     // NO alert()!
     newRSRunning = true;
-
-    // figure out if the user actually changed the record-set specification
-    old_set = $('ExportRecordSet').retrieve('old_set', null);
-    if (old_set != null && old_set == $('ExportRecordSet').value)
-    {
-        set_changed = false;
-    }
-    else
-    {
-        // update old_set
-        $('ExportRecordSet').store({ 'old_set' : $('ExportRecordSet').value });
-    }
-
-    if (set_changed)
-    {
-        $('OptionAiaScale').store({ 'disabled_state' : null }); // means aia_scale compatibility not determined yet; also
-                                                                // means that $('OptionAiaScale') has a disabledState property;
-                                                                // changing record-set invalidates the existing validation
-    }
-
-    // disable the 'Enable Processing' checkbox - will be enabled once the record-set has been examined for processing-step checkbox
-    // disabled state
-    $('ProcessingCheckbox').disabled = true;
-    $('ProcessingCheckboxLabel').style.color = 'grey';
-
-    // close the processing checkboxes
-    $("ProcessingCheckbox").checked = false;
-    ProcessingEnabled();
-
-    // display a message notifying user that we are working on enabling processing options (must examine all records)
-    $('ProcessingWaitMessage').style.color = colorBrightOrange;
-    $('ProcessingWaitMessage').style['font-weight'] = 'bold';
-    $('ProcessingWaitMessage').style.opacity = 1.0;
-    $('ProcessingWaitMessage').innerHTML = 'Determining applicable processing steps...please wait...';
-    $('ProcessingWaitMessage').style.display = 'table-row';
 
     // disable processing step checkboxes for now, since we are about to change the record-set, and some processing steps
     // need the record-set to be present
@@ -2003,24 +1654,20 @@ function ExportNewRS()
         var ExpOpt = ExportProcessingOptions[iProc];
         $(ExpOpt.id).disabled = true;
     }
-
+  
     $("ExportCheckMsg").innerHTML = "";
     SeriesName = "";
     ExportQueryOK = 0;
     $("CountButton").style.backgroundColor = colorNeutral;
-
+      
     // Disable RecordSet text edit while the asynchronous stuff runs for the newly set record-set.
     $('ExportRecordSet').disabled = true;
 
-    // we changed the record-set - clear out record count
-    RecordCount = null
-    $('ExportRecordSet').store({ 'count' : null });
-
-    // SetRecordLimit() starts jsoc_info asynchronously (via GetRSCount()).
+    // SetRecordLimit() starts jsoc_info asynchronously (via GetRSCount()).        
     if (SetRecordLimit(ProcessRSChange))
     {
         return; // SetRecordLimit calls GetRSCount(), non-zero on RS syntax error
-    }
+    }    
   }
 
 function SetRecordLimit(callbackAfterJsocinfo)
@@ -2050,83 +1697,67 @@ function SetRecordLimit(callbackAfterJsocinfo)
   }
 
 function SetExportMethod(byWhom)
-{
-    // byWhom = 0 for user click, else 1
-    if (byWhom == 0)
+  {
+  // byWhom = 0 for user click, else 1
+  if (byWhom == 0)
+    ExportQueryOK = 0;
+  var ExportMethodIndex = $("ExportMethod").selectedIndex;
+  ExportMethodValue = $("ExportMethod").options[ExportMethodIndex].value;
+  if (ExportMethodValue == "url_direct" || ExportMethodValue == "url_quick")
     {
-        ExportQueryOK = 0;
-    }
-
-    $("RequestIdPlace").update("");
-    $("RequestIDDesc").update("This is the ID tag for your export request. Use the Status Request button below to retrieve the links to the data.");
-    $("ExportStatus").update("");
-    $("DataLocation").update("Data Location");
-    $("ExportLocation").update("");
-
-    ExportMethodValue = $("ExportMethod").options[$("ExportMethod").selectedIndex].value;
-
-    if (ExportMethodValue == "url_direct" || ExportMethodValue == "url_quick")
-    {
-        ExportMethodOK = 1;
-
-        $("ProcessRow").style.display="none";
-        $(ExportProcessingOptions[0].id).checked = true;
-
-        for (var iProc=1; iProc < ExportProcessingOptions.length; iProc++)
-        {
-            $(ExportProcessingOptions[iProc].id).checked = false;
-            $(ExportProcessingOptions[iProc].rowid).style.display = "none";
-        }
-
-        if (ExportMethodValue == "url_direct")
-        {
-            $("ProtocolRow").style.display="table-row";
-
-            // hide export status section - we will display a link only in the SubmitResponseDiv.ExportLocation span
-            $('ExportDataDiv').hide()
-        }
-        else
-        {
-            $("ProtocolRow").style.display="none";
-        }
-
-        $("FilenameFmtRow").style.display="none";
-        ExportProtocolValue = "as-is";
-        $("ExportProtocol").selectedIndex = 0;
-        ExportCompressValue = "";
-        $("CompressRow").style.display="none";
-        $("RequestorRow").style.display="table-row";
-        $("NotifyRow").style.display="table-row";
-    }
-    else if (ExportMethodValue == "url" || ExportMethodValue == 'ftp' || ExportMethodValue == "url-tar" || ExportMethodValue == 'ftp-tar')
-    {
-        ExportMethodOK = 1;
-        $("ProcessRow").style.display="table-row";
-        $("ProtocolRow").style.display="table-row";
-        $("FilenameFmtRow").style.display="table-row";
-        $("RequestorRow").style.display="table-row";
-        $("NotifyRow").style.display="table-row";
-        // PHS turn off compression option
-        // if(ExportProtocolValue == "FITS")
-           // $("CompressRow").style.display="table-row";
-
-        // show export status section
-        $('ExportDataDiv').show();
-
-        if (byWhom == 0)
-        {
-            $("ExportCompress").selectedIndex = 0;
-        }
-    }
+    ExportMethodOK = 1;
+    $("ProcessRow").style.display="none";
+    var nProcs = ExportProcessingOptions.length;
+    $(ExportProcessingOptions[0].id).checked = true;
+    for (var iProc=1; iProc < nProcs; iProc++)
+      { 
+      var ExpOpt = ExportProcessingOptions[iProc];
+      $(ExpOpt.id).checked = false;
+      $(ExpOpt.rowid).style.display = "none";
+      }
+    if (ExportMethodValue == "url_direct")
+      {
+      $("ProtocolRow").style.display="table-row";
+      ExportMethodIsDirect = 1;
+      }
     else
-    {
-        alert("Please set Method to url_quick, url_direct,  url, or ftp");
-        ExportMethodOK = 0;
+      {
+      $("ProtocolRow").style.display="none";
+      ExportMethodIsDirect = 0;
+      }
+    $("FilenameFmtRow").style.display="none";
+    ExportProtocolValue = "as-is";
+    $("ExportProtocol").selectedIndex = 0;
+    ExportCompressValue = "";
+    // $("ExportCompress").selectedIndex = 1;
+    $("CompressRow").style.display="none";
+    $("RequestorRow").style.display="table-row";
+    $("NotifyRow").style.display="table-row";
     }
-
-    CheckRediness();
-}
-
+  else if (ExportMethodValue == "url" ||
+           ExportMethodValue == 'ftp' ||
+           ExportMethodValue == "url-tar" ||
+           ExportMethodValue == 'ftp-tar')
+    {
+    ExportMethodOK = 1;
+    $("ProcessRow").style.display="table-row";
+    $("ProtocolRow").style.display="table-row";
+    $("FilenameFmtRow").style.display="table-row";
+    $("RequestorRow").style.display="table-row";
+    $("NotifyRow").style.display="table-row";
+    // PHS turn off compression option
+    // if(ExportProtocolValue == "FITS")
+       // $("CompressRow").style.display="table-row";
+    if (byWhom == 0)
+      $("ExportCompress").selectedIndex = 0;
+    }
+  else
+    {
+    alert("Please set Method to url_quick, url_direct,  url, or ftp");
+    ExportMethodOK = 0;
+    }
+  CheckRediness();
+  }
 
 function SetExportFilenameFmt()
   {
@@ -2141,46 +1772,27 @@ function SetExportFilenameFmt()
   CheckRediness();
   }
 
-// Called after user clicks on 'Enable Processing' checkbox; check the disabledState for all processing steps that
-// use the disabledState property
+// Called after user clicks on 'Enable Processing' checkbox.
 function ProcessingEnabled()
-{
-    var option_index = 0;
-    var processing_option = null;
-    var disabled_state = null;
-
-    ExportQueryOK = 0;
-
-    if ($("ProcessingCheckboxHide").checked)
-    {
-        $("ProcessingCheckbox").checked = false;
-    }
-
-    if ($("ProcessingCheckbox").checked)
+  {
+  ExportQueryOK = 0;
+  if ($("ProcessingCheckboxHide").checked)
+    $("ProcessingCheckbox").checked = false;
+  if ($("ProcessingCheckbox").checked)
     {
         // The user enabled processing
-        if ($("ExportRecordSet").value == "" || $("ExportRecordSet").value == "[$]")
-        {
-            $("ProcessingWaitMessage").style.display = "table-row";
-            $("ProcessingCheckbox").checked = false;
-            return;
-        }
-
-        $("ProcessingWaitMessage").style.display = "none";
-        $("ProcessingCheckboxHide").checked = false;
-        $("ProcessingShowCheckbox").style.display = "none";
-        $("ExportProcessing").style.display = "table-row";
-
-        // enable the processing step checkboxes that should be enabled
-        for (option_index = 0; option_index < ExportProcessingOptions.length; option_index++)
-        {
-            processing_option_id = ExportProcessingOptions[option_index].id;
-
-            // if disabled-state metadata do not exist, then set disabled to false (the second arg to retrieve() is the default)
-            $(processing_option_id).disabled = $(processing_option_id).retrieve('disabled_state', false);
-        }
+    if ($("ExportRecordSet").value == "" || $("ExportRecordSet").value == "[$]")
+      {
+      $("ProcessingWaitMessage").style.display = "table-row";
+      $("ProcessingCheckbox").checked = false;
+      return;
+      }
+    $("ProcessingWaitMessage").style.display = "none";
+    $("ProcessingCheckboxHide").checked = false;
+    $("ProcessingShowCheckbox").style.display = "none";
+    $("ExportProcessing").style.display = "table-row";
     }
-    else
+  else
     {
         // The user disabled processing.
     $(ExportProcessingOptions[0].id).checked = true; // Enable the none processing option.
@@ -2211,9 +1823,8 @@ var setProcessingRunning = false;
 var setProcessingQueue = [];
 
 function runSetProcessing(intervalFn, spCallback)
-{
-    // 0 if no procesing enabled (Enable Processing is not checked),  -1 if same seriesname, -2 if series has changed between export processing requests.
-    // ichecked > 0 if the user clicks on/off a processing-step checkbox.
+{ // 0 if no procesing enabled (Enable Processing is not checked),  -1 if same seriesname, -2 if series has changed between export processing requests.
+    // ichecked > 0 if the user clicks on/off a processing-step checkbox.    
     if (setProcessingRunning)
     {
         // do not clear interval, this will continue to run until it is safe to run the code in the rest of the function
@@ -2222,17 +1833,18 @@ function runSetProcessing(intervalFn, spCallback)
 
     // No alerts in here.
 	setProcessingRunning = true;
-
+	
     ichecked = setProcessingQueue.shift()
 
 	if (typeof ichecked == 'undefined')
 	{
 		// nothing to do; should not get here because each function instance handles one SetProcessing() call
+		alert('bad')
 		clearInterval(intervalFn);
 		setProcessingRunning = false;
 		return;
 	}
-
+    
     ExportQueryOK = 0;
 
     if (ProcessingAllowed == 0)
@@ -2243,113 +1855,106 @@ function runSetProcessing(intervalFn, spCallback)
     {
         $(ExportProcessingOptions[0].id).checked = false; // Disable the 'none' processing step.
     }
-
+    
     ExportProcessingOK = null;
 
-    // Add recordLimit FIRST always. Could change when user changes RecordSet specification.
-    ExportProcessingArgs = "n=" + RecordLimit;
-    var isok = 1;
-    var nchecked = 0;
-    var iProc = 0;
-    var nProcs = ExportProcessingOptions.length;
-    SizeRatio = 1.0;
-
-    if ($(ExportProcessingOptions[0].id).checked) // no_op case must be first
+  // Add recordLimit FIRST always. Could change when user changes RecordSet specification.
+  ExportProcessingArgs = "n=" + RecordLimit;
+  var isok = 1;
+  var nchecked = 0;
+  var iProc = 0;
+  var nProcs = ExportProcessingOptions.length;
+  SizeRatio = 1.0;
+  if ($(ExportProcessingOptions[0].id).checked) // no_op case must be first
     {
-        // no_op - none processing checkbox is checked
-        nchecked++;
-        for (iProc=1; iProc<nProcs; iProc++)
+        // The none processing case.
+    nchecked++;
+    for (iProc=1; iProc<nProcs; iProc++)
+      {
+      var ExpOpt = ExportProcessingOptions[iProc];
+      $(ExpOpt.id).checked = false;
+      $(ExpOpt.rowid).style.display = "none";
+      
+        if (ExpOpt.id != "OptionImPatch")
         {
-            var ExpOpt = ExportProcessingOptions[iProc];
-            $(ExpOpt.id).checked = false;
-            $(ExpOpt.rowid).style.display = "none";
+            ExpOpt.Init(1);
+        }
+      }
+    ExportProcessingArgs += "|no_op";
+    }
+  else
+    {
+    for (iProc=1; iProc<nProcs; iProc++)
+      {
+      // ExportProcessingOptions is a list of all processing options. The command to perform
+      // any given option is sent to jsoc_fetch only if ExportProcessingOptions[iProc].id.checked is true.
+      // So, the order of the processing steps is the order they appear in ExportProcessingOptions, 
+      // which is determined in ProcessingInit() in processing.js.
+      var ExpOpt = ExportProcessingOptions[iProc];
+      if ($(ExpOpt.id).checked)
+        {
+        nchecked++;
+        $(ExportProcessingOptions[0].id).checked = false; // Do not send the 'none' processing option to jsoc_fetch.
+        if (ichecked == -2)
+          {
+            // This is the on-load case, where we want to initialize all processing parameters to their defaults.
+          ExpOpt.Init(1);
+          $(ExpOpt.rowid).style.display="table-row";
+          isok = 0;
+          
+            // We need to run the check function for each checked option since we changed the record-set.
+            // The Check() functions always run synchronously.
+            if (ExpOpt.hasOwnProperty('Check') && ExpOpt.Check && typeof ExpOpt.Check === 'function')
+            {
+                ExpOpt.paramsValid = null; // blow-away the cache so Check() can actually do the check and generate the command-line arguments.
+                args = ExpOpt.Check(true);
 
+                if (args == 'error')
+                {
+                    // Error that requires the checkbox to be unchecked.
+                    $(ExpOpt.id).checked = false;
+                    $(ExpOpt.rowid).style.display = 'none';
+                    nchecked--;
+                }
+            }
+          }
+        else
+          {
+            $(ExpOpt.rowid).style.display="table-row";
+            // This is the case where we do not want to reset the processing parameters to the default.
+            ExpOpt.Init(0); // 0 initializes globals needed by Check() functions; initialization is asynchronous, so 
+                            // we run a setInterval function below, waiting for completion; the Check() functions can modify the UI
+        }
+      }
+        else
+        {
+            $(ExpOpt.rowid).style.display="none";
+            // keep existing argument values for ImPatch only (the other processing options have no way
+            // of resetting them to default values, so we have to do that here if the user has unchecked
+            // the option's checkbox
             if (ExpOpt.id != "OptionImPatch")
             {
                 ExpOpt.Init(1);
             }
         }
-
-        ExportProcessingArgs += "|no_op";
-    }
-    else
-    {
-        // no_op - none is NOT checked
-        for (iProc=1; iProc<nProcs; iProc++)
+      }
+      
+      if (nchecked > 0)
+      {
+        // The Set() functions can run asynchronously. We have at least one Set() function that succeeded (which means 
+        // there could be AJAX running).
+        ExportProcessingArgsPoll = setInterval(function(){ GetExportProcessingArguments(spCallback); }, 50);
+        
+        // Disable all processing-step checkboxes, until GetExportProcessingArguments() resolves.
+        for (iProc = 0; iProc < nProcs; iProc++)
         {
-            // ExportProcessingOptions is a list of all processing options. The command to perform
-            // any given option is sent to jsoc_fetch only if ExportProcessingOptions[iProc].id.checked is true.
-            // So, the order of the processing steps is the order they appear in ExportProcessingOptions,
-            // which is determined in ProcessingInit() in processing.js.
             var ExpOpt = ExportProcessingOptions[iProc];
-
-            if ($(ExpOpt.id).checked)
-            {
-                nchecked++;
-                $(ExportProcessingOptions[0].id).checked = false; // Do not send the 'none' processing option to jsoc_fetch.
-
-                if (ichecked == -2)
-                {
-                    // This is the on-load case, where we want to initialize all processing parameters to their defaults.
-                    ExpOpt.Init(1);
-                    $(ExpOpt.rowid).style.display="table-row";
-                    isok = 0;
-
-                    // We need to run the check function for each checked option since we changed the record-set; the
-                    // Check() functions always run synchronously; they return the arguments to the processing program;
-
-                    if (ExpOpt.hasOwnProperty('Check') && ExpOpt.Check && typeof ExpOpt.Check === 'function')
-                    {
-                        ExpOpt.paramsValid = null; // blow-away the cache so Check() can actually do the check and generate the command-line arguments.
-                        args = ExpOpt.Check(true);
-
-                        if (args == 'error')
-                        {
-                            // Error that requires the checkbox to be unchecked.
-                            $(ExpOpt.id).checked = false;
-                            $(ExpOpt.rowid).style.display = 'none';
-                            nchecked--;
-                        }
-                    }
-                }
-                else
-                {
-                    $(ExpOpt.rowid).style.display="table-row";
-                    // This is the case where we do not want to reset the processing parameters to the default.
-                    ExpOpt.Init(0); // 0 initializes globals needed by Check() functions; initialization is asynchronous, so
-                                    // we run a setInterval function below, waiting for completion; the Check() functions can modify the UI
-                }
-            }
-            else
-            {
-                $(ExpOpt.rowid).style.display="none";
-
-                // keep existing argument values for ImPatch only (the other processing options have no way
-                // of resetting them to default values, so we have to do that here if the user has unchecked
-                // the option's checkbox
-                if (ExpOpt.id != "OptionImPatch")
-                {
-                    ExpOpt.Init(1);
-                }
-            }
+            $(ExpOpt.id).store({ 'disabledState' : $(ExpOpt.id).disabled})
+            $(ExpOpt.id).disabled = true;
         }
-
-        if (nchecked > 0)
-        {
-            // The Set() functions can run asynchronously. We have at least one Set() function that succeeded (which means
-            // there could be AJAX running).
-            ExportProcessingArgsPoll = setInterval(function(){ GetExportProcessingArguments(spCallback); }, 50);
-
-            // Disable all processing-step checkboxes, until GetExportProcessingArguments() resolves.
-            for (iProc = 0; iProc < nProcs; iProc++)
-            {
-                var ExpOpt = ExportProcessingOptions[iProc];
-                $(ExpOpt.id).store({ 'disabled_state' : $(ExpOpt.id).disabled })
-                $(ExpOpt.id).disabled = true;
-            }
-        }
+      }
     }
-
+    
     // it is possible that the aia_scale box was unchecked; in this case, we must restore the original
     // filename format (but only if it indeed was changed to one compatible with aia.lev1p5)
     var originalFormat = $('ExportFilenameFmt').retrieve('originalFormat', null);
@@ -2361,30 +1966,30 @@ function runSetProcessing(intervalFn, spCallback)
         {
             $('ExportFilenameFmt').value = originalFormat;
         }
-
+        
         // blow away the args-ready state so that Check() is run the next time the user checks the aia_scale checkbox
         ExportProcessingOptions[AiaScaleOption].paramsValid = null;
     }
-
+    
   if (nchecked == 0)
     {
     $(ExportProcessingOptions[0].id).checked = true; // Set no-op processing step.
-
+    
     // Hide the non-no-op steps.
     for (iProc=1; iProc<nProcs; iProc++)
     {
         var ExpOpt = ExportProcessingOptions[iProc];
         $(ExpOpt.rowid).style.display = "none";
     }
-
+    
     ExportProcessingArgs += "|no_op";
     }
   $("ExportSizeRatio").value = SizeRatio;
-
+        
   $("ExportProcessingHidden").value = ExportProcessingArgs;
-
+  
     clearInterval(intervalFn);
-
+  
     if (ExportProcessingArgsPoll)
     {
         // We don't know if export processing is OK yet.
@@ -2401,15 +2006,15 @@ function runSetProcessing(intervalFn, spCallback)
         {
             ExportProcessingOK = false;
         }
-
+        
         setProcessingRunning = false;
-
+        
         if (spCallback)
         {
             spCallback();
         }
     }
-
+    
     CheckRediness();
 }
 
@@ -2421,9 +2026,9 @@ function SetProcessing(ichecked, spCallback)
 	setProcessingQueue.push(ichecked)
 	intervalFn = setInterval(function(){ runSetProcessing(intervalFn, spCallback); }, 100);
 }
-
+ 
 // Cannot determine the arguments at the time that SetProcessing() is called because there might be
-// asynchronous processes running (AJAX calls) that need to complete before the arguments can be
+// asynchronous processes running (AJAX calls) that need to complete before the arguments can be 
 // finalized.
 
 // Polling function
@@ -2434,7 +2039,7 @@ function GetExportProcessingArguments(spCallback)
     var iProc = 0;
     var SizeRatio = 1.0;
     var oneChecked = false;
-
+    
     if (!ExportProcessingArgsReady())
     {
         // Wait till all the Set() procs for each processing step have completed their asynchronous processing.
@@ -2444,17 +2049,17 @@ function GetExportProcessingArguments(spCallback)
     for (iProc = 1; iProc < ExportProcessingOptions.length; iProc++)
     {
         ExpOpt = ExportProcessingOptions[iProc];
-
+        
         if ($(ExpOpt.id).checked)
         {
             args = ExportProcessingOptions[iProc].Check(true);
-
+            
             if (args === null)
             {
                 // a Set() function is pending; wait until it has completed
                 return;
             }
-
+            
             if (args == 'error')
             {
                 // Error that requires the checkbox to be unchecked.
@@ -2462,10 +2067,10 @@ function GetExportProcessingArguments(spCallback)
                 $(ExpOpt.rowid).style.display = 'none';
                 continue;
             }
-
+            
             oneChecked = true;
-
-            // At this point, we know for sure if there is an error with the export options chosen. If so,
+        
+            // At this point, we know for sure if there is an error with the export options chosen. If so, 
             // ignore that processing step, and uncheck its checkbox.
             if (args.length > 0)
             {
@@ -2475,40 +2080,40 @@ function GetExportProcessingArguments(spCallback)
             }
         }
     }
-
+    
     if (!oneChecked)
     {
         $(ExportProcessingOptions[0].id).checked = true; // Set no-op processing step.
-
+    
         // Hide the non-no-op steps.
         for (iProc = 1; iProc < ExportProcessingOptions.length; iProc++)
         {
             var ExpOpt = ExportProcessingOptions[iProc];
             $(ExpOpt.rowid).style.display = "none";
         }
-
+    
         ExportProcessingArgs += "|no_op";
     }
-
+    
     // Re-enable all processing-step checkboxes, until GetExportProcessingArguments() resolves.
     for (iProc = 0; iProc < ExportProcessingOptions.length; iProc++)
     {
         var ExpOpt = ExportProcessingOptions[iProc];
-
-        $(ExpOpt.id).disabled = $(ExpOpt.id).retrieve('disabled_state', false);
+        // ART $(ExpOpt.id).disabled = false;
+        $(ExpOpt.id).disabled = $(ExpOpt.id).retrieve('disabledState', false);
     }
-
+    
     $("ExportSizeRatio").value = SizeRatio;
     $("ExportProcessingHidden").value = ExportProcessingArgs; // Not used.
     CheckRediness();
-
+    
     clearInterval(ExportProcessingArgsPoll);
     ExportProcessingArgsPoll = null;
     ExportProcessingOK = true; // This means that everything that is going to modify the export arguments has completed
                                // modifying said parameters. It does NOT mean that the parameter values are acceptable.
 
     setProcessingRunning = false;
-
+    
     if (spCallback)
     {
         spCallback();
@@ -2516,7 +2121,7 @@ function GetExportProcessingArguments(spCallback)
 }
 
 function SetExportProtocol(byWhom)
-  {
+  { 
   // byWhom = 0 for user click, else 1
   if (byWhom == 0)
     ExportQueryOK = 0;
@@ -2623,10 +2228,9 @@ function ExportShowQuery()
   }
 
 function CheckRediness()
-{
-    var notificationAddressOK = NotificationAddressRegistered();
-    var status = ExportQueryOK * ExportRecordSetOK * ExportMethodOK * ExportFilenameFmtOK * ExportProtocolOK * notificationAddressOK;
-
+  {
+  var status = ExportQueryOK * ExportRecordSetOK * ExportMethodOK * ExportFilenameFmtOK * ExportProtocolOK * (ExportNotifyOK==1);
+  
   if ($("ProcessingCheckbox").checked)
   {
     status = status * (ExportProcessingOK ? 1 : 0) * (ProcessingOK() ? 1 : 0);
@@ -2649,14 +2253,14 @@ function CheckRediness()
     }
   ExportRedinessStatus = status;
   return(status);
-}
+  }
 
 // This is a callback function. It is invoked after the email check has completed.
 function SetExportParams()
 {
-    var notificationAddressOK = NotificationAddressRegistered();
-    var isOK = ExportRecordSetOK * ExportMethodOK * ExportFilenameFmtOK * ExportProtocolOK * notificationAddressOK;
-
+    // All these variables on the RHS are global.
+    var isOK = ExportRecordSetOK * ExportMethodOK * ExportFilenameFmtOK * ExportProtocolOK * (ExportNotifyOK==1);
+    
     if ($("ProcessingCheckbox").checked)
     {
         isOK = isOK * (ExportProcessingOK ? 1 : 0) * (ProcessingOK() ? 1 : 0);
@@ -2669,7 +2273,7 @@ function SetExportParams()
 
         // exportparameters is a global.
         exportparameters = new Hash({"op" : $("ExportOpID").value,
-                                    "ds" : RecordSet,
+                                    "ds" : RecordSet, 
                                     "sizeratio" : $("ExportSizeRatio").value,
                                     "process" :  ExportProcessingArgs,
                                     "requestor" : $("ExportRequestor").value,
@@ -2689,15 +2293,15 @@ function SetExportParams()
         $("ExportParameters").innerHTML = "";
         ExportQueryOK = 0;
     }
-
+    
     CheckRediness();
 }
 
 // This function is called when the user clicks on the "Check Params for Export"
-// button.
-// A lot of the calls in this function are asynchronous.
+// button. 
+// A lot of the calls in this function are asynchronous. 
 function CheckExportParamsInternal()
-{
+  {
     // complete the SetProcessing part of this check
     // If there was an error in the processing options, then ExportProcessingOK is not true.
     // ProcessingOK() is synchronous.
@@ -2707,161 +2311,109 @@ function CheckExportParamsInternal()
     }
     else
     {
-        if ($("ExportRecordSet").value.length == 0)
-        {
-            $("ExportCheckButton").style.backgroundColor = colorYellow;
-            $("ExportCheckMsg").innerHTML = "Please enter a record-set specification.";
-            return 0;
-        }
-
-        if (RecordCount === null)
-        {
-            $("ExportCheckButton").style.backgroundColor = colorYellow;
-            $("ExportCheckMsg").innerHTML = "Still counting records, wait a second then retry";
-            return(0);
-        }
-
-        while (1) // use with break instead of goto done.
-        {
-            if (ExportRecordSetOK == 0)
-            {
-                $("ExportCheckMsg").innerHTML = "Invalid record-set specification";
-                break;
-            }
-
-            SetExportMethod(1);
-            if (ExportMethodOK == 0)
-            {
-                $("ExportCheckMsg").innerHTML = "Method not given - enter export method then retry export request.";
-                break;
-            }
-
-            SetExportFilenameFmt();
-            if (ExportFilenameFmtOK == 0)
-            {
-                $("ExportCheckMsg").innerHTML = "FilenameFmt not given, Enter FilenameFmt then retry export request.";
-                break;
-            }
-
-            SetExportProtocol(1);
-            if (ExportProtocolOK == 0)
-            {
-                $("ExportCheckMsg").innerHTML = "Protocol not given, Enter export protocol then retry export request.";
-                break;
-            }
-
-            if ((ExportProtocolValue == "FITS" || ExportProtocolValue == "as-is") && ExportMethodValue != "url_quick")
-            {
-                SetExportCompress();
-            }
-            else if (protocolEnable)
-            {
-                ProtocolImageCheck();
-            }
-
-            // This is an asynchronous call, so we need to put the following "isOK" check into a
-            // callback function. Return isOK == 0 since we do not know if it is OK to do an export
-            // at this point.
-
-            // this may or may not be an asynchronous call; $("ExportNotify").retrieve('valid', false) will either synchronously
-            // return the acceptability of the notification address, or it will be updated when the asynchronous call completes;
-            // if this is an asynchronous call, then $("ExportNotify").retrieve('valid', false) below will indicate that
-            // the notification address is not acceptable, and the user will need to click on "Check Params for Export"
-            // again
-            startEmailCheck(SetExportParams);
-            break;
-        }
+  
+  
+  if ($("ExportRecordSet").value.length == 0)
+  {
+    $("ExportCheckButton").style.backgroundColor = colorYellow;
+    $("ExportCheckMsg").innerHTML = "Please enter a record-set specification.";
+    return 0;
+  }
+  
+  if (RecordCount === null)
+    {
+    $("ExportCheckButton").style.backgroundColor = colorYellow;
+    $("ExportCheckMsg").innerHTML = "Still counting records, wait a second then retry";
+    return(0);
+    }
+    
+  while (1) // use with break instead of goto done.
+    {
+    if (ExportRecordSetOK == 0)
+      {
+        $("ExportCheckMsg").innerHTML = "Invalid record-set specification";
+        break;
+      }
+    SetExportMethod(1);
+    if (ExportMethodOK == 0)
+      {
+      $("ExportCheckMsg").innerHTML = "Method not given, Enter export method then retry export request.";
+      break;
+      }
+    SetExportFilenameFmt();
+    if (ExportFilenameFmtOK == 0)
+      {
+      $("ExportCheckMsg").innerHTML = "FilenameFmt not given, Enter FilenameFmt then retry export request.";
+      break;
+      }
+      
+    SetExportProtocol(1);
+    if (ExportProtocolOK == 0)
+      {
+      $("ExportCheckMsg").innerHTML = "Protocol not given, Enter export protocol then retry export request.";
+      break;
+      }
+    if ((ExportProtocolValue == "FITS" || ExportProtocolValue == "as-is") && ExportMethodValue != "url_quick")
+      {
+      SetExportCompress();
+      }
+    else if (protocolEnable)
+      {
+      ProtocolImageCheck();
+      }      
+      
+    if (ExportNotifyOK == 0 || ExportNotifyOK == 2)
+      {
+      // This is an asynchronous call, so we need to put the following "isOK" check into a
+      // callback function. Return isOK == 0 since we do not know if it is OK to do an export
+      // at this point.
+      startEmailCheck(SetExportParams);
+      return false;
+      break;
+      }
+    $("ExportCheckMsg").innerHTML = "OK to proceed";
+    break;
+    }
+    
     }
 
     // note - ExportQueryOK is missing here
-    var notificationAddressOK = NotificationAddressRegistered();
-    var isOK = ExportRecordSetOK * ExportMethodOK * ExportFilenameFmtOK * ExportProtocolOK * notificationAddressOK;
-
-    if ($("ProcessingCheckbox").checked)
-    {
+  var isOK = ExportRecordSetOK * ExportMethodOK * ExportFilenameFmtOK * ExportProtocolOK * (ExportNotifyOK==1);
+  
+  if ($("ProcessingCheckbox").checked)
+  {
       isOK = isOK * (ExportProcessingOK ? 1 : 0) * (ProcessingOK() ? 1 : 0);
-    }
-
-    if (isOK)
+  }
+  
+  if (isOK)
     {
-        if ($("ExportMethod").options[$("ExportMethod").selectedIndex].value == 'url_direct')
-        {
-            // if export method == 'url_quick':
-            //   1. make sure all SUs are online (use results of jsoc_info call used when the record-set was selected)
-            //   2. determine if we want to stream a tar file (if num fits files > 1) or fits file (if num fits files == 1)
-            //   3. call exportCGI, which calls drms-export-to-stdout with the arguments determined in #2,
-            //      opening a pipe to receive results
-            //   4. stream an HTTP header back to the export user
-            //   5. stream the file (tar or fits)
-            if ($('ExportRecordSet').retrieve('count', null) > 1)
-            {
-                $("ExportCheckMsg").innerHTML = 'url_direct can only be used if exporting a single FITS file';
-                isOK = false;
-            }
-            else
-            {
-                if ($('ExportRecordSet').retrieve('allSUsOnline', false))
-                {
-                    var args = {};
+    var protocolparam = $("ExportProtocolHidden").value;
+    var RecordSet = $("ExportRecordSet").value;
+    
+    exportparameters = new Hash( {"op" : $("ExportOpID").value,
+                 		      "ds" : RecordSet, 
+                                      "sizeratio" : $("ExportSizeRatio").value,
+                 		      "process" :  ExportProcessingArgs,
+                 		      "requestor" : $("ExportRequestor").value,
+                 		      "notify" : $("ExportNotify").value,
+                                      "method" : ExportMethodValue,
+                                      "filenamefmt" : $("ExportFilenameFmt").value,
+			 	      "format" : "json",
+                 		      "protocol" : protocolparam });
 
-                    // call drms-export-to-stdout CGI
-                    // the tar file will have the name of the file; there will be only one image file in the tar file
-                    args.skiptar = 'true';
-                    args.spec = $('ExportRecordSet').value;
-                    args.filename = $("ExportFilenameFmt").value;
-                    // dbhost added to args when submit button clicked
-
-                    // no compression - url_direct is for streaming a single FITS file, uncompressed
-                    args.compression = 'none';
-
-                    $('ExportRecordSet').store({ 'exportArgs' : args });
-                }
-            }
-        }
-        else
-        {
-            var protocolparam = $("ExportProtocolHidden").value;
-            var RecordSet = $("ExportRecordSet").value;
-
-            exportparameters = new Hash( {  "op" : $("ExportOpID").value,
-                                            "ds" : RecordSet,
-                                            "sizeratio" : $("ExportSizeRatio").value,
-                                            "process" :  ExportProcessingArgs,
-                                            "requestor" : $("ExportRequestor").value,
-                                            "notify" : $("ExportNotify").value,
-                                            "method" : ExportMethodValue,
-                                            "filenamefmt" : $("ExportFilenameFmt").value,
-                                            "format" : "json",
-                                            "protocol" : protocolparam });
-
-        }
-
-        if (isOK)
-        {
-            $("ExportCheckMsg").innerHTML = "OK to proceed";
-            ExportShowQuery();
-            ExportQueryOK = 1;
-        }
+    ExportShowQuery();
+    ExportQueryOK = 1;
     }
-    else
+  else
     {
-        exportparameters = null;
-        $("ExportParameters").innerHTML = "";
-        ExportQueryOK = 0;
+    exportparameters = null;
+    $("ExportParameters").innerHTML = "";
+    ExportQueryOK = 0;
     }
-
-    if (isOK)
-    {
-        isOK = CheckRediness();
-    }
-    else
-    {
-        ExportQueryOK = 0;
-    }
-
+  var isOK = CheckRediness();
   return isOK;
   }
-
+  
 function CheckExportParams()
 {
     // Up till now, SetProcessing() gets called whenever a processing option checkbox gets clicked.
@@ -2878,14 +2430,15 @@ function GetExport() // This is the code executed when the user clicks on the "S
   //  1 ready for status request
   //  2 export complete, OK or failure.
   //  3 Process started, waiting response
+
   $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   if (ExportReadyOK == 3)
     {
     alert("Processing request, please wait...");
     return;
     }
-
-  if (ExportRedinessStatus)
+    
+  if (ExportRedinessStatus) 
     {
     ExportRedinessStatus = 0;
     ExportReadyOK = 3;
@@ -2895,7 +2448,7 @@ function GetExport() // This is the code executed when the user clicks on the "S
     $("ExportLocation").innerHTML = "";
     $("ExportButtonMsg").innerHTML = "Export request submitted, please wait...";
     $("ExportButton").value = "Processing ...";
-    $("ExportButton").style.backgroundColor = colorDarkishRed;
+    $("ExportButton").style.backgroundColor = colorDarkRed;
     $("ExportCheckButton").style.backgroundColor = colorYellow;
     }
   else if (ExportReadyOK == 1)
@@ -2909,20 +2462,6 @@ function GetExport() // This is the code executed when the user clicks on the "S
     ExportRedinessStatus = 0;
     $("ExportCheckMsg").innerHTML = "Export Request Complete, Please check updated export params before making another export request";
     return;
-    }
-
-    if ($('ExportMethod').options[$('ExportMethod').selectedIndex].value == 'url_direct')
-    {
-        if ($('ExportRecordSet').retrieve('count', null) > 1)
-        {
-            $("ExportLocation").innerHTML =  '<b>Multiple files were requested - use the url_direct export method to request a single file only.<\/b><p>';
-        }
-        else
-        {
-            CreateExportDownloadLink(null, null);
-        }
-
-        return;
     }
 
     var doFetchReqFn = function()
@@ -2941,11 +2480,11 @@ function GetExport() // This is the code executed when the user clicks on the "S
 			jsocfetchCGI = JSOCEXTFETCH;
 			exportparameters.update({ "dbhost" : EXTERNAL_SERVER });
 		}
-
+    
 		arguments = exportparameters.toObject();
-
+        
         $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
-
+        
         new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + jsocfetchCGI,
         {
             method: 'post',
@@ -2964,23 +2503,23 @@ function GetExport() // This is the code executed when the user clicks on the "S
                 $("ExportButton").value = "FAILURE ...";
                 $("ExportButton").style.backgroundColor = colorDarkPink;
                 ExportReadyOK = 2;
-                alert('[ GetExport ] Something went wrong...');
+                alert('Something went wrong...');
             },
             onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
         });
-
+        
         $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
     };
-
-
+    
+    
     // Just call the function. It will determine if it should use the internal or external version of the CGI.
     doFetchReqFn();
   }
-
+ 
 function ExportOrigin(requestID, webserver)
 {
     var retVal = [];
-
+    
     if (webserver.toLowerCase() == EXTERNAL_WEBSERVER || webserver.toLowerCase() == EXTERNAL_WEBSERVER + '.' + STANFORD_DOMAIN)
     {
         retVal.push('extServer');
@@ -2993,7 +2532,7 @@ function ExportOrigin(requestID, webserver)
     {
         retVal.push('invalidServer');
     }
-
+    
     if (requestID)
     {
         if (retVal[0] != 'invalidServer')
@@ -3031,7 +2570,7 @@ function ExportOrigin(requestID, webserver)
             }
         }
     }
-
+    
     return retVal;
 }
 
@@ -3046,20 +2585,20 @@ function GetReExport()
   $("ReExportButtonMsg").innerHTML = "Export request submitted, please wait...";
   $("ReExportButton").value = "Processing ...";
   $("ReExportButton").style.backgroundColor = colorPink;
-
+  
   var paramObj = {"op" : "exp_repeat",
                   "requestid" : $("ReRequestID").value,
                   "format" : "json",
                   "notify" : $("ReExportNotify").value};
-
+  
   exportparameters = new Hash(paramObj);
-
+  
   // Use JSOC_FETCH_X, which accesses the internal db, if needed. And this is needed if the request ID string ends in
   // 'X_IN'.
 	var jsocfetchCGI = JSOC_FETCH;
 	var is_IN = ($("ReRequestID").value.search("_IN") > 0);
     var isExtOrigin = ($("ReRequestID").value.search("_X_IN") > 0);
-
+		
 	if (is_IN && (Host.toLowerCase() == EXTERNAL_WEBSERVER || Host.toLowerCase() == EXTERNAL_WEBSERVER + '.' + STANFORD_DOMAIN))
 	{
 		if (!isExtOrigin)
@@ -3093,7 +2632,7 @@ function GetReExport()
             ExportReadyOK = 2;
             $("ReExportButton").value = "FAILURE ...";
             $("ReExportButton").style.backgroundColor = colorDarkPink;
-            alert('[ GetReExport ] Something went wrong...');
+            alert('Something went wrong...');
         },
         onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
     });
@@ -3102,28 +2641,14 @@ function GetReExport()
 
 
 function ProcessExportResponse(response)
-{
-    var data = response.evalJSON();
-    state = 3;
-    Cookie.setData("state",state);
+  {
+  var data = response.evalJSON();
+  state = 3;
+  Cookie.setData("state",state);
 
-    if (data.status == 7)
+  if (data.status == 6)
     {
-        // pending request
-        $("ExportCheckMsg").style.color = colorRealRed;
-        $("ExportCheckMsg").innerHTML = data.error;
-        ExportReadyOK = 2;
-        $("ExportButton").value = "Wait";
-        $("ExportButtonMsg").innerHTML = data.error;
-        $("RequestIdPlace").innerHTML = "";
-        $("ExportStatus").innerHTML = "Request Rejected";
-        $("ExportLocation").innerHTML = "";
-        state = 0;
-        Cookie.setData("state",state);
-    }
-  else if (data.status == 6)
-    {
-    // email address was not registered, or export_manage not yet found request.
+    // email address was not registered, or export_manage not yet found request. 
     $("ExportCheckMsg").innerHTML = "RequestID not found, status=6, error=" + data.error + "<br>Try again in a few seconds, may just be not ready to respond";
     ExportReadyOK = 3; // keep waiting
     $("ExportButton").value = "Retry";
@@ -3217,9 +2742,22 @@ function ProcessExportResponse(response)
     $("ExportLocation").innerHTML =  valuetable + "<br>";
     $("FileUploadInfo").innerHTML = "File upload done, " + data.rcount + " records requested.";
     if (ExportMethodValue == "url_quick")
-    {
+      {
+      if (ExportMethodIsDirect) // was url_direct on call
+        {
+        if (count > 1)
+            $("ExportLocation").innerHTML =  "<b>Multiple files returned, direct fetch not possible. <\/b><p>" +
+              valuetable + "<br>";
+        else
+            {
+            var path = encodeURI("http://jsoc.stanford.edu" + data.dir + "/" + data.data[0].filename);
+    //      doucment.write("<link type=\"application/fits\" href="+path+" />");
+    //      fetch image
+            }
+        }
+      else // url_quick on call
         $("ExportLocation").innerHTML = valuetable + "<br>";
-    }
+      }
     else
       $("ExportLocation").innerHTML =  valuetable + "<br>";
     if (ExportFromFileList == 1)
@@ -3255,22 +2793,22 @@ function GetStatus()
     alert("You must provide a RequestID");
     return;
     }
-
+    
     // An external user can check status on certain internal requests. These requests originated from the external site,
     // but they were passed-through to the internal site because they involved at least one internal series that
     // was whitelisted for external access. The request IDs of those requests contains an 'X':
     //
-    // JSOC_20161225_1254_X_IN
+    // JSOC_20161225_1254_X_IN  
 	var jsocfetchCGI = JSOC_FETCH;
 	var is_IN = ($("StatusRequestID").value.search("_IN") > 0);
     var isExtOrigin = ($("StatusRequestID").value.search("_X_IN") > 0);
-
+    
     // there are two boolean attributes describing the origin of an export request:
     // 1. the request was submitted from the external website (EXTERNAL_WEBSERVER) or the internal website (INTERNAL_WEBSERVER)
     // 2. the request was for the export of a db-external data series (the request ID ends in '_IN') or a db-internal data series (the request ID does not end in '_IN')
     //
     // the internal server can serve requests for db-internal series only; the external server can serve requests for either
-    // db-external series (the request ID does not end in '_IN'), or db-internal series initiated from the external server
+    // db-external series (the request ID does not end in '_IN'), or db-internal series initiated from the external server 
     // (the request ID ends in '_X_IN')
 
 	if (is_IN && (Host.toLowerCase() == EXTERNAL_WEBSERVER || Host.toLowerCase() == EXTERNAL_WEBSERVER + '.' + STANFORD_DOMAIN))
@@ -3301,7 +2839,7 @@ function GetStatus()
   $("StatusOther").innerHTML = "";
   $("StatusButtonMsg").innerHTML = "Processing status request ...";
   $("StatusButton").value = "Processing ...";
-
+  
   new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + jsocfetchCGI,
     {
     method: 'get',
@@ -3426,7 +2964,7 @@ function GetStatus()
       $("StatusButtonMsg").innerHTML = "Export Failure, Problem at JSOC facility.";
       $("StatusButton").value = "FAILURE ...";
       $("StatusButton").style.backgroundColor = colorDarkPink;
-      alert('[ GetStatus ] Something went wrong...');
+      alert('Something went wrong...');
       ExportReadyOK = 2;
       },
     onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
@@ -3493,7 +3031,7 @@ access the data.
   <tr>
     <td>RequestID</td>
     <td colspan="2"><span id="RequestIdPlace" style="width:12em;background-color:#FFF8DC;">&nbsp;</span></td>
-    <td id="RequestIDDesc">This is the ID tag for your export request.  Use the Status Request button below to retrieve the links to the data.</td>
+    <td>This is the ID tag for your export request.  Use the Status Request button below to retrieve the links to the data.</td>
   </tr>
 
   <tr>
@@ -3502,7 +3040,7 @@ access the data.
   </tr>
 
   <tr>
-    <td id="DataLocation">Data Location</td>
+    <td>Data Location</td>
     <td colspan="3"><span id="ExportLocation" style="background-color:#FFF8DC;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span ></td>
   </tr>
 
@@ -3577,16 +3115,17 @@ Use this section to request a renewal/repeat of a prior export for which the dat
     <td><input id="ReExportNotify" type="text" name="Renotify" value="" onChange="ExportNop();" ></td>
     <td colspan="2">
       Provide your email address for notification.
+      If Requestor is your SolarMail name you may use "solarmail" here.
     </td>
   </tr>
-
+  
   <tr id="AjaxReExportRequestRow">
     <td colspan="4">
       re-<input id="ReExportButton" type="button" value="Submit Export Request" style="background-color:#D8D8D8" onClick="GetReExport();" >
     <span id="ReExportButtonMsg">Please only click once for re-export request.</span >
     </td>
   </tr>
-
+  
 </table>
 </div> <!-- id="ReExportDiv" -->
 </div>

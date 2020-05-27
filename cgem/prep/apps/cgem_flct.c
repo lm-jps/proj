@@ -346,10 +346,10 @@ int DoIt(void)
         getEphemeris(inRec0, &ephem0);
         getEphemeris(inRec1, &ephem1);
         
-        double latmin0 = (ephem0.crval2 - (ny - 1) / 2. * ephem0.cdelt2) * RADSINDEG;       // Fixed Apr 7 2019
-        double latmin1 = (ephem1.crval2 - (ny - 1) / 2. * ephem1.cdelt2) * RADSINDEG;
-        double latmax0 = (ephem0.crval2 + (ny - 1) / 2. * ephem0.cdelt2) * RADSINDEG;
-        double latmax1 = (ephem1.crval2 + (ny - 1) / 2. * ephem1.cdelt2) * RADSINDEG;
+        double latmin0 = (ephem0.crval2 - ny / 2. * ephem0.cdelt2) * RADSINDEG;
+        double latmin1 = (ephem1.crval2 - ny / 2. * ephem1.cdelt2) * RADSINDEG;
+        double latmax0 = (ephem0.crval2 + ny / 2. * ephem0.cdelt2) * RADSINDEG;
+        double latmax1 = (ephem1.crval2 + ny / 2. * ephem1.cdelt2) * RADSINDEG;
         double latmin = (latmin0 + latmin1) / 2.;
         double latmax = (latmax0 + latmax1) / 2.;
         

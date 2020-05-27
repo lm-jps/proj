@@ -287,12 +287,7 @@ int DoIt ()
        cdelt2 = drms_getkey_float(inprec, "CDELT2", &status);
        if (status) DIE("CDELT2 not found!");
        if (rescale) {
-         float r_sun =  drms_getkey_float(inprec, "R_SUN", &status);
          mag = fabs(cdelt1 / scale_to);
-         if (!status) {
-           r_sun *= mag;
-           drms_setkey_float(outrec, "R_SUN", r_sun);
-         }
          cdelt1 /= mag;
          cdelt2 /= mag;
          drms_setkey_float(outrec, "CDELT1", cdelt1);
@@ -383,7 +378,7 @@ int DoIt ()
         if (status) DIE("drms_array_create failed!");
         for (i=0; i<wide*high; i++) {
           if (is_aia) {
-            if (*(output_array+i) < -8) *(output_array+i) = -8;
+            if (*(output_array+i)<0) *(output_array+i)=0;
             if (*(output_array+i)>z) *(output_array+i)=z;
             }
           *((float *)(outarr->data)+i) = *(output_array+i);

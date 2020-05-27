@@ -417,7 +417,7 @@ if(cdark = drms_getkey_string(rs, "IMG_TYPE", &status)) {
 }
 if(!hmiaiaflg) {		//HMI specific qual bits
   //instrument anomaly on 2018.08.17. Change ending FSN or delete when resolved -Hao
-  //if(fsn >= 144002065 ) quallev0 = quallev0 | Q_INSTR_ANOM;
+  if(fsn >= 144002065 ) quallev0 = quallev0 | Q_INSTR_ANOM;
 
   hsqfgsn = drms_getkey_int(rs, "HSQFGSN", &status);
   if(status || (fsn != hsqfgsn)) quallev0 = quallev0 | Q_NOISP;

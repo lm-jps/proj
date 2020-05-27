@@ -103,7 +103,7 @@ struct swIndex {
     float mean_derivative_bz;
     float Rparam;
 };
- 
+
 // Mapping method
 enum projection {
 	carree,
@@ -567,14 +567,9 @@ int mapScaler(DRMS_Record_t *sharpRec, DRMS_Record_t *inRec, DRMS_Record_t *harp
 	if (!inSeg) return 1;
 	
 	DRMS_Array_t *inArray = NULL;
+
 	inArray = drms_segment_read(inSeg, DRMS_TYPE_FLOAT, &status);
 	if (!inArray) return 1;
-
-    if (!strcmp(segName, "conf_disambig") || !strcmp(segName, "bitmap")) {
-        // Moved out so it works for FD conf_disambig as well
-        // Jan 2 2014 XS
-        interpOpt = 3;		// Aug 12 XS, near neighbor
-    }
 	    
 	float *inData;
 	int xsz = inArray->axis[0], ysz = inArray->axis[1];

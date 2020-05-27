@@ -178,10 +178,10 @@ int DoIt(void)
         DRMS_Segment_t *outSeg = drms_segment_lookupnum(outRec, 0);
         int rows = outSeg->axis[1], cols = outSeg->axis[0];
         
-        double minlat = crval2 + (1.0 - crpix2) * cdelt2;       // fixed on Apr 6 2019
-        double maxlat = crval2 + (rows - crpix2) * cdelt2;
-        double minlon = crval1 + (1.0 - crpix1) * cdelt1;
-        double maxlon = crval1 + (cols - crpix1) * cdelt1;
+        double minlat = crval2 + (0.5 - crpix2) * cdelt2;           // Edge is at 0.5 and rows+0.5
+        double maxlat = crval2 + (rows + 0.5 - crpix2) * cdelt2;
+        double minlon = crval1 + (0.5 - crpix1) * cdelt1;
+        double maxlon = crval1 + (cols + 0.5 - crpix1) * cdelt1;
         
         drms_setkey_double(outRec, "MINCOLAT", (90. - maxlat) * RADSINDEG);         // a
         drms_setkey_double(outRec, "MAXCOLAT", (90. - minlat) * RADSINDEG);         // b

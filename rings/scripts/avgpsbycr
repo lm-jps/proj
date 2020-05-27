@@ -2,7 +2,7 @@
 # Create averages of hmi.rdv_pspec_fd* power spectra over a rotation by
 #   Stonyhurst coordinates (cf. avgpscrsyn)
 
-set SCRIPT_VERSION = 1.9
+set SCRIPT_VERSION = 1.8
 
 @ TEST = 0	# set to 1 for production in namespace hmi_test
 set TW
@@ -13,15 +13,12 @@ if ("$1" =~ '-test') then
 endif
 
 if ($#argv < 2) then
-  echo "usage: $0 [-test] Size CarrRot [5d_Line_Start]"
+  echo "usage: $0 [-test] Size CarRot"
   exit
 endif
 
 @ SYSER = `echo $1 | sed  -e "s/^0*//"`
 @ CROT = `echo $2 | sed  -e "s/^0*//"`
-
-@ LINE0 = 0
-if ($#argv > 2) @ LINE0 = $3
 
 # modules, programs, and scripts
 set DATAVG = datavg
@@ -69,8 +66,14 @@ if ($NT > $#TILESS) then
   exit
 endif
 
-set QSUB = qsub2
-set QUEUE = k.q
+if ($SYSE == 5) then
+# for now, override use of cluster 2 for massive arrays
+  set QSUB = qsub
+  set QUEUE = j.q
+else
+  set QSUB = qsub2
+  set QUEUE = k.q
+endif
 
 #  check that required scripts and programs are in path or rooted
 foreach CMD ($QSUB $DATAVG)
@@ -171,6 +174,11 @@ if ($EQCT < 2) then
   goto CLEANUP
 endif
 
+# get range of available CM longitudes: ordinarily 360-005
+# set LON0 = `show_info -q ds= $PSER"[$CROT][][][0][0]" key= CMLon | head -1`
+# set LON1 = `show_info -q ds= $PSER"[$CROT][][][0][0]" key= CMLon | tail -1`
+# get list of all latitudes present: can change from start to end of rotation
+# set TLATS = (`show_info -q ds= $PSER"[$CROT][$LON0,$LON1][][][0]" key= LatHG | sort -u`)
 # get CM longitude closest to midpoint of rotation
 @ LONM = 180
 @ FOUND = `show_info -cq ds= $PSER"[$CROT][$LONM]"`
@@ -187,25 +195,10 @@ while ($FOUND < 1)
   if ($LONM <= $SYSE) goto CLEANUP
 end
 
-@ TOTEL = 0
 # get list of all latitudes present for (nearest time to) midpoint
 set TLATS = (`show_info -q ds= $PSER"[$CROT][$LONM][][][0]" key= LatHG`)
-if ($SYSE == 5) then
-  set LATS
-  set LONS
-  foreach TLAT ($TLATS)
-    set TLONS = (`show_info -q ds= $PSER"[$CROT][180][][$TLAT]" key= LonCM`)
-    foreach TLON ($TLONS)
-      set LATS = ($LATS $TLAT)
-      set LONS = ($LONS $TLON)
-    end
-  end
-  @ NTOT = $#LATS
-  set QSUB = qsub
-  set QUEUE = j.q
-  goto SHORTLINES
-endif
-
+@ TOTEL = 0
+@ TOTCT = 0
 foreach TLAT ($TLATS)
 #  @ LONCT0 = `show_info -cq ds= $PSER"[$CROT][$LON0][][$TLAT][0]"`
 #  @ LONCT1 = `show_info -cq ds= $PSER"[$CROT][$LON1][][$TLAT][0]"`
@@ -257,95 +250,6 @@ foreach TLAT ($TLATS)
   @ ELAPS += 30
   @ ELAPS /= 60
   echo "  time for averaging $EXPCT sets of spectra on the cluster: $ELAPS min" >> $MMSG
-end
-@ TOTEL += 30
-@ TOTEL /= 60
-echo "Total time for averaging $TOTCT sets of spectra on the cluster: $TOTEL min" >> $MMSG
-echo "    averaged spectra in $AVGS""[$CROT]" >> $MMSG
-goto CLEANUP
-
-SERIAL:
-
-@ FAIL = 0
-@ N = 0
-@ BEGUN = `date +%s`
-while ($N < $NTOT)
-  @ N++
-  set LAT = $LATS[$N]
-  set LON = $LONS[$N]
-  $DATAVG out= $AVGS mean= logP pkey= CMLon mscale= $MSCALE mzero= $MZERO \
-      copy= "CarrRot,LatHG,LonCM,DELTA_K,DELTA_NU,D_OMEGA,Apode_f,APOD_MIN,APOD_MAX" \
-      in= $PSER"[$CROT][][][$LAT][$LON]" >>& $RLOG
-  if ($status) @ FAIL++
-end
-@ FINIS = `date +%s`
-@ ELAPS = $FINIS - $BEGUN
-@ TOTEL += $ELAPS
-@ ELAPS += 30
-@ ELAPS /= 60
-echo "  Time for averaging $NTOT sets of spectra: $ELAPS min" >> $MMSG
-echo "    averaged spectra in $AVGS""[$CROT]" >> $MMSG
-if ($FAIL) then
-  echo "  Warning! $FAIL averaging failures" >> $MMSG
-  echo "  ($CROT) $FAIL averaging failures" >> $LOGF
-endif
-goto CLEANUP
-
-SHORTLINES:
-@ NSTRT = $LINE0 * 16
-@ LINE = $LINE0
-@ N = $NSTRT
-while ($N < $NTOT)
-  @ LINE++
-  @ N16 = 0
-  set LLONS
-  set LLATS
-  while ($N16 < 16)
-    @ N16++
-    @ N++
-    if ($N > $NTOT) continue
-    set LLATS = ($LLATS $LATS[$N])
-    set LLONS = ($LLONS $LONS[$N])
-  end
-  @ EXPCT = $#LLONS
-  @ QJOK = `grep "exited with exit code 0." $RLOG | wc -l`
-  @ TOTCT = $QJOK + $EXPCT
-  echo "#\!/bin/csh -f" > $SCRIPT
-  echo "limit vm $VMEM"M >> $SCRIPT
-  echo set noglob >> $SCRIPT
-  echo 'set LONS =  ('"$LLONS"')' >> $SCRIPT
-  echo 'set LON = $LONS[$SGE_TASK_ID]' >> $SCRIPT
-  echo 'set LATS =  ('"$LLATS"')' >> $SCRIPT
-  echo 'set LAT = $LATS[$SGE_TASK_ID]' >> $SCRIPT
-  echo 'set LOG = '$RLOG'.$SGE_TASK_ID.'$LINE >> $SCRIPT
-  echo "$DATAVG \" >> $SCRIPT
-  echo "  out= $AVGS mean= logP \" >> $SCRIPT
-  echo "  pkey= CMLon \" >> $SCRIPT
-  echo "  mscale= $MSCALE mzero= $MZERO \" >> $SCRIPT
-  echo '  copy= "CarrRot,LatHG,LonCM,DELTA_K,DELTA_NU,D_OMEGA,Apode_f,APOD_MIN,APOD_MAX" \' >> $SCRIPT
-  echo '  in= '$PSER'"['$CROT'][][][$LAT][$LON]" >>& $LOG' >> $SCRIPT
-  @ BEGUN = `date +%s`
-  $QSUB -sync yes -t 1-$EXPCT -q $QUEUE -e $QRES -o $QRES $SCRIPT >>& $RLOG
-  @ QJOK = `grep "exited with exit code 0." $RLOG | wc -l`
-  @ FAIL = $TOTCT - $QJOK
-  if ($FAIL) then
-    echo "  $FAIL averaging failures on cluster for 5-deg Line Set $LINE" >> $MMSG
-    echo "  ($CROT) $FAIL averaging failures on cluster for 5-deg Line Set $LINE`" >> $LOGF
-    set QIDS = `grep "exited with exit code" $RLOG | awk '{print $2}' | awk -F. '{print $1}' | sort -u`
-    set PROG = `basename $SCRIPT`
-    foreach QID ($QIDS)
-      set ERRLOG = $QRES/$PROG.e$QID
-      set noglob
-      echo "  stderr from module failures in $ERRLOG.*" >> $MMSG
-      echo "  For details, qacct[2] -j $QID" >> $MMSG
-      unset noglob
-    end
-  endif
-  sleep 15
-  @ FINIS = `date +%s`
-  @ ELAPS = $FINIS - $BEGUN
-  @ TOTEL += $ELAPS
-  echo "  time for averaging $EXPCT sets of spectra (set $LINE): $ELAPS sec" >> $MMSG
 end
 @ TOTEL += 30
 @ TOTEL /= 60

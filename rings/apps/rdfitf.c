@@ -14,7 +14,8 @@
  *	in	DataSet	-	Input dataset
  *	out	string	fit.out	output data series or (if series is not
  *				writeable) file name
- *	guessfile string -	name of file containing parameterizations for
+ *	guessfile string	~dhaber/coefhrtest.dat
+ *				name of file containing parameterizations for
  *				each fitting parameter
  *	unwrap	string	unwrap		name of the segment to which
  *		the unwrapped input power spectrum (before filtering) is to be
@@ -80,10 +81,6 @@
  *	or a file name based on whether it can be referred to a series
  *	writeable by the user is not sensible, but probably not particularly
  *	dangerous.
- *    It is implictly assumed that in the input spectrum, NAXIS1 = NAXIS2,
- *	CRPIX1 = CRPIX2, CRVAL1 = CRVAL2, and CDELT1 = CDELT2; only the first
- *	and second of these are checked. Also, it is required that NAXIS1 and
- *	NAXIS2 are even
  *
  *  Future development:
  *    Process LOG_BASE key in driver, converting power spectrum to log if
@@ -160,21 +157,17 @@
  *  Revision history is at end of file.
  */
 
-#define MODULE_VERSION_NUMBER	("0.9")
-#define KEYSTUFF_VERSION "keystuff_v11.c"
-
 char *module_name = "ringfit_ssw";
 char *module_desc = "ring fitting using method of Haber and Hindman";
-char *version_id = MODULE_VERSION_NUMBER;
+char *version_id = "0.8";
 
 #include <jsoc_main.h>
-#include KEYSTUFF_VERSION
 
 ModuleArgs_t module_args[] = {
-  {ARG_DATASET,	"in", "", "input dataset"}, 
+  {ARG_DATASET,	"in", "mdi.rdVpspec_dp[1988][180][180][0]", "input dataset"}, 
   {ARG_STRING, "out", "fit.out",
       "name of output data series (or file) containing fit coefficients"},
-  {ARG_STRING, "guessfile", "",
+  {ARG_STRING, "guessfile", "/home/dhaber/coefhrtest.dat",
       "name of file containing parameterizations for each fitting parameter"},
   {ARG_STRING, "unwrap", "unwrap",
       "segment containing optional unwrapped power spectra"},
@@ -194,7 +187,7 @@ ModuleArgs_t module_args[] = {
   {ARG_INT, "nrdtot", "16",
       "number of ridges in guess file. as long as there are 16 or less the default should work"},
   {ARG_FLOAT, "ux", "0.0", "initial guess for zonal flow speed [m/s]"},
-  {ARG_FLOAT, "uy", "0.0", "initial guess for meridional flow speed [m/s]"},
+  {ARG_FLOAT, "uy", "0.0", "initial guess for merridional flow speed [m/s]"},
   {ARG_INT, "smooth", "0", "amount of smoothing wanted [wavenumber bins]"},
   {ARG_INT, "mdata", "16",
       "number of azimuthal Fourier components to keep when subsampling the data"},
@@ -209,7 +202,7 @@ ModuleArgs_t module_args[] = {
   {ARG_FLAG,  "U", "0", "write unwrapped power spectrum"},      
   {ARG_FLAG,  "v", "0", "verbose output"}, 
   {ARG_FLAG,  "x", "0", "really verbose output"}, 
-  {ARG_FLAG,  "d", "0", "do not use second derivatives in parameter errors"},      
+  {ARG_FLAG,  "2", "0", "do not use second derivatives in parameter errors"},      
   {ARG_FLOAT, "xtol", "1e-4", "termination tolerance on fitting parameters"}, 
   {ARG_FLOAT, "ftol", "1e-8", "termination tolerance on fitting function"}, 
   {ARG_FLOAT, "feps", "1e-16", "accuracy of function values from FUNC"}, 
@@ -243,6 +236,7 @@ char *propagate[] = {"CarrTime", "CarrRot", "CMLon", "LonHG", "LatHG", "LonCM",
     "MapScale", "MapProj", "Map_PA", "RSunRef", "PosAng", "MAI",
     "Apode_f", "APOD_MIN", "APOD_MAX"};
 
+#include "keystuff.c"
 #include "read_guess.c"
 
 #define RSUN_MM (696.0)
@@ -323,9 +317,11 @@ int DoIt (void) {
   int iprint = params_get_int (params, "iprint");
   int iflg = params_isflagset (params, "2");
 
+  if (verbose)
+     fprintf(stderr," guessfile = %s \n", guessfile);
   snprintf (module_ident, 64, "%s v%s", module_name, version_id);
   if (verbose) {
-    printf ("%s:\n", module_ident);
+    printf ("%s version %s\n", module_name, version_id);
     printf ("fits of %s\n", inds);
     if (no_fits)
       printf ("(diagnostic run only, no records will be written to DRMS)\n");
@@ -404,14 +400,14 @@ int DoIt (void) {
 		/*  this code is shared with code in rdfitc,
 			      and should be turned into a separate function  */
 					/*  check output data series struct  */
-  orec = drms_template_record (drms_env, outser, &status);
+  orec = drms_create_record (drms_env, outser, DRMS_TRANSIENT, &status);
   if (orec) {
     segct = drms_record_numsegments (orec);
     if (segct < 1) {
       fprintf (stderr,
 	  "Error: no data segment in output series %s\n", outser);
       drms_close_records (ids, DRMS_FREE_RECORD);
-      drms_free_record (orec);
+      drms_close_record (orec, DRMS_FREE_RECORD);
       return 1;
     }
     oseg = drms_segment_lookup (orec, "fit.out");
@@ -429,7 +425,6 @@ int DoIt (void) {
 	fprintf (stderr,
 	    "Error: no generic data segment in output series %s\n", outser);
 	drms_close_records (ids, DRMS_FREE_RECORD);
-	drms_free_record (orec);
 	return 1;
       }
       fprintf (stderr, "         writing to segment %s.\n", oseg->info->name);
@@ -473,14 +468,14 @@ int DoIt (void) {
 	write_filt_pow = 0;
       }
     }
-    drms_free_record (orec);
+    drms_close_record (orec, DRMS_FREE_RECORD);
     drms_output = 1;
     if (verbose)
         printf("rgnct = %d \n",rgnct);
     if (verbose && (rgnct > 1)) printf ("%d records in input dataset %s\n",
         rgnct, inds);
   } else {
-	    /*  Can't create in named series, assume it's a filename instead  */
+	   /*  Can't create in named series, assume it's a filename instead  */
     if (rgnct > 1) {
       fprintf (stderr,
 	  "Query produced %d matching records with output to single file;",
@@ -493,19 +488,11 @@ int DoIt (void) {
     drms_output = 0;
   }
   dispose = (no_fits) ? DRMS_FREE_RECORD : DRMS_INSERT_RECORD;
-					     /*  end shared code with rdfitc  */
-		    /*  Read in guess table coefficients for main parameters  */
+					    /*  end shared code with rdfitc  */
+		   /*  Read in guess table coefficients for main parameters  */
   irec = ids->records[0];
   dk = drms_getkey_double (irec, "DELTA_K", &status);
   nkc = drms_getkey_float (irec, "CRPIX1", &status);
-  if (nkc != drms_getkey_float (irec, "CRPIX2", &status)) {
-    fprintf (stderr,
-        "Error: CRPIX1 and CRPIX2 in input spectrum must be equal\n");
-    drms_close_records (ids, DRMS_FREE_RECORD);
-    return 1;
-  }
-		     /*  original code expected crpix1,2 to be 0.5 too small  */
-  nkc -= 0.5;
   nk = nkc - 0.5;
   status = read_guess (guessfile, nrdtot, m, &fnua, &fwa, &pa, &bga, &ma,
       verbose);
@@ -531,29 +518,22 @@ int DoIt (void) {
     return 1;
   }
   dklast = dk;
-	 /*  loop over all input spectra, creating an output record for each  */
-			 /*  check to make sure you are at first good record  */
+	/*  loop over all input spectra, creating an output record for each  */
+/* check to make sure you are at first good record */
   nmalloc = 0;
   for (rgn = 0; rgn < rgnct; rgn++) {
     irec = ids->records[rgn];
     drms_sprint_rec_query (recid, irec);
-    if (verbose && (rgnct > 1))
+    if (verbose && (rgnct > 1)) {
       printf ("processing record %d:\n    %s\n", rgn, recid);
+    }
     dk = drms_getkey_double (irec, "DELTA_K", &status);
     dnu = drms_getkey_double (irec, "DELTA_NU", &status);
     lnbase = drms_getkey_float (irec, "LOG_BASE", &status);
     crpix1 = drms_getkey_float (irec, "CRPIX1", &status);
     crpix2 = drms_getkey_float (irec, "CRPIX2", &status);
-    if (crpix2 != crpix1) {
-      fprintf (stderr, "Error: CRPIX1 != CRPIX2 in input spectrum\n");
-      drms_close_records (ids, DRMS_FREE_RECORD);
-      return 1;
-    }
-		       /*  Fortran code expects crpix1,2 to be 0.5 too small  */
-    crpix1 -= 0.5;
-    crpix2 -= 0.5;
     rsun = drms_getkey_float (irec, "RSunRef", &status);
-    if (status || isnan (rsun)) {			     /*  from rdfitc  */
+    if (status || isnan (rsun)) {			/*  from rdfitc  */
       rsun = RSUN_MM;
       fprintf (stderr, "Warning: no valid value for RSunRef; ");
       fprintf (stderr, "using %f\n", rsun);
@@ -562,39 +542,30 @@ int DoIt (void) {
       status = make_table(fnua, fwa, pa, bga, fnu, width, 
                 ampg, bkg, m, nk, dk, nrdtot, kbmin, kbmax, ma, verbose);
       if (status) {
-	printf ("Problem making table of guesses \n");
-	return 1;
+        printf("Problem making table of guesses \n");
+        return 1;
       }
     }
     dklast = dk;
     if (verbose) printf("dk = %lf   dklast = %lf \n", dk, dklast);
 
     segct = irec->segments.num_total;
+/*    fprintf(stderr," segct = %d \n",segct);  */
     if (segct != 1) {
       for (n = 0; n < segct; n++) {
 	iseg = drms_segment_lookupnum (irec, n);
-        if (!iseg) continue;
 	if (iseg->info->naxis == 3) break;
+	isegnum = n;
       }
+      if (verbose) printf("number of segments %d\n",segct);
       if (n >= segct) {
 	fprintf (stderr, "found no segmemt of rank 3 in input dataset\n");
 	drms_close_records (ids, DRMS_FREE_RECORD);
         return 1;
       }
-      isegnum = n;
     } else {
       isegnum = 0;
       iseg = drms_segment_lookupnum (irec, isegnum);
-      if (!iseg) {
-	fprintf (stderr, "Error, could not open data segment\n");
-	drms_close_records (ids, DRMS_FREE_RECORD);
-	return 1;
-      }
-      if (iseg->info->naxis != 3) {
-	fprintf (stderr, "Error: found no segmemt of rank 3 in input dataset\n");
-	drms_close_records (ids, DRMS_FREE_RECORD);
-	return 1;
-      }
     }
     if (!iseg) {
       fprintf (stderr, "Error, could not open data segment\n");
@@ -613,24 +584,15 @@ int DoIt (void) {
     nky = pspec->axis[1];
     nnu = pspec->axis[2];
     spec = (float *)pspec->data;
-    if (nkx != nky) {
-      fprintf (stderr, "Error: NAXIS1 = %d != NAXIS2 = %d\n", nkx, nky);
-      drms_close_records (ids, DRMS_FREE_RECORD);
-      return 1;
-    }
-    if (nkx % 2) {
-      fprintf (stderr, "Error: NAXIS1 and NAXIS2 must be even\n");
-      drms_close_records (ids, DRMS_FREE_RECORD);
-      return 1;
-    }
-    nk = nkx / 2;
-    if (verbose)
+    nk = nkx/2;
+/*              */
+    if (verbose) {
       printf("nkx = %d  nky = %d  nnu = %d  nk = %d  ntot = %d\n",nkx,nky,nnu,nk,ntot);
+    }
     for (n = 0; n < nrdg; n++) {
       if (kbend[n] > nk) {
-	fprintf (stderr, "Error: kstop value %d > nk = %d \n", kbend[n], nk);
-	drms_close_records (ids, DRMS_FREE_RECORD);
-	return 1;
+        fprintf(stderr, "Error: kstop value %d > nk = %d \n",kbend[n], nk);
+        return 1;
       }
     }
     if (nmalloc == 0) {
@@ -967,10 +929,4 @@ int DoIt (void) {
  *    10.06.03	Added output keys for parameters, results; records written
  *		without segments when no fits
  *  v 0.8 frozen 2010.08.19
- *	11.04.18	Fixed bug in determination of default input segment
- *		when multiple segments possible
- *	19.04.23	Modified treatment of CRPIX1,2 to reflect corrections
- *		in output of module pspec3; added some sanity checks; removed
- *		defaults for input power spectra and guessfile; changed flag 2
- *		to d
  */

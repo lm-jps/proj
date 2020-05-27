@@ -93,7 +93,7 @@
  *
  */
 
-#define MODULE_VERSION_NUMBER	("1.9")
+#define MODULE_VERSION_NUMBER	("1.8")
 #define KEYSTUFF_VERSION "keystuff_v10.c"
 #define EARTH_EPHEM_VERSION "earth_ephem_v10.c"
 
@@ -682,6 +682,8 @@ int DoIt (void) {
 
 					     /*  process input specification  */
   if (key_params_from_dspec (inset)) {
+    double tstep;
+    float clat;
 				    /*  input specified as specific data set  */
     if (!(ids = drms_open_records (drms_env, inset, &status))) {
       fprintf (stderr, "Error: (%s) unable to open input data set %s\n",
@@ -701,32 +703,21 @@ int DoIt (void) {
       source[n] = '\0';
       break;
     }
-    irec = ids->records[0];
-    keywd = drms_keyword_lookup (irec, primekey, 1);
-    if (keywd->info->type == DRMS_TYPE_TIME ) {
-      double tstep;
-      float clat;
-
-      tfirst = 1.0 / 0.0;
-      tlast = -tfirst;
-      for (rec = 0; rec < recct; rec++) {
-	tobs_rec = drms_getkey_time (irec, primekey, &status);
-	if (time_is_invalid (tobs_rec)) continue;
-	if (tobs_rec < tfirst) tfirst = tobs_rec;
-	if (tobs_rec > tlast) tlast = tobs_rec;
-      }
-      tmid = 0.5 * (tfirst + tlast);
-      intrvl = tlast - tfirst;
-      tstep = intrvl / (recct - 1);
-      intrvl += tstep;
-      tmid += 0.5 * tstep;
-      carrington_geoloc (tmid, &clmid, &clat, &crmid);
-    } else {
-/*  prime key is not time; midtime Carrington coordinates unknown  */
-      tmid = DRMS_MISSING_TIME;
-      clmid = DRMS_MISSING_FLOAT;
-      crmid = DRMS_MISSING_INT;
+    tfirst = 1.0 / 0.0;
+    tlast = -tfirst;
+    for (rec = 0; rec < recct; rec++) {
+      irec = ids->records[rec];
+      tobs_rec = drms_getkey_time (irec, primekey, &status);
+      if (time_is_invalid (tobs_rec)) continue;
+      if (tobs_rec < tfirst) tfirst = tobs_rec;
+      if (tobs_rec > tlast) tlast = tobs_rec;
     }
+    tmid = 0.5 * (tfirst + tlast);
+    intrvl = tlast - tfirst;
+    tstep = intrvl / (recct - 1);
+    intrvl += tstep;
+    tmid += 0.5 * tstep;
+    carrington_geoloc (tmid, &clmid, &clat, &crmid);
   } else {
 				/*  only the input data series is named,
 				    get record specifications from arguments  */
@@ -962,8 +953,8 @@ int DoIt (void) {
       &status);
   mean = drms_array_create (DRMS_TYPE_DOUBLE, naxis, iseg->axis, (void *)vavg,
       &status);
-  powr = (needpowr) ? drms_array_create (DRMS_TYPE_DOUBLE, naxis,
-      iseg->axis, (void *)vvar, &status) : NULL;
+  if (needpowr) powr = drms_array_create (DRMS_TYPE_DOUBLE, naxis, iseg->axis,
+      (void *)vvar, &status);
 		/*  set the output scaling factors to be segment defaults
 				    if not overridden as argument parameters  */
   if (mseg) {
@@ -1346,14 +1337,6 @@ int DoIt (void) {
     if (verbose) printf ("ok\n");
     if (writelog) fprintf (runlog, "ok\n");
   }
-
-  if (imgct < 1) {
-    fprintf (stderr, "Error: %d acceptable records in input set\n", imgct);
-    drms_close_records (ids, DRMS_FREE_RECORD);
-    drms_close_record (orec, DRMS_FREE_RECORD);
-    return 1;
-  }
-
   if (checkseg) free (inaxis);
   vval = (int *)vcts->data;
   vavg = (double *)mean->data;
@@ -1633,10 +1616,4 @@ int DoIt (void) {
  *		for determining geocentric Carrington coordinates corresponding
  *		to MidTime for that case
  *  v 1.8 frozen 19.02.11
- *	19.10.03	trap case with no acceptable input records
- *	19.10.13	initialize powr to NULL when not used (just to make
- *		run time initialization checker happy)
- *		skip attempt to set midtime ephemeris if prime key is not time
- *		in a dataset spec
- *  v 1.9 frozen 20.01.14
  */

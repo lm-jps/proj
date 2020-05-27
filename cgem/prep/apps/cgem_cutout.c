@@ -30,7 +30,7 @@
 #include "jsoc_main.h"
 #include "astro.h"
 #include "cartography.c"
-#include "diffrot.h"        // double diffrot_dop[3], diffrot[3];
+#include "diffrot.h"        // double diffrot[3];
 
 #define PI              (M_PI)
 #define RADSINDEG        (PI/180.)
@@ -132,7 +132,6 @@ ModuleArgs_t module_args[] =
     {ARG_FLOAT, "latref", "0", "Reference patch center Stonyhurst lat, in deg."},
     {ARG_INT, "cols", "500", "Columns of output cutout."},
     {ARG_INT, "rows", "500", "Rows of output cutout."},
-    {ARG_FLAG, "m", "", "Set manual mode."},
     {ARG_STRING, "tref", kNotSpecified, "Reference time."},
     {ARG_END}
 };
@@ -157,12 +156,8 @@ int DoIt(void)
     pInfo.rows = params_get_int(&cmdparams, "rows");
     pInfo.tref = params_get_time(&cmdparams, "tref");
     pInfo.cgemnum = params_get_int(&cmdparams, "cgemnum");
-    pInfo.noaa_ar = params_get_int(&cmdparams, "noaa_ar");
+    pInfo.noaa_ar = params_get_int(&cmdparams, "noaa_ar"); if (pInfo.noaa_ar < 0) { pInfo.noaa_ar = pInfo.cgemnum; }
     pInfo.harpnum = params_get_int(&cmdparams, "harpnum");
-    
-    int manual = params_isflagset(&cmdparams, "m");
-    // NOAA_AR == CGEMNUM if manual mode, Mar 26 2020
-    if (manual && pInfo.noaa_ar < 0) { pInfo.noaa_ar = pInfo.cgemnum; }
     
     /* Input data */
     
@@ -322,9 +317,9 @@ int createCutRecord(DRMS_Record_t *bRec, DRMS_Record_t *dopRec,
     
     int ll[2], ur[2];
     double diff_a[3];
-    diff_a[0] = diffrot[0];     // decoupled from Doppler correction DR rate
-    diff_a[1] = diffrot[1];
-    diff_a[2] = diffrot[2];
+    diff_a[0] = drms_getkey_double(dopRec, "DIFF_A0", &status); if (status) { diff_a[0] = diffrot[0]; }
+    diff_a[1] = drms_getkey_double(dopRec, "DIFF_A2", &status); if (status) { diff_a[1] = diffrot[1]; }
+    diff_a[2] = drms_getkey_double(dopRec, "DIFF_A4", &status); if (status) { diff_a[2] = diffrot[2]; }
     if (findCoord(bRec, pInfo, diff_a, ll, ur)) {
         printf("Coordinate unreasonable\n");
         return 1;
@@ -388,6 +383,8 @@ int findCoord(DRMS_Record_t *inRec, struct patchInfo *pInfo, double *diff_a, int
     
     // Rotate
     // Differential rotation rate in urad/s
+    // Use results from DOPPCAL, if fails then use
+    // proj/lev1.5_hmi/libs/lev15/rotcoef_file.txt
     
     double lat_c = pInfo->latref;
     double difr = diff_a[0] + diff_a[1] * pow(sin(lat_c),2) + diff_a[2] * pow(sin(lat_c),4);
@@ -684,7 +681,7 @@ int getDoppCorr_patch(DRMS_Record_t *inRec, int *ll, int *ur, float *doppCorr)
             - obsv_x * sinlon_nobp * coslat_nobp * k;        // cm/s
             
             doppCorr[ind] += (rsun_ref * sinlon * coslatc * 1.e-6 *
-                              (diffrot_dop[0] + diffrot_dop[1] * pow(sinlat, 2) + diffrot_dop[2] * pow(sinlat, 4)));        // cm/s; use diffrot_dop now Apr 27 2019
+                              (2.71390 - 0.405000 * pow(sinlat, 2) - 0.422000 * pow(sinlat, 4)));        // cm/s
             
         }
     }

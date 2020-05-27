@@ -11,15 +11,15 @@
  *    pspec3 [-lvx] in= pspec= ...
  *
  *  Arguments: (type		default         description)
- *    in	DataSet none            Input dataset
+ *	in	DataSet none            Input dataset
  *			A series of records containing 3-d data cubes as one
  *			of their segments. It is assumed that all records in
  *			the dataset are from the same dataseries, or at least
  *			share a common segment structure
- *    segment	string	-		Name of the input data segment (only
+ *      segment string	-		Name of the input data segment (only
  *			required if the input series has multiple 3-dimensional
  *			segments)
- *    pspec	DataSeries	-		Output data series;  must
+ *	pspec	DataSeries	-		Output data series;  must
  *			contain at least one 3-dimensional segment
  *    mask_in	Float		0.9375		Inner apodization radius
  *    mask_ex	Float		1.0		Outer apodization radius
@@ -39,10 +39,10 @@
  *	validity are not known, but the code has been verified to work with
  *	"normal" input spectra (Dopplergrams as compressed scaled shorts)
  *	of up to 800 Mpxl.
+ *    No checking that input data series corresponds with link in output
+ *	series
  *    The value of CDELT3 in the input set overrides the value of Cadence
  *	if propagated, but is not checked for units
- *    If there are multiple data series in the input data set specification
- *	(unlikely), only the first is validated, with a warning being issued
  *
  *  Future Updates
  *    Use drms_keyword_lookup()
@@ -56,23 +56,18 @@
  *
  *  Revision history is at end of file.
  */
-
-#define MODULE_VERSION_NUMBER	("1.2")
-#define KEYSTUFF_VERSION "keystuff_v11.c"
+#include <jsoc_main.h>
+#include <fftw3.h>
 
 char *module_name = "pspec3";
 char *module_desc = "3-d power spectrum";
-char *version_id = MODULE_VERSION_NUMBER;
-
-#include <jsoc_main.h>
-#include KEYSTUFF_VERSION
-#include <fftw3.h>
+char *version_id = "1.1";
 
 ModuleArgs_t module_args[] = {
   {ARG_DATASET, "in", "", "Input data set"},
   {ARG_STRING,	"segment", "Not Specified",
       "input data series segment; ignored if series only has one 3-d segment"}, 
-  {ARG_DATASERIES, "pspec", "", "Output data series"},
+  {ARG_DATASERIES, "pspec", "", "Ouput data series"},
   {ARG_FLOAT, "mask_in", "0.9375", "inner radial apodization edge", "[0.0,)"},
   {ARG_FLOAT, "mask_ex", "1.0", "outer radial apodization edge", "[0.0,)"},
   {ARG_FLOAT,	"apodize", "0.96875", "temporal apodization edge",
@@ -92,6 +87,8 @@ char *propagate[] = {"CarrTime", "CarrRot", "CMLon", "LonHG", "LatHG", "LonCM",
     "MidTime", "Duration", "LonSpan", "T_START", "T_STOP", "Coverage",
     "ZonalTrk", "ZonalVel", "MeridTrk", "MeridVel", "MapScale", "MAI", "Ident",
     "Width", "Height", "Size", "MapProj", "Map_PA", "PosAng", "RSunRef"};
+
+#include "keystuff.c"
 
 static int cleanup (int error, DRMS_RecordSet_t *irecs, DRMS_Record_t *orec,
     DRMS_Array_t *orig, DRMS_Array_t *pspec, int dispose) {
@@ -251,7 +248,7 @@ int DoIt (void) {
   int rgn, rgnct, segs, isegnum, osegnum, found;
   int bin, is, js;
   int key_n, kstat, propct, status;
-  int bigcube, unlnkeyct, unlnsegct;
+  int bigcube;
   char **copykeylist;
   char *inser;
   char module_ident[64];
@@ -287,19 +284,17 @@ int DoIt (void) {
       printf ("(diagnostic run only, no records will be written to DRMS)\n");
   }
 						/*  check the output series */
-  orec = drms_template_record (drms_env, out_series, &status);
+  orec = drms_create_record (drms_env, out_series, DRMS_TRANSIENT, &status);
   if (status) {
     fprintf (stderr,
-	"Error: drms_template_record returned %d for data series:\n", status);
+	"Error: drms_create_record returned %d for data series:\n", status);
     fprintf (stderr, "       %s\n", out_series);
-    if (orec) drms_free_record (orec);
-    return 1;
+    return cleanup (1, irecs, orec, orig, pspec, dispose);
   }
   if ((segs = orec->segments.num_total) < 1) {
     fprintf (stderr, "Error: no data segments in output data series:\n");
     fprintf (stderr, "  %s\n", out_series);
-    drms_free_record (orec);
-    return 1;
+    return cleanup (1, irecs, orec, orig, pspec, dispose);
   }
   found = 0;
   for (n = 0; n < segs; n++) {
@@ -311,8 +306,7 @@ int DoIt (void) {
   if (!found) {
     fprintf (stderr, "Error: no segment of rank 3 in output data series:\n");
     fprintf (stderr, "  %s\n", out_series);
-    drms_free_record (orec);
-    return 1;
+    return cleanup (1, irecs, orec, orig, pspec, dispose);
   }
   oseg = drms_segment_lookupnum (orec, osegnum);
   if (found > 1) {
@@ -337,34 +331,27 @@ int DoIt (void) {
     default:
       scale_range = 1.0;
   }
-							     /*  check input  */
+  drms_close_record (orec, DRMS_FREE_RECORD);
+							   /*  check input  */
   irecs = drms_open_records (drms_env, inds, &status);
   if (status) {
     fprintf (stderr, "Error (%s): drms_open_records() returned %d for dataset:\n",
 	module_ident, status);
     fprintf (stderr, "  %s\n", inds);
-    drms_free_record (orec);
-    return cleanup (1, irecs, NULL, orig, pspec, dispose);
+    return cleanup (1, irecs, orec, orig, pspec, dispose);
   }
 
   rgnct = irecs->n;
   if (rgnct < 1) {
     fprintf (stderr, "No records found in input data set %s\n", inds);
-    drms_free_record (orec);
-    return cleanup (1, irecs, NULL, orig, pspec, dispose);
-  }
-  if (irecs->ss_n > 1) {
-    fprintf (stderr, "Warning: dataset %s contains %d subsets\n", inds,
-	irecs->ss_n);
-    fprintf (stderr, "         only the first is being checked\n");
+    return cleanup (1, irecs, orec, orig, pspec, dispose);
   }
   irec = irecs->records[0];
   inser = strdup (inds);
   if ((segs = drms_record_numsegments (irec)) < 1) {
     fprintf (stderr, "Error: no data segments in input data series:\n");
     fprintf (stderr, "  %s\n", inser);
-    drms_free_record (orec);
-    return cleanup (1, irecs, NULL, orig, pspec, dispose);
+    return cleanup (1, irecs, orec, orig, pspec, dispose);
   }
   found = 0;
   for (n = 0; n < segs; n++) {
@@ -376,16 +363,8 @@ int DoIt (void) {
   if (!found) {
     fprintf (stderr, "Error: no segment of rank 3 in input data series:\n");
     fprintf (stderr, "  %s\n", inser);
-    drms_free_record (orec);
-    return cleanup (1, irecs, NULL, orig, pspec, dispose);
+    return cleanup (1, irecs, orec, orig, pspec, dispose);
   }
-  if (status = drms_verify_links (irec->seriesinfo->seriesname, out_series,
-      &unlnkeyct, &unlnsegct)) {
-    fprintf (stderr, "Warning: output series %s contains %d unresolved links\n",
-	out_series, status);
-    fprintf (stderr, "         input series %s\n", irec->seriesinfo->seriesname);
-  }
-  drms_free_record (orec);
   if (found > 1) {
     if (strcmp (seg_name, "Not Specified")) {
       iseg = drms_segment_lookup (irec, seg_name);
@@ -418,7 +397,7 @@ int DoIt (void) {
     printf ("\nprocessing %d record(s) in series %s:\n", rgnct, inser);
   }
 
-							 /*  process records  */
+						       /*  process records  */
   for (rgn = 0; rgn < rgnct; rgn++) {
     irec = irecs->records[rgn];
     drms_sprint_rec_query (source, irec);
@@ -444,7 +423,7 @@ int DoIt (void) {
       }
       tstep /= planes - 1.0;
     }
-			    /*  the input looks okay, open the output record  */
+			   /*  the input looks okay, open the output record  */
     orec = drms_create_record (drms_env, out_series, DRMS_PERMANENT, &status);
     if (status) {
       fprintf (stderr,
@@ -462,7 +441,7 @@ int DoIt (void) {
     hrows = rows / 2;
     cols_even = (cols % 2) ? 0 : 1;
     rows_even = (rows % 2) ? 0 : 1;
-    hplanes = planes / 2;		      /*  possible bug if planes odd  */
+    hplanes = planes / 2;		     /*  possible bug if planes odd  */
     if (planes % 2) hplanes++;
  
     apodization = (double *)malloc (area * sizeof (double));
@@ -486,7 +465,7 @@ int DoIt (void) {
 	}
       }
     }
-					    /*  Initialize FFT working space  */
+					  /*  Initialize FFT working space  */
     if (dp_calc) {
       wdata = (double *)malloc (planes * rows * xcols * sizeof (double));
       plan = fftw_plan_dft_r2c_3d (planes, rows, cols, wdata,
@@ -496,7 +475,7 @@ int DoIt (void) {
       fplan = fftwf_plan_dft_r2c_3d (planes, rows, cols, xdata,
 	  (fftwf_complex *)xdata, FFTW_ESTIMATE);
     }
-				       /*  add the argument values to header  */
+				     /*  add the argument values to header  */
     if (planes < 2) apode_edge = 2.0;
     bigcube = 0;
     if (cube > 838860800) {
@@ -594,9 +573,9 @@ int DoIt (void) {
     dval = drms_getkey_double (irec, "CDELT3", &status);
     if (!status) kstat += check_and_set_key_float (orec, "Cadence", dval);
 						       /*  and set new ones  */
-    crpix = (cols % 2) ? 0.5 * (cols + 1) : 0.5 * cols + 1;
+    crpix = 0.5 * (cols + 1);
     kstat += check_and_set_key_float (orec, "CRPIX1", crpix);
-    if (cols != rows) crpix = (rows % 2) ? 0.5 * (rows + 1) : 0.5 * rows + 1;
+    if (cols != rows) crpix = 0.5 * (rows + 1);
     kstat += check_and_set_key_float (orec, "CRPIX2", crpix);
     crpix = 1.0;
     kstat += check_and_set_key_float (orec, "CRPIX3", crpix);
@@ -855,8 +834,5 @@ exp(scale_range), target_min);
  *  v 1.1	Removed some old commented out code
  *	Fixed bug in test for minimum values out of scaling range (zero)
  *  v 1.1 frozen 2012.12.24
- *  v 1.2	Fixed error in reporting of CRPIXn (1,2) values;
- *	use drms_template_record() to check output series validity; verify
- *	that any destination links to source exist in source
  *
  */

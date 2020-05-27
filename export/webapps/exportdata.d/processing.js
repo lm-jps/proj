@@ -50,10 +50,6 @@ var keyNoaaLonX = 3;
 // It gets called ONLY from the Set() functions. So, the argument to DoCheck() should be false.
 function processingGetRecInfo(DoCheck, exportOption, n)
   {
-    var parameters = null;
-    var argString = null;
-    var url = null;
-    
   // Get keywords for a single record.  n will be 1 for first record, -1 for last record.
   if (n==1)
     processingFirstRecord = null;
@@ -67,11 +63,9 @@ function processingGetRecInfo(DoCheck, exportOption, n)
   var RecordSet = $("ExportRecordSet").value;
   $("ImRecordSet").innerHTML = RecordSet;
 
-    parameters = { "ds" : RecordSet, "op" : "rs_list", "n" : n, "key" : keysneeded, "seg" : segsneeded, "l" : 1 };
-
   var ajaxParameters = {
     method: 'get',
-    parameters: parameters,
+    parameters: {"ds" : RecordSet, "op" : "rs_list", "n" : n, "key" : keysneeded, "seg" : segsneeded, "l" : 1 },
 
     onSuccess: function(transport, json)
       {
@@ -109,12 +103,9 @@ function processingGetRecInfo(DoCheck, exportOption, n)
               exportOption.argsReady = true;
           }
       },
-    onFailure: function() { alert('[ processingGetRecInfo ] Something went wrong...'); if (exportOption) { exportOption.argsReady = true; } },
+    onFailure: function() { alert('Something went wrong...'); if (exportOption) { exportOption.argsReady = true; } },
     onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; if (exportOption) { exportOption.argsReady = true; } }
     };
-    
-    argString = Object.keys(parameters).map(function(key) { return key + '=' + encodeURIComponent(parameters[key]); }).join('&');
-    url = 'http://' + Host + '/cgi-bin/ajax/' + JSOC_INFO + '?' + argString;
     
   new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + JSOC_INFO, ajaxParameters);
   }
@@ -1600,8 +1591,6 @@ function ProcessingInit()
   ExpOpt.Size = 1.0;
     ExpOpt.argsReady = true;
     ExpOpt.paramsValid = null;
-    // to determine if checkbox is disabled, must check record-set keyword values
-    ExpOpt.disabled_state_rec_dep = true;
   ExportProcessingOptions[iOpt] = ExpOpt;
   AiaScaleOption = iOpt;
 
@@ -1693,25 +1682,15 @@ function ProcessingInit()
 
   var nOpt = iOpt + 1;
 
-    for (iOpt=1; iOpt<nOpt; iOpt++)
+for (iOpt=1; iOpt<nOpt; iOpt++)
     {
-        var id;
-
-        ExpOpt = ExportProcessingOptions[iOpt];
-        ExpOpt.Init(1);
-        $(ExpOpt.id).checked = false;
-        $(ExpOpt.rowid).style.display = "none";
-    
-        if (ExpOpt.hasOwnProperty('disabled_state_rec_dep'))
-        {
-            $(ExpOpt.id).store({ 'disabled_state_rec_dep' : ExpOpt.disabled_state_rec_dep });
-        }
-        else
-        {
-            $(ExpOpt.id).store({ 'disabled_state_rec_dep' : false });
-        }
+    var id;
+    ExpOpt = ExportProcessingOptions[iOpt];
+    ExpOpt.Init(1);
+    $(ExpOpt.id).checked = false;
+    $(ExpOpt.rowid).style.display = "none";
     }
-}
+  }
 
 function ProcessingOK()
 {

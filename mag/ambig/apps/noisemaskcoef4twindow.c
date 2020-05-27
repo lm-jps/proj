@@ -75,7 +75,7 @@ ModuleArgs_t module_args[] =
 int DoIt(void)
 {
 
-    int status = DRMS_SUCCESS, newchunk, ds, nds, nnds;
+    int status = DRMS_SUCCESS, cstat, newchunk, ds, nds, nnds;
     float vr, vrstart, vrstop, vrstep = 50.0, vr_center;
     char *inRecQuery, *outRecQuery;
     char *phasemapid_str, phaseid[64];
@@ -94,7 +94,6 @@ int DoIt(void)
     DRMS_Record_t *outRec;
     DRMS_Segment_t *inSeg = NULL, *outSeg;
     DRMS_Array_t *inArray, *outArray;
-    DRMS_RecChunking_t cstat;
     int outDims[2] = {xDim, yDim};
     TIME t_rec;
 
@@ -150,18 +149,38 @@ printf("n=%d\n", nnds);
 
                 t_rec = drms_getkey_time(inRec, "T_REC", &status);
 
+/*                drms_setkey_time(outRec, "T_REC_O", t_rec);
+                drms_copykey(outRec, inRec, "INVPHMAP");
+                drms_copykey(outRec, inRec, "INSTRUME");
+                drms_copykey(outRec, inRec, "CAMERA");
+                drms_copykey(outRec, inRec, "HISTORY");
+                drms_copykey(outRec, inRec, "COMMENT");
+                drms_copykey(outRec, inRec, "BLD_VERS");
+                float tmp;
+*/
                 crpix1 = drms_getkey_float(inRec, "CRPIX1", &status);
+//                drms_setkey_float(outRec, "CRPIX1_O", tmp);
                 crpix2 = drms_getkey_float(inRec, "CRPIX2", &status);
+//                drms_setkey_float(outRec, "CRPIX2_O", tmp);
                 crval1 = drms_getkey_float(inRec, "CRVAL1", &status);
+//                drms_setkey_float(outRec, "CRVAL1_O", tmp);
                 crval2 = drms_getkey_float(inRec, "CRVAL2", &status);
+//                drms_setkey_float(outRec, "CRVAL2_O", tmp);
                 cdelt1 = drms_getkey_float(inRec, "CDELT1", &status);
+//                drms_setkey_float(outRec, "CDELT1_O", tmp);
                 cdelt2 = drms_getkey_float(inRec, "CDELT2", &status);
+//                drms_setkey_float(outRec, "CDELT2_O", tmp);
                 crota2 = drms_getkey_float(inRec, "CROTA2", &status);
+//                drms_setkey_float(outRec, "CROTA2_O", tmp);
+//                drms_setkey_double(outRec, "DSUN_ORI", dSun);
+//                drms_setkey_double(outRec, "RSUN_ORI", rSun);
+//                drms_setkey_int(outRec, "VRCENT", (int)(vr_center));
               }
 
             t_rec = drms_getkey_time(inRec, "T_REC", &status);
             vr = drms_getkey_double(inRec, "OBS_VR", &status);
             sprint_at(tstr, t_rec);
+            printf("idx=%d, Vr=%f, T_REC = %s\n", idx, vr, tstr);
             inSeg = drms_segment_lookup(inRec, "field");
             inArray = drms_segment_read(inSeg, DRMS_TYPE_FLOAT, &status);
             if (status)
@@ -182,13 +201,10 @@ printf("n=%d\n", nnds);
                    datacube[imgData + iData] = bField[iData];
                   }
               }
-              printf("idx=%d, Vr=%f, T_REC = %s\n", idx, vr, tstr);
               drms_free_array(inArray);
-
           }
-          if (idx > ndMax - 1) break; //maximum data number is set to be 50.
+          if (idx > ndMax) break; //maximum data number is set to be 50.
         }
-
       ngood = idx;
 printf("ngood=%d\n", ngood);
       if (ngood < 10) {free(datacube); continue;}

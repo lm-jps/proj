@@ -10,10 +10,11 @@ $test = shift @ARGV or $test = 0;
 $to_list = join ",", 'jps@lmsal.com',
           '6509965043@txt.att.net',
           '6504503716@txt.att.net',
-          '5178969022@txt.att.net',
+          '5178969022@vtext.com',
           '6507436500@tmomail.net',
           '6509968590@txt.att.net',
           '4088964682@messaging.sprintpcs.com',
+          '7192333079@vmobl.com',
           'mark.cheung@gmail.com';
 
 $to_list = join ",", $to_list, 'green@lmsal.com',
@@ -23,8 +24,7 @@ $to_list = join ",", $to_list, 'green@lmsal.com',
         'wolfsonjake@gmail.com', 'mbobra@sun.stanford.edu',
         'aanorton@stanford.edu', 'baldner@sun.stanford.edu',
         'william.d.pesnell@nasa.gov', 'cheung@lmsal.com',
-        '4084317110@txt.att.net', '4086125678@vtext.com', 
-        '4089338703@txt.att.net'
+        '4084317110@txt.att.net'
         unless $test;
 
 $msg_file = "$ENV{HOME}/bit_flip_his.txt";

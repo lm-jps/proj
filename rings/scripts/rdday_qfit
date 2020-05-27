@@ -8,7 +8,7 @@
 #   The intermediate input series cannot be overridden by the options file in
 #	continuation test runs
 
-set SCRIPT_VERSION = 2.4
+set SCRIPT_VERSION = 2.3
 
 @ TEST = 0	# set to 1 for production in namespace hmi_test
 set TW
@@ -228,9 +228,8 @@ set KSER = hmi.HSKernels
 
 # auxiliary files
 set NOTE = ~rick/hmi/notify
-set RJCT = ~jsoc/hmi/tables/LHS_reject.v
-set MRJCT = ~jsoc/hmi/tables/LHS_reject.m45
-set FGUESSFIL = ~dhaber/coefhrtest.dat
+set RJCT = ~rick/hmi/qual/reject.V
+set MRJCT = ~rick/hmi/qual/reject.M45
 
 if ($TEST) then
 # parse testoptions file for possible substitution of I/O series and files
@@ -242,8 +241,6 @@ if ($TEST) then
   if ($status == 0) set BCKG = `grep "^BCKG =" $TSTOPT | awk '{print $3}'`
   grep -q "^GSER =" $TSTOPT
   if ($status == 0) set GSER = `grep "^GSER =" $TSTOPT | awk '{print $3}'`
-  grep -q "^FGUESS =" $TSTOPT
-  if ($status == 0) set FGUESSFIL = `grep "^FGUESS =" $TSTOPT | awk '{print $3}'`
   grep -q "^KSER =" $TSTOPT
   if ($status == 0) set KSER = `grep "^KSER =" $TSTOPT | awk '{print $3}'`
   grep -q "^RJCT =" $TSTOPT
@@ -441,11 +438,11 @@ while ($STRIP < $STRIPCT)
   @ LINCT = $STRIP * 2
   set LATS = (`head -$LINCT $TLIST | tail -2 | head -1`)
   set LONS = (`head -$LINCT $TLIST | tail -1`)
-#  commented out 2019.06.17
-#  if ($#LATS != $#LONS) then
-#    echo Warning: numbers of longitudes and latitudes differ
-#    if ($#LONS > $RGNCT) @ RGNCT = $#LONS
-#  endif
+
+  if ($#LATS != $#LONS) then
+    echo Warning: numbers of longitudes and latitudes differ
+    if ($#LONS > $RGNCT) @ RGNCT = $#LONS
+  endif
   set LATLIST = $LATS[1]
   set LONLIST = $LONS[1]
   @ N = 1
@@ -509,7 +506,6 @@ while ($STRIP < $STRIPCT)
   @ ELAPS /= 60
   if ($STRIPCT == 1) then
     echo "  time for MAI calc for $EXPCT regions on $HOSTID : $ELAPS min" >> $MMSG
-    echo "    MAI info in $MAISER""[$CROT][$CLON]" >> $MMSG
   endif
 
   @ BEGUN = `date +%s`
@@ -544,7 +540,6 @@ if ($MAIONLY) then
   @ TOTML /= 60
   echo "  total time for MAI calc for $RGNCT regions on $HOSTID : $TOTML min" >> $MMSG
   echo "  ($CARTIM) total time for MAI calc $RGNCT regions on $HOSTID : $TOTML min" >> $LOGF
-  echo "    MAI info in $MAISER""[$CROT][$CLON]" >> $MMSG
   goto CLEANUP
 endif
 
@@ -553,7 +548,6 @@ if ($STRIPCT > 1) then
   @ TOTML /= 60
   echo "  total time for MAI calc for $RGNCT regions on $HOSTID : $TOTML min" >> $MMSG
   echo "  ($CARTIM) total time for MAI calc $RGNCT regions on $HOSTID : $TOTML min" >> $LOGF
-  echo "    MAI info in $MAISER""[$CROT][$CLON]" >> $MMSG
   @ TOTEL += 30
   @ TOTEL /= 60
   echo "  total time for tracking $RGNCT regions on $HOSTID : $TOTEL min" >> $MMSG
@@ -628,7 +622,7 @@ if ($NOGO) goto TURNOUT
 @ EXIST = `show_info -bcq ds= $FSER"[$CROT][$CLON]"`
 if ($SYSE == 5) goto SKIP_INVRT
 
-$RFITF out= $FSER in= $PSER"[$CROT][$CLON]" guessfile= $FGUESSFIL \
+$RFITF out= $FSER in= $PSER"[$CROT][$CLON]" \
     nmax= $NMAX kstart= "{$KLOW}" kstop= "{$KHIGH}" >>& $RLOG
 if ($status) then
   set SUBJ = "HMI $SYSE-deg ring-diagram $TW processing for $CARTIM incomplete"

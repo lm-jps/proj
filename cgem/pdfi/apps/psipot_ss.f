@@ -46,31 +46,31 @@ c             for a potential magnetic field, evaluated at at cell centers in
 c             theta,phi, and at radial shells. [G km]
 c
 c-
-c - -  PDFI_SS electric field inversion software
-c - -  http://cgem.ssl.berkeley.edu/~fisher/public/software/PDFI_SS
-c - -  Copyright (C) 2015-2019 Regents of the University of California
-c 
-c - -  This software is based on the concepts described in Kazachenko et al.
-c - -  (2014, ApJ 795, 17).  A detailed description of the software is in
-c - -  Fisher et al. (2019, arXiv:1912.08301 ).
-c - -  If you use the software in a scientific 
-c - -  publication, the authors would appreciate a citation to these papers 
-c - -  and any future papers describing updates to the methods.
-c
-c - -  This is free software; you can redistribute it and/or
-c - -  modify it under the terms of the GNU Lesser General Public
-c - -  License as published by the Free Software Foundation,
-c - -  version 2.1 of the License.
-c
-c - -  This software is distributed in the hope that it will be useful,
-c - -  but WITHOUT ANY WARRANTY; without even the implied warranty of
-c - -  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-c - -  See the GNU Lesser General Public License for more details.
-c
-c - -  To view the GNU Lesser General Public License visit
-c - -  http://www.gnu.org/copyleft/lesser.html
-c - -  or write to the Free Software Foundation, Inc.,
-c - -  59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+c   PDFI_SS Electric Field Inversion Software
+c   http://cgem.ssl.berkeley.edu/cgi-bin/cgem/PDFI_SS/index
+c   Copyright (C) 2015,2016 University of California
+c  
+c   This software is based on the concepts described in Kazachenko et al. 
+c   (2014, ApJ 795, 17).  It also extends those techniques to 
+c   spherical coordinates, and uses a staggered, rather than a centered grid.
+c   If you use the software in a scientific publication, 
+c   the authors would appreciate a citation to this paper and any future papers 
+c   describing updates to the methods.
+c  
+c   This is free software; you can redistribute it and/or
+c   modify it under the terms of the GNU Lesser General Public
+c   License as published by the Free Software Foundation;
+c   either version 2.1 of the License, or (at your option) any later version.
+c  
+c   This software is distributed in the hope that it will be useful,
+c   but WITHOUT ANY WARRANTY; without even the implied warranty of
+c   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+c   See the GNU Lesser General Public License for more details.
+c  
+c   To view the GNU Lesser General Public License visit
+c   http://www.gnu.org/copyleft/lesser.html
+c   or write to the Free Software Foundation, Inc.,
+c   59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 c
       implicit none
 c
@@ -89,11 +89,9 @@ c
       integer :: i,j,q,iph,itmp,bcm,idimf,ierror
       integer :: kk,kl,mp,np,iflag
       real*8 :: dtheta,dphi,delr,dphifft,elm,pertrb,pi,dum
-      real*8 :: rangecos,mflux
+      real*8 :: rangecos
 c     real*8 :: alpha
       real*8 :: rqmh2,rqph2
-c     real*8 :: psitot,psibar
-c     real*8 :: scrbtot,area
       real*8 :: brft(m,n),scrb(m,n),scrbft(m,n),divbh(m,n)
 c     real*8 :: brtest(m,n),br(m,n)
       real*8 :: fce(m,n)
@@ -317,6 +315,8 @@ c
 c
       enddo
 c
+c - - Compute Fourier amplitude of -r^2 div B_h from horiz. Poisson equation
+c - - r^2 grad_h^2 psi = -r^2 div B_h
 c
       do j=1,n
          do i=1,m
@@ -336,7 +336,7 @@ c - - Now, we're finally ready to do the solution to Laplace equation
 c - - in theta and r, using brft values at the photosphere for each Fourier
 c - - mode:
 c 
-      kk=int(log(real(p+1))/log(real(2)))+2
+      kk=int(log(real(p+1)/log(real(2))))+1
       kl=2**(kk+1)
       itmp=(kk-2)*kl+5+max(2*(p+1),6*m)
 c - - allocate work array for blktri:
@@ -354,10 +354,6 @@ c RHS = 0 everwhere except the photosphere
       y(1:m,2:p+1)=0.d0
       call blktri(iflag,np,p+1,an,bn,cn,mp,m,am(1:m,1),bm(1:m,1),
      1 cm(1:m,1),m,y,ierror,wb)
-      if(wb(1) .gt. dble(itmp)) then
-         write(6,*) 'psipot_ss: itmp too small for wb, exiting'
-         stop
-      endif
       if(ierror .ne. 0) then
          write(6,*) 'psipot blktri init ierror .ne. 0, = ',ierror
          stop
@@ -410,18 +406,8 @@ c
          end do
       end do
 c
-c - - deallocate work array w:
-c
-      deallocate(w)
-c
-c - - As a final step, remove 1/r artifact from psi, created by conflict
-c - - in boundary conditions psi=0 at R_SS and floating photospheric psi
-c - - caused by homogenous Neumann BC in theta for photospheric solution 
-c
-      mflux=0.d0
-      call psi_fix_ss(m,n,p,bcn,a,b,c,d,rsun,rssmrs,psi3d,mflux)
-c
 c - - we're done:
 c
+      deallocate(w)
       return
       end

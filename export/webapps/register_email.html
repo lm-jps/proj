@@ -4,7 +4,7 @@
 <meta HTTP-EQUIV="Content-Type" content="text/html; charset=iso-8859-1">
 <title>JSOC E-Mail Registry</title>
 
-<script type="text/javascript" src="js/prototype-1.6.1.js"></script>
+<script type="text/javascript" src="js/prototype-1.6.0.3.js"></script>
 <script type="text/javascript" src="js/cookies.js"></script>
 <script type="text/javascript" src="js/prototip.js"></script>
 <link rel="stylesheet" type="text/css" href="css/prototip.css" >
@@ -18,15 +18,6 @@ span.tip { background-color:blue;font-family:verdana;color:white;font-size:1em;f
 .prototip { font:0.8em Arial, Helvetica, sans-serif; }
 </style>
 
-<!--
-the href path in the <script> tag is relative to the web root, not relative to the current directory;
-we can change the path to which the href is relative by setting the <base> tag
--->
-<script type="text/javascript">
-var base_path = location.pathname.sub(".html", "");
-document.write('<base id="basepath" href="' + base_path + '/">');
-</script>
-
 <!-- Add export email checking code. -->
 <script type="text/javascript" src="exportdata.d/export_email_verify.js"></script>
 
@@ -37,10 +28,6 @@ var ExportUserOK;
 var ExportNotifyOK;
 var TipsCreated = 0;
 
-var colorDarkGreen = "#009000";
-var colorDarkRed = "#C00000";
-var colorDarkBlue = "#0000B0";
-
 function initVars()
   {
   Host = location.host;
@@ -49,8 +36,9 @@ function initVars()
   else
     Internal = 0;
   $("ExportRequestor").value = "";
+  $("ExportNotify").value = "solarmail";
   email_initVars();
-
+  
   }
 
 function getargs()
@@ -101,7 +89,7 @@ function CreateTips()
 
   MainTips(tipstyle);
   TipsCreated = 1;
-  $$("span.tip").each(function(showspan){showspan.show();});
+  $$("span.tip").each(function(showspan){showspan.show();}); 
   }
 </script>
 
@@ -117,27 +105,33 @@ function CreateTips()
 <div id="Validate_email">
 <br><b>JSOC Data Export Email Registry</b>
 <p>
-The JSOC data-export system requires an email address to be validated as a prerequisite to system usage -
-use this page to do so. Alternatively, registration can be completed via the
-main export page. Please enter this email address in the "Notify" field. Notices regarding export success
-or failure will be sent to this address.
+JSOC data exports require an email address to be validated before an export request can be submitted.
+This page can be used to pre-register an email address so that future export requests using the
+registered email address can proceed without interruption.
+Please enter the email address you will use to be notified of completed data export requests
+in the "Notify" box. 
 <p>
-The "Requestor" field is optional, but if you provide your name then we can use it in
-communications should we need to contact you or provide assistance with issues.
+If you have a current SolarMail address you may put "solarmail" in the Notify
+box (no quotes) put your SolarMail name in the "Requester" box. 
 <p>
-After entering the requested information into the two fields, click the "Check Email Registration" button.
-If your address is already registered with the JSOC, this page will update with confirmation. No email
-message will be sent.
+If you are not using SolarMail for data export  notification then you may
+leave the Requester field blank or fill it with your name so we can use it in any communication with
+you if you have problems with export requests or if we need to notify you of any
+problems with the JSOC export service.
 <p>
-If your address is not registered, then you will recieve an email message
-asking you to click "reply" (do not modify the message). When we recieve the reply, we will
-respond notifying your address has been registered.
+After entering any needed information in the two boxes below, press the "Submit" button.
+If your address is already registered with the JSOC you will get a rapid confirmation and
+no mail will be sent to you at this time.
 <p>
-If we do not recieve a reply within fifteen minutes, we will abort the registration process. Feel
-free to try again if the timeout interval has exceeded. Contact us if you experience troubles.
+If your address is not in our list then you will recieve email within a short time
+asking you to simply "Reply" to that message with no changes needed to the message.
+When we recieve the reply your address will be registered.
 <p>
-If you have enabled cookies in your browser we will save the "Notify" and "Requestor" values and
-use them with future export requests; the cookie times out in ten days.
+If we do not recieve a reply message within three minutes the registration attempt will be stopped.
+If the address is correct but you could not reply in time, simply try again.
+<p>
+If you have "Cookies" enabled in your browser we will save the Notify and Requester values and
+preload them into future JSOC export requests until the Cookie times out after 10 days with no use.
 <p>
 <p>
 <table>
@@ -154,10 +148,10 @@ use them with future export requests; the cookie times out in ten days.
     </tr>
 
     <tr id="RequestorRow">
-      <td>Requestor</td>
+      <td>Requester</td>
       <td><span id="RequestorHelp" class="tip">?</span></td>
       <td><input id="ExportRequestor" type="text" name="requestor" value="" onChange="SetExportUser();" ></td>
-      <td><span id="RequestorMessage">Provide an optional export-user identifier.</span></td>
+      <td><span id="RequestorMessage">Provide an identifier for you, e.g. your SolarMail name.</span></td>
     </tr>
 
     <tr id="AjaxExportRequestRow">
