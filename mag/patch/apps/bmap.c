@@ -1872,6 +1872,11 @@ void outputLatLon(DRMS_Record_t *outRec, DRMS_Record_t *inRec, struct mapInfo *m
 	outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, carrLat, &status);
 	outSeg->axis[0] = outArray->axis[0]; outSeg->axis[1] = outArray->axis[1];
 	outArray->parent_segment = outSeg;
+    if (mInfo->rice) {
+        outArray->israw = 0;        // always compressed
+        outArray->bzero = outSeg->bzero;
+        outArray->bscale = outSeg->bscale;
+    }
 	status = drms_segment_write(outSeg, outArray, 0);
 	drms_free_array(outArray);
 	
@@ -1880,6 +1885,11 @@ void outputLatLon(DRMS_Record_t *outRec, DRMS_Record_t *inRec, struct mapInfo *m
 	outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, carrLon, &status);
 	outSeg->axis[0] = outArray->axis[0]; outSeg->axis[1] = outArray->axis[1];
 	outArray->parent_segment = outSeg;
+    if (mInfo->rice) {
+        outArray->israw = 0;        // always compressed
+        outArray->bzero = outSeg->bzero;
+        outArray->bscale = outSeg->bscale;
+    }
 	status = drms_segment_write(outSeg, outArray, 0);
 	drms_free_array(outArray);
 	
