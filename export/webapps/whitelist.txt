@@ -9,6 +9,7 @@ cgem.doppcal_720s
 cgem.lorentz
 cgem.pdfi_input
 cgem.pdfi_output
+cgem.sft_global_nlong0300_noncontiguous
 hmi.b_135s
 hmi.B_720s_dcon
 hmi.B_720s_dconS
