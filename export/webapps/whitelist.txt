@@ -10,6 +10,8 @@ cgem.lorentz
 cgem.pdfi_input
 cgem.pdfi_output
 cgem.sft_global_nlong0300_noncontiguous
+cgem.sft_global_nlong0600_noncontiguous
+cgem.sft_global_nlong1200_noncontiguous
 hmi.b_135s
 hmi.B_720s_dcon
 hmi.B_720s_dconS
