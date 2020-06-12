@@ -260,7 +260,7 @@ ModuleArgs_t module_args[] =
 	{ARG_INT, "doerr", "1", "Perform error propagation, use near neighbor so far."},
 	{ARG_INT, "covar", "0", "Out put covariances for field, only work for cutout now."},
 	{ARG_INT, "rice", "1", "Use Rice compression."},
-	{ARG_INT, "ambweak", "0", "Ambiguity resolution for weak field. 0: potential; 1: random; 2: radial acute"},
+	{ARG_INT, "ambweak", "2", "Ambiguity resolution for weak field. 0: potential; 1: random; 2: radial acute"},
 	{ARG_FLAG, "c",	"", "Simple full pixel cutout without interpolation, override all mapping options."},
 	{ARG_FLAG, "l",	"", "Force vector representation in local tangent coordinates, for cutout mode only."},
 	{ARG_FLAG, "g",	"", "Force vector representation in plane of sky coordinates, for remap mode only."},
