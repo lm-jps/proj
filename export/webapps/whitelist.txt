@@ -13,6 +13,7 @@ cgem.sft_global_nlong0300_noncontiguous
 cgem.sft_global_nlong0600_noncontiguous
 cgem.sft_global_nlong1200_noncontiguous
 hmi.b_135s
+hmi.B_5760s
 hmi.B_720s_dcon
 hmi.B_720s_dconS
 hmi.b_720s_e15w1332_cea
@@ -49,6 +50,7 @@ hmi.M_720s_dcon
 hmi.M_720s_dconS
 hmi.m_720s_mod
 hmi.m_720s_nrt
+hmi.ME_5760s
 hmi.ME_720s_fd10_dcon
 hmi.marmask_720s
 hmi.marmask_720s_nrt
@@ -88,6 +90,7 @@ hmi.q_synop
 hmi.rdvavgpspec_fd15
 hmi.rdvavgpspec_fd30
 hmi.s_135s
+hmi.S_5760s
 hmi.S_720s_dcon
 hmi.S_720s_dconS
 hmi.s_90s
