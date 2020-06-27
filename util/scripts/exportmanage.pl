@@ -269,8 +269,6 @@ unless (GetDLogFH(\$dlogfh, $daemonlog))
     CloseDLog(\$dlogfh);
 }
 
-$cmd = "$binpath/$manage JSOC_DBHOST=$dbhost procser=$procser";
-
 my($msgq) = {lastsend => time(), msgs => {}};
 
 $strp_hour = new DateTime::Format::Strptime(pattern => '%Y%m%d_%H', locale => 'en_US', time_zone => 'local');
@@ -281,6 +279,7 @@ undef($last_time_run);
 while (1)
 {
    # print "running $cmd.\n";
+   $cmd = "$binpath" . "$manage JSOC_DBHOST=$dbhost procser=$procser";
    $rout = qx($cmd 2>&1);
 
    if ($? == -1)
@@ -326,7 +325,7 @@ while (1)
         my($day);
 
 
-        $cmd = "$binpath/$manage JSOC_DBHOST=$dbhost op=" . JEM_OPERATION_CLEAN_HASHES;
+        $cmd = "$binpath" . "$manage JSOC_DBHOST=$dbhost op=" . JEM_OPERATION_CLEAN_HASHES;
         $rout = qx($cmd 2>&1);
 
         if ($? == -1)
