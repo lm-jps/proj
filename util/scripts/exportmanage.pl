@@ -1,4 +1,4 @@
-#!/usr/bin/perl 
+#!/home/jsoc/bin/linux_x86_64/activeperl
 
 # Here's how to run this script (from scratch)
 #  ssh jsoc@j0
@@ -22,19 +22,19 @@
 #        name (not the full path to the program/script). So the actual program/script that runs will be the one
 #        that the shell resolves using the $PATH variable. For example, if the user arta makes
 #        changes to the jsoc_export_as_fits in arta's home directory, and arta's $PATH contains a pointer to the binaries
-#        in arta's home directory, then arta should run 'su arta' before continuing. IMPORTANT - <USER> will need 
-#        permissions to write into /home/jsoc/exports/tmp and /home/jsoc/exports/logs. Generally <USER> will be a 
+#        in arta's home directory, then arta should run 'su arta' before continuing. IMPORTANT - <USER> will need
+#        permissions to write into /home/jsoc/exports/tmp and /home/jsoc/exports/logs. Generally <USER> will be a
 #        member of the group jsoc, so this requirement will be met.
 #     cd /home/jsoc/exports
 #     /home/jsoc/cvs/Development/JSOC/proj/util/scripts/exportmanage.pl -root <ROOT> -dbuser <DBUSER> -dbhost <DBHOST> -manager <MANAGER> -runflag <RFLAG> &
 #        where <ROOT> is the CVS code tree root containing <MANAGER>
 #        and <DBUSER> is the PG user who the manager connects as (defaults to "production"). IMPORTANT - the manager will
-#           write records to tables that require elevated permissions. Most likely, you'll need to connect to the database 
-#           as user production to do this. This means that you'll need to place the password for user production in 
+#           write records to tables that require elevated permissions. Most likely, you'll need to connect to the database
+#           as user production to do this. This means that you'll need to place the password for user production in
 #           your .pgpass file.
 #        and <DBHOST> is the host of the database server (defaults to "hmidb"). For internal exports, should be "hmidb", for exports from public db, should be "hmidb2"
-#        and <MANAGER> is the name of the manager program (defaults to "jsoc_export_manage"). IMPORTANT - you should include 
-#           a "-t" flag. This will cause the manager program to run in test mode, which means that it will process records 
+#        and <MANAGER> is the name of the manager program (defaults to "jsoc_export_manage"). IMPORTANT - you should include
+#           a "-t" flag. This will cause the manager program to run in test mode, which means that it will process records
 #           in jsoc.export_new that contain the special test status of 12 (instead of the regular status of 2).
 #        and <RFLAG> is the file flag that keeps this script running in a loop (defaults to keep_running in cdir)
 #
@@ -47,6 +47,8 @@ use warnings;
 
 use FileHandle;
 use Fcntl ':flock';
+use DateTime qw(compare strftime now);
+use DateTime::Format::Strptime;
 use FindBin qw($RealBin);
 use lib "$RealBin/../../../localization";
 use drmsparams;
@@ -67,6 +69,10 @@ use constant kMsgQSendInterval => 120; # 2 minutes between mailing of messages
 
 use constant kLogFlagInt => "Int";
 use constant kLogFlagExt => "Ext";
+
+use constant JEM_OPERATION_CLEAN_HASHES => "clean_hashes";
+use constant MD5_SERIES => "jsoc.export_md5";
+my(@CLEAN_HASHES_TIMES) = ( 0, 6, 12, 18 );
 
 my($config) = new drmsparams;
 
@@ -122,7 +128,7 @@ while ($arg = shift(@ARGV))
     if ($arg eq "-root")
     {
         $root = shift(@ARGV);
-        $binpath = "$root/bin";
+        # $binpath = "$root/bin";
     }
     elsif ($arg eq "-dbhost")
     {
@@ -209,7 +215,7 @@ while ($arg = shift(@ARGV))
 
 # Don't run if somebody is already managing the export
 $lckfh = FileHandle->new(">$runningflag.lck");
-unless (flock($lckfh, LOCK_EX|LOCK_NB)) 
+unless (flock($lckfh, LOCK_EX|LOCK_NB))
 {
    print "$0 is already running. Exiting.\n";
    exit(2);
@@ -222,7 +228,7 @@ unless (flock($lckfh, LOCK_EX|LOCK_NB))
 
 if (defined($binpath))
 {
-    $binpath = "$binpath/$ENV{\"JSOC_MACHINE\"}";
+    $binpath = "$binpath/$ENV{\"JSOC_MACHINE\"}/";
 }
 else
 {
@@ -249,6 +255,12 @@ print LOG $msg;
 my($rout);
 my($cmd);
 my($dlogfh);
+my($current_time);
+my($strp_hour);
+my($next_hour_to_run_index);
+my($next_hour_to_run);
+my($last_time_run);
+
 my($err) = 0;
 
 unless (GetDLogFH(\$dlogfh, $daemonlog))
@@ -257,26 +269,31 @@ unless (GetDLogFH(\$dlogfh, $daemonlog))
     CloseDLog(\$dlogfh);
 }
 
-$cmd = "$binpath/$manage JSOC_DBHOST=$dbhost procser=$procser";
+$cmd = "$binpath" . "$manage JSOC_DBHOST=$dbhost procser=$procser";
 
 my($msgq) = {lastsend => time(), msgs => {}};
+
+$strp_hour = new DateTime::Format::Strptime(pattern => '%Y%m%d_%H', locale => 'en_US', time_zone => 'local');
+$next_hour_to_run_index = 0;
+$next_hour_to_run = $strp_hour->parse_datetime(DateTime->now()->strftime('%Y%m%d') . '_' . $CLEAN_HASHES_TIMES[$next_hour_to_run_index]);
+undef($last_time_run);
 
 while (1)
 {
    # print "running $cmd.\n";
    $rout = qx($cmd 2>&1);
-   
+
    if ($? == -1)
    {
        QueueMessage($msgq, &kMsgType1, "Export Daemon Execution Failure!!", &kMailMessage1);
-   } 
+   }
    elsif ($? & 127)
    {
       # jsoc_export_manage died in response to an unhandled signal
       my($sig) = $? & 127;
-       
+
        QueueMessage($msgq, &kMsgType1, "Export Daemon Execution Failure!!", &kMailMessage2, "DB Host: $dbhost\n", "Unhandled signal: $sig.\n");
-   } 
+   }
    elsif (($? >> 8) != 0)
    {
       # jsoc_export_manage returned with an error code
@@ -300,18 +317,83 @@ while (1)
       print LOG $msg;
    }
 
+    # clean hashes from MD5_SERIES series
+    $current_time = DateTime->now();
+
+    if (!defined($last_time_run) || DateTime->compare($current_time, $next_hour_to_run) > 0 && DateTime->compare($next_hour_to_run, $last_time_run) > 0)
+    {
+        my($update_times) = 1;
+        my($day);
+
+
+        $cmd = "$binpath/$manage JSOC_DBHOST=$dbhost op=" . JEM_OPERATION_CLEAN_HASHES;
+        $rout = qx($cmd 2>&1);
+
+        if ($? == -1)
+        {
+            QueueMessage($msgq, &kMsgType1, "Export Daemon Execution Failure!!", &kMailMessage1, "failure to clean hashes");
+            $update_times = 0;
+        }
+        elsif ($? & 127)
+        {
+            # jsoc_export_manage died in response to an unhandled signal
+            my($sig) = $? & 127;
+
+            QueueMessage($msgq, &kMsgType1, "Export Daemon Execution Failure!!", &kMailMessage2, "failure to clean hashes", "DB Host: $dbhost\n", "Unhandled signal: $sig.\n");
+        }
+
+        if (defined($rout) && length($rout) > 0)
+        {
+            $msg = "$rout\n";
+            unless (GetDLogFH(\$dlogfh, $daemonlog))
+            {
+                print $dlogfh $msg;
+            }
+
+            print LOG $msg;
+        }
+
+        if ($update_times)
+        {
+            $msg = "cleaned MD5 hashes\n";
+
+            unless (GetDLogFH(\$dlogfh, $daemonlog))
+            {
+                print $dlogfh $msg;
+            }
+
+            print LOG $msg;
+
+            $last_time_run = $current_time;
+            $next_hour_to_run_index++;
+
+            if ($next_hour_to_run_index > scalar(@CLEAN_HASHES_TIMES) - 1)
+            {
+                # update the day part of the $next_hour_to_run
+                $day = ($next_hour_to_run + DateTime::Duration->new( days => 1 ))->strftime('%Y%m%d');
+                $next_hour_to_run_index = 0;
+            }
+            else
+            {
+                $day = $next_hour_to_run->strftime('%Y%m%d');
+            }
+
+            $next_hour_to_run = $strp_hour->parse_datetime($day . '_' . $CLEAN_HASHES_TIMES[$next_hour_to_run_index]);
+        }
+    }
+
     SendPendingMessages($msgq);
-    
-   CloseDLog(\$dlogfh);
-      
-   if (KeepRunning($runningflag))
-   {
-      sleep(2);
-   } 
-   else
-   {
-      last;
-   }
+
+    CloseDLog(\$dlogfh);
+
+    if (KeepRunning($runningflag))
+    {
+        sleep(2);
+    }
+    else
+    {
+        last;
+    }
 }
 
 $msg = "Stopped by $ENV{'USER'} at " . `date` . ".\n";
@@ -340,7 +422,7 @@ sub IOwnRunFlag
    my($fexists);
    my($iownit);
    my($line);
-   
+
    $fexists = (-e $file);
    if ($fexists)
    {
@@ -388,7 +470,7 @@ sub GetDLogFH
 
         if (!defined($$rfh))
         {
-            QueueMessage($msgq, &kMsgType1, "Export Daemon Log Unavailable", &kMailMessage3);   
+            QueueMessage($msgq, &kMsgType1, "Export Daemon Log Unavailable", &kMailMessage3);
             $err = 1;
         }
     }
@@ -398,7 +480,7 @@ sub GetDLogFH
 
 sub CloseDLog
 {
-    my($rfh) = $_[0]; # reference to filehandle object 
+    my($rfh) = $_[0]; # reference to filehandle object
 
     if (defined($$rfh))
     {
@@ -413,7 +495,7 @@ sub SendPendingMessages
     my($imsg);
     my($msg);
     my($subj);
-    
+
     if (time() - $msgs->{lastsend} > &kMsgQSendInterval)
     {
         # Check for pending messages
@@ -424,7 +506,7 @@ sub SendPendingMessages
             open(MAILPIPE, "| /bin/mail -s \"$subj\" " . &kMailList) || die "Couldn't open 'mail' pipe.\n";
             print MAILPIPE $msg;
             close(MAILPIPE);
-            
+
             if ($msgq->{msgs}->{$imsg}->{ntimes} > 1)
             {
                 $msgq->{msgs}->{$imsg}->{ntimes} = $msgq->{msgs}->{$imsg}->{ntimes} - 1;
@@ -434,7 +516,7 @@ sub SendPendingMessages
                 delete($msgq->{msgs}->{$imsg});
             }
         }
-        
+
         $msgs->{lastsend} = time();
     }
 }
@@ -453,11 +535,11 @@ sub QueueMessage
     my($subj) = shift;
     my(@msg) = @_;
     my($oktoins);
-    
+
     if (exists($msgq->{msgs}->{$type}))
     {
         $oktoins = time() - $msgq->{msgs}->{$type}->{instime} > &kMsgQInterval;
-        
+
         # Message already exists. Don't add to queue until some time elapses.
         if ($oktoins)
         {
