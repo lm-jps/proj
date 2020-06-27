@@ -269,7 +269,7 @@ unless (GetDLogFH(\$dlogfh, $daemonlog))
     CloseDLog(\$dlogfh);
 }
 
-$cmd = "$binpath" . "$manage JSOC_DBHOST=$dbhost procser=$procser";
+$cmd = "$binpath/$manage JSOC_DBHOST=$dbhost procser=$procser";
 
 my($msgq) = {lastsend => time(), msgs => {}};
 
