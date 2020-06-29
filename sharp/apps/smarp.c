@@ -21,6 +21,7 @@
  *
  *	Notes:
  *		v0.0 No explicit notes
+ *		v0.1 Adjusted to take all bitmap values > 36
  *
  *	Example Call:
  *      > smarp "mharp=mdi.Mtarp[13643][2010.10.14_20:48:00_TAI]" "sharp_cea=su_mbobra.smarp_cea_96m" cont="mdi.fd_Ic_interp[2010.10.14_20:48:00_TAI]" "sharp_cut=su_mbobra.smarp_96m"
@@ -100,7 +101,7 @@ struct swIndex {
     float mean_vf;
     float count_mask;
     float absFlux;
-    float mean_derivative_bz;
+    float mean_derivative_los;
     float Rparam;
 };
  
@@ -526,7 +527,7 @@ int createCeaRecord(DRMS_Record_t *mharpRec, DRMS_Record_t *contRec, DRMS_Record
 	// set space weather keywords
         computeSWIndex(swKeys_ptr, sharpRec, &mInfo);	 
         printf("Space weather indices done.\n");
-	setSWIndex(sharpRec, swKeys_ptr);
+	    setSWIndex(sharpRec, swKeys_ptr);
 	         
 	// set statistical keywords (e.g. DATAMIN, DATAMAX, etc.)	
 	//int nCEASegs = ARRLENGTH(CEASegs);
@@ -1047,18 +1048,16 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 	int nx = mInfo->ncol, ny = mInfo->nrow;
 	int nxny = nx * ny;
 	int dims[2] = {nx, ny};
-    
-	// Get bx, by, bz, mask
 	
-	// Use HARP (Turmon) bitmap as a threshold on spaceweather quantities
+	// Get mask + use TARP bitmap as a threshold on spaceweather quantities
 	DRMS_Segment_t *bitmaskSeg = drms_segment_lookup(inRec, "bitmap");
 	DRMS_Array_t *bitmaskArray = drms_segment_read(bitmaskSeg, DRMS_TYPE_INT, &status);
-	int *bitmask = (int *) bitmaskArray->data;		// get the previously made mask array
+	int *bitmask = (int *) bitmaskArray->data;		// bitmap
 	    
-        //Use magnetogram map to compute R
-        DRMS_Segment_t *losSeg = drms_segment_lookup(inRec, "magnetogram");
-        DRMS_Array_t *losArray = drms_segment_read(losSeg, DRMS_TYPE_FLOAT, &status);
-        float *los = (float *) losArray->data;          // los
+    // Get line-of-sight magnetogram
+    DRMS_Segment_t *losSeg = drms_segment_lookup(inRec, "magnetogram");
+    DRMS_Array_t *losArray = drms_segment_read(losSeg, DRMS_TYPE_FLOAT, &status);
+    float *los = (float *) losArray->data;          // los
     	 
 	// Get emphemeris
 	float  cdelt1_orig = drms_getkey_float(inRec, "CDELT1",   &status);
@@ -1070,61 +1069,56 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 	float crpix1       = drms_getkey_float(inRec, "CRPIX1", &status);
 	float crpix2       = drms_getkey_float(inRec, "CRPIX2", &status);
     
-        // convert cdelt1_orig from degrees to arcsec
-        float cdelt1       = (atan((rsun_ref*cdelt1_orig*RADSINDEG)/(dsun_obs)))*(1/RADSINDEG)*(3600.);
+    // convert cdelt1_orig from degrees to arcsec
+    float cdelt1       = (atan((rsun_ref*cdelt1_orig*RADSINDEG)/(dsun_obs)))*(1/RADSINDEG)*(3600.);
 
 	// Temp arrays
-	float *derx_bz = (float *) (malloc(nxny * sizeof(float)));
-	float *dery_bz = (float *) (malloc(nxny * sizeof(float)));
+	float *derx_los = (float *) (malloc(nxny * sizeof(float)));
+	float *dery_los = (float *) (malloc(nxny * sizeof(float)));
      
-        // define some values for the R calculation
-        int scale = round(2.0/cdelt1);
-        int nx1 = nx/scale;
-        int ny1 = ny/scale;
-        int nxp = nx1+40; // same comment as above
-        int nyp = ny1+40; // why is this a +40 pixel size? is this an MDI pixel?
-        float *rim     = (float *)malloc(nx1*ny1*sizeof(float));
-        float *p1p0    = (float *)malloc(nx1*ny1*sizeof(float));
-        float *p1n0    = (float *)malloc(nx1*ny1*sizeof(float));
-        float *p1p     = (float *)malloc(nx1*ny1*sizeof(float));
-        float *p1n     = (float *)malloc(nx1*ny1*sizeof(float));
-        float *p1      = (float *)malloc(nx1*ny1*sizeof(float));
-        float *pmap    = (float *)malloc(nxp*nyp*sizeof(float));
-        float *p1pad   = (float *)malloc(nxp*nyp*sizeof(float));
-        float *pmapn   = (float *)malloc(nx1*ny1*sizeof(float));
+    // define some values for the R calculation
+    int scale = round(2.0/cdelt1);
+    int nx1 = nx/scale;
+    int ny1 = ny/scale;
+    int nxp = nx1+40; // same comment as above
+    int nyp = ny1+40; // why is this a +40 pixel size? is this an MDI pixel?
+    float *rim     = (float *)malloc(nx1*ny1*sizeof(float));
+    float *p1p0    = (float *)malloc(nx1*ny1*sizeof(float));
+    float *p1n0    = (float *)malloc(nx1*ny1*sizeof(float));
+    float *p1p     = (float *)malloc(nx1*ny1*sizeof(float));
+    float *p1n     = (float *)malloc(nx1*ny1*sizeof(float));
+    float *p1      = (float *)malloc(nx1*ny1*sizeof(float));
+    float *pmap    = (float *)malloc(nxp*nyp*sizeof(float));
+    float *p1pad   = (float *)malloc(nxp*nyp*sizeof(float));
+    float *pmapn   = (float *)malloc(nx1*ny1*sizeof(float));
     
-
-	// THREE spaceweather quantities computed: USFLUX, MEANGBZ, R_VALUE
-	if (computeAbsFlux(los, dims, &(swKeys_ptr->absFlux), &(swKeys_ptr->mean_vf),
+	// Compute three spaceweather quantities, USFLUX, MEANGBZ, R_VALUE, on LOS data
+	
+	if (computeAbsFlux_los(los, dims, &(swKeys_ptr->absFlux), &(swKeys_ptr->mean_vf),
                            &(swKeys_ptr->count_mask), bitmask, cdelt1, rsun_ref, rsun_obs))
         {
 		swKeys_ptr->absFlux = DRMS_MISSING_FLOAT;		// If fail, fill in NaN
 		swKeys_ptr->mean_vf = DRMS_MISSING_FLOAT;
-                swKeys_ptr->count_mask  = DRMS_MISSING_INT;
-	}
+        swKeys_ptr->count_mask  = DRMS_MISSING_INT;
+	    }
     
-    
-	if (computeBzderivative(los, dims, &(swKeys_ptr->mean_derivative_bz), 
-                                bitmask, derx_bz, dery_bz))
+	if (computeLOSderivative(los, dims, &(swKeys_ptr->mean_derivative_los), 
+                                bitmask, derx_los, dery_los))
         {
-		swKeys_ptr->mean_derivative_bz = DRMS_MISSING_FLOAT; // If fail, fill in NaN
+		swKeys_ptr->mean_derivative_los = DRMS_MISSING_FLOAT; // If fail, fill in NaN
         }
 	
-    
-	if (computeR(los, dims, &(swKeys_ptr->Rparam), cdelt1, rim, p1p0, p1n0,
+	if (computeR_los(los, dims, &(swKeys_ptr->Rparam), cdelt1, rim, p1p0, p1n0,
                      p1p, p1n, p1, pmap, nx1, ny1, scale, p1pad, nxp, nyp, pmapn))
         {
 		swKeys_ptr->Rparam = DRMS_MISSING_FLOAT;		// If fail, fill in NaN
         }
-
     	
 	// Clean up the arrays
       	drms_free_array(bitmaskArray);
-	//drms_free_array(bzArray);
         drms_free_array(losArray);
-
-        // free arrays related to Bz derivative
-	free(derx_bz); free(dery_bz);
+        // free arrays related to LOS derivative
+	    free(derx_los); free(dery_los);
         // free the arrays that are related to the r calculation     
         free(rim);
         free(p1p0);
@@ -1144,7 +1138,7 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 void setSWIndex(DRMS_Record_t *outRec, struct swIndex *swKeys_ptr)
 {
     drms_setkey_float(outRec, "USFLUX",  swKeys_ptr->mean_vf);
-    drms_setkey_float(outRec, "MEANGBZ", swKeys_ptr->mean_derivative_bz);
+    drms_setkey_float(outRec, "MEANGBZ", swKeys_ptr->mean_derivative_los);
     drms_setkey_float(outRec, "R_VALUE", swKeys_ptr->Rparam);
     drms_setkey_float(outRec, "CMASK", swKeys_ptr->count_mask);
 };
