@@ -1,18 +1,19 @@
 
 /*===========================================
  
- The following 3 functions calculate the following spaceweather indices:
+ The following 3 functions calculate the following spaceweather indices on line-of-sight
+ magnetic field data:
  
- USFLUX Total unsigned flux in Maxwells
- MEANGBZ Mean value of the vertical field gradient, in Gauss/Mm
- R_VALUE Karel Schrijver's R parameter
+ USFLUX  Total unsigned flux in Maxwells
+ MEANGBZ Mean value of the line-of-sight (approximately vertical in remapped and reprojected data) field gradient, in Gauss/Mm
+ R_VALUE R parameter (Schrijver, 2007)
  
  The indices are calculated on the pixels in which the bitmap segment is greater than 36. 
  
  The SMARP bitmap has 13 unique values because they describe three different characteristics: 
  the location of the pixel (whether the pixel is off disk or a member of the patch), the 
  character of the magnetic field (quiet or active), and the character of the continuum 
- intensity data (quiet, part of faculae, part of a sunspot). 
+ intensity data (quiet, faculae, sunspot). 
 
  Here are all the possible values:
  
@@ -58,8 +59,8 @@
 /* Example function 1: Compute total unsigned flux in units of G/cm^2 */
 
 //  To compute the unsigned flux, we simply calculate
-//  flux = surface integral [(vector Bz) dot (normal vector)],
-//       = surface integral [(magnitude Bz)*(magnitude normal)*(cos theta)].
+//  flux = surface integral [(vector LOS) dot (normal vector)],
+//       = surface integral [(magnitude LOS)*(magnitude normal)*(cos theta)].
 //  However, since the field is radial, we will assume cos theta = 1.
 //  Therefore the pixels only need to be corrected for the projection.
 
@@ -68,9 +69,9 @@
 //  (Gauss/pix^2)(CDELT1)^2(RSUN_REF/RSUN_OBS)^2(100.cm/m)^2
 //  =Gauss*cm^2
 
-int computeAbsFlux(float *bz, int *dims, float *absFlux,
-                   float *mean_vf_ptr, float *count_mask_ptr,
-                   int *bitmask, float cdelt1, double rsun_ref, double rsun_obs)
+int computeAbsFlux_los(float *los, int *dims, float *absFlux,
+                       float *mean_vf_ptr, float *count_mask_ptr,
+                       int *bitmask, float cdelt1, double rsun_ref, double rsun_obs)
 
 {
     
@@ -91,8 +92,8 @@ int computeAbsFlux(float *bz, int *dims, float *absFlux,
 	   for (j = 0; j < ny; j++)
 	   {
 	    if ( bitmask[j * nx + i] < 36 ) continue;
-            if isnan(bz[j * nx + i]) continue;
-            sum += (fabs(bz[j * nx + i]));
+            if isnan(los[j * nx + i]) continue;
+            sum += (fabs(los[j * nx + i]));
             count_mask++;
 	   }
 	}
@@ -109,9 +110,9 @@ int computeAbsFlux(float *bz, int *dims, float *absFlux,
 }
 
 /*===========================================*/
-/* Example function 2:  Derivative of B_vertical SQRT( (dBz/dx)^2 + (dBz/dy)^2 ) */
+/* Example function 2:  Derivative of B_LOS (approximately B_vertical) = SQRT( ( dLOS/dx )^2 + ( dLOS/dy )^2 ) */
 
-int computeBzderivative(float *bz, int *dims, float *mean_derivative_bz_ptr, int *bitmask, float *derx_bz, float *dery_bz)
+int computeLOSderivative(float *los, int *dims, float *mean_derivative_los_ptr, int *bitmask, float *derx_los, float *dery_los)
 {
     
     int nx = dims[0];
@@ -120,7 +121,7 @@ int computeBzderivative(float *bz, int *dims, float *mean_derivative_bz_ptr, int
     int j = 0;
     int count_mask = 0;
     double sum = 0.0;
-    *mean_derivative_bz_ptr = 0.0;
+    *mean_derivative_los_ptr = 0.0;
     
     if (nx <= 0 || ny <= 0) return 1;
     
@@ -129,7 +130,7 @@ int computeBzderivative(float *bz, int *dims, float *mean_derivative_bz_ptr, int
     {
 	for (j = 0; j <= ny-1; j++)
         {
-           derx_bz[j * nx + i] = (bz[j * nx + i+1] - bz[j * nx + i-1])*0.5;
+           derx_los[j * nx + i] = (los[j * nx + i+1] - los[j * nx + i-1])*0.5;
         }
     }
     
@@ -138,7 +139,7 @@ int computeBzderivative(float *bz, int *dims, float *mean_derivative_bz_ptr, int
     {
         for (j = 1; j <= ny-2; j++)
         {
-           dery_bz[j * nx + i] = (bz[(j+1) * nx + i] - bz[(j-1) * nx + i])*0.5;
+           dery_los[j * nx + i] = (los[(j+1) * nx + i] - los[(j-1) * nx + i])*0.5;
         }
     }
     
@@ -148,25 +149,25 @@ int computeBzderivative(float *bz, int *dims, float *mean_derivative_bz_ptr, int
     i=0;
     for (j = 0; j <= ny-1; j++)
     {
-        derx_bz[j * nx + i] = ( (-3*bz[j * nx + i]) + (4*bz[j * nx + (i+1)]) - (bz[j * nx + (i+2)]) )*0.5;
+        derx_los[j * nx + i] = ( (-3*los[j * nx + i]) + (4*los[j * nx + (i+1)]) - (los[j * nx + (i+2)]) )*0.5;
     }
     
     i=nx-1;
     for (j = 0; j <= ny-1; j++)
     {
-        derx_bz[j * nx + i] = ( (3*bz[j * nx + i]) + (-4*bz[j * nx + (i-1)]) - (-bz[j * nx + (i-2)]) )*0.5;
+        derx_los[j * nx + i] = ( (3*los[j * nx + i]) + (-4*los[j * nx + (i-1)]) - (-los[j * nx + (i-2)]) )*0.5;
     }
     
     j=0;
     for (i = 0; i <= nx-1; i++)
     {
-        dery_bz[j * nx + i] = ( (-3*bz[j*nx + i]) + (4*bz[(j+1) * nx + i]) - (bz[(j+2) * nx + i]) )*0.5;
+        dery_los[j * nx + i] = ( (-3*los[j*nx + i]) + (4*los[(j+1) * nx + i]) - (los[(j+2) * nx + i]) )*0.5;
     }
     
     j=ny-1;
     for (i = 0; i <= nx-1; i++)
     {
-        dery_bz[j * nx + i] = ( (3*bz[j * nx + i]) + (-4*bz[(j-1) * nx + i]) - (-bz[(j-2) * nx + i]) )*0.5;
+        dery_los[j * nx + i] = ( (3*los[j * nx + i]) + (-4*los[(j-1) * nx + i]) - (-los[(j-2) * nx + i]) )*0.5;
     }
     
     
@@ -175,21 +176,21 @@ int computeBzderivative(float *bz, int *dims, float *mean_derivative_bz_ptr, int
         for (j = 0; j <= ny-1; j++)
         {
             if ( bitmask[j * nx + i] < 36 ) continue;
-            if ( (derx_bz[j * nx + i] + dery_bz[j * nx + i]) == 0) continue;
-            if isnan(bz[j * nx + i])      continue;
-            if isnan(bz[(j+1) * nx + i])  continue;
-            if isnan(bz[(j-1) * nx + i])  continue;
-            if isnan(bz[j * nx + i-1])    continue;
-            if isnan(bz[j * nx + i+1])    continue;
-            if isnan(derx_bz[j * nx + i]) continue;
-            if isnan(dery_bz[j * nx + i]) continue;
-            sum += sqrt( derx_bz[j * nx + i]*derx_bz[j * nx + i]  + dery_bz[j * nx + i]*dery_bz[j * nx + i] ); /* Units of Gauss */
+            if ( (derx_los[j * nx + i] + dery_los[j * nx + i]) == 0) continue;
+            if isnan(los[j * nx + i])      continue;
+            if isnan(los[(j+1) * nx + i])  continue;
+            if isnan(los[(j-1) * nx + i])  continue;
+            if isnan(los[j * nx + i-1])    continue;
+            if isnan(los[j * nx + i+1])    continue;
+            if isnan(derx_los[j * nx + i]) continue;
+            if isnan(dery_los[j * nx + i]) continue;
+            sum += sqrt( derx_los[j * nx + i]*derx_los[j * nx + i]  + dery_los[j * nx + i]*dery_los[j * nx + i] ); /* Units of Gauss */
             count_mask++;
         }
     }
     
-    *mean_derivative_bz_ptr = (sum)/(count_mask); // would be divided by ((nx-2)*(ny-2)) if shape of count_mask = shape of magnetogram
-    //printf("mean_derivative_bz_ptr=%f\n",*mean_derivative_bz_ptr);
+    *mean_derivative_los_ptr = (sum)/(count_mask); // would be divided by ((nx-2)*(ny-2)) if shape of count_mask = shape of magnetogram
+    //printf("mean_derivative_los_ptr=%f\n",*mean_derivative_los_ptr);
     
 	return 0;
 }
@@ -205,10 +206,10 @@ int computeBzderivative(float *bz, int *dims, float *mean_derivative_bz_ptr, int
 // are the dimensions of the input array, fsample() will usually result 
 // in a segfault (though not always, depending on how the segfault was accessed.) 
 
-int computeR(float *los, int *dims, float *Rparam, float cdelt1,
-             float *rim, float *p1p0, float *p1n0, float *p1p, float *p1n, float *p1,
-             float *pmap, int nx1, int ny1, 
-             int scale, float *p1pad, int nxp, int nyp, float *pmapn)
+int computeR_los(float *los, int *dims, float *Rparam, float cdelt1,
+                 float *rim, float *p1p0, float *p1n0, float *p1p, float *p1n, float *p1,
+                 float *pmap, int nx1, int ny1, 
+                 int scale, float *p1pad, int nxp, int nyp, float *pmapn)
 
 { 
     int nx = dims[0];
