@@ -1234,6 +1234,142 @@ int computeLorentz(float *bx,  float *by, float *bz, float *fx, float *fy, float
  
 }
 
+/*===========================================*/
+
+/* Example function 17: Compute total unsigned flux in units of G/cm^2 on the LOS field */
+
+//  To compute the unsigned flux, we simply calculate
+//  flux = surface integral [(vector LOS) dot (normal vector)],
+//       = surface integral [(magnitude LOS)*(magnitude normal)*(cos theta)].
+//  However, since the field is radial, we will assume cos theta = 1.
+//  Therefore the pixels only need to be corrected for the projection.
+
+//  To convert G to G*cm^2, simply multiply by the number of square centimeters per pixel.
+//  As an order of magnitude estimate, we can assign 0.5 to CDELT1 and 722500m/arcsec to (RSUN_REF/RSUN_OBS).
+//  (Gauss/pix^2)(CDELT1)^2(RSUN_REF/RSUN_OBS)^2(100.cm/m)^2
+//  =Gauss*cm^2
+
+int computeAbsFlux_los(float *los, int *dims, float *absFlux,
+                       float *mean_vf_ptr, float *count_mask_ptr,
+                       int *bitmask, float cdelt1, double rsun_ref, double rsun_obs)
+
+{
+    
+    int nx = dims[0];
+    int ny = dims[1];
+    int i = 0;
+    int j = 0;
+    int count_mask = 0;
+    double sum = 0.0;
+    *absFlux = 0.0;
+    *mean_vf_ptr = 0.0;
+    
+     
+    if (nx <= 0 || ny <= 0) return 1;
+    
+	for (i = 0; i < nx; i++)
+	{
+	   for (j = 0; j < ny; j++)
+	   {
+	    if ( bitmask[j * nx + i] < 30 ) continue;
+            if isnan(los[j * nx + i]) continue;
+            sum += (fabs(los[j * nx + i]));
+            count_mask++;
+	   }
+	}
+    
+    *mean_vf_ptr     = sum*cdelt1*cdelt1*(rsun_ref/rsun_obs)*(rsun_ref/rsun_obs)*100.0*100.0;
+    *count_mask_ptr  = count_mask;
+
+    return 0;
+}
+
+/*===========================================*/
+/* Example function 18:  Derivative of B_LOS (approximately B_vertical) = SQRT( ( dLOS/dx )^2 + ( dLOS/dy )^2 ) */
+
+int computeLOSderivative(float *los, int *dims, float *mean_derivative_los_ptr, int *bitmask, float *derx_los, float *dery_los)
+{
+    
+    int nx = dims[0];
+    int ny = dims[1];
+    int i = 0;
+    int j = 0;
+    int count_mask = 0;
+    double sum = 0.0;
+    *mean_derivative_los_ptr = 0.0;
+    
+    if (nx <= 0 || ny <= 0) return 1;
+    
+    /* brute force method of calculating the derivative (no consideration for edges) */
+    for (i = 1; i <= nx-2; i++)
+    {
+	for (j = 0; j <= ny-1; j++)
+        {
+           derx_los[j * nx + i] = (los[j * nx + i+1] - los[j * nx + i-1])*0.5;
+        }
+    }
+    
+    /* brute force method of calculating the derivative (no consideration for edges) */
+    for (i = 0; i <= nx-1; i++)
+    {
+        for (j = 1; j <= ny-2; j++)
+        {
+           dery_los[j * nx + i] = (los[(j+1) * nx + i] - los[(j-1) * nx + i])*0.5;
+        }
+    }
+    
+    /* consider the edges for the arrays that contribute to the variable "sum" in the computation below.
+    ignore the edges for the error terms as those arrays have been initialized to zero. 
+    this is okay because the error term will ultimately not include the edge pixels as they are selected out by the mask and bitmask arrays.*/
+    i=0;
+    for (j = 0; j <= ny-1; j++)
+    {
+        derx_los[j * nx + i] = ( (-3*los[j * nx + i]) + (4*los[j * nx + (i+1)]) - (los[j * nx + (i+2)]) )*0.5;
+    }
+    
+    i=nx-1;
+    for (j = 0; j <= ny-1; j++)
+    {
+        derx_los[j * nx + i] = ( (3*los[j * nx + i]) + (-4*los[j * nx + (i-1)]) - (-los[j * nx + (i-2)]) )*0.5;
+    }
+    
+    j=0;
+    for (i = 0; i <= nx-1; i++)
+    {
+        dery_los[j * nx + i] = ( (-3*los[j*nx + i]) + (4*los[(j+1) * nx + i]) - (los[(j+2) * nx + i]) )*0.5;
+    }
+    
+    j=ny-1;
+    for (i = 0; i <= nx-1; i++)
+    {
+        dery_los[j * nx + i] = ( (3*los[j * nx + i]) + (-4*los[(j-1) * nx + i]) - (-los[(j-2) * nx + i]) )*0.5;
+    }
+    
+    
+    for (i = 0; i <= nx-1; i++)
+    {
+        for (j = 0; j <= ny-1; j++)
+        {
+            if ( bitmask[j * nx + i] < 30 ) continue;
+            if ( (derx_los[j * nx + i] + dery_los[j * nx + i]) == 0) continue;
+            if isnan(los[j * nx + i])      continue;
+            if isnan(los[(j+1) * nx + i])  continue;
+            if isnan(los[(j-1) * nx + i])  continue;
+            if isnan(los[j * nx + i-1])    continue;
+            if isnan(los[j * nx + i+1])    continue;
+            if isnan(derx_los[j * nx + i]) continue;
+            if isnan(dery_los[j * nx + i]) continue;
+            sum += sqrt( derx_los[j * nx + i]*derx_los[j * nx + i]  + dery_los[j * nx + i]*dery_los[j * nx + i] ); /* Units of Gauss */
+            count_mask++;
+        }
+    }
+    
+    *mean_derivative_los_ptr = (sum)/(count_mask); // would be divided by ((nx-2)*(ny-2)) if shape of count_mask = shape of magnetogram
+    //printf("mean_derivative_los_ptr=%f\n",*mean_derivative_los_ptr);
+    
+	return 0;
+}
+
 /*==================KEIJI'S CODE =========================*/
 
 // #include <omp.h>
