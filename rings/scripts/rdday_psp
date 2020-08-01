@@ -8,7 +8,7 @@
 #   The intermediate input series cannot be overridden by the options file in
 #	continuation test runs
 
-set SCRIPT_VERSION = 2.4
+set SCRIPT_VERSION = 2.5
 
 @ TEST = 0	# set to 1 for production in namespace hmi_test
 set TW
@@ -413,8 +413,8 @@ else
   @ CR60++
   @ CL60 = 360
 endif
-set BCK = $BCKG"[$CR60][$CL60]"
-@ BCKCT = `show_info -c ds= "$BCK" | awk '{print $1}'`
+set BCK = $BCKG"[$CR60][$CL60]{mean}"
+@ BCKCT = `show_info -cq ds= "$BCK"`
 if ($BCKCT < 1) then
   echo "Warning: Data average record $BCK does not exist"  >> $MMSG
   echo "         Background subtraction skipped"  >> $MMSG
@@ -585,7 +585,8 @@ if ($NOGO) goto TURNOUT
 @ BEGUN = `date +%s`
 @ RGNCT = `show_info -cq ds= $TSER"[$CROT][$CLON]"`
 @ EXIST = `show_info -bcq ds= $PSER"[$CROT][$CLON]"`
-$PSPEC pspec= $PSER in= $TSER"[$CROT][$CLON]" mask_in= $APODE apodize= $APODT >>& $RLOG
+$PSPEC pspec= $PSER in= $TSER"[$CROT][$CLON]" mask_in= $APODE  mask_ex= 1.0 \
+    apodize= $APODT fbin= 0 >>& $RLOG
 if ($status) then
   set SUBJ = "HMI $SYSE-deg ring-diagram $TW processing for $CARTIM incomplete"
   echo "  pspec failure on $HOSTID"  >> $MMSG
@@ -680,7 +681,8 @@ if ($NOGO) goto TURNOUT
 @ EXIST = `show_info -bcq ds= $FLOW"[$CROT][$CLON]"`
 setenv OMP_NUM_THREADS 1
 $RVINV out= $FLOW in= $FSER cr= $CROT clon= $CLON kernel= "$KRNL" \
-    num= $RTGCT rb= $RIMIN re= $RIMAX nmax= $NIMAX lmax= $LIMAX >>& $RLOG
+    num= $RTGCT rb= $RIMIN re= $RIMAX nmax= $NIMAX lmax= $LIMAX \
+    seg= fit.out uxseg= Ux uyseg= Uy amu= 0.005 ob= 1.0 oe= 5.2 >>& $RLOG
 if ($status) then
   set SUBJ = "HMI $SYSE-deg ring-diagram $TW processing for $CARTIM incomplete"
   echo "  rdvinv failure on $HOSTID"  >> $MMSG
@@ -776,7 +778,13 @@ if ($SYSE == 5) then
     echo "$RFITC \" >> $SCRIPT
     echo "  out= $CSER \" >> $SCRIPT
     echo "  guessfile= $GUESSFIL \" >> $SCRIPT
-    echo "  fmax= $CFMAX \" >> $SCRIPT
+    echo "  fmin= 900 fmax= $CFMAX \" >> $SCRIPT
+    echo "  nmin= 0 nmax= 10 \" >> $SCRIPT
+    echo "  lmin= 80 lmax= 3000 \" >> $SCRIPT
+    echo "  ux= 0.0 uy= 0.0 \" >> $SCRIPT
+    echo "  bfgsct= 125 linminct= 15 \" >> $SCRIPT
+    echo "  A1= fit S= fit \" >> $SCRIPT
+    echo "  A1_guess= 0.0 S_guess= -200.0 \" >> $SCRIPT
     echo '  in= "$RGN" >>& $RRLOG' >> $SCRIPT
     @ BEGUN = `date +%s`
     $QSUB -sync yes -t 1-$EXPCT -q $QUEUE -e $QRES -o $QRES $SCRIPT >>& $RLOG
@@ -854,7 +862,13 @@ else
   echo "$RFITC \" >> $SCRIPT
   echo "  out= $CSER \" >> $SCRIPT
   echo "  guessfile= $GUESSFIL \" >> $SCRIPT
-  echo "  fmax= $CFMAX \" >> $SCRIPT
+  echo "  fmin= 900 fmax= $CFMAX \" >> $SCRIPT
+  echo "  nmin= 0 nmax= 10 \" >> $SCRIPT
+  echo "  lmin= 80 lmax= 3000 \" >> $SCRIPT
+  echo "  ux= 0.0 uy= 0.0 \" >> $SCRIPT
+  echo "  bfgsct= 125 linminct= 15 \" >> $SCRIPT
+  echo "  A1= fit S= fit \" >> $SCRIPT
+  echo "  A1_guess= 0.0 S_guess= -200.0 \" >> $SCRIPT
   echo '  in= "$RGN" >>& $RRLOG' >> $SCRIPT
   unset noglob
   @ QJOK = 0

@@ -1457,8 +1457,10 @@ printf ("sf = %f, sb = %f\n", sf[0], sb[0]);
  *	parameters in those cases
  *		Added setting of keywords Samples, MeanMu, MeanPA, COMMENT
  *  v 2.1 frozen 2018.02.09
- *  2018.07.24	Fixed "bug" in setting of Apodization limits keywords
+ *  2018.07.24	Fixed "bug" in setting of Apodization limits keywords -
+ *  	keyword names corrected to those in use
  *  2018.09.20	Added check for validity of input data series  
+ *  v 2.2 frozen 2020.03.17
  *		
  */
 /******************************************************************************/

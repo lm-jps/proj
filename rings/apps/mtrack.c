@@ -1,3 +1,11 @@
+			 /*  remove the next six lines for use with DRMS 9.5  */
+#ifndef JPL_EPHEM_TABLEDIR
+#define JPL_EPHEM_TABLEDIR	("/home/rick/src/ephem/tables")
+#endif
+#ifndef SOHO_EPHEM_TABLE
+#define SOHO_EPHEM_TABLE	("/home/soi/CM/tables/ephemeris/summary")
+#endif
+
 /******************************************************************************/
 /*
  *  mtrack.c						~rick/src/mtrack
@@ -23,7 +31,7 @@
  *				time and heliographic location.
  *      segment string	-		Name of the input data segment (only
  *				required if the input series has multiple
- *				segments)
+ *				segments and segment not in specifier)
  *      out     DataSer none            Output data series name
  *				The output series must have prime keys that
  *				can distinguish individual output records by
@@ -106,7 +114,7 @@
  *	bscale	float	NaN		Value scaling parameter for output
  *	bzero	Float	NaN		value offset parameter for output
  *	trec_key string	T_REC		Keyname of time type prime keyword for
- *				input data series
+ *				input data series, assumed slotted
  *	tobs_key string	T_OBS		Keyname of time type keyword describing
  *				observation time (midpoint) of each input image
  *	tstp_key string	Cadence		Keyname of float type keyword describing
@@ -217,14 +225,16 @@
  */
 /******************************************************************************/
 
-#define MODULE_VERSION_NUMBER	("2.2")
+#define MODULE_VERSION_NUMBER	("2.3")
 #define KEYSTUFF_VERSION "keystuff_v10.c"
-#define EARTH_EPHEM_VERSION "earth_ephem_v10.c"
+#define EARTH_EPHEM_VERSION "earth_ephem_v11.c"
+#define SOHO_EPHEM_VERSION "soho_ephem_v11.c"
 
 #include <jsoc_main.h>
 #include KEYSTUFF_VERSION
 #include EARTH_EPHEM_VERSION
-						      /*  module identifier  */
+#include SOHO_EPHEM_VERSION
+						       /*  module identifier  */
 char *module_name = "mtrack";
 char *module_desc = "track multiple regions from solar image sequences";
 char *version_id = MODULE_VERSION_NUMBER;
@@ -249,11 +259,11 @@ ModuleArgs_t module_args[] = {
   {ARG_INT,	"max_miss", "All",
       "missing values threshold for image rejection"},
   {ARG_STRING,	"tmid", "Not Specified", "midpoint of tracking interval"}, 
-  {ARG_INT,	"length", "0",
+  {ARG_INT,	"length", "Not Specified",
       "target length of tracking interval [in units of input cadence]"}, 
 				      /*  necessitated by bug (ticket #177)  */
-  {ARG_TIME,	"tstart", "JD_0", "start of tracking interval"}, 
-  {ARG_TIME,	"tstop", "JD_0", "end of tracking interval"}, 
+  {ARG_TIME,	"tstart", "Not Specified", "start of tracking interval"}, 
+  {ARG_TIME,	"tstop", "Not Specified", "end of tracking interval"}, 
   {ARG_FLOAT,	"tstep", "Not specified", "temporal cadence for output"},
   {ARG_FLOATS,	"lat", "[0.0]",
       "heliographic latitude(s) of tracking center(s) [deg]"},
@@ -279,7 +289,7 @@ ModuleArgs_t module_args[] = {
   {ARG_FLOAT,	"bzero", "Segment Default", "output offset"},
   {ARG_STRING,	"trec_key", "T_REC", "keyname of (slotted) prime key"}, 
   {ARG_STRING,	"tobs_key", "T_OBS", "keyname for image observation time"}, 
-  {ARG_STRING,	"tstp_key", "CADENCE",  "keyname for image observation time"}, 
+  {ARG_STRING,	"tstp_key", "CADENCE",  "keyname for observation cadence"}, 
   {ARG_STRING,	"qual_key", "Quality",  "keyname for 32-bit image quality field"}, 
   {ARG_STRING,	"clon_key", "CRLN_OBS", "keyname for image central longitude"}, 
   {ARG_STRING,	"clat_key", "CRLT_OBS", "keyname for image central latitude"}, 
@@ -311,7 +321,6 @@ ModuleArgs_t module_args[] = {
        /*  list of keywords to propagate (if possible) from input to output  */
 char *propagate[] = {"CONTENT"};
 
-#include "soho_ephem.c"
 #include "cartography.c"
 #include "imginfo.c"
 #include "mdistuff.c"
@@ -417,9 +426,9 @@ int drms_key_is_slotted (DRMS_Env_t *drms_env, const char *keyname,
 int key_params_from_dspec (const char *dspec) {
 /*
  *  Establish whether target times are determined from dataset specifier
- *  assume that if a bracket is found in the dataset specifier it is a
- *  set of well-specified records containing a properly ordered input dataset;
- *  otherwise, a dataseries to be queried
+ *    assume that if a bracket is found in the dataset specifier it is a
+ *    set of well-specified records containing a properly ordered input
+ *    dataset; otherwise, a dataseries to be queried
  */
   int n, nt = strlen (dspec);
 
@@ -942,13 +951,17 @@ int getctrloc_from_time (TIME t, double *img_lat, double *cm_lon, int *cr,
  */
   double rsun, vr, vn, vw;
   TIME table_mod_time;
+  int status = 0;
 
-  if (platform == LOC_SOHO)
-    soho_ephemeris (t, &rsun, img_lat, cm_lon, &vr, &vn, &vw, &table_mod_time);
-  else if (platform == LOC_UNKNOWN) return 1;
-  else earth_ephemeris (t, &rsun, img_lat, cm_lon, &vr, &vn, &vw);
-  *cr = carrington_rots (t, 1);
-  return 0;
+  if (platform == LOC_SOHO) {
+    status = soho_ephemeris (t, &rsun, img_lat, cm_lon, &vr, &vn, &vw, &table_mod_time);
+    *cr = carrington_rots (t, 1);
+  } else if (platform == LOC_UNKNOWN) return 1;
+  else {
+    status = earth_ephemeris (t, &rsun, img_lat, cm_lon, &vr, &vn, &vw);
+    *cr = carrington_rots (t, 0);
+  }
+  return status;
 }
 
 int verify_keys (DRMS_Record_t *rec, const char *clon,
@@ -1051,9 +1064,7 @@ int get_cadence (DRMS_Record_t *rec, const char *source, const char *tstp_key,
     }
     if (*tstep > 0) *tstep *= *cadence;
     else *tstep = *cadence;
-fprintf (stderr, " tstep set to %f\n", *tstep);
   } else {
-fprintf (stderr, " tstp_key = %s not found\n", tstp_key);
 			     /* cadence key missing, use trec_key if slotted  */
     drms_free_keyword_struct (keywd);
     if ((keywd = drms_keyword_lookup (rec, trec_key, 1))) {
@@ -1086,8 +1097,8 @@ fprintf (stderr, " tstp_key = %s not found\n", tstp_key);
   return 0;
 }
 
-static int platform_info (DRMS_Record_t *rec, char *source_series) {
-  int platform = LOC_UNKNOWN;
+static platloc platform_info (DRMS_Record_t *rec, char *source_series) {
+  platloc platform = LOC_UNKNOWN;
   int status;
   DRMS_Keyword_t *keywd;
 
@@ -1096,8 +1107,9 @@ static int platform_info (DRMS_Record_t *rec, char *source_series) {
     if (keywd->info->recscope != 1)
       fprintf (stderr, "Warning: TELESCOP is variable in input series %s\n",
 	  source_series);
-    if (!strcmp (drms_getkey_string (rec, "TELESCOP", &status), "SDO/HMI"))
-    platform = LOC_SDO;
+    if (!strcmp (drms_getkey_string (rec, "TELESCOP", &status), "SDO/HMI") ||
+      !strcmp (drms_getkey_string (rec, "TELESCOP", &status), "SDO/AIA"))
+      platform = LOC_SDO;
     else if (!strcmp (drms_getkey_string (rec, "TELESCOP", &status), "SOHO"))
       platform = LOC_SOHO;
     else if (!strcmp (drms_getkey_string (rec, "TELESCOP", &status),
@@ -1159,6 +1171,454 @@ static void free_all (float *clat, float *clon, float *mai, double *delta_rot,
   free (rejects);
 }
 
+/*
+ *  This function implements the segment selection rules of the specification
+ *    for mtrack v 2.3 and is intended to be used in substitution for the code
+ *    in the module body; the iterator logic is necessary because the
+ *    drms_segment_lookup* functions do not follow links when the record
+ *    not instantiated (i.e. a template record).
+ */ 
+char *select_segment (DRMS_Record_t *trec, char *parsed_segname) {
+  DRMS_Segment_t *seg;
+  HIterator_t hit;
+  int n, segct;
+
+  int found = 0;
+  char *first_seg = NULL;
+  segct = drms_record_numsegments (trec);
+  if (parsed_segname) {
+       /*  if a segment has been specified, check that it exists and is okay  */
+    for (n = 0; n < segct; n++) {
+      hiter_new_sort (&hit, &trec->segments, drms_segment_ranksort);
+      while ((seg = (DRMS_Segment_t *)hiter_getnext (&hit))) {
+	if (seg->info->segnum == n) break;
+	if (seg->info->segnum > n) {
+	  seg = NULL;
+	  break;
+	}
+      }
+      hiter_free (&hit);
+      if (strcasecmp (seg->info->name, parsed_segname)) continue;
+      if (seg->info->naxis != 2) return NULL;
+      if (seg->info->protocol == DRMS_GENERIC) return NULL;
+      return parsed_segname;
+    }
+    return NULL;
+  } else {
+				       /*  look for first 2-dim, warn if more */
+    for (n = 0; n < segct; n++) {
+      hiter_new_sort (&hit, &trec->segments, drms_segment_ranksort);
+      while ((seg = (DRMS_Segment_t *)hiter_getnext (&hit))) {
+	if (seg->info->segnum == n) break;
+	if (seg->info->segnum > n) {
+	  seg = NULL;
+	  break;
+	}
+      }
+      hiter_free (&hit);
+      if (seg->info->naxis == 2 && seg->info->protocol != DRMS_GENERIC) {
+        if (!found) first_seg = seg->info->name;
+	found++;
+      }
+    }
+    if (found > 1) {
+      fprintf (stderr, "Warning: multiple 2-d segments in series %s\n",
+	  seg->record->seriesinfo->seriesname);
+      fprintf (stderr, "         using %s\n", first_seg);
+    }
+    return first_seg;
+  }
+}
+
+/*
+ *  This function implements the record set selection rules of the
+ *    specification for the current version of mtrack, making use of
+ *    the DRMS localized serverdefs to support Carrington times
+ */ 
+DRMS_RecordSet_t *track_record_selection (const char *inspec,
+    const char *tstrt_str, const char *tstop_str, const char *tmid_str,
+    int length, const char *tstp_key, const char *trec_key, double *tstep,
+    double *cadence, int geo_times, char *reqseg, char **segname,
+    char **input_set, int *tstrtstop, int *time_cr, double *time_cl,
+    int *need_crcl, platloc *platform, int verbose) {
+  DRMS_RecordSet_t *ds = NULL;
+  DRMS_Record_t *trec;
+  TIME pkeybase, tbase, tmid, tstrt, tstop;
+  double dt, phase, pkeystep;
+  int tstrt_ind, tstop_ind;
+  int slotted, status;
+  char *eoser, *eoseg, *segnames, *parsed_segname;
+  char rec_query[DRMS_MAXQUERYLEN];
+  char tbuf[64], ptbuf[64], pttbuf[64];
+
+  int explicit = 0;
+  char *source_series = strdup (inspec);
+  char *pkindx = malloc (strlen (trec_key) + 8);
+  char *pkbase = malloc (strlen (trec_key) + 8);
+  char *pkstep = malloc (strlen (trec_key) + 8);
+
+  *tstrtstop = 0;
+  segnames = strchr (source_series, '{');
+  if (segnames) {
+    eoseg = strchr (segnames, '}');
+    if (eoseg) *eoseg = '\0';
+    parsed_segname = segnames + 1;
+    if (strchr (segnames, ',')) {
+      fprintf (stderr, "Error: only a single segment can be selected\n");
+      return ds;
+    }
+				  /*  check for conflicting segment requests  */
+    if (strcmp (reqseg, "Not Specified")) {
+      if (strcasecmp (reqseg, parsed_segname)) {
+	fprintf (stderr, "Error: conflicting segment names %s and %s\n",
+	    reqseg, parsed_segname);
+	fprintf (stderr, "       only one can be selected\n");
+	return ds;
+      }
+    }
+  } else parsed_segname = (strcmp (reqseg, "Not Specified")) ? reqseg : NULL;
+  sprintf (rec_query, "");
+  if (key_params_from_dspec (inspec)) {
+				    /*  input specified as specific data set  */
+			/*  this overrides any time specification via the
+				arguments tstart, tstop, tmid, and/or length  */
+    if (strcmp (tstrt_str, "Not Specified") ||
+	strcmp (tstop_str, "Not Specified") ||
+        strcmp (tmid_str, "Not Specified") || (length > 0)) {
+      fprintf (stderr, "Warning: input record set explicitly specified:\n");
+      fprintf (stderr,
+	  "         tstart, tstop, tmid and length values ignored\n");
+    }
+    eoser = strchr (source_series, '[');
+    if (eoser) *eoser = '\0';
+    eoser = strchr (source_series, '{');
+    if (eoser) *eoser = '\0';
+    strcpy (rec_query, inspec);
+    trec = drms_template_record (drms_env, source_series, &status);
+    get_cadence (trec, source_series, tstp_key, trec_key, tstep, cadence);
+    dt = *cadence;
+    sprintf (pkindx, "%s_index", trec_key);
+    *platform = platform_info (trec, source_series);
+    explicit = 1;
+  } else {
+				/*  only the input data series is named,
+				    get record specifications from arguments  */
+    eoser = strchr (source_series, '{');
+    if (eoser) *eoser = '\0';
+    trec = drms_template_record (drms_env, source_series, &status);
+    if (!trec) {
+      fprintf (stderr, "Error: unable to find requested series \"%s\"\n",
+	  source_series);
+      return ds;
+    }
+    if (get_cadence (trec, source_series, tstp_key, trec_key, tstep, cadence))
+      return ds;
+    dt = *cadence;
+    *platform = platform_info (trec, source_series);
+    if (slotted = drms_key_is_slotted (drms_env, trec_key, source_series)) {
+      sprintf (pkindx, "%s_index", trec_key);
+      sprintf (pkbase, "%s_epoch", trec_key);
+      sprintf (pkstep, "%s_step", trec_key);
+      tbase = pkeybase = drms_getkey_time (trec, pkbase, &status);
+      pkeystep = drms_getkey_double (trec, pkstep, &status);
+    }
+    if (strcmp (tmid_str, "Not Specified")) {
+      if (strcmp (tstrt_str, "Not Specified") ||
+	  strcmp (tstop_str, "Not Specified")) {
+	fprintf (stderr, "Warning: with tmid and length specified,\n");
+	fprintf (stderr,
+	  "         tstart and tstop values ignored\n");
+      }
+      if (length <= 0) {
+	fprintf (stderr, "Error: if tmid is specified,");
+	fprintf (stderr, " length in units of cadence must also be specified\n");
+	return ds;
+      }
+	/*  determine start and stop times from length (in units of tstep)
+			and midtime (which can be CR:CL as well as date_time) */
+      if (sscanf (tmid_str, "%d:%lf", time_cr, time_cl) == 2) {
+			   /*  tmid specified as CR:CL : need ephemeris info  */
+	*need_crcl = 0;
+	if (geo_times || *platform != LOC_SOHO) {
+#ifndef JPL_EPHEM_TABLEDIR
+	  fprintf (stderr,
+	      "Error: no ephemeris info, cannot specify time in CT format\n");
+	  return ds;
+#endif
+	  tmid = time_from_crcl (*time_cr, *time_cl, 0);
+	} else {
+#ifndef SOHO_EPHEM_TABLE
+	  fprintf (stderr,
+	      "Error: no ephemeris info, cannot specify time in CT format\n");
+	  return ds;
+#endif
+	  tmid = time_from_crcl (*time_cr, *time_cl, 1);
+	}
+	if (time_is_invalid (tmid)) {
+	  fprintf (stderr,
+	      "Error: Unable to determine time from Carrington longitude\n");
+	  return ds;
+	}
+      } else		       /*  tmid specified as normal date-time string  */
+	tmid = sscan_time ((char *)tmid_str);
+      sprint_time (ptbuf, tmid, "TAI", 0);
+      if (slotted) {
+	phase = fmod ((tmid - tbase), dt);
+	if (length % 2 == 0) phase += 0.5 * dt;
+	if (phase > dt) phase -= dt;
+	tmid -= phase;
+	if (verbose) {
+	  sprint_time (tbuf, tmid, "TAI", 0);
+	  if (*need_crcl) {
+	    if (strcmp (ptbuf, tbuf))
+	      printf ("Target time %s adjusted to %s\n", tmid_str, tbuf);
+	  } else {
+	    sprint_time (tbuf, tmid, "TAI", 1);
+	    printf ("Target time %d:%05.1f = %s adjusted to\n\t%s\n",
+	      *time_cr, *time_cl, ptbuf, tbuf);
+	  }
+	}
+      }
+      tstrt = tmid - (length / 2) * *tstep;
+      if (length % 2 == 0) tstrt += 0.5 * dt;
+      tstop = tstrt + (length - 1) * *tstep;
+    } else {
+      if (sscanf (tstrt_str, "%d:%lf", time_cr, time_cl) == 2) {
+			   /*  time specified as CR:CL : need ephemeris info  */
+	if (geo_times || *platform != LOC_SOHO) {
+#ifndef JPL_EPHEM_TABLEDIR
+	  fprintf (stderr,
+	      "Error: no ephemeris info, cannot specify time in CT format\n");
+	  return ds;
+#endif
+	  tstrt = time_from_crcl (*time_cr, *time_cl, 0);
+	} else {
+#ifndef SOHO_EPHEM_TABLE
+	  fprintf (stderr,
+	      "Error: no ephemeris info, cannot specify time in CT format\n");
+	  return ds;
+#endif
+	  tstrt = time_from_crcl (*time_cr, *time_cl, 1);
+	}
+	if (time_is_invalid (tstrt)) {
+	  fprintf (stderr,
+	      "Error: Unable to determine time from Carrington longitude\n");
+	  return ds;
+	}
+        sprint_time (ptbuf, tstrt, "TAI", 0);
+      } else {		       /*  time specified as normal date-time string  */
+        *tstrtstop = 1;
+	tstrt = sscan_time ((char *)tstrt_str);
+      }
+      if (time_is_invalid (tstrt)) {
+	fprintf (stderr,
+	    "Error: either a specific data record set must be selected as input\n");
+	fprintf (stderr,
+	    "       or (tmid and length) or (tstart and tstop) must be specified\n");
+	return ds;
+      }
+      if (sscanf (tstop_str, "%d:%lf", time_cr, time_cl) == 2) {
+			   /*  time specified as CR:CL : need ephemeris info  */
+	if (geo_times || *platform != LOC_SOHO) {
+#ifndef JPL_EPHEM_TABLEDIR
+	  fprintf (stderr,
+	      "Error: no ephemeris info, cannot specify time in CT format\n");
+	  return ds;
+#endif
+	  tstop = time_from_crcl (*time_cr, *time_cl, 0);
+	} else {
+#ifndef SOHO_EPHEM_TABLE
+	  fprintf (stderr,
+	      "Error: no ephemeris info, cannot specify time in CT format\n");
+	  return ds;
+#endif
+	  tstop = time_from_crcl (*time_cr, *time_cl, 1);
+	}
+	if (time_is_invalid (tstop)) {
+	  fprintf (stderr,
+	      "Error: Unable to determine time from Carrington longitude\n");
+	  return ds;
+	}
+	*tstrtstop = 0;
+      } else		       /*  time specified as normal date-time string  */
+	tstop = sscan_time ((char *)tstop_str);
+      if (time_is_invalid (tstop)) {
+	fprintf (stderr,
+	    "Error: either a specific data record set must be selected as input\n");
+	fprintf (stderr,
+	    "       or (tmid and length) or (tstart and tstop) must be specified\n");
+	return ds;
+      }
+      sprint_time (pttbuf, tstop, "TAI", 0);
+      if (slotted) {
+		 /*  assume that prime key specified by trec_key is slotted!  */
+	phase = fmod ((tstrt - tbase), dt);
+	tstrt -= phase;
+	if (phase > 0.5 * dt) tstrt += dt;
+	phase = fmod ((tstop - tbase), dt);
+	tstop -= phase;
+	if (phase > 0.5 * dt) tstop += dt;
+	if (verbose) {
+	}
+      }
+    }
+    if (slotted) {
+		 /*  assume that prime key specified by trec_key is slotted!  */
+      tstrt_ind = (tstrt - pkeybase + 0.5 * pkeystep) / pkeystep;
+      tstop_ind = (tstop - pkeybase + 0.5 * pkeystep) / pkeystep;
+      snprintf (rec_query, 256, "%s[?%s between %d and %d?]", source_series,
+	  pkindx, tstrt_ind, tstop_ind);
+    } else {
+      snprintf (rec_query, 256, "%s[?%s between %23.16e and %23.16e?]",
+	  source_series, trec_key, tstrt - 0.01 * dt, tstop + 0.01 * dt);
+    }
+  }
+						     /*  check input segment  */
+		     /*  doesn't work properly if there are linked segments!  */
+  *segname = select_segment (trec, parsed_segname);
+  if (*segname == NULL) {
+    if (parsed_segname)
+      fprintf (stderr, "Error: segment \"%s\" is not in series, or is wrong type\n",
+	  parsed_segname);
+    else fprintf (stderr, "Error: no appropriate segments in series %s\n",
+	source_series);
+    return ds;
+  }
+  *input_set = strdup (rec_query);
+  if (!(ds = drms_open_records (drms_env, rec_query, &status))) {
+    fprintf (stderr, "Error: unable to open selected data set \"%s\"\n",
+	rec_query);
+    fprintf (stderr, "       status = %d\n", status);
+    return ds;
+  }
+  if (explicit) {
+					/*  for explictly named dataset,
+				check if record spec implies reduced cadence  */
+    int cmult = (ds->n < 2) ? 1 :
+	drms_getkey_int (ds->records[1], pkindx, &status) -
+	drms_getkey_int (ds->records[0], pkindx, &status);
+    *cadence *= cmult;
+  }
+  free (pkindx);
+  free (pkbase);
+  free (pkstep);
+  return ds;
+}
+/*
+ *  Determine the Carrington central-meridian-longitude span of the input
+ *    dataset from (a) the clon and crot keywords from the records that
+ *    correspond to the start and stop times if they are valid; otherwise
+ *    (b) the computed values from the start and stop time if the required
+ *    tables are present; otherwise (c) time extrapolation of the relevant
+ *    keyword values for the first and last records with valid values.
+ *    If there are no valid values for the central meridian longitude
+ *    and Carrington rotation a NaN is returned, signaling that not mapping
+ *    and tracking could be performed (although strictly the Carrington
+ *    rotation number would not really be required).
+ */
+double getlon_span (DRMS_RecordSet_t *ds, TIME tstrt, TIME tstop,
+    double cadence, platloc platform, int geo_times, char *tobs_key,
+    char *clon_key, char *crot_key) {
+  DRMS_Record_t *rec;
+  TIME tobs, tfrst, tlast;
+  double img_lat, cm_lon_strt, cm_lon_stop, cm_lon_first, cm_lon_last;
+  int cr_strt, cr_stop;
+  int nr, status;
+
+  double lon_span = 0.0 / 0.0;
+  int extrapolate_lonstrt = 0, extrapolate_lonstop = 0;
+  int recct = ds->n;
+
+  tobs = drms_getkey_time (ds->records[0], tobs_key, &status);
+  if (fabs (tobs - tstrt) < cadence) {
+    rec = ds->records[0];
+    cr_strt = drms_getkey_int (rec, crot_key, &status);
+    cm_lon_strt = drms_getkey_double (rec, clon_key, &status);
+    if (status || isnan (cm_lon_strt) || cr_strt < 0) {
+      if (geo_times) status = getctrloc_from_time (tstrt, &img_lat,
+	  &cm_lon_strt, &cr_strt, LOC_GEOC);
+      else status = getctrloc_from_time (tstrt, &img_lat, &cm_lon_strt,
+	  &cr_strt, platform);
+      extrapolate_lonstrt = status;
+    }
+  }
+  if (extrapolate_lonstrt) {
+    for (nr = 0; nr < recct; nr++) {
+      tobs = drms_getkey_time (ds->records[nr], tobs_key, &status);
+      if (time_is_invalid (tobs)) continue;
+      rec = ds->records[nr];
+      cm_lon_first = drms_getkey_double (rec, clon_key, &status);
+      if (status || isnan (cm_lon_first)) continue;
+      cr_strt = drms_getkey_int (rec, crot_key, &status);
+      if (status || cr_strt < 0) continue;
+      tfrst = tobs;
+      break;
+    }
+    if (nr == recct) {
+      fprintf (stderr, "Error: No valid ephemeris data in input data set\n");
+      fprintf (stderr, "       and unable to compute from time\n");
+      return lon_span;
+    }
+  }
+
+  tobs = drms_getkey_time (ds->records[recct - 1], tobs_key, &status);
+  if (fabs (tobs - tstop) < cadence) {
+    rec = ds->records[recct - 1];
+    cr_stop = drms_getkey_int (rec, crot_key, &status);
+    cm_lon_stop = drms_getkey_double (rec, clon_key, &status);
+    if (status|| isnan (cm_lon_stop) || cr_stop < 0) {
+      if (geo_times) status = getctrloc_from_time (tstop, &img_lat,
+	  &cm_lon_stop, &cr_stop, LOC_GEOC);
+      else status = getctrloc_from_time (tstop, &img_lat, &cm_lon_stop,
+	  &cr_stop, platform);
+      extrapolate_lonstop = status;
+    }
+  }
+  if (extrapolate_lonstop) {
+    for (nr = recct - 1; nr; nr--) {
+      tobs = drms_getkey_time (ds->records[nr], tobs_key, &status);
+      if (time_is_invalid (tobs)) continue;
+      rec = ds->records[nr];
+      cm_lon_last = drms_getkey_double (rec, clon_key, &status);
+      if (status || isnan (cm_lon_last)) continue;
+      cr_stop = drms_getkey_int (rec, crot_key, &status);
+      if (status || cr_strt < 0) continue;
+      tlast = tobs;
+      break;
+    }
+  }
+		/*  If CM longitudes at start and stop of tracking interval
+			could not be read from data or calculated from time,
+			       extrapolate from known first and last values  */
+  if (extrapolate_lonstrt || extrapolate_lonstop) {
+    double rotrate;
+    double dlon = cm_lon_first - cm_lon_last;
+    double tfrst_last = tlast - tfrst;
+    dlon += 360 * (cr_stop - cr_strt);
+    rotrate = dlon / tfrst_last;
+    if (extrapolate_lonstrt) {
+      cm_lon_strt = cm_lon_first + rotrate * (tfrst - tstrt);
+      while (cm_lon_strt > 360.0) {
+	cm_lon_strt -= 360.0;
+	cr_strt--;
+      }
+    }
+    if (extrapolate_lonstop) {
+      cm_lon_stop = cm_lon_last - rotrate * (tfrst - tstrt);
+      while (cm_lon_strt < 0.0) {
+	cm_lon_stop += 360.0;
+	cr_stop++;
+      }
+    }
+  }
+  lon_span = cm_lon_strt - cm_lon_stop;
+  while (cr_strt < cr_stop) {
+    cr_strt++;
+    lon_span += 360.0;
+  }
+  return lon_span;
+}
+
 /******************************************************************************/
 			/*  module body begins here  */
 /******************************************************************************/
@@ -1171,13 +1631,13 @@ int DoIt (void) {
   DRMS_Array_t *data_array = NULL, *map_array = NULL, *bckg_array;
   DRMS_Keyword_t *keywd;
   FILE **log;
-  TIME trec, tobs, tmid, tbase, tfirst, tlast, ttrgt;
+  TIME trec, tobs, tmid, tbase, tfrst, tlast, ttrgt;
   double *maplat, *maplon, *map_coslat, *map_sinlat = NULL;
   double *cmaplat, *cmaplon, *ctrmu, *ctrx, *ctry, *muavg, *xavg, *yavg, *latavg;
   double *delta_rot, *map_pa;
   double *minval, *maxval, *datamean, *datarms, *dataskew, *datakurt;
   double min_scaled, max_scaled;
-  double carr_lon, cm_lon_start, cm_lon_stop, lon_span;
+  double carr_lon, cm_lon_strt, cm_lon_stop, lon_span;
   double cm_lon_first, cm_lon_last;
   double data_cadence, coverage, t_eps, phase;
   double lat, lon, img_lat, img_lon;
@@ -1198,9 +1658,7 @@ int DoIt (void) {
   int *reject_list = NULL;
   int axes[3], slice_start[3], slice_end[3];
   int recct, rgn, rgnct, segct, valid, cvct, cvgoct, cvnoct, cvused, cvmaxct;
-  int t_cr, tmid_cr, cr_start, cr_stop;
-  int cr_first, cr_last;
-  int found_first, found_mid, found_last;
+  int t_cr, tmid_cr, cr_strt, cr_stop, tstrtstop;
   int col, row, pixct, dxy, i, found, n, nr, or;
   int blankvals, no_merid_v, rejects, status, verbose_logs, setmais;
   int x_invrt, y_invrt;
@@ -1210,6 +1668,7 @@ int DoIt (void) {
   int badpkey, badqual, badfill, badtime, badcv, blacklist, qualcheck;
   unsigned char *offsun, *ctroffsun;
   char *input, *source_series, *eoser, *segspec, *osegname, *pkeyval;
+  char *parsed_segname;
   char logfilename[DRMS_MAXPATHLEN], ctimefmt[DRMS_MAXFORMATLEN];
   char rec_query[256];
   char module_ident[64], key[64], tbuf[64], ptbuf[64], ctime_str[16];
@@ -1229,7 +1688,7 @@ int DoIt (void) {
       "SIN", "ZEA"};
   missing_val = 0.0 / 0.0;
 						 /*  process command params  */
-  char *inset = strdup (params_get_str (params, "in"));
+  char *inspec = strdup (params_get_str (params, "in"));
   char *outser = strdup (params_get_str (params, "out"));
   char *bckgn = strdup (params_get_str (params, "bckgn"));
   char *rejectfile = strdup (params_get_str (params, "reject"));
@@ -1451,40 +1910,25 @@ int DoIt (void) {
     drms_close_records (ods, DRMS_FREE_RECORD);
     return 1;
   }
-
-  input = strdup (inset);
-  source_series = strdup (inset);
-  segspec = strstr (input, "{");
-  eoser = strchr (source_series, '[');
-  if (eoser) *eoser = '\0';
-  eoser = strchr (source_series, '{');
-  if (eoser) *eoser = '\0';
-
-  if (key_params_from_dspec (inset)) {
-    double tstep_inp;
-				    /*  input specified as specific data set  */
-			/*  this overrides any time specification via the
-				arguments tstart, tstop, tmis, and/or length  */
-    if (!time_is_invalid (tstrt) || !time_is_invalid (tstop) ||
-        strcmp (tmid_str, "Not Specified") || (length > 0)) {
-      fprintf (stderr, "Warning: input record set explicitly specified:\n");
-      fprintf (stderr,
-	  "         tstart, tstop, tmid and length values ignored\n");
-    }
-    if (!(ids = drms_open_records (drms_env, inset, &status))) {
-      fprintf (stderr, "Error: (%s) unable to open input data set \"%s\"\n",
-        module_ident, inset);
-      fprintf (stderr, "       status = %d\n", status);
-      return 1;
-    }
+						    /*  replacement function  */
+  ids = track_record_selection (inspec, tstrt_str, tstop_str, tmid_str,
+      length, tstp_key, trec_key, &tstep, &data_cadence, geo_times, seg_name,
+      &parsed_segname, &input, &tstrtstop, &tmid_cr, &tmid_cl, &need_crcl,
+      &platform, verbose);
+  if (!ids) {
+    fprintf (stderr, "Error (%s): no input data set\n", module_ident);
+    return 1;
+  }
+  seg_name = parsed_segname;
     if ((recct = ids->n) < 2) {
       fprintf (stderr, "Error: (%s) <2 records in selected input set\n",
 	  module_ident);
-      fprintf (stderr, "       %s\n", inset);
+      fprintf (stderr, "       %s\n", input);
       drms_close_records (ids, DRMS_FREE_RECORD);
       return 1;
     }
     irec = ids->records[0];
+    source_series = strdup (irec->seriesinfo->seriesname);
 					     /*  check for required keywords  */
     if (filt_on_calver) {
       keywd = drms_keyword_lookup (irec, calverkey, 1);
@@ -1499,206 +1943,16 @@ int DoIt (void) {
       drms_close_records (ids, DRMS_FREE_RECORD);
       return 1;
     }
-    tstrt = drms_getkey_time (irec, trec_key, &status);
-    tstop = drms_getkey_time (ids->records[recct - 1], trec_key, &status);
-    tmid = 0.5 * (tstrt + tstop);
-    if (get_cadence (irec, source_series, tstp_key, trec_key, &tstep_inp,
-	&data_cadence)) {
-      fprintf (stderr, "Error: unable to determine input cadence: tstep must be supplied\n");
-      drms_close_records (ids, DRMS_FREE_RECORD);
-      return 1;
-    }
-    if (isnan (tstep) || tstep <= 0.0) tstep = tstep_inp;
-    else tstep *= data_cadence;
-    length = (tstop - tstrt + 1.01 * tstep) / tstep;
-    seglist = ndimsegments (irec, 2, &segct);
-    platform = platform_info (irec, source_series);
-    if (platform == LOC_UNKNOWN) fprintf (stderr,
-	"Warning: observing location unknown, assumed geocenter\n");
-/*
- *  End of time range evaluation when input specified as specific data set
- */
-  } else {
-				/*  only the input data series is named,
-				    get record specifications from arguments  */
-    if (!strcmp (tmid_str, "Not Specified") &&
-	(time_is_invalid (tstrt) || time_is_invalid (tstop))) {
-      fprintf (stderr,
-	  "Error: either a specific data record set must be selected as input\n");
-      fprintf (stderr, "       or (tmid and length) or (tstart and tstop) must be\n");
-      fprintf (stderr, "       specified\n");
-      return 1;
-    }
-		    /*  get required series info from first record in series  */
-						/*  platform, cadence, phase  */
-    snprintf (rec_query, 256, "%s[:#^]", source_series);
-    if (segspec) strcat (rec_query, segspec);
-    if (!(ids = drms_open_records (drms_env, rec_query, &status))) {
-      fprintf (stderr, "Error: unable to open input data set \"%s\"\n", inset);
-      fprintf (stderr, "       status = %d\n", status);
-      return 1;
-    }
-    irec = ids->records[0];
-    status = verify_keys (irec, clon_key, clat_key, &kscale);
-    if (status) {
-      drms_close_records (ids, DRMS_FREE_RECORD);
-      return 1;
-    }
-    if (get_cadence (irec, source_series, tstp_key, trec_key, &tstep,
-	&data_cadence)) {
-      drms_close_records (ids, DRMS_FREE_RECORD);
-      return 1;
-    }
-    t_eps = 0.5 * data_cadence;
-    platform = platform_info (irec, source_series);
-    if (platform == LOC_UNKNOWN) fprintf (stderr,
-	"Warning: observing location unknown, assumed geocenter\n");
-/*
-    segct = drms_record_numsegments (irec);
-*/
-    seglist = ndimsegments (irec, 2, &segct);
-
-    if (strcmp (tmid_str, "Not Specified")) {
-/*  determine start and stop times from length (in units of tstep) and midtime
-				    (which can be CR:CL as well as date_time) */
-       if (sscanf (tmid_str, "%d:%lf", &tmid_cr, &tmid_cl) == 2) {
-			   /*  tmid specified as CR:CL : need ephemeris info  */
-	need_crcl = 0;
-	tmid = (geo_times) ?
-	    time_from_crcl (tmid_cr, tmid_cl, 0) :
-	    time_from_crcl (tmid_cr, tmid_cl, platform == LOC_SOHO);
-	if (ut_times) sprint_time (ptbuf, tmid, "UTC", 0);
-	else sprint_time (ptbuf, tmid, "TAI", 0);
-			   /*  adjust to phase of input, within data cadence  */
-	tbase = drms_getkey_time (irec, trec_key, &status);
-	phase = fmod ((tmid - tbase), data_cadence);
-	tmid -= phase;
-	if (phase > 0.5 * data_cadence) tmid += data_cadence;
-	if (verbose) {
-	  if (ut_times) sprint_time (tbuf, tmid, "UTC", 0);
-	  else sprint_time (tbuf, tmid, "TAI", 0);
-	  printf ("Target time %d:%05.1f = %s adjusted to\n\t%s\n",
-	      tmid_cr, tmid_cl, ptbuf, tbuf);
-	}
-      } else		       /*  tmid specified as normal date-time string  */
-        tmid = sscan_time (tmid_str);
-      tbase = drms_getkey_time (irec, trec_key, &status);
-      phase = fmod ((tmid - tbase), data_cadence);
-      if (length <= 0) {
-	fprintf (stderr,
-	    "Error: if tmid is specified, length in units of cadence must also be specified\n");
-	if (ods) drms_close_records (ods, DRMS_FREE_RECORD);
-	drms_close_records (ids, DRMS_FREE_RECORD);
-	return 1;
-      }
-      tstrt = tmid - 0.5 * length * tstep;
-      tstop = tstrt + (length - 1) * tstep;
-      if (tstop <= tstrt) {
-	sprint_time (ptbuf, tstop, "", 0);
-	fprintf (stderr,
-	    "Error: requested end time %s before or at\n       start time ",
-	    ptbuf);
-	sprint_time (ptbuf, tstrt, "", 0);
-	fprintf (stderr, "%s for length = %d, tstep = %.2f\n", ptbuf, length,
-	    tstep);
-	if (ods) drms_close_records (ods, DRMS_FREE_RECORD);
-	drms_close_records (ids, DRMS_FREE_RECORD);
-	return 1;
-      }
-			   /*  adjust stop time to reflect sampling symmetry  */
-      if ((fabs (phase) < 0.001 * t_eps) && length % 2)
-	tstop += tstep;
-      if ((fabs (phase - t_eps) < 0.001 * t_eps) && (length % 2 == 0))
-	tstop += tstep;
+    if (tstrtstop) {
+      tstrt = params_get_time (params, "tstart");
+      tlast = tstop = params_get_time (params, "tstop");
     } else {
-		/*  tstart and tstop specified, determine midtime and length  */
-      if (sscanf (tstrt_str, "%d:%lf", &t_cr, &t_cl) == 2) {
-        tstrt = (geo_times) ?
-	    time_from_crcl (t_cr, t_cl, 0) :
-	    time_from_crcl (t_cr, t_cl, platform == LOC_SOHO);
-	if (ut_times) sprint_time (ptbuf, tstrt, "UTC", 0);
-	else sprint_time (ptbuf, tstrt, "TAI", 0);
-			   /*  adjust to phase of input, within data cadence  */
-	tbase = drms_getkey_time (irec, trec_key, &status);
-	phase = fmod ((tstrt - tbase), data_cadence);
-	tstrt -= phase;
-	if (phase > 0.5 * data_cadence) tstrt += data_cadence;
-	if (verbose) {
-	  if (ut_times) sprint_time (tbuf, tstrt, "UTC", 0);
-	  else sprint_time (tbuf, tstrt, "TAI", 0);
-	  printf ("Start time %d:%05.1f = %s adjusted to\n\t%s\n",
-	      t_cr, t_cl, ptbuf, tbuf);
-	}
-      }
-      if (sscanf (tstop_str, "%d:%lf", &t_cr, &t_cl) == 2) {
-        tstop = (geo_times) ?
-	    time_from_crcl (t_cr, t_cl, 0) :
-	    time_from_crcl (t_cr, t_cl, platform == LOC_SOHO);
-	if (ut_times) sprint_time (ptbuf, tstop, "UTC", 0);
-	else sprint_time (ptbuf, tstop, "TAI", 0);
-			   /*  adjust to phase of input, within data cadence  */
-	tbase = drms_getkey_time (irec, trec_key, &status);
-	phase = fmod ((tstop - tbase), data_cadence);
-	tstop -= phase;
-	if (phase > 0.5 * data_cadence) tstop += data_cadence;
-	if (verbose) {
-	  if (ut_times) sprint_time (tbuf, tstop, "UTC", 0);
-	  else sprint_time (tbuf, tstop, "TAI", 0);
-	  printf ("Stop time %d:%05.1f = %s adjusted to\n\t%s\n",
-	      t_cr, t_cl, ptbuf, tbuf);
-	}
-      }
-			   /*  tmid specified as CR:CL : need ephemeris info  */
-      tmid = 0.5 * (tstrt + tstop);
-      length = (tstop - tstrt + 1.01 * tstep) / tstep;
-    }
-    drms_close_records (ids, DRMS_FREE_RECORD);
-    if (drms_key_is_slotted (drms_env, trec_key, source_series)) {
-			  /*  use an indexed search if possible, much faster  */
-      DRMS_Record_t *rec = drms_template_record (drms_env, source_series,
-	  &status);
-      TIME pkeybase;
-      double pkeystep;
-      int tstrt_ind, tstop_ind;
-      char *pkindx = malloc (strlen (trec_key) + 8);
-      char *pkbase = malloc (strlen (trec_key) + 8);
-      char *pkstep = malloc (strlen (trec_key) + 8);
-
-      sprintf (pkindx, "%s_index", trec_key);
-      sprintf (pkbase, "%s_epoch", trec_key);
-      sprintf (pkstep, "%s_step", trec_key);
-      pkeybase = drms_getkey_time (rec, pkbase, &status);
-      pkeystep = drms_getkey_double (rec, pkstep, &status);
-      tstrt_ind = (tstrt - pkeybase) / pkeystep;
-      tstop_ind = (tstop - pkeybase) / pkeystep;
-      snprintf (rec_query, 256, "%s[?%s between %d and %d?]", source_series,
-	  pkindx, tstrt_ind, tstop_ind);
-
-      free (pkindx);
-      free (pkbase);
-      free (pkstep);
-      drms_free_record (rec);
-    } else snprintf (rec_query, 256, "%s[?%s between %23.16e and %23.16e?]",
-	source_series, trec_key, tstrt - t_eps, tstop + t_eps);
-    if (segspec) strcat (rec_query, segspec);
-    if (!(ids = drms_open_records (drms_env, rec_query, &status))) {
-      fprintf (stderr, "Error: unable to open input data set \"%s\\n", rec_query);
-      fprintf (stderr, "       status = %d\n", status);
-      return 1;
-    }
-    if ((recct = ids->n) < 2) {
-      fprintf (stderr, "Error: (%s) <2 records in selected input set\n",
-	  module_ident);
-      fprintf (stderr, "       %s with selection\n", inset);
-      fprintf (stderr, "       %s\n", rec_query);
-      drms_close_records (ids, DRMS_FREE_RECORD);
-      return 1;
-    }
-
-    input = strdup (rec_query);
-			    /*  end determination of record set from params  */
-  }
-
+      tstrt = drms_getkey_time (irec, trec_key, &status);
+      tlast = tstop = drms_getkey_time (ids->records[recct - 1], trec_key, &status);
+    } tmid = 0.5 * (tstrt + tstop);
+    if (length <= 0)
+      length = (tstop - tstrt + 1.01 * data_cadence) / data_cadence;
+    seglist = ndimsegments (irec, 2, &segct);
   if (verbose) {
     sprint_time (ptbuf, tstrt, "TAI", 0);
     sprint_time (tbuf, tstop, "TAI", 0);
@@ -1709,228 +1963,75 @@ int DoIt (void) {
 			(individual segment reads should take care of that)
 		call  drms_stage_records (ids, 1, 0) here; however, this was
 	    removed in v 1.1, as it seemed to be causing crashes at the time  */
-  irec = ids->records[0];
-  if (segct == 1) {
-    segnum = seglist[0];
-    record_segment = drms_segment_lookupnum (irec, segnum);
-  } else if (segct > 1) {
-    if (strcmp (seg_name, "Not Specified")) {
-      int n;
-      segnum = -1;
-      for (n = 0; n < segct; n++) {
-	record_segment = drms_segment_lookupnum (irec, seglist[n]);
-	if (!strcmp (record_segment->info->name, seg_name)) {
-	  segnum = n;
-	  break;
-	}
-      }
-      if (segnum < 0) {
-	fprintf (stderr,
-	    "Error: requested segment %s not found in input series\n",
-	    seg_name);
-	drms_close_records (ids, DRMS_FREE_RECORD);
-	return 1;
-      }
-    } else {
-      fprintf (stderr,
-	  "Error: input data set contains multiple 2-d segments\n");
-      fprintf (stderr,
-	  "       segment must be named explicitly as segment parameter\n");
-      fprintf (stderr, "       or in dataset specification (within braces)\n");
-      drms_close_records (ids, DRMS_FREE_RECORD);
-      return 1;
-    }
-  } else {
-    fprintf (stderr, "Error: input data set contains no 2-d segments\n");
+    /*  Get Carrington times for first, midtime (if needed), and last images
+					      from input records if possible  */
+  lon_span = getlon_span (ids, tstrt, tstop, data_cadence, platform, geo_times,
+      tobs_key, clon_key, crot_key);
+  if (isnan (lon_span)) {
     drms_close_records (ids, DRMS_FREE_RECORD);
     return 1;
   }
-    /*  Get Carrington times for first, midtime (if needed), and last images  */
-  found_first = found_mid = found_last = 0;
-  tobs = drms_getkey_time (ids->records[0], tobs_key, &status);
-  if (fabs (tobs - tstrt) < data_cadence) {
-    tfirst = tobs;
-    irec = ids->records[0];
-    cm_lon_first = cm_lon_start = drms_getkey_double (irec, clon_key, &status);
-    cr_first = cr_start = drms_getkey_int (irec, crot_key, &status);
-    if (isnan (cm_lon_first) || cr_first < 0) {
-      if (geo_times)
-	getctrloc_from_time (tobs, &img_lat, &cm_lon_first, &cr_first, LOC_GEOC);
-      else
-	getctrloc_from_time (tobs, &img_lat, &cm_lon_first, &cr_first, platform);
-    }
-    else found_first = 1;
-  }
-
-  tobs = drms_getkey_time (ids->records[recct - 1], tobs_key, &status);
-  if (fabs (tobs - tstop) < data_cadence) {
-    tlast = tobs;
-    irec = ids->records[recct - 1];
-    cm_lon_last = cm_lon_stop = drms_getkey_double (irec, clon_key, &status);
-    cr_last = cr_stop = drms_getkey_int (irec, crot_key, &status);
-    if (isnan (cm_lon_last) || cr_last < 0) {
-      if (geo_times)
-	getctrloc_from_time (tobs, &img_lat, &cm_lon_last, &cr_last, LOC_GEOC);
-      else
-	getctrloc_from_time (tobs, &img_lat, &cm_lon_last, &cr_last, platform);
-    }
-    else found_last = 1;
-  }
-
-/*
-  found = 0;
-  for (nr = 0; nr < recct; nr++) {
-    tobs = drms_getkey_time (ids->records[nr], tobs_key, &status);
-    if (time_is_invalid (tobs)) continue;
-    if (fabs (tobs - tmid) < data_cadence) {
-      irec = ids->records[nr];
-      if (need_crcl) {
-        tmid_cl = drms_getkey_double (irec, clon_key, &status);
-        tmid_cr = drms_getkey_int (irec, crot_key, &status);
-	if (isnan (tmid_cl) || tmid_cr < 0) continue;
-      }
-      found = 1;
-    }
-    if (!found_first && !time_is_invalid (tobs)) {
-      irec = ids->records[nr];
-      cm_lon_first = drms_getkey_double (irec, clon_key, &status);
-      cr_first = drms_getkey_int (irec, crot_key, &status);
-      tfirst = tobs;
-      found_first = 1;
-    }
-  }
-  if (!found_last) {
-    for (nr = recct - 1; nr; nr--) {
-      if (!time_is_invalid (tobs)) {
-	if (tobs < tmid) {
-	  cm_lon_last = tmid_cl;
-	  cr_last = tmid_cr;
-	} else {
-	  irec = ids->records[nr];
-	  cm_lon_last = drms_getkey_double (irec, clon_key, &status);
-	  cr_last = drms_getkey_int (irec, crot_key, &status);
-	}
-	tlast = tobs;
-	found_last = 1;
-	break;
-      }
-    }
-  }
-*/
-  if (!found_first) {
-    for (nr = 0; nr < recct; nr++) {
-      tobs = drms_getkey_time (ids->records[nr], tobs_key, &status);
-      if (time_is_invalid (tobs)) continue;
-      irec = ids->records[nr];
-      cm_lon_first = drms_getkey_double (irec, clon_key, &status);
-      cr_first = drms_getkey_int (irec, crot_key, &status);
-      tfirst = tobs;
-      if (isnan (cm_lon_first) || cr_first < 0) {
-	if (geo_times)
-	  getctrloc_from_time (tobs, &img_lat, &cm_lon_first, &cr_first, LOC_GEOC);
-	else
-	  getctrloc_from_time (tobs, &img_lat, &cm_lon_first, &cr_first, platform);
-      } else {
-        found_first = 1;
-        break;
-      }
-    }
-  }
   if (need_crcl) {
-    double timediff = fabs (tstop - tstrt);
-    for (nr = 0; nr < recct; nr++) {
-      tobs = drms_getkey_time (ids->records[nr], tobs_key, &status);
-      if (time_is_invalid (tobs)) continue;
-      if (fabs (tobs - tmid) > data_cadence) continue;
-      if (fabs (tobs - tmid) > timediff) continue;  
-      timediff = fabs (tobs - tmid);
+	     /*  midtime target not specified in CT, need CR and CL for keys  */
+    int interpcrcl = 0;
+    if (recct % 2) {
+      nr = recct / 2;
       irec = ids->records[nr];
-      tmid_cl = drms_getkey_double (irec, clon_key, &status);
       tmid_cr = drms_getkey_int (irec, crot_key, &status);
-      if (isnan (tmid_cl) || tmid_cr < 0) {
+      tmid_cl = drms_getkey_double (irec, clon_key, &status);
+      if (status || isnan (tmid_cl) || tmid_cr < 0) {
 	if (geo_times)
-	  status = getctrloc_from_time (tobs, &img_lat, &tmid_cl, &tmid_cr, LOC_GEOC);
+	  status = getctrloc_from_time (tmid, &img_lat, &tmid_cl, &tmid_cr, LOC_GEOC);
 	else
-	  status = getctrloc_from_time (tobs, &img_lat, &tmid_cl, &tmid_cr, platform);
+	  status = getctrloc_from_time (tmid, &img_lat, &tmid_cl, &tmid_cr, platform);
+	if (status) interpcrcl = 1;
       }
-      found_mid = 1;
+    } else {
+      if (geo_times)
+	status = getctrloc_from_time (tmid, &img_lat, &tmid_cl, &tmid_cr, LOC_GEOC);
+      else
+	status = getctrloc_from_time (tmid, &img_lat, &tmid_cl, &tmid_cr, platform);
+      if (status) interpcrcl = 1;
     }
-  }
-  if (!found_last) {
-    for (nr = recct - 1; nr; nr--) {
-      tobs = drms_getkey_time (ids->records[nr], tobs_key, &status);
-      if (time_is_invalid (tobs)) continue;
-      irec = ids->records[nr];
-      cm_lon_last = drms_getkey_double (irec, clon_key, &status);
-      cr_last = drms_getkey_int (irec, crot_key, &status);
-      tlast = tobs;
-      if (isnan (cm_lon_last) || cr_last < 0) {
-	if (geo_times)
-	  getctrloc_from_time (tobs, &img_lat, &cm_lon_last, &cr_last, LOC_GEOC);
-	else
-	  getctrloc_from_time (tobs, &img_lat, &cm_lon_last, &cr_last, platform);
-      } else {
-	found_last = 1;
+    if (interpcrcl) {
+				/*  no ephemeris for midtime record and can't 
+					get ephemeris from time; interpolate  */
+      TIME t0, t1;
+      double cl0, cl1;
+      int cr0, cr1;
+      nr = recct / 2 + 1;
+      for (; nr < recct; nr++) {
+	irec = ids->records[nr];
+	t1 = drms_getkey_time (irec, tobs_key, &status);
+	cr1 = drms_getkey_int (irec, crot_key, &status);
+	cl1 = drms_getkey_double (irec, clon_key, &status);
+        if (status || isnan (cl1) || cr1 < 0) continue;
 	break;
       }
+      nr = recct / 2 - 1;
+      for (; nr; nr--) {
+	irec = ids->records[nr];
+	t0 = drms_getkey_time (irec, tobs_key, &status);
+	cr0 = drms_getkey_int (irec, crot_key, &status);
+	cl0 = drms_getkey_double (irec, clon_key, &status);
+        if (status || isnan (cl0) || cr0 < 0) continue;
+	break;
+      }
+      if (cr0 < cr1) cl0 += 360;
+      tmid_cr = cr0;
+      tmid_cl = cl1 + (cl0 - cl1) * (tmid - t0) / (t1 - t0);
+      if (tmid_cl > 360.0) {
+        tmid_cl -= 360.0;
+	tmid_cr++;
+      }
     }
   }
-  if (!found_first) {
-    fprintf (stderr, "Error: No valid observation times in input data set\n");
-      drms_close_records (ids, DRMS_FREE_RECORD);
-      return 1;
-  }
-
   axes[0] = map_cols;
   axes[1] = map_rows;
   axes[2] = 1;
   slice_start[0] = slice_start[1] = 0;
   slice_end[0] = axes[0] - 1;
   slice_end[1] = axes[1] - 1;
-  if (geo_times) {
-    getctrloc_from_time (tstrt, &img_lat, &cm_lon_start, &cr_start, LOC_GEOC);
-    getctrloc_from_time (tstop, &img_lat, &cm_lon_stop, &cr_stop, LOC_GEOC);
-  } else {
-    getctrloc_from_time (tstrt, &img_lat, &cm_lon_start, &cr_start, platform);
-    getctrloc_from_time (tstop, &img_lat, &cm_lon_stop, &cr_stop, platform);
-  }
-/*   if (need_ephem_from_time) {
-		/*  estimate midpoint ephemeris by linear interpolation
-					 of closest observations to midtime
- /*  This code has not been well tested in crossover of Carrington rotation
-    	  /*  assume at most one rotation between first and last estimators
-      fprintf (stderr, "Warning: Carrington ephemeris from time not supported\n");
-      if (!found) {
-	tmid_cr = cr_first;
-	if (cr_last != cr_first) cm_lon_last -= 360.0;
-	tmid_cl = cm_lon_first +
-            (cm_lon_last - cm_lon_first) * (tmid - tfirst) / (tlast - tfirst);
-    	      /*  assume at most one rotation between first and last estimators
-	if (tmid_cl < 0.0) {
-	  tmid_cr++;
-	  tmid_cl += 360.0;
-	}
-      }
-      fprintf (stderr, "         estimating midpoint as %d:%08.4f\n",
-	  tmid_cr, tmid_cl);
-	/*  long extrapolations, and lazy correction for change of rotation
-					number,but only needed for lon_span
-      cr_start = cr_first;
-      cm_lon_start = cm_lon_first +
-          (cm_lon_last - cm_lon_first) * (tstrt - tfirst) / (tlast - tfirst);
-      cr_stop = cr_last;
-      cm_lon_stop = cm_lon_first +
-          (cm_lon_last - cm_lon_first) * (tstop - tfirst) / (tlast - tfirst);
-      if (cm_lon_stop > cm_lon_start) cr_stop++;
-    }
-*/
-  if (need_crcl && !found_mid) {
-  }
-  lon_span = cm_lon_start - cm_lon_stop;
-  while (cr_start < cr_stop) {
-    cr_start++;
-    lon_span += 360.0;
-  }
   nntot = (long long)recct * pixct;
 					  /*  allocate map parameter arrays  */
   clat = (float *)malloc (rgnct * sizeof (float));
@@ -2178,7 +2279,7 @@ int DoIt (void) {
       continue;
     }
 			     /*  replace with call to solar_ephemeris_info?  */
-    img_lon = raddeg * drms_getkey_double (irec, clon_key, &status);
+    cm_lon_last = img_lon = raddeg * drms_getkey_double (irec, clon_key, &status);
     img_lat = raddeg * drms_getkey_double (irec, clat_key, &status);
 			 /*  check for record quality, reject as applicable  */
     if (rejects) {
@@ -2271,7 +2372,7 @@ int DoIt (void) {
     if (ut_times) sprint_time (tbuf, tobs, "UTC", 0);
     else sprint_time (tbuf, tobs, "TAI", 0);
     tbuf[strlen (tbuf) - 4] = '\0';
-    record_segment = drms_segment_lookupnum (irec, segnum);
+    record_segment = drms_segment_lookup (irec, seg_name);
     if (!no_proc) {
 		  /*  actual image data manipulation - read input data image  */
       data_array = drms_segment_read (record_segment, DRMS_TYPE_FLOAT, &status);
@@ -2532,9 +2633,6 @@ int DoIt (void) {
 	  if (!(or % 64)) fflush (stdout);
 	}
 	for (rgn = 0; rgn < rgnct; rgn++) {
-/*
-	  memcpy (&map[rgn][nr*pixct], &maps[rgn*pixct], pixct * sizeof (float));
-*/
 	  orec = orecs[rgn];
 	  oseg = drms_segment_lookup (orec, osegname);
 	  memcpy (map_array->data, &maps[rgn*pixct], pixct * sizeof (float));
@@ -2603,7 +2701,7 @@ int DoIt (void) {
 	badfill, recct, max_miss);
     if (badtime) fprintf (stderr,
 	"    %d of %d records rejected for duplicate values of %s\n",
-	badtime, recct, trec_key);
+	badtime, recct, tobs_key);
     if (badcv) fprintf (stderr,
 	"    %d of %d records rejected for unacceptabel values of %s\n",
 	badcv, recct, calverkey);
@@ -3047,6 +3145,19 @@ int DoIt (void) {
  *	when input dataset fully specified (not fully fixed in previous
  *	version
  *  v 2.2 frozen 2019.01.14
+ *  v 2.3	Fixed declaration of platform_info() to make certain compilers
+ *	happy, and body to return correct info for AIA; Extensive changes to
+ *	use functions track_record_selection () and select_segment() to better
+ *	implement data selection rules, and subsidiary functions to use DRMS
+ *	localized serverdefs as needed; Fixed bug that could have caused use
+ *	of wrong segment when input series has multiple 2-d segments and
+ *	background subtraction is done; Fixed bug in getctrloc_from_time()
+ *	that was always calculating for SOHO; Fixed the setting of the MidTime
+ *	keyword to correct for a bias of half the cadence; Modified to avoid
+ *	interpolation between adjacent acceptable input steps when dataset
+ *	selection is by tmid/length, regardless of phase of target time and
+ *	parity of length
+ *  v 2.3 frozen 2020.07.03
  */
 /******************************************************************************/
 

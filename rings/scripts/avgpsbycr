@@ -2,7 +2,7 @@
 # Create averages of hmi.rdv_pspec_fd* power spectra over a rotation by
 #   Stonyhurst coordinates (cf. avgpscrsyn)
 
-set SCRIPT_VERSION = 1.9
+set SCRIPT_VERSION = 2.0
 
 @ TEST = 0	# set to 1 for production in namespace hmi_test
 set TW
@@ -47,7 +47,7 @@ endif
 # select from synoptic series
 set TILESS = (  05    15    30)
 # set VMEMS =  ( 250  5200 10000)
-set VMEMS =  ( 250  4000 8000)
+set VMEMS =  ( 300  4000 8000)
 # New VMEM limits assume no power map output with datavg v 1.5+
 # set PCMDS =  ( ""  "" "-pe smp 2")
 # PCMD should be set for dual if max number of jobs on one node * max vmem
@@ -194,15 +194,15 @@ if ($SYSE == 5) then
   set LATS
   set LONS
   foreach TLAT ($TLATS)
-    set TLONS = (`show_info -q ds= $PSER"[$CROT][180][][$TLAT]" key= LonCM`)
+    set TLONS = (`show_info -q ds= $PSER"[$CROT][$LONM][][$TLAT]" key= LonCM`)
     foreach TLON ($TLONS)
       set LATS = ($LATS $TLAT)
       set LONS = ($LONS $TLON)
     end
   end
   @ NTOT = $#LATS
-  set QSUB = qsub
-  set QUEUE = j.q
+#  set QSUB = qsub
+#  set QUEUE = j.q
   goto SHORTLINES
 endif
 
@@ -239,7 +239,7 @@ foreach TLAT ($TLATS)
   if ($FAIL) then
     echo "  $FAIL averaging failures on cluster at Latitude `printf %+05.1f $TLAT`" >> $MMSG
     echo "  ($CROT) $FAIL averaging failures on cluster at Latitude `printf %+05.1f $TLAT`" >> $LOGF
-    set QIDS = `grep "exited with exit code" $RLOG | awk '{print $2}' | awk -F. '{print $1}' | sort -u`
+    set QIDS = `grep "exited with exit code 1" $RLOG | awk '{print $2}' | awk -F. '{print $1}' | sort -u`
     set PROG = `basename $SCRIPT`
     foreach QID ($QIDS)
       set ERRLOG = $QRES/$PROG.e$QID
@@ -330,7 +330,7 @@ while ($N < $NTOT)
   @ FAIL = $TOTCT - $QJOK
   if ($FAIL) then
     echo "  $FAIL averaging failures on cluster for 5-deg Line Set $LINE" >> $MMSG
-    echo "  ($CROT) $FAIL averaging failures on cluster for 5-deg Line Set $LINE`" >> $LOGF
+    echo "  ($CROT) $FAIL averaging failures on cluster for 5-deg Line Set $LINE" >> $LOGF
     set QIDS = `grep "exited with exit code" $RLOG | awk '{print $2}' | awk -F. '{print $1}' | sort -u`
     set PROG = `basename $SCRIPT`
     foreach QID ($QIDS)
