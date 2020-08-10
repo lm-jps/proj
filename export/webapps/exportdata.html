@@ -106,6 +106,20 @@ var ON_BEFORE_UNLOAD_FXN = function (event)
     }
 };
 
+var UPDATE_HTTP_REQUEST_COUNT = function(event)
+{
+    $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
+
+    if (Ajax.activeRequestCount == 0)
+    {
+        $("AjaxBusy").style.color = colorDarkGreen;
+    }
+    else
+    {
+        $("AjaxBusy").style.color = colorDarkRed;
+    }
+}
+
 function OnEnterKey(evt,action)
   {
   var keynum;
@@ -399,8 +413,11 @@ function OnLoadInit()
     $('FileUploadFormID').observe('change', function(event) { $('FileUploadFormID').store({ 'beforeunloadEnabled': true }); });
     $('FileUploadFormID').store({ 'beforeunloadEnabled': false });
 
-    // deal with onbeforeunload bs - can't figure out any other way to do this
+    // protect from back button
     setInterval(ON_BEFORE_UNLOAD_FXN, 500);
+
+    // start periodic function to update active HTTP requests counter
+    setInterval(UPDATE_HTTP_REQUEST_COUNT, 500)
 
   window.focus();
   }
@@ -701,16 +718,12 @@ WlSeriesInfo.prototype.extractSnames = function(args)
     var callbackArgs = args.cbargs;
     var snames = [];
 
-    $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
-
     new Ajax.Request('http://' + Host + '/cgi-bin/' + PARSE_RECSET,
     {
         method: 'get',
         parameters: { "spec" : spec },
         onSuccess: function(transport, json)
         {
-            $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
-
             var response = transport.responseText || null;
             var parseInfo = response.evalJSON();
 
@@ -730,10 +743,8 @@ WlSeriesInfo.prototype.extractSnames = function(args)
             callbackObj[callbackObjMeth](callbackArgs);
         },
         onFailure: function() { alert('Unable to parse record-set specficiation ' + "'" + spec + "'."); },
-        onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
+        onComplete: function() { }
      });
-
-     $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
 };
 
 function CreateParseSpecResponse(processSpec)
@@ -791,7 +802,7 @@ function ParseSpec(spec, processSpec)
         'parameters' : { 'spec' : spec },
         'onSuccess' : onSuccess,
         'onFailure' : function() { $("RSCountPlace").innerHTML = 'ERROR - unable to parse record-set specification ' + spec; $('ExportRecordSet').disabled = false; },
-        'onComplete' : function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
+        'onComplete' : function() { }
     });
 }
 
@@ -1181,7 +1192,7 @@ function ObtainFastRecordCount(errMsg, spec, callback)
             'parameters': arguments,
             'onSuccess': onSuccess,
             'onFailure': function() { RecordCount = null; $('ExportRecordSet').store({ 'count': RecordCount }); $("RSCountPlace").innerHTML = 'ERROR - failure calling jsoc_info'; ExportRecordSetOK = 0; SeriesName = ''; $('ExportRecordSet').disabled = false; },
-            'onComplete': function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
+            'onComplete': function() { }
         });
     }
 }
@@ -1225,7 +1236,7 @@ function RequestRSInfo(errMsg, spec, lastRecord, callback)
             'parameters': arguments,
             'onSuccess': onSuccess,
             'onFailure': function() { RecordCount = null; $('ExportRecordSet').store({ 'count': RecordCount }); $("RSCountPlace").innerHTML = 'ERROR - failure calling jsoc_info'; ExportRecordSetOK = 0; SeriesName = ''; $('ExportRecordSet').disabled = false; },
-            'onComplete': function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
+            'onComplete': function() { }
         });
     }
 }
@@ -1467,7 +1478,7 @@ function RequestSeriesInfo(series, callback)
         'parameters': { 'series' : series, 'atts' : 1, 'keys' : '*', 'segs' : '*' },
         'onSuccess': onSuccess,
         'onFailure': function() { RecordCount = null; $('ExportRecordSet').store({ 'count': RecordCount }); SeriesName = ''; ExportRecordSetOK = 0; $("RSCountPlace").innerHTML = 'ERROR - failure calling series-info'; $('ExportRecordSet').disabled = false; },
-        'onComplete': function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
+        'onComplete': function() { }
     });
 }
 
@@ -1600,7 +1611,6 @@ function GetRSCount(countCallback)
 
     RecordCount = null; // To indicate that the RecordCount has not been set yet.
     $('ExportRecordSet').store({ 'count': RecordCount });
-    $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
 
     return(0);
 }
@@ -1640,7 +1650,6 @@ function GetCompatibleFormat(series, attributes, keywords)
 
 function GetDefaultFormat()
 {
-	$("AjaxBusy").innerHTML = Ajax.activeRequestCount;
 	// $("RSCountPlace").innerHTML = RSCountActiveMSg; why?
 	// RecordCount = null; why?
 	var RecordSet = $("ExportRecordSet").value;
@@ -1739,10 +1748,9 @@ function GetDefaultFormat()
 				{
 					alert('Unable to retrieve series information for record-set ' + RecordSet + '. ' + SeriesInfo.error)
 				}
-				$("AjaxBusy").innerHTML = Ajax.activeRequestCount;
 			},
 			onFailure: function() { alert('[ GetDefaultFormat ] Something went wrong...'); },
-			onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
+			onComplete: function() { }
 		});
 	};
 
@@ -1811,14 +1819,13 @@ function GetDefaultFormat()
                             }
                         },
             'onFailure': function() { AiaLev1AttributesGlobal = null; AiaLev1KeywordsGlobal = null; },
-            'onComplete': function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
+            'onComplete': function() { }
         });
     }
 }
 
 function CreateDataTable(data, valuetable)
   {
-  $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   // valuetable = "";
   // var count = data.count;
   var count = data.data.length;
@@ -2878,7 +2885,6 @@ function GetExport() // This is the code executed when the user clicks on the "S
   //  1 ready for status request
   //  2 export complete, OK or failure.
   //  3 Process started, waiting response
-  $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   if (ExportReadyOK == 3)
     {
     alert("Processing request, please wait...");
@@ -2944,8 +2950,6 @@ function GetExport() // This is the code executed when the user clicks on the "S
 
 		arguments = exportparameters.toObject();
 
-        $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
-
         new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + jsocfetchCGI,
         {
             method: 'post',
@@ -2953,7 +2957,6 @@ function GetExport() // This is the code executed when the user clicks on the "S
 
             onSuccess: function(transport, json)
             {
-                $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
                 var response = transport.responseText || "no response text";
                 var status = ProcessExportResponse(response);
                 var op = $("ExportOpID").value;
@@ -2966,10 +2969,8 @@ function GetExport() // This is the code executed when the user clicks on the "S
                 ExportReadyOK = 2;
                 alert('[ GetExport ] Something went wrong...');
             },
-            onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
+            onComplete: function() { }
         });
-
-        $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
     };
 
 
@@ -3037,7 +3038,6 @@ function ExportOrigin(requestID, webserver)
 
 function GetReExport()
   {
-  $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   ExportReadyOK = 3;
   state = 2;
   Cookie.setData("state",state);
@@ -3083,7 +3083,6 @@ function GetReExport()
 
         onSuccess: function(transport, json)
         {
-            $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
             var response = transport.responseText || "no response text";
             var status = ProcessExportResponse(response);
         },
@@ -3095,9 +3094,8 @@ function GetReExport()
             $("ReExportButton").style.backgroundColor = colorDarkPink;
             alert('[ GetReExport ] Something went wrong...');
         },
-        onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
+        onComplete: function() { }
     });
-    $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   }
 
 
@@ -3249,7 +3247,6 @@ function ClearStatus()
 
 function GetStatus()
   {
-  $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   if ($("StatusRequestID").value.length == 0)
     {
     alert("You must provide a RequestID");
@@ -3429,9 +3426,8 @@ function GetStatus()
       alert('[ GetStatus ] Something went wrong...');
       ExportReadyOK = 2;
       },
-    onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
+    onComplete: function() { }
     });
-  $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   }
 
 </script>
@@ -3448,8 +3444,7 @@ function GetStatus()
 <input id="ResetPageButton" type="button" value="reset page" onClick="ReInitPage();" disabled>
 &nbsp;&nbsp;&nbsp;
 <input id="TipsOnOffButton" type="button" value="Turn Help Off" onClick="ToggleHelp();" >
-&nbsp;&nbsp;<span id="AjaxBusy">0</span> Requests Pending
-<span id='systemWorking'>, Loading...</span>
+&nbsp;&nbsp;<span id="AjaxBusy">0</span> Active HTTP Requests
 <!-- <br clear=all> -->
 <hr>
 </div> <!-- end div header -->
