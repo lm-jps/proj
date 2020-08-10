@@ -23,7 +23,7 @@
 //                is tested for completion, but only the XxxxInit and CheckXxxx funtions will be used elsewhere.
 //
 //  Finally, make entries in ProcessingInit() at the end of this file.
-//                
+//
 
 // Global vars for multiple processing options
 
@@ -53,7 +53,7 @@ function processingGetRecInfo(DoCheck, exportOption, n)
     var parameters = null;
     var argString = null;
     var url = null;
-    
+
   // Get keywords for a single record.  n will be 1 for first record, -1 for last record.
   if (n==1)
     processingFirstRecord = null;
@@ -63,7 +63,6 @@ function processingGetRecInfo(DoCheck, exportOption, n)
   var keysneeded = timePrime+","+timePrime+"_step,CAR_ROT,CRLN_OBS,CRLT_OBS,CDELT1,CTYPE1";
   var segsneeded = firstRealSegment;
   var recinfo;
-  $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   var RecordSet = $("ExportRecordSet").value;
   $("ImRecordSet").innerHTML = RecordSet;
 
@@ -90,7 +89,7 @@ function processingGetRecInfo(DoCheck, exportOption, n)
               {
               processingLastRecord = recinfo;
               }
-              
+
                 if (exportOption)
                 {
                     exportOption.argsReady = false;
@@ -102,20 +101,19 @@ function processingGetRecInfo(DoCheck, exportOption, n)
           {
             alert("Processing setup code failed to get record info for n="+thisN+" of " + RecordSet);
           }
-          $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
-        
+
           if (exportOption)
           {
               exportOption.argsReady = true;
           }
       },
     onFailure: function() { alert('[ processingGetRecInfo ] Something went wrong...'); if (exportOption) { exportOption.argsReady = true; } },
-    onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; if (exportOption) { exportOption.argsReady = true; } }
+    onComplete: function() { if (exportOption) { exportOption.argsReady = true; } }
     };
-    
+
     argString = Object.keys(parameters).map(function(key) { return key + '=' + encodeURIComponent(parameters[key]); }).join('&');
     url = 'http://' + Host + '/cgi-bin/ajax/' + JSOC_INFO + '?' + argString;
-    
+
   new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + JSOC_INFO, ajaxParameters);
   }
 
@@ -135,18 +133,18 @@ function HmiB2ptrSet(param)
     this.paramsValid = null;
 
     checkRes = this.Check(false);
-      
+
     if (checkRes === null)
     {
         this.argsReady = true;
-        return 1;    
+        return 1;
     }
     else if (checkRes.length == 0)
     {
         this.argsReady = true;
         return 0;
     }
-    
+
     this.argsReady = true;
     return 0;
   }
@@ -164,13 +162,13 @@ function HmiB2ptrCheck(fromSetProcessing)
   var HmiB2ptrSizeRatio = 1.0;
   var isok = true;
   var args = "HmiB2ptr,l=1";
-  
+
   if (!$("OptionHmiB2ptr").checked)
   {
     // If this processing option is not selected, then do not check parameter values.
     return '';
   }
-  
+
     if (fromSetProcessing)
     {
         if (!this.argsReady)
@@ -179,13 +177,13 @@ function HmiB2ptrCheck(fromSetProcessing)
             return null;
         }
     }
-    
+
     if (this.paramsValid !== null)
     {
         // Already checked.
         return this.paramsValid; // Empty string if the previous call determined the arguments to be invalid.
     }
-  
+
     if (SeriesName.toUpperCase() === 'hmi.B_720s'.toUpperCase())
     {
         // $("ExportFilenameFmt").value = $("ExportFilenameFmt").value.replace('T_REC','T_OBS');
@@ -214,10 +212,10 @@ var AiaScaleOption;
 function AiaScaleSet(param)
   {
     var checkRes = null;
-        
+
     this.argsReady = false;
     this.paramsValid = null;
-    
+
     if (param == 'usempt')
     {
         // if the user checked the use-mpt box, then display the mpt row element, else hide it
@@ -299,9 +297,9 @@ function AiaScaleSet(param)
         alert('Error - invalid AiaScaleSet() argument ' + param)
         return 1;
     }
-    
+
     checkRes = this.Check(false);
-    
+
     if (checkRes === null)
     {
         // Error - uncheck the processing step.
@@ -314,7 +312,7 @@ function AiaScaleSet(param)
         this.argsReady = true;
         return 0;
     }
-    
+
     this.argsReady = true;
     return 0;
   }
@@ -349,7 +347,7 @@ function AiaScaleCheck(fromSetProcessing)
         // If this processing option is not selected, then do not check parameter values.
         return '';
     }
-  
+
     if (fromSetProcessing)
     {
         if (!this.argsReady)
@@ -358,7 +356,7 @@ function AiaScaleCheck(fromSetProcessing)
             return null;
         }
     }
-    
+
     if (this.paramsValid !== null)
     {
         // already checked; even though we use a different set of arguments for cut-out vs. non-cut-out, a change
@@ -366,29 +364,29 @@ function AiaScaleCheck(fromSetProcessing)
         // away the cached arguments
         return this.paramsValid; // Empty string if the previous call determined the arguments to be invalid.
     }
-    
-    // if the series is aia.lev1 and we are producing non-cut-outs, then data go into aia.lev1p5 (indicated by 
+
+    // if the series is aia.lev1 and we are producing non-cut-outs, then data go into aia.lev1p5 (indicated by
     // 'aia_scale' processing); otherwise, data go into SeriesName + '_mod' (indicated by 'aia_scale_mod' processing)
 
     if (IsAiaLev1)
     {
         // hack away! what we should do is read the jsoc.export_procs out field to determine what the output series is going to be;
-        // however, it is time to move on; simply use the substitution s/lev1/lev1p5/ and if we end up with aia.lev1p5, 
+        // however, it is time to move on; simply use the substitution s/lev1/lev1p5/ and if we end up with aia.lev1p5,
         // then change the filename format to one compatible with aia.lev1p5, and use the aia_scale_orig proc
         outputSeries = SeriesName.strip().replace(/lev1/i, 'lev1p5');
-        
+
         if (outputSeries == AIA_LEV1P5)
-        {        
+        {
             args = 'aia_scale_orig';
-        
+
             // the output series is aia.lev1p5, so let's use a filename format compatible with aia.lev1p5;
-            // actually, we could do this for all processing since the filename format must always be compatible 
+            // actually, we could do this for all processing since the filename format must always be compatible
             // with the output series, not the input series
-        
+
             // save the original in case the user un-checks aia_scale
             $('ExportFilenameFmt').store({ 'originalFormat' : $('ExportFilenameFmt').value });
             compatibleFormat = GetCompatibleFormat(AIA_LEV1P5, AiaLev1AttributesGlobal, AiaLev1KeywordsGlobal);
-        
+
             // now, replace aia.lev1p5 with the original series name, and remove the RequestID specification (output series
             // have this extra prime-key keyword)
             $("ExportFilenameFmt").value = compatibleFormat.replace(AIA_LEV1P5, SeriesName.strip()).replace(/[.]{requestid}/i, '');
@@ -423,19 +421,19 @@ function AiaScaleCheck(fromSetProcessing)
             // scale aia-lev1 series and perform cut-out, use the save results in aia.lev1p5
             args = 'aia_scale';
         }
-    
+
         val = parseInt($('AiaScaleCutoutXc').value)
         if (Math.abs(val) > 4096)
         {
             isok = false;
         }
-        else 
+        else
         {
             if (val != 0)
             {
                 args = args + ',' + 'xc=' + $('AiaScaleCutoutXc').value;
             }
-        
+
             val = parseInt($('AiaScaleCutoutYc').value);
             if (Math.abs(val) > 4096)
             {
@@ -447,7 +445,7 @@ function AiaScaleCheck(fromSetProcessing)
                 {
                     args = args + ',' + 'yc=' + $('AiaScaleCutoutYc').value;
                 }
-            
+
                 val = parseInt($('AiaScaleCutoutWide').value);
                 if (val < 0 || val > 4096)
                 {
@@ -459,7 +457,7 @@ function AiaScaleCheck(fromSetProcessing)
                     {
                         args = args + ',' + 'wide=' + $('AiaScaleCutoutWide').value;
                     }
-                
+
                     val = parseInt($('AiaScaleCutoutHigh').value);
                     if (val < 0 || val > 4096)
                     {
@@ -473,7 +471,7 @@ function AiaScaleCheck(fromSetProcessing)
             }
         }
     }
-    
+
     // provide MPT series if user has selected MPT
     if ($('AiaScaleUseMptCheckbox').checked)
     {
@@ -519,10 +517,10 @@ function RebinInit(onLoad)
 function RebinSet(control)
   {
     var checkRes = null;
-    
+
     this.argsReady = false;
     this.paramsValid = null;
-      
+
     if (control == "method")
     {
         if ($("RebinMethod").selectedIndex==1)
@@ -558,9 +556,9 @@ function RebinSet(control)
             $("RebinNvector").style.backgroundColor = colorWhite;
         }
     }
-    
+
     checkRes = this.Check(false);
-    
+
     if (checkRes === null)
     {
         this.argsReady = true;
@@ -571,7 +569,7 @@ function RebinSet(control)
         this.argsReady = true;
         return 0;
     }
-    
+
     this.argsReady = true;
     return 0;
   }
@@ -581,13 +579,13 @@ function RebinCheck(fromSetProcessing)
   var RebinSizeRatio = 1.0;
   var rv = "rebin";
   var isok = true;
-  
+
     if (!$("OptionRebin").checked)
     {
         // If this processing option is not selected, then do not check parameter values.
         return '';
     }
-    
+
     if (fromSetProcessing)
     {
         if (!this.argsReady)
@@ -596,23 +594,23 @@ function RebinCheck(fromSetProcessing)
             return null;
         }
     }
-    
+
     if (this.paramsValid !== null)
     {
         // Already checked.
         return this.paramsValid; // Empty string if the previous call determined the arguments to be invalid.
-    }  
-    
+    }
+
   if ($("RebinSegments").checked)
     {
     rv = rv + ",A=1";
     }
-    
+
   if ($("RebinCrop").checked)
     {
     rv = rv + ",c=1";
     }
-    
+
   if ($("RebinRotate").checked)
     {
     rv = rv + ",u=0";
@@ -621,7 +619,7 @@ function RebinCheck(fromSetProcessing)
     {
     rv = rv + ",u=1";
     }
-    
+
   if (parseFloat($("RebinScale").value) != 1.0)
     {
     if ($("RebinScale").value <= 0)
@@ -629,7 +627,7 @@ function RebinCheck(fromSetProcessing)
     rv = rv + ",scale=" + $("RebinScale").value;
     RebinSizeRatio = parseFloat($("RebinScale").value);
     }
-    
+
   if ($("RebinMethod").selectedIndex == 1)
     {
     rv = rv + ",method=gaussian";
@@ -641,7 +639,7 @@ function RebinCheck(fromSetProcessing)
       {
       rv = rv + ",FWHM=" + $("RebinFWHM").value;
       }
-        
+
     if (parseFloat($("RebinNvector").value) == -1.0)
       {
       isok = false;
@@ -655,7 +653,7 @@ function RebinCheck(fromSetProcessing)
     {
     rv = rv + ",method=boxcar";
     }
-    
+
   ExportProcessingOptions[RebinOption].Size = RebinSizeRatio*RebinSizeRatio;
   this.paramsValid = (isok ? rv : "");
   CheckRediness();
@@ -690,7 +688,7 @@ function ResizeInit(onLoad)
 function ResizeSet(control)
   {
     var checkRes = null;
-    
+
     this.argsReady = false;
     this.paramsValid = null;
 
@@ -709,20 +707,20 @@ function ResizeSet(control)
     {
     $("ResizeCdelt").style.backgroundColor = colorWhite;
     }
-  // no specific action needed for "method", "register_to", "crop", or "replicate" 
-  
+  // no specific action needed for "method", "register_to", "crop", or "replicate"
+
     processingGetRecInfo(this.Check, this, 1);
     return 0;
   }
 
-// If the Check() functions are called without first calling the corresponding Set() functions, then 
+// If the Check() functions are called without first calling the corresponding Set() functions, then
 // it is possible that the Check() functions are operating on stale data because the Check() functions
 // may use variables set by the Set() functions.
-// 
+//
 // We basically do not want to call the Check() functions from SetProcessing() until the the Set()
 // functions have completed. The way to do that is to wait until this.paramsValid is !== null.
-// 
-// The parameter, if true, says we are calling from SetProcessing(). If that is the case, then 
+//
+// The parameter, if true, says we are calling from SetProcessing(). If that is the case, then
 // return this.paramsValid. SetProcessing() keeps calling the Check() function until
 // this.paramsValid !== null.
 function ResizeCheck(fromSetProcessing)
@@ -730,13 +728,13 @@ function ResizeCheck(fromSetProcessing)
   var ResizeSizeRatio = 1.0;
   var rv = "resize";
   var isok = true;
-  
+
     if (!$("OptionResize").checked)
     {
         // If this processing option is not selected, then do not check parameter values.
         return '';
     }
-        
+
     if (fromSetProcessing)
     {
         if (!this.argsReady)
@@ -745,13 +743,13 @@ function ResizeCheck(fromSetProcessing)
             return null;
         }
     }
-    
+
     if (this.paramsValid !== null)
     {
         // Already checked.
         return this.paramsValid; // Empty string if the previous call determined the arguments to be invalid.
     }
-    
+
   if ($("ResizeBicubic").checked)
     rv += ",regrid=1";
   else
@@ -761,14 +759,14 @@ function ResizeCheck(fromSetProcessing)
     rv += ",do_stretchmarks=1";
   else
     rv += ",do_stretchmarks=0";
-    
+
   if ($("ResizeSunCenter").checked)
     rv += ",center_to=0";
   else if ($("ResizeFirstImage").checked)
     rv += ",center_to=1";
   else
     rv += ",center_to=2";
-    
+
   if ($("ResizeDoScale").checked)
     {
     rv = rv + ",rescale=1";
@@ -785,7 +783,7 @@ function ResizeCheck(fromSetProcessing)
     {
     rv = rv + ",c=1";
     }
-    
+
   ExportProcessingOptions[ResizeOption].Size = ResizeSizeRatio;
   this.paramsValid = (isok ? rv : "");
   CheckRediness();
@@ -810,12 +808,12 @@ function ImPatchGetNoaa()
   if ($("ImNOAA").value != "NotSpecified")
     {
     var noaaNum = 1 * $("ImNOAA").value;
-    if (noaaNum < 7000) 
+    if (noaaNum < 7000)
       {
       noaaNum = noaaNum + 10000; // OK for times after 1996 Jan.
       $("ImNOAA").value = noaaNum + "";
       }
-    $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
+
     new Ajax.Request('http://' + Host + '/cgi-bin/ajax/jsoc_info_jsoc2',
       {
       method: 'get',
@@ -863,11 +861,11 @@ function ImPatchGetNoaa()
         alert('Something went wrong with NOAA num data request');
         $("ImNOAA").value = "Not Found";
         },
-      onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
+      onComplete: function() { }
       });
     }
   }
-  
+
 // The values of the ImPatch inputs have changed. We need to call ImPatchCheck() to make sure the changes were valid.
 // If there is no first or last record saved in global variables, then we need to get them. In this case, we have
 // to put ImPatchCheck() in a callback, since we cannot actually do the check synchronously - we have to wait until
@@ -880,20 +878,20 @@ function ImPatchGetNoaa()
 function ImPatchSet(param)
   {
     var checkRes = null;
-    
+
     // Get first and last record info
     this.argsReady = false;
     this.paramsValid = null;
     if (param == 1) defaultStartUsed = 0;
     if (param == 2) defaultStopUsed = 0;
-        
+
     if ($("ImRecordSet").innerHTML !== $("ExportRecordSet").value)
     {
         processingFirstRecord = null;
         processingLastRecord = null;
         $("ImTDelta").value = "NotSpecified";
     }
-    
+
     // RecordCount cannot be null - you have to have a valid record-set before you can click on im_patch processing.
     if (RecordCount === null)
     {
@@ -903,7 +901,7 @@ function ImPatchSet(param)
         if (defaultStopUsed) $("ImTStop").value = "NotSpecified";
         ExportNewRS(); // This will gracefully fail if there is no record-set specification entered.
     }
-    
+
     if ($("ImTrack").checked)
     {
         ImTracked = 1;
@@ -912,7 +910,7 @@ function ImPatchSet(param)
     {
         ImTracked = 0;
     }
-    
+
     if (processingFirstRecord && processingLastRecord)
     {
         checkRes = this.Check(false);
@@ -920,7 +918,7 @@ function ImPatchSet(param)
         if (checkRes === null)
         {
             this.argsReady = true;
-            return 1;        
+            return 1;
         }
         else if (checkRes.length == 0)
         {
@@ -941,7 +939,7 @@ function ImPatchSet(param)
     {
         processingGetRecInfo(this.Check, this, -1);
     }
-    
+
     return 0;
   }
 
@@ -968,7 +966,7 @@ function ImPatchCheck(fromSetProcessing)
     // and finalize the Set() call. But if this Check() was called by SetProcessing(), then we need to
     // check if there is a pending Set() call. We do that by looking at this.argsReady. If it is
     // false, then we know that there is a pending Set(), and SetProcessing() must wait. If it is true,
-    // then there is no pending Set(), and SetProcessing() can get an answer and continue.    
+    // then there is no pending Set(), and SetProcessing() can get an answer and continue.
     if (fromSetProcessing)
     {
         if (!this.argsReady)
@@ -977,13 +975,13 @@ function ImPatchCheck(fromSetProcessing)
             return null;
         }
     }
-    
+
     if (this.paramsValid !== null)
     {
         // Already checked.
         return this.paramsValid; // Empty string if the previous call determined the arguments to be invalid.
     }
-    
+
   if (RecordCount === null)
     {
         return("");
@@ -1062,7 +1060,7 @@ function ImPatchCheck(fromSetProcessing)
   if ($("ImTDelta").value.strip().empty()) $("ImTDelta").value = "NotSpecified";
   if ($("ImTDelta").value == "NotSpecified" && processingFirstRecord)
     {
-    var recset = $("ExportRecordSet").value; // This can be undefined if user has changed record set and has not waited for the 
+    var recset = $("ExportRecordSet").value; // This can be undefined if user has changed record set and has not waited for the
                                              // record count to complete.
     var posAt = recset.indexOf("@");
     if (posAt > 0)
@@ -1251,12 +1249,12 @@ function ImPatchInit(onLoad)
         defaultStartUsed = 1;
         defaultStopUsed = 1;
     }
-    else        
+    else
     {
         // set first and last record for impatch
 
         // blow away arguments cache since we are changing the values of processingFirstRecord and processingLastRecord
-        processingGetRecInfo(this.Check, this, 1); // changes this.argsReady to true        
+        processingGetRecInfo(this.Check, this, 1); // changes this.argsReady to true
         processingGetRecInfo(this.Check, this, -1);
     }
   }
@@ -1280,12 +1278,12 @@ function MaprojGetNoaa()
   if ($("MaprojNOAA").value != "NotSpecified")
     {
     var noaaNum = 1 * $("MaprojNOAA").value;
-    if (noaaNum < 7000) 
+    if (noaaNum < 7000)
       {
       noaaNum = noaaNum + 10000; // OK for times after 1996 Jan.
       $("MaprojNOAA").value = noaaNum + "";
       }
-    $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
+
     new Ajax.Request('http://' + Host + '/cgi-bin/ajax/jsoc_info_jsoc2',
       {
       method: 'get',
@@ -1294,7 +1292,7 @@ function MaprojGetNoaa()
         {
         var response = transport.responseText || "no response text";
         var NOAA_rslist = response.evalJSON();
-        if (NOAA_rslist.status == 0 && NOAA_rslist.count > 0) 
+        if (NOAA_rslist.status == 0 && NOAA_rslist.count > 0)
           {
           var minLong = 999, minRec=-1;
           var irec, nrecs = NOAA_rslist.count;
@@ -1310,7 +1308,7 @@ function MaprojGetNoaa()
             }
           if (minLong == 999)
             {
-            $("MaprojNOAA").value = noaaNum + "Region not found"; 
+            $("MaprojNOAA").value = noaaNum + "Region not found";
             }
           else
             {
@@ -1327,7 +1325,7 @@ function MaprojGetNoaa()
           }
         else
           {
-          $("MaprojNOAA").value = noaaNum + "Region not found"; 
+          $("MaprojNOAA").value = noaaNum + "Region not found";
           }
         },
       onFailure: function()
@@ -1335,7 +1333,7 @@ function MaprojGetNoaa()
         alert('Something went wrong with NOAA num data request');
         $("MaprojNOAA").value = "Not Found";
         },
-      onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
+      onComplete: function() { }
       });
     }
   }
@@ -1343,29 +1341,29 @@ function MaprojGetNoaa()
 function MaprojSet(param)
   {
     var checkRes = null;
-    
+
     this.argsReady = false;
     this.paramsValid = null;
-      
+
     // Get first and last record info
     if (param == 1) defaultStartUsed = 0;
     if (param == 2) defaultStopUsed = 0;
-    
+
     if (processingFirstRecord && processingLastRecord)
     {
         checkRes = this.Check(false);
-        
+
         if (checkRes === null)
         {
             this.argsReady = true;
-            return 1;        
+            return 1;
         }
         else if (checkRes.length == 0)
         {
             this.argsReady = true;
             return 0;
         }
-        
+
         this.argsReady = true;
         return 0;
     }
@@ -1379,7 +1377,7 @@ function MaprojSet(param)
     {
         processingGetRecInfo(this.Check, this, -1);
     }
-    
+
     return 0;
   }
 
@@ -1389,13 +1387,13 @@ function MaprojCheck(fromSetProcessing)
   var isok = true;
   var args = "Maproj";
   var MaprojLocOption;
-  
+
     if (!$("OptionMaproj").checked)
     {
         // If this processing option is not selected, then do not check parameter values.
         return '';
     }
-    
+
     if (fromSetProcessing)
     {
         if (!this.argsReady)
@@ -1404,7 +1402,7 @@ function MaprojCheck(fromSetProcessing)
             return null;
         }
     }
-    
+
     if (this.paramsValid !== null)
     {
         // Already checked.
@@ -1420,7 +1418,7 @@ function MaprojCheck(fromSetProcessing)
     {
     $("MaprojReflatLine").style.display="none";
     }
- 
+
   if ($("MaprojGrid").value != "none")
     {
     args += ",grid=" + $("MaprojGrid").value;
@@ -1428,7 +1426,7 @@ function MaprojCheck(fromSetProcessing)
 
   if (processingFirstRecord)
     {
-    // var DegPerArcsec = (180.0/(696.0*3.14159))*(149640.0/(180.0*3600.0/3.14159)  // deg/Mm * Mm/arcsec 
+    // var DegPerArcsec = (180.0/(696.0*3.14159))*(149640.0/(180.0*3600.0/3.14159)  // deg/Mm * Mm/arcsec
     var DegPerArcsec = 215/3600.0;  // deg/RsunRadian  * AURadian/arcsec
     var DegPerPixel = new Number(processingFirstRecord.keywords[keyCDELT].values[0] * DegPerArcsec);
     $("MaprojMaxScale").innerHTML = DegPerPixel.toPrecision(3);
@@ -1575,7 +1573,7 @@ function ProcessingInit()
 
   // Add Select options for each processing type, in order that they may be used.
   iOpt = 0;
-  ProcessingOptionsHTML += 
+  ProcessingOptionsHTML +=
     '<input type="checkbox" checked="true" value="no_op" id="OptionNone" onChange="SetProcessing('+iOpt+');" />' +
     'no_op - none&nbsp;' +
     '<input id="ProcessingCheckboxHide" type="checkbox" checked="false" onChange="ProcessingEnabled();" />&nbsp;hide<br>';
@@ -1622,7 +1620,7 @@ function ProcessingInit()
   HmiB2ptrOption = iOpt;
 
   iOpt++;
-  ProcessingOptionsHTML += 
+  ProcessingOptionsHTML +=
     '<input type="checkbox" checked="false" value="resize" id="OptionResize" onChange="SetProcessing('+iOpt+');" /> ' +
     'resize - Resize and rotate if needed, use sub-pixel registration<br>';
   ExpOpt = new Object();
@@ -1638,7 +1636,7 @@ function ProcessingInit()
   ResizeOption = iOpt;
 
   iOpt++;
-  ProcessingOptionsHTML += 
+  ProcessingOptionsHTML +=
     '<input type="checkbox" checked="false" value="im_patch" id="OptionImPatch" onChange="SetProcessing('+iOpt+');" /> ' +
     'im_patch - Extract sub-frame<br>';
   ExpOpt = new Object();
@@ -1652,13 +1650,13 @@ function ProcessingInit()
     ExpOpt.paramsValid = null;
   ExportProcessingOptions[iOpt] = ExpOpt;
   ImPatchOption = iOpt;
-  
+
     // add processing HTML element event handlers
     $('ResetImPatchButton').addEventListener('click', function() { ImPatchInit(1); ExportProcessingOptions[ImPatchOption].Set(0); $("ProcessImPatch").style.display="table-row";}, false);
 
 
   iOpt++;
-  ProcessingOptionsHTML += 
+  ProcessingOptionsHTML +=
     '<input type="checkbox" checked="false" value="maproj" id="OptionMaproj" onChange="SetProcessing('+iOpt+');" /> ' +
     'maproj - Extract a sub-frame and remap to a chosen projection.<br>';
   ExpOpt = new Object();
@@ -1674,7 +1672,7 @@ function ProcessingInit()
   MaprojOption = iOpt;
 
   iOpt++;
-  ProcessingOptionsHTML += 
+  ProcessingOptionsHTML +=
     '<input type="checkbox" checked="false" value="rebin" id="OptionRebin" onChange="SetProcessing('+iOpt+');" /> ' +
     'rebin - Rebin with boxcar or gaussian smoothing<br>';
   ExpOpt = new Object();
@@ -1701,7 +1699,7 @@ function ProcessingInit()
         ExpOpt.Init(1);
         $(ExpOpt.id).checked = false;
         $(ExpOpt.rowid).style.display = "none";
-    
+
         if (ExpOpt.hasOwnProperty('disabled_state_rec_dep'))
         {
             $(ExpOpt.id).store({ 'disabled_state_rec_dep' : ExpOpt.disabled_state_rec_dep });
@@ -1717,19 +1715,19 @@ function ProcessingOK()
 {
     var processingIsOk = true;
     var iOpt;
-  
+
     // Skip the no-op processing step (index 0).
     for (iOpt = 1; iOpt < ExportProcessingOptions.length; iOpt++)
     {
         ExpOpt = ExportProcessingOptions[iOpt];
-        
+
         if ($(ExpOpt.id).checked && (ExpOpt.paramsValid === null || ExpOpt.paramsValid.length == 0))
         {
             processingIsOk = false;
             break;
         }
     }
-        
+
     return processingIsOk;
 }
 
@@ -1737,19 +1735,18 @@ function ExportProcessingArgsReady()
 {
     var argsReady = true;
     var iOpt;
-  
+
     // Skip the no-op processing step (index 0).
     for (iOpt = 1; iOpt < ExportProcessingOptions.length; iOpt++)
     {
         ExpOpt = ExportProcessingOptions[iOpt];
-        
+
         if ($(ExpOpt.id).checked && !ExpOpt.argsReady)
         {
             argsReady = false;
             break;
         }
     }
-    
+
     return argsReady;
 }
-
