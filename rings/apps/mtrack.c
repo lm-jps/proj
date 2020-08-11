@@ -1,11 +1,3 @@
-			 /*  remove the next six lines for use with DRMS 9.5  */
-#ifndef JPL_EPHEM_TABLEDIR
-#define JPL_EPHEM_TABLEDIR	("/home/rick/src/ephem/tables")
-#endif
-#ifndef SOHO_EPHEM_TABLE
-#define SOHO_EPHEM_TABLE	("/home/soi/CM/tables/ephemeris/summary")
-#endif
-
 /******************************************************************************/
 /*
  *  mtrack.c						~rick/src/mtrack
@@ -231,6 +223,14 @@
 #define SOHO_EPHEM_VERSION "soho_ephem_v11.c"
 
 #include <jsoc_main.h>
+			 /*  remove the next six lines for use with DRMS 9.5  */
+#ifndef JPL_EPHEM_TABLEDIR
+#define JPL_EPHEM_TABLEDIR	("/home/rick/src/ephem/tables")
+#endif
+#ifndef SOHO_EPHEM_TABLE
+#define SOHO_EPHEM_TABLE	("/home/soi/CM/tables/ephemeris/summary")
+#endif
+
 #include KEYSTUFF_VERSION
 #include EARTH_EPHEM_VERSION
 #include SOHO_EPHEM_VERSION
