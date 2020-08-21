@@ -41,6 +41,11 @@
 #        Example : /home/jsoc/cvs/Development/JSOC/proj/util/scripts/exportmanage.pl -root /home/arta/cvs/JSOC -dbuser production -dbhost hmidb2 -manager "jsoc_export_manage -t procser=jsoc.export_procs" -runflag keepruntest.txt -logflag Test &
 #
 #  2. Point a browser at http://jsoc.stanford.edu/ajax/exportdatatest.html and export something.
+#
+# In order for jsoc_export_manage to properly start a queing system script, the environment must contain a "pointer" to the cluster queing system;
+# in the past, this needed to be done by exportmanager.pl; at some point, it was moved to a script that started exportmanage.pl; in both cases, it
+# was difficult to ensure that the environment always got set; now, the environment is set by jsoc_export_manage itself; it sources a bash script
+# that sets the environment immediately before running qsub
 
 use strict;
 use warnings;
@@ -71,6 +76,7 @@ use constant kLogFlagInt => "Int";
 use constant kLogFlagExt => "Ext";
 
 use constant JEM_OPERATION_CLEAN_HASHES => "clean_hashes";
+use constant JEM_OPERATION_CLEAN_PENDING_REQUESTS => "clean_requests";
 use constant MD5_SERIES => "jsoc.export_md5";
 my(@CLEAN_HASHES_TIMES) = ( 0, 6, 12, 18 );
 
@@ -321,24 +327,28 @@ while (1)
 
     if (!defined($last_time_run) || DateTime->compare($current_time, $next_hour_to_run) > 0 && DateTime->compare($next_hour_to_run, $last_time_run) > 0)
     {
-        my($update_times) = 1;
+        my($clean_success) = 0;
         my($day);
 
 
+        # clean MD5 hashes
         $cmd = "$binpath" . "$manage JSOC_DBHOST=$dbhost op=" . JEM_OPERATION_CLEAN_HASHES;
         $rout = qx($cmd 2>&1);
 
         if ($? == -1)
         {
-            QueueMessage($msgq, &kMsgType1, "Export Daemon Execution Failure!!", &kMailMessage1, "failure to clean hashes");
-            $update_times = 0;
+            QueueMessage($msgq, &kMsgType1, "Export Daemon Execution Failure!!", &kMailMessage1, "failure to clean MD5 hashes table");
         }
         elsif ($? & 127)
         {
             # jsoc_export_manage died in response to an unhandled signal
             my($sig) = $? & 127;
 
-            QueueMessage($msgq, &kMsgType1, "Export Daemon Execution Failure!!", &kMailMessage2, "failure to clean hashes", "DB Host: $dbhost\n", "Unhandled signal: $sig.\n");
+            QueueMessage($msgq, &kMsgType1, "Export Daemon Execution Failure!!", &kMailMessage2, "failure to clean MD5 hashes table", "DB Host: $dbhost\n", "Unhandled signal: $sig.\n");
+        }
+        else
+        {
+            $clean_success = 1;
         }
 
         if (defined($rout) && length($rout) > 0)
@@ -352,9 +362,45 @@ while (1)
             print LOG $msg;
         }
 
-        if ($update_times)
+        if ($clean_success)
         {
-            $msg = "cleaned MD5 hashes\n";
+            # clean pending-requests table
+            $clean_success = 0;
+
+            $cmd = "$binpath" . "$manage JSOC_DBHOST=$dbhost op=" . JEM_OPERATION_CLEAN_PENDING_REQUESTS;
+            $rout = qx($cmd 2>&1);
+
+            if ($? == -1)
+            {
+                QueueMessage($msgq, &kMsgType1, "Export Daemon Execution Failure!!", &kMailMessage1, "failure to clean pending-requests table");
+            }
+            elsif ($? & 127)
+            {
+                # jsoc_export_manage died in response to an unhandled signal
+                my($sig) = $? & 127;
+
+                QueueMessage($msgq, &kMsgType1, "Export Daemon Execution Failure!!", &kMailMessage2, "failure to clean pending-requests table", "DB Host: $dbhost\n", "Unhandled signal: $sig.\n");
+            }
+            else
+            {
+                $clean_success = 1;
+            }
+
+            if (defined($rout) && length($rout) > 0)
+            {
+                $msg = "$rout\n";
+                unless (GetDLogFH(\$dlogfh, $daemonlog))
+                {
+                    print $dlogfh $msg;
+                }
+
+                print LOG $msg;
+            }
+        }
+
+        if ($clean_success)
+        {
+            $msg = "cleaned MD5-hashes table; cleaned pending-requests table\n";
 
             unless (GetDLogFH(\$dlogfh, $daemonlog))
             {
@@ -363,6 +409,9 @@ while (1)
 
             print LOG $msg;
 
+            # update the variables that conrtrol the next time cleaning is run - if either of the
+            # cleaning tasks fails, then a new attempt will be made each loop iteration until
+            # both cleaning tasks complete
             $last_time_run = $current_time;
             $next_hour_to_run_index++;
 
