@@ -72,8 +72,8 @@ use constant kMsgType3 => "msgtype3";
 use constant kMsgQInterval => 600; # 10 minutes, at least, between message inserts
 use constant kMsgQSendInterval => 120; # 2 minutes between mailing of messages
 
-use constant kLogFlagInt => "Int";
-use constant kLogFlagExt => "Ext";
+use constant kLogFlagInt => "int";
+use constant kLogFlagExt => "ext";
 
 use constant JEM_OPERATION_CLEAN_HASHES => "clean_hashes";
 use constant JEM_OPERATION_CLEAN_PENDING_REQUESTS => "clean_requests";
@@ -249,33 +249,26 @@ local $ENV{"JSOC_DBNAME"} = $dbname;
 
 #`touch $runningflag`;
 `echo $$ > $runningflag`;
-$logfile = kExportDir . "/logs/" . `date +"%F_%R.log"`;
-open(LOG, ">> $logfile") || die "Couldn't open logfile '$logfile'.\n";
-$daemonlog = kExportDir . "/logs/exportlog${logflag}.txt";
-
-my($datenow) = `date`;
-chomp($datenow);
-$msg = "Started by $ENV{'USER'} at $datenow on machine $ENV{'HOST'} using $dbhost.\n";
-print LOG $msg;
+$daemonlog = kExportDir . "/logs/exportlog-${logflag}.txt";
 
 my($rout);
 my($cmd);
 my($dlogfh);
+my($datenow);
 my($current_time);
 my($strp_hour);
 my($next_hour_to_run_index);
 my($next_hour_to_run);
 my($last_time_run);
-
 my($err) = 0;
-
-unless (GetDLogFH(\$dlogfh, $daemonlog))
-{
-    print $dlogfh $msg;
-    CloseDLog(\$dlogfh);
-}
-
 my($msgq) = {lastsend => time(), msgs => {}};
+
+$datenow = `date`;
+chomp($datenow);
+$msg = "Started by $ENV{'USER'} at $datenow on machine $ENV{'HOST'} using $dbhost.\n";
+
+# first call to PrintToLog() opens log file
+PrintToLog(\$dlogfh, $daemonlog, $msg);
 
 $strp_hour = new DateTime::Format::Strptime(pattern => '%Y%m%d_%H', locale => 'en_US', time_zone => 'local');
 $next_hour_to_run_index = 0;
@@ -284,51 +277,41 @@ undef($last_time_run);
 
 while (1)
 {
-   # print "running $cmd.\n";
-   $cmd = "$binpath" . "$manage JSOC_DBHOST=$dbhost procser=$procser";
-   $rout = qx($cmd 2>&1);
+    # print "running $cmd.\n";
+    $cmd = "$binpath" . "$manage JSOC_DBHOST=$dbhost procser=$procser";
+    $rout = qx($cmd 2>&1);
 
-   if ($? == -1)
-   {
-       QueueMessage($msgq, &kMsgType1, "Export Daemon Execution Failure!!", &kMailMessage1);
-   }
-   elsif ($? & 127)
-   {
-      # jsoc_export_manage died in response to an unhandled signal
-      my($sig) = $? & 127;
+    if ($? == -1)
+    {
+        QueueMessage($msgq, &kMsgType1, "Export Daemon Execution Failure!!", &kMailMessage1);
+    }
+    elsif ($? & 127)
+    {
+        # jsoc_export_manage died in response to an unhandled signal
+        my($sig) = $? & 127;
 
-       QueueMessage($msgq, &kMsgType1, "Export Daemon Execution Failure!!", &kMailMessage2, "DB Host: $dbhost\n", "Unhandled signal: $sig.\n");
-   }
-   elsif (($? >> 8) != 0)
-   {
-      # jsoc_export_manage returned with an error code
-      $msg = "$manage returned with a non-zero code of $? >> 8.\n";
-      unless (GetDLogFH(\$dlogfh, $daemonlog))
-      {
-          print $dlogfh $msg;
-      }
+        QueueMessage($msgq, &kMsgType1, "Export Daemon Execution Failure!!", &kMailMessage2, "DB Host: $dbhost\n", "Unhandled signal: $sig.\n");
+    }
+    elsif (($? >> 8) != 0)
+    {
+        # jsoc_export_manage returned with an error code
+        $msg = "$manage returned with a non-zero code of $? >> 8.\n";
+        PrintToLog(\$dlogfh, $daemonlog, $msg);
+    }
 
-      print LOG $msg;
-   }
-
-   if (defined($rout) && length($rout) > 0)
-   {
-      $msg = "$rout\n";
-      unless (GetDLogFH(\$dlogfh, $daemonlog))
-      {
-         print $dlogfh $msg;
-      }
-
-      print LOG $msg;
-   }
+    if (defined($rout) && length($rout) > 0)
+    {
+        $msg = "$rout\n";
+        PrintToLog(\$dlogfh, $daemonlog, $msg);
+    }
 
     # clean hashes from MD5_SERIES series
     $current_time = DateTime->now();
 
-    if (!defined($last_time_run) || DateTime->compare($current_time, $next_hour_to_run) > 0 && DateTime->compare($next_hour_to_run, $last_time_run) > 0)
+    if (!defined($last_time_run) || (DateTime->compare($current_time, $next_hour_to_run) > 0 && DateTime->compare($next_hour_to_run, $last_time_run) > 0))
     {
         my($clean_success) = 0;
-        my($day);
+        my($next_day);
 
 
         # clean MD5 hashes
@@ -349,17 +332,14 @@ while (1)
         else
         {
             $clean_success = 1;
+            $msg = "cleaned MD5 hashes\n";
+            PrintToLog(\$dlogfh, $daemonlog, $msg);
         }
 
         if (defined($rout) && length($rout) > 0)
         {
             $msg = "$rout\n";
-            unless (GetDLogFH(\$dlogfh, $daemonlog))
-            {
-                print $dlogfh $msg;
-            }
-
-            print LOG $msg;
+            PrintToLog(\$dlogfh, $daemonlog, $msg);
         }
 
         if ($clean_success)
@@ -384,49 +364,45 @@ while (1)
             else
             {
                 $clean_success = 1;
+                $msg = "cleaned pending requests\n";
+                PrintToLog(\$dlogfh, $daemonlog, $msg);
             }
 
             if (defined($rout) && length($rout) > 0)
             {
                 $msg = "$rout\n";
-                unless (GetDLogFH(\$dlogfh, $daemonlog))
-                {
-                    print $dlogfh $msg;
-                }
-
-                print LOG $msg;
+                PrintToLog(\$dlogfh, $daemonlog, $msg);
             }
         }
 
         if ($clean_success)
         {
-            $msg = "cleaned MD5-hashes table; cleaned pending-requests table\n";
-
-            unless (GetDLogFH(\$dlogfh, $daemonlog))
-            {
-                print $dlogfh $msg;
-            }
-
-            print LOG $msg;
-
             # update the variables that conrtrol the next time cleaning is run - if either of the
             # cleaning tasks fails, then a new attempt will be made each loop iteration until
             # both cleaning tasks complete
             $last_time_run = $current_time;
-            $next_hour_to_run_index++;
+
+            while (1)
+            {
+                $next_hour_to_run_index++;
+                $next_hour_to_run = $strp_hour->parse_datetime($last_time_run->strftime('%Y%m%d') . '_' . $CLEAN_HASHES_TIMES[$next_hour_to_run_index]);
+
+                if (DateTime->compare($next_hour_to_run, $last_time_run) > 0)
+                {
+                    last;
+                }
+            }
 
             if ($next_hour_to_run_index > scalar(@CLEAN_HASHES_TIMES) - 1)
             {
-                # update the day part of the $next_hour_to_run
-                $day = ($next_hour_to_run + DateTime::Duration->new( days => 1 ))->strftime('%Y%m%d');
+                # set $next_hour_to_run to first run time next day; set index to 0
+                $next_day = ($last_time_run + DateTime::Duration->new( days => 1 ))->strftime('%Y%m%d');
                 $next_hour_to_run_index = 0;
-            }
-            else
-            {
-                $day = $next_hour_to_run->strftime('%Y%m%d');
+                $next_hour_to_run = $strp_hour->parse_datetime($next_day . '_' . $CLEAN_HASHES_TIMES[$next_hour_to_run_index]);
             }
 
-            $next_hour_to_run = $strp_hour->parse_datetime($day . '_' . $CLEAN_HASHES_TIMES[$next_hour_to_run_index]);
+            $msg = "next hour to run is $next_hour_to_run\n";
+            PrintToLog(\$dlogfh, $daemonlog, $msg);
         }
     }
 
@@ -442,17 +418,16 @@ while (1)
     {
         last;
     }
-}
+} # while forever
 
 $msg = "Stopped by $ENV{'USER'} at " . `date` . ".\n";
-unless (GetDLogFH(\$dlogfh, $daemonlog))
+PrintToLog(\$dlogfh, $daemonlog, $msg);
+
+if (defined($dlogfh))
 {
-    print $dlogfh $msg;
     CloseDLog(\$dlogfh);
 }
 
-print LOG $msg;
-close(LOG);
 
 # Don't leave junk laying about
 CleanRunFlag($runningflag);
@@ -518,12 +493,34 @@ sub GetDLogFH
 
         if (!defined($$rfh))
         {
-            QueueMessage($msgq, &kMsgType1, "Export Daemon Log Unavailable", &kMailMessage3);
+            if (defined($msgq))
+            {
+                QueueMessage($msgq, &kMsgType1, "Export Daemon Log Unavailable", &kMailMessage3);
+            }
+
             $err = 1;
         }
     }
 
     return $err;
+}
+
+sub PrintToLog
+{
+    my($rfh) = shift; # reference to filehandle object
+    my($dlog) = shift;
+    my($msg) = shift;
+    my($date_str);
+    my($content);
+
+
+    unless (GetDLogFH($rfh, $dlog))
+    {
+        $date_str = `date +"%F_%R"`;
+        chomp($date_str);
+        $content = "[ " . $date_str . " ] " . $msg;
+        $$rfh->print($content);
+    }
 }
 
 sub CloseDLog
@@ -569,7 +566,7 @@ sub SendPendingMessages
     }
 }
 
-# Message queue:
+# Message queue (to MAIL warnings and notices):
 #   key - id
 #   val - hash : {instime => 10292392, msg => "export failure", ntimes => 5}
 #     where instime is unix seconds identifying time message was inserted into queue.
