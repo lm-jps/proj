@@ -326,7 +326,10 @@ sub GenQueryB
       $datewhere = " AND $datewhere";
    }
 
-   $stmnt = "SELECT main.owning_series, main.ds_index, main.online_loc, partn.bytes, partn.sumid, partn.effective_date FROM (SELECT ds_index, group_id, bytes, sumid, effective_date FROM sum_partn_alloc WHERE status = $status AND group_id = $group$datewhere) AS partn, (SELECT ds_index, owning_series, online_loc FROM sum_main WHERE storage_group = $group) AS main WHERE partn.ds_index = main.ds_index ORDER BY lower(main.owning_series), main.ds_index";
+   # change sort order to (series, online_loc)	kehcheng 2020.08.21
+   # $stmnt = "SELECT main.owning_series, main.ds_index, main.online_loc, partn.bytes, partn.sumid, partn.effective_date FROM (SELECT ds_index, group_id, bytes, sumid, effective_date FROM sum_partn_alloc WHERE status = $status AND group_id = $group$datewhere) AS partn, (SELECT ds_index, owning_series, online_loc FROM sum_main WHERE storage_group = $group) AS main WHERE partn.ds_index = main.ds_index ORDER BY lower(main.owning_series), main.ds_index";
+
+   $stmnt = "SELECT main.owning_series, main.ds_index, main.online_loc, partn.bytes, partn.sumid, partn.effective_date FROM (SELECT ds_index, group_id, bytes, sumid, effective_date FROM sum_partn_alloc WHERE status = $status AND group_id = $group$datewhere) AS partn, (SELECT ds_index, owning_series, online_loc FROM sum_main WHERE storage_group = $group) AS main WHERE partn.ds_index = main.ds_index ORDER BY lower(main.owning_series), main.online_loc";
 
    if (kDEBUG)
    {
