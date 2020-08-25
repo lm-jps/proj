@@ -255,7 +255,8 @@ my($rout);
 my($cmd);
 my($dlogfh);
 my($datenow);
-my($current_time);
+my($current_datetime);
+my($current_datetime_str);
 my($strp_hour);
 my($next_hour_to_run_index);
 my($next_hour_to_run);
@@ -263,16 +264,18 @@ my($last_time_run);
 my($err) = 0;
 my($msgq) = {lastsend => time(), msgs => {}};
 
-$datenow = `date`;
-chomp($datenow);
-$msg = "Started by $ENV{'USER'} at $datenow on machine $ENV{'HOST'} using $dbhost.\n";
+
+# make time-string parser (all times are local)
+$strp_hour = new DateTime::Format::Strptime(pattern => '%Y%m%d_%H', locale => 'en_US', time_zone => 'local');
+$current_datetime = DateTime->now(time_zone => 'local');
+
+$msg = "Started by $ENV{'USER'} at " . $current_datetime->strftime('%Y-%m-%d %T') . " on machine $ENV{'HOST'} using $dbhost.\n";
 
 # first call to PrintToLog() opens log file
 PrintToLog(\$dlogfh, $daemonlog, $msg);
 
-$strp_hour = new DateTime::Format::Strptime(pattern => '%Y%m%d_%H', locale => 'en_US', time_zone => 'local');
 $next_hour_to_run_index = 0;
-$next_hour_to_run = $strp_hour->parse_datetime(DateTime->now()->strftime('%Y%m%d') . '_' . $CLEAN_HASHES_TIMES[$next_hour_to_run_index]);
+$next_hour_to_run = $strp_hour->parse_datetime($current_datetime->strftime('%Y%m%d') . '_' . $CLEAN_HASHES_TIMES[$next_hour_to_run_index]);
 undef($last_time_run);
 
 while (1)
@@ -306,9 +309,9 @@ while (1)
     }
 
     # clean hashes from MD5_SERIES series
-    $current_time = DateTime->now();
+    $current_datetime = DateTime->now(time_zone => 'local');
 
-    if (!defined($last_time_run) || (DateTime->compare($current_time, $next_hour_to_run) > 0 && DateTime->compare($next_hour_to_run, $last_time_run) > 0))
+    if (!defined($last_time_run) || (DateTime->compare($current_datetime, $next_hour_to_run) > 0 && DateTime->compare($next_hour_to_run, $last_time_run) > 0))
     {
         my($clean_success) = 0;
         my($next_day);
@@ -380,7 +383,9 @@ while (1)
             # update the variables that conrtrol the next time cleaning is run - if either of the
             # cleaning tasks fails, then a new attempt will be made each loop iteration until
             # both cleaning tasks complete
-            $last_time_run = $current_time;
+            $last_time_run = $current_datetime;
+            $msg = "updating next clean time; current time is " . $current_datetime->strftime('%Y-%m-%d %T') . "\n";
+            PrintToLog(\$dlogfh, $daemonlog, $msg);
 
             while (1)
             {
@@ -512,15 +517,14 @@ sub PrintToLog
     my($rfh) = shift; # reference to filehandle object
     my($dlog) = shift;
     my($msg) = shift;
-    my($date_str);
+    my($current_datetime);
     my($content);
 
 
     unless (GetDLogFH($rfh, $dlog))
     {
-        $date_str = `date +"%F_%R"`;
-        chomp($date_str);
-        $content = "[ " . $date_str . " ] " . $msg;
+        $current_datetime = DateTime->now(time_zone => 'local');
+        $content = "[ " .  DateTime->now(time_zone => 'local')->strftime('%Y-%m-%d %T') . " ] " . $msg;
         $$rfh->print($content);
     }
 }
