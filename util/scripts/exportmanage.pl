@@ -385,20 +385,22 @@ while (1)
             while (1)
             {
                 $next_hour_to_run_index++;
+
+                if ($next_hour_to_run_index > scalar(@CLEAN_HASHES_TIMES) - 1)
+                {
+                    # set $next_hour_to_run to first run time next day; set index to 0
+                    $next_day = ($last_time_run + DateTime::Duration->new( days => 1 ))->strftime('%Y%m%d');
+                    $next_hour_to_run_index = 0;
+                    $next_hour_to_run = $strp_hour->parse_datetime($next_day . '_' . $CLEAN_HASHES_TIMES[$next_hour_to_run_index]);
+                    last;
+                }
+
                 $next_hour_to_run = $strp_hour->parse_datetime($last_time_run->strftime('%Y%m%d') . '_' . $CLEAN_HASHES_TIMES[$next_hour_to_run_index]);
 
                 if (DateTime->compare($next_hour_to_run, $last_time_run) > 0)
                 {
                     last;
                 }
-            }
-
-            if ($next_hour_to_run_index > scalar(@CLEAN_HASHES_TIMES) - 1)
-            {
-                # set $next_hour_to_run to first run time next day; set index to 0
-                $next_day = ($last_time_run + DateTime::Duration->new( days => 1 ))->strftime('%Y%m%d');
-                $next_hour_to_run_index = 0;
-                $next_hour_to_run = $strp_hour->parse_datetime($next_day . '_' . $CLEAN_HASHES_TIMES[$next_hour_to_run_index]);
             }
 
             $msg = "next hour to run is $next_hour_to_run\n";
