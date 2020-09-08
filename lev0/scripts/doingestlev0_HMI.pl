@@ -13,8 +13,8 @@
 #  exit;
 #}
 $host = `hostname`;
-if(!($host =~ /cl2n01[78]/)) {
-  print "This can only be run on the cl2n017/8 pipeline machine.\n";
+if(!($host =~ /cl2n.../)) {
+  print "This can only be run on the cl2n pipeline machine.\n";
   exit;
 }
 @vcnames = ("VC01", "VC04", "VC02", "VC05"); #primary channels
