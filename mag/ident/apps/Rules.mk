@@ -36,6 +36,8 @@ $(OBJ_$(d)):		CF_TGT := $(CF_TGT) -I$(SRCDIR)/$(d)/../../libs/astro -I$(SRCDIR)/
 
 $(EXE_$(d)):		$(OBJsegment_$(d)) $(LIBsegment) $(LIBmex2c_jsoc) $(LIBmexrng) $(LIBmextools)
 
+LL_TGT := $(LL_TGT) -L$(LIBCJSONH) -lcjson
+
 # Shortcuts
 .PHONY:	$(S_$(d))
 $(S_$(d)):	%:	$(d)/%
