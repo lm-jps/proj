@@ -311,7 +311,7 @@ while (1)
     # clean hashes from MD5_SERIES series
     $current_datetime = DateTime->now(time_zone => 'local');
 
-    if (!defined($last_time_run) || (DateTime->compare($current_datetime, $next_hour_to_run) > 0 && DateTime->compare($next_hour_to_run, $last_time_run) > 0))
+    if (!defined($last_time_run) || DateTime->compare($current_datetime, $next_hour_to_run) > 0)
     {
         my($clean_success) = 0;
         my($next_day);
