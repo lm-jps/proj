@@ -72,9 +72,10 @@ function email_getargs()
 function startEmailCheck(callbackFxn)
 {   // This is called when the check params button is pressed.
     // if not ready, complain and do nothing.
-    var requestor = null;
-    var isRequestorValid = null;
     var address = null;
+    var requestor = null;
+    var snail_address = null; // no UI yet
+    var isRequestorValid = null;
     var isAddressValid = null;
 
 
@@ -88,7 +89,7 @@ function startEmailCheck(callbackFxn)
         $("ExportCheckMsg").innerHTML = 'Submitted email address is: "' + address + '".';
 
         // will avoid making an AJAX call if possible (checked email addresses are cached in $("ExportNotify").retrieve('addresses')
-        CheckAddressRegistration(address.slice(0), callbackFxn, false);
+        CheckAddressRegistration(address.slice(0), requestor, snail_address, callbackFxn, false);
     }
 }
 
@@ -156,6 +157,7 @@ function SetExportNotify(clickedByUser)
 {
     var address = null;
     var requestor = null;
+    var snail_address = null; // no UI yet
     var doValidation = true;
     var valid = false;
 
@@ -178,7 +180,7 @@ function SetExportNotify(clickedByUser)
         if (valid)
         {
             $("ExportNotify").store('valid', true);
-            CheckAddressRegistration(address.slice(0), null, false);
+            CheckAddressRegistration(address.slice(0), requestor, snail_address, null, false);
         }
     }
 }
@@ -213,13 +215,13 @@ function SetExportUser(clickedByUser)
     }
 }
 
-function CallCheckAddressRegistration(address)
+function CallCheckAddressRegistration(address, name, snail_address)
 {
     ExportNotifyTimeLeft -= ExportNotifyTimeDelta/1000;
 
     // always do a simple check for the registration or check process to be complete; do not start a new registration
     // process
-    CheckAddressRegistration(address, null, true);
+    CheckAddressRegistration(address, name, snail_address, null, true);
 }
 
 function RegistrationTimeout(address)
@@ -252,7 +254,7 @@ function RegistrationTimeout(address)
 //
 // it is possible that the user changed the email address while a registration process or check was pending; make sure
 // to examine ExportNotifyTimer - if it not null and the user is attempting to register a different address
-function CheckAddressRegistration(address, callbackFxn, checkOnly)
+function CheckAddressRegistration(address, requestor, snail_address, callbackFxn, checkOnly)
 {
     var cgiArgs = null;
     var pending = false;
@@ -372,7 +374,7 @@ function CheckAddressRegistration(address, callbackFxn, checkOnly)
     {
         // we need to do either a registration check (checkOnly == true), or a check followed by a registration (checkOnly == false)
         ExportNotifyTimeLeft = MAX_NOTIFY_TIMER;
-        ExportNotifyTimer = setInterval(function () { CallCheckAddressRegistration(address.slice(0)); }, ExportNotifyTimeDelta);
+        ExportNotifyTimer = setInterval(function () { CallCheckAddressRegistration(address.slice(0), requestor, snail_address); }, ExportNotifyTimeDelta);
         // timer will run until valid email found or time limit expired or user changes email address
         // *** JS will NOT call CallCheckAddressRegistration() until after CheckAddressRegistration() because JS does not
         // interrupt function calls to switch to a different function call; so we do not need to worry about entering
@@ -392,7 +394,7 @@ function CheckAddressRegistration(address, callbackFxn, checkOnly)
         $("ExportNotifyMsg").innerHTML = "Checking...";
     }
 
-    cgiArgs = { "address" : address, "checkonly" : checkOnly ? 1 : 0 };
+    cgiArgs = { "address" : address, "name" : requestor, "checkonly" : checkOnly ? 1 : 0 };
 
     new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + JSOC_CHECK_EMAIL,
     {
