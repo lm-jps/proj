@@ -4,7 +4,7 @@ dirstack_$(sp)	:= $(d)
 d		:= $(dir)
 
 # Local variables
-MODEXE_$(d)	:= $(addprefix $(d)/, test_nlfff test_localpf test_preproc)
+MODEXE_$(d)	:= $(addprefix $(d)/, nlfff_v1 localpf test_nlfff test_localpf test_preproc nlfff_v2)
 MODEXE		:= $(MODEXE) $(MODEXE_$(d))
 
 #MODEXE_SOCK_$(d):= $(MODEXE_$(d):%=%_sock)
@@ -26,7 +26,7 @@ S_$(d)		:= $(notdir $(EXE_$(d))) #$(MODEXE_SOCK_$(d)))
 # Local rules
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
 $(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\""
-$(OBJ_$(d)):		CF_TGT := -I$(SRCDIR)/$(d)/../../libs/astro -I$(SRCDIR)/$(d)/src/
+$(OBJ_$(d)):		CF_TGT := -I$(SRCDIR)/$(d)/../../libs/astro -I$(SRCDIR)/$(d)/src/ -fp-model precise
 $(EXE_$(d)):		LF_TGT := $(LF_TGT) -lmkl_em64t 
 
 # I removed the compiler flags "-fp-model precise" and "-fp-model source" 
