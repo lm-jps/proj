@@ -17,7 +17,8 @@
  *          v2.2        Oct 06 2010
  *          v2.3        Feb 13 2011
  *          v3.0        Oct 19 2017
- *          v4.0        Feb 22 2019 (final)
+ *          v4.0        Feb 22 2019
+ *          v5.0        Sep 22 2019
  *
  *
  * Issues:
@@ -51,7 +52,7 @@
  *          Implemented Kahan summation for all sums, so results from runs with different
  *          number of threads now agree. The preprocessing summation is performed in
  *          single thread mode as OpenMP Kahan summation still yields different results
- *          for different threads
+ *          for different threads; modified output to save as compressed ints
  *
  * Example:
  *          nlfff_v1 "in=su_xudong.B_720s_cea[12673][2017.09.06_11:36:00_TAI]" "out=su_xudong.nlfff" "PREP=1" "MULTI=3" "nz=256"
@@ -384,9 +385,15 @@ int DoIt(void)
                 outSegBz->axis[i] = outArrayBz->axis[i];
             }
             
-            outArrayBx->parent_segment = outSegBx;
-            outArrayBy->parent_segment = outSegBy;
-            outArrayBz->parent_segment = outSegBz;
+            outArrayBx->israw = 0;        // always compressed
+            outArrayBx->bzero = outSegBx->bzero;
+            outArrayBx->bscale = outSegBx->bscale;
+            outArrayBy->israw = 0;
+            outArrayBy->bzero = outSegBy->bzero;
+            outArrayBy->bscale = outSegBy->bscale;
+            outArrayBz->israw = 0;
+            outArrayBz->bzero = outSegBz->bzero;
+            outArrayBz->bscale = outSegBz->bscale;
             
             /* Result writing */
             status = drms_segment_write(outSegBx, outArrayBx, 0);
