@@ -129,7 +129,7 @@ int DoIt(void)
     double *bx0, *by0, *bz0;
     double *bx0_now, *by0_now, *bz0_now;
     double *Bx, *By, *Bz, *Bx_tmp, *By_tmp, *Bz_tmp;
-    double energy;
+    double energy, energy1;
     
     int verbflag, prepflag, noOutput;
     int outDims[3];
@@ -296,18 +296,29 @@ int DoIt(void)
                     dpt++;
                 }}}
         
-        // no checking of nd    // Oct 19 2017
-        double c = 0.0;         // kahan summation
-        energy = 0.;        // Feb 13 2011
-        for (k = 0; k < nz - nd; k++) {
-            for (j = nd; j < ny - nd; j++) {
-                for (i = nd; i < nx - nd; i++) {
+        // no checking of nd
+        double c = 0.0, c1 = 0.0;         // kahan summation
+        energy = energy1 = 0.0;
+        double b2, y1, t1, y, t;
+        for (k = 0; k < nz; k++) {
+            for (j = 0; j < ny; j++) {
+                for (i = 0; i < nx; i++) {
                     dpt0 = i * nynz + j * nz + k;
-                    double y = (Bx[dpt0] * Bx[dpt0] + By[dpt0] * By[dpt0] + Bz[dpt0] * Bz[dpt0]) - c;
-                    double t = energy + y;
+                    b2 = Bx[dpt0] * Bx[dpt0] + By[dpt0] * By[dpt0] + Bz[dpt0] * Bz[dpt0];
+                    y1 = b2 - c1;
+                    t1 = energy1 + y1;
+                    c1 = (t1 - energy1) - y1;
+                    energy1 = t1;
+                    if (j < nd || j >= (ny - nd) || i < nd || i >= (nx - nd)) {
+                        continue;
+                    }
+                    y = b2 - c;
+                    t = energy + y;
                     c = (t - energy) - y;
                     energy = t;
-                }}}
+                }
+            }
+        }
         
         /* Output record */
         outRec = outRS->records[irec];
@@ -354,6 +365,7 @@ int DoIt(void)
         drms_setkey_string(outRec, "BLD_VERS", jsoc_version);
         drms_setkey_time(outRec, "DATE", CURRENT_SYSTEM_TIME);
         drms_setkey_double(outRec, "ENERGY", energy);
+        drms_setkey_double(outRec, "ENERGY1", energy1);
         drms_copykey(outRec, inRec, "BIN");
         drms_copykey(outRec, inRec, "T_REC");
         drms_copykey(outRec, inRec, "T_OBS");
