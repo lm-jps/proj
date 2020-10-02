@@ -34,6 +34,15 @@ var INTERNAL_WEBSERVER = 'jsoc2'
 var EXTERNAL_WEBSERVER = 'jsoc'
 var STANFORD_DOMAIN = 'stanford.edu'
 
+// EB states
+var EB_STATE_DISABLED = 'disabled';
+var EB_STATE_ENABLED = 'enabled';
+var EB_STATE_SUBMIT_ENABLED = 'submit_enabled';
+var EB_STATE_SUBMIT = 'submit'
+var EB_STATE_CANCEL_ENABLED = 'cancel_enabled';
+var EB_STATE_PATH = 'path';
+var EB_STATE_CANCEL = 'cancel';
+
 var KEYWORD_CTYPE1 = 'CTYPE1';
 var KEYWORD_CTYPE2 = 'CTYPE2';
 var KEYWORD_LVL_NUM = 'LVL_NUM';
@@ -61,6 +70,18 @@ var DRMS_EXPORT = 'drms-export.sh';
 var SERIES_INFO = 'series_info';
 var PARSE_RECSET = 'drms_parserecset';
 var LOOKDATA = "lookdata";
+var MANAGE_EXPORT_CGI = 'manage-request.sh';
+
+// manage-request operations
+var MR_OPERATION_CHECK = 'check';
+var MR_OPERATION_CANCEL = 'cancel';
+
+// manage-requests status codes
+var MR_STATUS_UNKNOWN = 0;
+var MR_STATUS_NOT_PENDING = 1;
+var MR_STATUS_PENDING = 2;
+var MR_STATUS_REQUEST_CANCELED = 3;
+
 
 </script>
 <!-- Add html for processing and protocol options  -->
@@ -120,6 +141,227 @@ var UPDATE_HTTP_REQUEST_COUNT = function(event)
     }
 }
 
+var MANAGE_REQUEST_XHR = function(address, op, dbhost)
+{
+    new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + MANAGE_EXPORT_CGI,
+    {
+        method: 'get',
+        parameters: { "address" : address, "operation" : op, "H" : dbhost },
+        onSuccess: function(response)
+        {
+            var mr_status_obj = response.responseJSON;
+            if (mr_status_obj !== null)
+            {
+                var status = mr_status_obj.status;
+                var state = $("ExportButton").retrieve('state', EB_STATE_DISABLED);
+                var interval_fn_timer = $("ExportButton").retrieve('interval', null);
+                var clear_interval_fn_timer = false;
+                var error = false;
+
+                if (status < 0)
+                  {
+                    // error calling MR - do nothing (don't change state)
+                    $("ExportButtonMsg").innerHTML = mr_status_obj.msg;
+                    error = true;
+                }
+                else if (op == MR_OPERATION_CHECK)
+                {
+                    // action depends on state and status
+                    if (status == MR_STATUS_NOT_PENDING)
+                    {
+                        if (state == EB_STATE_ENABLED)
+                        {
+                            state = EB_STATE_SUBMIT_ENABLED;
+                        }
+                        else if (state == EB_STATE_SUBMIT_ENABLED)
+                        {
+                            // no change
+                            state = EB_STATE_SUBMIT_ENABLED;
+                        }
+                        else if (state == EB_STATE_SUBMIT)
+                        {
+                            state = EB_STATE_SUBMIT;
+                        }
+                        else if (state == EB_STATE_CANCEL_ENABLED)
+                        {
+                            state = EB_STATE_PATH;
+                        }
+                        else if (state == EB_STATE_PATH)
+                        {
+                            // do nothing
+                            state = EB_STATE_PATH;
+
+                            // stop interval function
+                            clear_interval_fn_timer = true;
+                        }
+                        else if (state == EB_STATE_CANCEL)
+                        {
+                            // stop interval function
+                            clear_interval_fn_timer = true;
+
+                            state = EB_STATE_CANCEL_DISABLED;
+                        }
+                        else
+                        {
+                            // error
+                            alert('1');
+                            $("ExportButtonMsg").innerHTML = 'bad export button state ' + state;
+                            error = true
+                        }
+                    }
+                    else if (status == MR_STATUS_PENDING)
+                    {
+                        if (state == EB_STATE_ENABLED)
+                        {
+                            state = EB_STATE_CANCEL_ENABLED;
+                        }
+                        else if (state == EB_STATE_SUBMIT_ENABLED)
+                        {
+                            // error - can't happen
+                            alert('2');
+                            $("ExportButtonMsg").innerHTML = 'bad export button state ' + state;
+                            error = true
+                        }
+                        else if (state == EB_STATE_SUBMIT)
+                        {
+                            state = EB_STATE_SUBMIT;
+                        }
+                        else if (state == EB_STATE_CANCEL_ENABLED)
+                        {
+                            // no change
+                            state = EB_STATE_CANCEL_ENABLED;
+                        }
+                        else if (state == EB_STATE_PATH)
+                        {
+                            // error - can't happen
+                            alert('3');
+                            $("ExportButtonMsg").innerHTML = 'bad export button state ' + state;
+                            error = true
+                        }
+                        else if (state == EB_STATE_CANCEL)
+                        {
+                            // do nothing
+                            state = EB_STATE_CANCEL;
+                        }
+                        else
+                        {
+                            // error
+                            alert('4');
+                            $("ExportButtonMsg").innerHTML = 'bad export button state ' + state;
+                            error = true
+                        }
+                    }
+                    else
+                    {
+                        // error
+                        $("ExportButtonMsg").innerHTML = 'unexpected manage-request status ' + status.toString();
+                        error = true;
+                    }
+                }
+                else if (op == MR_OPERATION_CANCEL)
+                {
+                    if (state != EB_STATE_CANCEL_ENABLED)
+                    {
+                        alert('5');
+                        $("ExportButtonMsg").innerHTML = 'bad export button state ' + state;
+                        error = true;
+                    }
+                    else if (status == MR_STATUS_REQUEST_CANCELED)
+                    {
+                        $("ExportButtonMsg").innerHTML = 'unexpected manage-request status ' + status.toString();
+                        error = true;
+                    }
+                }
+                else
+                {
+                    // bad operation
+                    $("ExportButtonMsg").innerHTML = 'bad manage-request operation ' + op;
+                    error = true;
+                }
+
+                if (error)
+                {
+                    // stop interval function
+                    clear_interval_fn_timer = true;
+
+                    state = EB_STATE_CANCEL_DISABLED;
+                }
+
+                if (interval_fn_timer !== null && clear_interval_fn_timer)
+                {
+                    clearInterval(interval_fn_timer);
+                    $("ExportButton").store({ 'interval' : null })
+                }
+
+                $("ExportButton").store({ 'state' : state })
+                update_export_buttons();
+            }
+        },
+        onFailure: function()
+        {
+            alert('unable to check for a pending export request');
+        },
+        onComplete: function()
+        {
+        }
+     });
+}
+
+// export button (EB) states:
+// 1. DISABLED - the Check Params for Export button (CPE) has not yet been clicked; interval function (XHR) not running OR
+//               failure of any kind anywhere in state graph OR CANCEL + IF "not pending"
+// 2. ENABLED - CPE clicked, parameters ready, interval function (IF) running
+// 3. SUBMIT_ENABLED - ENABLED + IF "not pending"
+// 4. CANCEL_ENABLED - ENABLED + IF "pending"
+// 5. CANCEL - SUBMIT_ENABLED + EB clicked
+// 6. PATH - CANCEL_ENABLED + IF "not pending"
+//
+// EB labels
+// 1. "not ready" - for DISABLED OR ENABLED
+// 2. "submit" - for SUBMIT_ENABLED
+// 3. "cancel" - for CANCEL_ENABLED
+// 4. "wait" - for CANCEL
+// 5. "get path" - for PATH
+var CHECK_FOR_PENDING_REQUEST = function(event)
+{
+    // the user has already clicked on the Check Params for Export button; the 'submit' button is currently disabled
+    var manage_export_fn = function()
+    {
+        var address = $("ExportNotify").value;
+        var op = MR_OPERATION_CHECK;
+        var dbhost = EXTERNAL_SERVER;
+        var xhr = MANAGE_REQUEST_XHR;
+
+        xhr(address, op, dbhost);
+     }
+
+     return manage_export_fn;
+}
+
+// states (the button label); destination states at arrow head
+//   disabled: check params not clicked yet
+//      not called
+//   submit:
+//      not called
+//   cancel:
+//      --> disabled
+//   path:
+//      not called
+var CANCEL_PENDING_REQUEST = function(event)
+{
+    var manage_export_fn = function()
+    {
+        var address = $("ExportNotify").value;
+        var op = MR_OPERATION_CANCEL;
+        var dbhost = EXTERNAL_SERVER;
+        var xhr = MANAGE_REQUEST_XHR;
+
+        xhr(address, op, dbhost);
+     }
+
+     return manage_export_fn();
+}
+
 function OnEnterKey(evt,action)
   {
   var keynum;
@@ -166,13 +408,11 @@ var RecordLimit;
 var RecordCount = null; // Initialized in initVars(), Modified in GetRSCount()
 var ExportQueryOK;
 var ExportRecordSetOK;
-var ExportRedinessStatus;
 var ExportFromFileList;
 var ExportMethodOK;
 var ExportFilenameFmtOK;
 var ExportProcessingOptions;
 var ExportUserOK;
-var ExportReadyOK;
 var TipsEnabled;
 var TipsCreated = 0;
 var args;
@@ -181,7 +421,6 @@ var uploadOndoneAction = 0;
 var ExportProcessingArgs = "";
 var ProcessingAllowed = 1;
 var ExportMethodValue = "url_quick";
-var exportparameters;
 
 // Export processing globals.
 var ExportProcessingArgsPoll = null;
@@ -237,12 +476,10 @@ function initVars()
   RecordLimit = 0;
   ExportRecordSetOK = 0;
   ExportQueryOK = 0;
-  ExportRedinessStatus = 0;
   ExportFromFileList = 0;
   ExportMethodOK = 1;
   ExportFilenameFmtOK = 1;
   ExportUserOK = 0;
-  ExportReadyOK = 2;
   TipsEnabled = 1;
   uploadOndoneAction = 0;
   firstTimePrime = "";
@@ -298,6 +535,7 @@ function initVars()
     $("ExportButton").value = "Submit Export Request";
     $("ExportButtonMsg").innerHTML = "Please only click once for export request.";
     $("ExportButton").style.backgroundColor = colorRed;
+    $("ExportButton").disabled = true;
     $("RecordSetRow").style.display="table-row";
     $("RecordCountRow").style.display="table-row";
     $("FilenameFmtRow").style.display="none";
@@ -310,60 +548,89 @@ function initVars()
     $("TarFileLocationRow").style.display = "none";
     $("KeywordFileLocationRow").style.display = "none";
     $("ShowQueryCheckbox").checked = 0;
+    $("StatusRequestID").value = "";
     SetExportMethod(1);
     }
   email_initVars();
+
+  update_export_buttons();
+
   FileUploadCleanup();
   }
 
 function getargs()
-  {
-  state = Cookie.getData("state");
-  if (state == 1)
+{
+    // as far as I can tell, state never equals anything but 0 here; it gets set to 2 in GetExport() - called when user clicks 'submit',
+    // it gets set to 2 in GetReExport, it gets touched in ProcessExportResponse() - that function first sets to 3 then to 0, setting to
+    // 0 always, and it gets set to either 2 (error jsoc_fetch status) or 1 (non-error jsoc_fetch status) after jsoc_fetch op=status returns
+    // but that state never gets used anywhere; the state is only read here, and it is always 0
+    //
+    // it seems as if 2 means something is asynchronously evaluating whether or not the URL is going to be 'good', 1 means
+    // we have a good URL stored in `search`, and 0 means get the URL from the browser address box; so, this function
+    // will clear-out jsoc_fetch args if we don't know the status of the existing args, it will use the known-to-be-good
+    // args if we have good args stored in `search`, and it will get the args from the URL otherwise, overwriting the
+    // `search` args stored in the cookie; but the other functions will force the last option by setting the state to 0, even
+    // if we have good args in the `search` attribute
+    state = Cookie.getData("state");
+
+    if (state == 1)
     {
-    var exportargs = Cookie.data["search"];
-    if (exportargs != undefined)
-      {
-      exportargs = decodeURIComponent(exportargs);
-      exportargs = exportargs.substr(1);
-      exportargs = exportargs.replace(/\?/g,"QUESTIONMARK");
-      args = exportargs.toQueryParams();
-      if (args.ds == undefined)
+        // the export-request record-set is stored in the 'search' cookie attribute; the limit and requestid might also be stored
+        var exportargs = Cookie.data["search"];
+
+        if (exportargs != undefined)
+        {
+            exportargs = decodeURIComponent(exportargs);
+            exportargs = exportargs.substr(1);
+            exportargs = exportargs.replace(/\?/g,"QUESTIONMARK");
+            args = exportargs.toQueryParams();
+            if (args.ds == undefined)
+            {
+                args.ds = "";
+            }
+
+            args.ds = args.ds.replace(/QUESTIONMARK/g, "?");
+        }
+        else
+        {
+            args = new Object;
+            args.ds = "";
+        }
+    }
+    else if (state > 1)
+    {
+        args = new Object;
         args.ds = "";
-      args.ds = args.ds.replace(/QUESTIONMARK/g, "?");
-      }
+        args.requestid = "";
+        args.limit= "none";
+    }
     else
-      {
-      args = new Object;
-      args.ds = "";
-      }
-    }
-  else if (state > 1)
     {
-    args = new Object;
-    args.ds = "";
-    args.requestid = "";
-    args.limit= "none";
-    }
-  else
-    {
-    var exportargs = location.search;
+        // cookie state 0 - attempt to get the record-set specification (ds) from the exportdata.html URL
+        var exportargs = location.search;
 
-    exportargs = decodeURIComponent(exportargs);
-    exportargs = exportargs.substr(1);
-    exportargs = exportargs.replace(/\?/g,"QUESTIONMARK");
-    args = exportargs.toQueryParams();
-    if (args.ds == undefined)
-      args.ds = "";
-    args.ds = args.ds.replace(/QUESTIONMARK/g, "?");
-    state=1;
-    Cookie.setData("state",state);
-    Cookie.setData("search",location.search);
-    }
-  email_getargs();
-  return args;
-  }
+        exportargs = decodeURIComponent(exportargs);
+        exportargs = exportargs.substr(1);
+        exportargs = exportargs.replace(/\?/g,"QUESTIONMARK");
+        args = exportargs.toQueryParams();
+        if (args.ds == undefined)
+        {
+            args.ds = "";
+        }
 
+        args.ds = args.ds.replace(/QUESTIONMARK/g, "?");
+        state = 1;
+        Cookie.setData("state", state);
+        Cookie.setData("search", location.search);
+    }
+
+    // load email address and username from cookie
+    email_getargs();
+
+    return args;
+}
+
+// cookie state is 0
 function OnLoadInit()
   {
   var needcount = 0;
@@ -376,7 +643,7 @@ function OnLoadInit()
     $("footer_link").href="http://jsoc2.stanford.edu";
     }
   state = 0;
-  Cookie.setData("state",state);
+  Cookie.setData("state", state);
   args = getargs();
 
   if (args.ds)
@@ -424,7 +691,7 @@ function OnLoadInit()
 
 function ReInitPage()
   {
-  Cookie.setData("state",0);
+  Cookie.setData("state", 0);
   OnLoadInit();
   }
 
@@ -1049,8 +1316,6 @@ function CreateRequestRSInfoCallback(callback, lastRecord)
                         }
                     }
                 }
-
-                CheckRediness();
             }
             else
             {
@@ -1271,7 +1536,6 @@ function CreateExportDownloadLink(err, callback)
         Cookie.setData("requestid", "");
 
         $("ExportButtonMsg").innerHTML = 'Please use the link below to download data prior to initiating a new request';
-        ExportReadyOK = 2;
         $("ExportButton").value = 'Submit Export Request'; // if user clicks, then export-complete message displays
         $("ExportButton").style.backgroundColor = "#D8D8D8"; // grey
 
@@ -1886,7 +2150,6 @@ function ProcessRSChange(error)
         // NotifyProcessingCode requires the first jsoc_info to have completed (the one started by SetRecordLimit()).
         // It also requires that SetProcessing() has completed its asynchronous running.
         NotifyProcessingCode();
-        CheckRediness();
 
         // check each export processing step's disabled_state (except for processing option 0 - that is no_op)
         for (option_index = 1; option_index < ExportProcessingOptions.length; option_index++)
@@ -1936,8 +2199,6 @@ function ProcessRSChange(error)
                 $(ExpOpt.rowid).style.display = "none";
             }
         }
-
-        CheckRediness();
     }
 
     // Re-enable the RecordSet text box.
@@ -2130,8 +2391,6 @@ function SetExportMethod(byWhom)
         alert("Please set Method to url_quick, url_direct,  url, or ftp");
         ExportMethodOK = 0;
     }
-
-    CheckRediness();
 }
 
 
@@ -2145,7 +2404,6 @@ function SetExportFilenameFmt()
     alert("Please set non-empty name for FilenameFmt");
     ExportFilenameFmtOK = 0;
     }
-  CheckRediness();
   }
 
 // Called after user clicks on 'Enable Processing' checkbox; check the disabledState for all processing steps that
@@ -2416,8 +2674,6 @@ function runSetProcessing(intervalFn, spCallback)
             spCallback();
         }
     }
-
-    CheckRediness();
 }
 
 // the processing.js code defines SetProcessing as the onChange function for the processing checkboxes
@@ -2507,7 +2763,6 @@ function GetExportProcessingArguments(spCallback)
 
     $("ExportSizeRatio").value = SizeRatio;
     $("ExportProcessingHidden").value = ExportProcessingArgs; // Not used.
-    CheckRediness();
 
     clearInterval(ExportProcessingArgsPoll);
     ExportProcessingArgsPoll = null;
@@ -2582,7 +2837,6 @@ function SetExportProtocol(byWhom)
     if (ProtocolOptionsSet > 0)
       ProtocolImageCheck();
     }
-  CheckRediness();
   }
 
 function SetExportCompress()
@@ -2613,49 +2867,100 @@ function SetExportCompress()
       ExportCompressOK = 0;
       }
     }
-  CheckRediness();
   }
 
 // Notify and Requestor checking is now in the email registration js script.
 
 function ExportShowQuery()
-  {
-  if ($("ShowQueryCheckbox").checked)
-    {
-    var paramString = decodeURIComponent(Object.toQueryString(exportparameters));
-    $("ExportParameters").innerHTML = paramString.replace(/&/g,"&amp;");
-     }
-  else
-    $("ExportParameters").innerHTML = "";
-  }
-
-function CheckRediness()
 {
-    var notificationAddressOK = NotificationAddressRegistered();
-    var status = ExportQueryOK * ExportRecordSetOK * ExportMethodOK * ExportFilenameFmtOK * ExportProtocolOK * notificationAddressOK;
+    var args = null;
+    var paramString = null;
 
-  if ($("ProcessingCheckbox").checked)
-  {
-    status = status * (ExportProcessingOK ? 1 : 0) * (ProcessingOK() ? 1 : 0);
-  }
+    if ($("ShowQueryCheckbox").checked)
+    {
+        args = $('ExportRecordSet').retrieve('exportArgs', null);
 
-  if (status)
-    {
-    $("ExportButtonMsg").innerHTML = "Please only click once for export request.";
-    $("ExportButton").value = "Submit Export Request";
-    $("ExportButton").style.backgroundColor = colorGreen;
-    $("ExportCheckMsg").style.color = colorBlack;
-    $("ExportCheckButton").style.backgroundColor = colorGreen;
+        if (args != null)
+        {
+            paramString = decodeURIComponent(Object.toQueryString(args));
+            if (paramString)
+            {
+                $("ExportParameters").innerHTML = paramString.replace(/&/g,"&amp;");
+            }
+        }
     }
-  else
+    else
     {
-    $("ExportCheckMsg").style.color = colorRealRed;
-    $("ExportCheckButton").style.backgroundColor = colorYellow;
-    $("ExportButton").value = "Not Ready To Submit";
-    $("ExportButton").style.backgroundColor = colorRed;
+        $("ExportParameters").innerHTML = "";
     }
-  ExportRedinessStatus = status;
-  return(status);
+}
+
+// update label, color, disabled
+function update_export_buttons()
+{
+    var state = $("ExportButton").retrieve('state', EB_STATE_DISABLED);
+
+    if (state == EB_STATE_DISABLED)
+    {
+        $("ExportCheckButton").style.backgroundColor = colorYellow;
+        $("ExportCheckButton").value = 'check parameters';
+        $("ExportCheckButton").disabled = false;
+        $("ExportCheckMsg").style.color = colorRealRed;
+        $("ExportCheckMsg").innerHTML = 'Click to check export parameters and continue';
+
+        $("ExportButton").style.backgroundColor = colorRed;
+        $("ExportButton").value = "not ready"
+        $("ExportButton").disabled = true;
+        $("ExportButtonMsg").style.color = colorRealRed;
+
+        if ($("StatusRequestID").value.length == 0)
+        {
+            $("ExportButtonMsg").innerHTML = "Check export parameters first";
+        }
+        else
+        {
+            $("ExportButtonMsg").innerHTML = "Fetch your data at URLs below before starting a new request";
+        }
+    }
+    else if (state == EB_STATE_ENABLED)
+    {
+        $("ExportCheckButton").disabled = true;
+        $("ExportCheckMsg").style.color = colorBlack;
+        $("ExportCheckMsg").innerHTML = '';
+
+        $("ExportButtonMsg").innerHTML = '';
+    }
+    else if (state == EB_STATE_SUBMIT_ENABLED)
+    {
+        $("ExportButton").style.backgroundColor = colorGreen;
+        $("ExportButton").value = "submit";
+        $("ExportButton").disabled = false;
+        $("ExportButtonMsg").innerHTML = 'Click to submit export request';
+    }
+    else if (state == EB_STATE_SUBMIT)
+    {
+        $("ExportButton").value = "wait...";
+        $("ExportButton").disabled = true;
+    }
+    else if (state == EB_STATE_CANCEL_ENABLED)
+    {
+        $("ExportButton").style.backgroundColor = colorGreen;
+        $("ExportButton").value = "cancel";
+        $("ExportButton").disabled = false;
+        $("ExportButtonMsg").innerHTML = 'Click to cancel export request';
+    }
+    else if (state == EB_STATE_PATH)
+    {
+        $("ExportButton").style.backgroundColor = colorGreen;
+        $("ExportButton").value = "get path";
+        $("ExportButton").disabled = false;
+        $("ExportButtonMsg").innerHTML = 'Click to obtain URL path to exported data';
+    }
+    else if (state == EB_STATE_CANCEL)
+    {
+        $("ExportButton").value = "Wait...";
+        $("ExportButton").disabled = true;
+    }
 }
 
 // This is a callback function. It is invoked after the email check has completed.
@@ -2671,35 +2976,27 @@ function SetExportParams()
 
     if (isOK)
     {
-        var protocolparam = $("ExportProtocolHidden").value;
-        var RecordSet = $("ExportRecordSet").value;
-
-        // exportparameters is a global.
-        exportparameters = new Hash({"op" : $("ExportOpID").value,
-                                    "ds" : RecordSet,
-                                    "sizeratio" : $("ExportSizeRatio").value,
-                                    "process" :  ExportProcessingArgs,
-                                    "requestor" : $("ExportRequestor").value,
-                                    "notify" : $("ExportNotify").value,
-                                    "method" : ExportMethodValue,
-                                    "filenamefmt" : $("ExportFilenameFmt").value,
-                                    "format" : "json",
-                                    "protocol" : protocolparam });
-
-        ExportShowQuery();
-        ExportQueryOK = 1;
+        // can set CPE to green and enable EB button
     }
     else
     {
-        // exportparameters is a global.
-        exportparameters = null;
-        $("ExportParameters").innerHTML = "";
-        ExportQueryOK = 0;
+
     }
 
-    CheckRediness();
+
 }
 
+function is_ok_to_submit()
+{
+    var is_ok = (NotificationAddressRegistered() ? 1: 0) * ExportRecordSetOK * ExportMethodOK * ExportFilenameFmtOK * ExportProtocolOK;
+
+    if ($("ProcessingCheckbox").checked)
+    {
+        isOK = isOK * (ExportProcessingOK ? 1 : 0) * (ProcessingOK() ? 1 : 0);
+    }
+
+    return is_ok;
+}
 // This function is called when the user clicks on the "Check Params for Export"
 // button.
 // A lot of the calls in this function are asynchronous.
@@ -2710,21 +3007,19 @@ function CheckExportParamsInternal()
     // ProcessingOK() is synchronous.
     if ($("ProcessingCheckbox").checked && (!ExportProcessingOK || !ProcessingOK()))
     {
-        $("ExportCheckMsg").innerHTML = "Processing details not correct, fix and retry export request.";
+        $("ExportCheckMsg").innerHTML = "Processing details not correct, fix and retry export request";
     }
     else
     {
         if ($("ExportRecordSet").value.length == 0)
         {
-            $("ExportCheckButton").style.backgroundColor = colorYellow;
-            $("ExportCheckMsg").innerHTML = "Please enter a record-set specification.";
+            $("ExportCheckMsg").innerHTML = "Please enter a record-set specification";
             return 0;
         }
 
         if (RecordCount === null)
         {
-            $("ExportCheckButton").style.backgroundColor = colorYellow;
-            $("ExportCheckMsg").innerHTML = "Still counting records, wait a second then retry";
+            $("ExportCheckMsg").innerHTML = "Still counting records; wait a second then retry";
             return(0);
         }
 
@@ -2739,21 +3034,21 @@ function CheckExportParamsInternal()
             SetExportMethod(1);
             if (ExportMethodOK == 0)
             {
-                $("ExportCheckMsg").innerHTML = "Method not given - enter export method then retry export request.";
+                $("ExportCheckMsg").innerHTML = "Method not given - enter export method then retry export request";
                 break;
             }
 
             SetExportFilenameFmt();
             if (ExportFilenameFmtOK == 0)
             {
-                $("ExportCheckMsg").innerHTML = "FilenameFmt not given, Enter FilenameFmt then retry export request.";
+                $("ExportCheckMsg").innerHTML = "FilenameFmt not given, Enter FilenameFmt then retry export request";
                 break;
             }
 
             SetExportProtocol(1);
             if (ExportProtocolOK == 0)
             {
-                $("ExportCheckMsg").innerHTML = "Protocol not given, Enter export protocol then retry export request.";
+                $("ExportCheckMsg").innerHTML = "Protocol not given, Enter export protocol then retry export request";
                 break;
             }
 
@@ -2781,16 +3076,13 @@ function CheckExportParamsInternal()
     }
 
     // note - ExportQueryOK is missing here
-    var notificationAddressOK = NotificationAddressRegistered();
-    var isOK = ExportRecordSetOK * ExportMethodOK * ExportFilenameFmtOK * ExportProtocolOK * notificationAddressOK;
-
-    if ($("ProcessingCheckbox").checked)
-    {
-      isOK = isOK * (ExportProcessingOK ? 1 : 0) * (ProcessingOK() ? 1 : 0);
-    }
+    // notificationAddressOK may be in the process of being updated asynchronously, in which case notificationAddressOK == false
+    isOK = is_ok_to_submit()
 
     if (isOK)
     {
+        var args = {};
+
         if ($("ExportMethod").options[$("ExportMethod").selectedIndex].value == 'url_direct')
         {
             // if export method == 'url_quick':
@@ -2809,8 +3101,6 @@ function CheckExportParamsInternal()
             {
                 if ($('ExportRecordSet').retrieve('allSUsOnline', false))
                 {
-                    var args = {};
-
                     // call drms-export-to-stdout CGI
                     // the tar file will have the name of the file; there will be only one image file in the tar file
                     args.skiptar = 'true';
@@ -2820,55 +3110,53 @@ function CheckExportParamsInternal()
 
                     // no compression - url_direct is for streaming a single FITS file, uncompressed
                     args.compression = 'none';
-
-                    $('ExportRecordSet').store({ 'exportArgs' : args });
                 }
             }
         }
         else
         {
-            var protocolparam = $("ExportProtocolHidden").value;
-            var RecordSet = $("ExportRecordSet").value;
-
-            exportparameters = new Hash( {  "op" : $("ExportOpID").value,
-                                            "ds" : RecordSet,
-                                            "sizeratio" : $("ExportSizeRatio").value,
-                                            "process" :  ExportProcessingArgs,
-                                            "requestor" : $("ExportRequestor").value,
-                                            "notify" : $("ExportNotify").value,
-                                            "method" : ExportMethodValue,
-                                            "filenamefmt" : $("ExportFilenameFmt").value,
-                                            "format" : "json",
-                                            "protocol" : protocolparam });
-
+            args.op = $("ExportOpID").value;
+            args.ds = $("ExportRecordSet").value;
+            args.sizeratio = $("ExportSizeRatio").value;
+            args.process = ExportProcessingArgs;
+            args.requestor = $("ExportRequestor").value;
+            args.notify = $("ExportNotify").value;
+            args.method = ExportMethodValue;
+            args.filenamefmt = $("ExportFilenameFmt").value;
+            args.format = "json";
+            args.protocol = $("ExportProtocolHidden").value;
         }
 
-        if (isOK)
-        {
-            $("ExportCheckMsg").innerHTML = "OK to proceed";
-            ExportShowQuery();
-            ExportQueryOK = 1;
-        }
+        $('ExportRecordSet').store({ 'exportArgs' : args });
+        $("ExportCheckMsg").innerHTML = "OK to proceed";
+        ExportShowQuery();
     }
     else
     {
-        exportparameters = null;
+        $("ExportRecordSet").store({ 'exportArgs' : null });
         $("ExportParameters").innerHTML = "";
-        ExportQueryOK = 0;
     }
 
     if (isOK)
     {
-        isOK = CheckRediness();
-    }
-    else
-    {
-        ExportQueryOK = 0;
+        // disable the 'submit' button, and start the interval function that:
+        //   1. ensures that there is no pending request for this user; or
+        //   2. presents the user with an enabled 'submit'/'cancel' button
+        var check_pending_fn = CHECK_FOR_PENDING_REQUEST();
+        var interval_fn_timer = null;
+
+        $("ExportCheckMsg").innerHTML = 'Checking for pending request...';
+        $("ExportButton").store({ 'state' : EB_STATE_ENABLED })
+        update_export_buttons();
+
+        interval_fn_timer = setInterval(check_pending_fn, 1000);
+        $("ExportButton").store({ 'interval' : interval_fn_timer })
     }
 
-  return isOK;
-  }
+    return isOK;
+}
 
+// called when user clicks on CPE button
 function CheckExportParams()
 {
     // Up till now, SetProcessing() gets called whenever a processing option checkbox gets clicked.
@@ -2877,48 +3165,41 @@ function CheckExportParams()
     SetProcessing(-1, CheckExportParamsInternal);  // asynchronous - can't do the rest until this asynchronous call completes.
 }
 
-function GetExport() // This is the code executed when the user clicks on the "Submit Export Request" button.
-  {
-  // ExportReadyOK values
-  // use this for state inside GetExport only, use ExportRedinessStatus to determine OK to proceed
-  //  0 ready to begin export process
-  //  1 ready for status request
-  //  2 export complete, OK or failure.
-  //  3 Process started, waiting response
-  if (ExportReadyOK == 3)
+function GetExport() // This is the code executed when the user clicks on the ExportButton button.
+{
+    // if the use was able to click this button, then it was OK to submit an export request
+    var EB_state = $("ExportButton").retrieve('state', EB_STATE_DISABLED);
+
+    if (EB_state == EB_STATE_SUBMIT_ENABLED)
     {
-    alert("Processing request, please wait...");
-    return;
+        EB_state = EB_STATE_SUBMIT;
+    }
+    else if (EB_state == EB_STATE_CANCEL_ENABLED)
+    {
+        EB_state = EB_STATE_CANCEL;
+    }
+    else if (EB_state == EB_STATE_PATH)
+    {
+        // change arguments to perform an exp_status request
+        $('ExportRecordSet').store({ 'exportArgs' : { "op" : "exp_status", "requestid" : $("RequestIdPlace").innerHTML } })
+    }
+    else
+    {
+        EB_state = EB_STATE_DISABLED;
+        $("ExportButtonMsg").innerHTML = "Unexpected export button state";
     }
 
-  if (ExportRedinessStatus)
+    $("ExportButton").store({ 'state' : EB_state });
+    update_export_buttons();
+
+    if (EB_state == EB_STATE_DISABLED)
     {
-    ExportRedinessStatus = 0;
-    ExportReadyOK = 3;
-    state = 2;
-    Cookie.setData("state",state);
-    $("ExportStatus").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
-    $("ExportLocation").innerHTML = "";
-    $("ExportButtonMsg").innerHTML = "Export request submitted, please wait...";
-    $("ExportButton").value = "Processing ...";
-    $("ExportButton").style.backgroundColor = colorDarkishRed;
-    $("ExportCheckButton").style.backgroundColor = colorYellow;
-    }
-  else if (ExportReadyOK == 1)
-    {
-    var requestidtmp = $("RequestIdPlace").innerHTML;
-    exportparameters = new Hash( {"op" : "exp_status","requestid":requestidtmp});
-    }
-  else // ExportReadyOK == 2
-    {
-    // $("ExportRecordSet").value = "";
-    ExportRedinessStatus = 0;
-    $("ExportCheckMsg").innerHTML = "Export Request Complete, Please check updated export params before making another export request";
-    return;
+        return;
     }
 
     if ($('ExportMethod').options[$('ExportMethod').selectedIndex].value == 'url_direct')
     {
+        // no need to process a full export request via jsoc_fetch
         if ($('ExportRecordSet').retrieve('count', null) > 1)
         {
             $("ExportLocation").innerHTML =  '<b>Multiple files were requested - use the url_direct export method to request a single file only.<\/b><p>';
@@ -2932,23 +3213,26 @@ function GetExport() // This is the code executed when the user clicks on the "S
     }
 
     var doFetchReqFn = function()
-	{
-		var arguments = null;
-		var jsocfetchCGI = null;
+    {
+    		var arguments = null;
+    		var jsocfetchCGI = null;
 
-		// If this is the external host, then use jsocextfetch. This CGI will choose the correct db server to handle the series.
-		// If this is the internal host, then use jsoc_fetch, which will use the internal db server.
-		if (serverMap[Host.toLowerCase()] == INTERNAL_SERVER)
-		{
-			jsocfetchCGI = JSOC_FETCH;
-		}
-		else
-		{
-			jsocfetchCGI = JSOCEXTFETCH;
-			exportparameters.update({ "dbhost" : EXTERNAL_SERVER });
-		}
+    		// If this is the external host, then use jsocextfetch. This CGI will choose the correct db server to handle the series.
+    		// If this is the internal host, then use jsoc_fetch, which will use the internal db server.
+    		if (serverMap[Host.toLowerCase()] == INTERNAL_SERVER)
+    		{
+      			jsocfetchCGI = JSOC_FETCH;
+    		}
+    		else
+    		{
+      			jsocfetchCGI = JSOCEXTFETCH;
+            arguments = $('ExportRecordSet').retrieve('exportArgs', null);
 
-		arguments = exportparameters.toObject();
+            if (arguments !== null)
+            {
+                arguments.dbhost = EXTERNAL_SERVER;
+            }
+    		}
 
         new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + jsocfetchCGI,
         {
@@ -2966,17 +3250,15 @@ function GetExport() // This is the code executed when the user clicks on the "S
                 $("ExportButtonMsg").innerHTML = "Export Failure, Problem at JSOC facility.";
                 $("ExportButton").value = "FAILURE ...";
                 $("ExportButton").style.backgroundColor = colorDarkPink;
-                ExportReadyOK = 2;
                 alert('[ GetExport ] Something went wrong...');
             },
             onComplete: function() { }
         });
     };
 
-
     // Just call the function. It will determine if it should use the internal or external version of the CGI.
     doFetchReqFn();
-  }
+}
 
 function ExportOrigin(requestID, webserver)
 {
@@ -3037,8 +3319,9 @@ function ExportOrigin(requestID, webserver)
 }
 
 function GetReExport()
-  {
-  ExportReadyOK = 3;
+{
+    var args = null;
+
   state = 2;
   Cookie.setData("state",state);
   $("ExportStatus").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
@@ -3047,12 +3330,10 @@ function GetReExport()
   $("ReExportButton").value = "Processing ...";
   $("ReExportButton").style.backgroundColor = colorPink;
 
-  var paramObj = {"op" : "exp_repeat",
-                  "requestid" : $("ReRequestID").value,
-                  "format" : "json",
-                  "notify" : $("ReExportNotify").value};
-
-  exportparameters = new Hash(paramObj);
+    args = { "op" : "exp_repeat",
+             "requestid" : $("ReRequestID").value,
+             "format" : "json",
+             "notify" : $("ReExportNotify").value };
 
   // Use JSOC_FETCH_X, which accesses the internal db, if needed. And this is needed if the request ID string ends in
   // 'X_IN'.
@@ -3079,7 +3360,7 @@ function GetReExport()
     new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + jsocfetchCGI,
     {
         method: 'post',
-        parameters: exportparameters.toObject(),
+        parameters: args,
 
         onSuccess: function(transport, json)
         {
@@ -3089,7 +3370,6 @@ function GetReExport()
         onFailure: function()
         {
             $("ReExportButtonMsg").innerHTML = "Export Failure, Problem at JSOC facility.";
-            ExportReadyOK = 2;
             $("ReExportButton").value = "FAILURE ...";
             $("ReExportButton").style.backgroundColor = colorDarkPink;
             alert('[ GetReExport ] Something went wrong...');
@@ -3102,6 +3382,8 @@ function GetReExport()
 function ProcessExportResponse(response)
 {
     var data = response.evalJSON();
+
+    // state gets set to 0 before leaving this function, so this statement has no effect
     state = 3;
     Cookie.setData("state",state);
 
@@ -3110,7 +3392,6 @@ function ProcessExportResponse(response)
         // pending request
         $("ExportCheckMsg").style.color = colorRealRed;
         $("ExportCheckMsg").innerHTML = data.error;
-        ExportReadyOK = 2;
         $("ExportButton").value = "Wait";
         $("ExportButtonMsg").innerHTML = data.error;
         $("RequestIdPlace").innerHTML = "";
@@ -3123,7 +3404,6 @@ function ProcessExportResponse(response)
     {
     // email address was not registered, or export_manage not yet found request.
     $("ExportCheckMsg").innerHTML = "RequestID not found, status=6, error=" + data.error + "<br>Try again in a few seconds, may just be not ready to respond";
-    ExportReadyOK = 3; // keep waiting
     $("ExportButton").value = "Retry";
     $("ExportButtonMsg").innerHTML = data.error;
     $("RequestIdPlace").innerHTML = "";
@@ -3133,7 +3413,6 @@ function ProcessExportResponse(response)
   else if (data.status == 5)
     {
     $("ExportCheckMsg").innerHTML = "Requested RequestID is too old, data no longer online, error=" + data.error;
-    ExportReadyOK = 2;
     $("ExportButton").value = "Export timeout";
     $("ExportButtonMsg").innerHTML = data.error;
     $("RequestIdPlace").innerHTML = "";
@@ -3146,7 +3425,6 @@ function ProcessExportResponse(response)
     {
     $("ExportCheckMsg").innerHTML = "Requested RecordSet not found or specification error, status=4, error=" + data.error +
       "<br>The export program failed.<br>" + "JSOC support see: jsoc/exports/tmp/" + data.requestid + ".runlog";
-    ExportReadyOK = 2;
     $("ExportButton").value = "Bad RecordSet";
     $("ExportButtonMsg").innerHTML = data.error;
     $("RequestIdPlace").innerHTML = "";
@@ -3159,7 +3437,6 @@ function ProcessExportResponse(response)
     {
     $("ExportCheckMsg").innerHTML = "Requested export size is too large: " + data.error + " Please contact the JSOC for help.";
     $("ExportButtonMsg").innerHTML = data.error;
-    ExportReadyOK = 2;
     $("ExportButton").value = "Export Too Large";
     $("ExportButton").style.backgroundColor = "#D8D8D8";
     RequestID = data.requestid;
@@ -3178,14 +3455,28 @@ function ProcessExportResponse(response)
       $("StatusButtonMsg").innerHTML = "Export request is being processed";
     else  // status==2
       $("StatusButtonMsg").innerHTML = "Export request waiting for processing";
-    ExportReadyOK = 1; // now allow check for status
-    $("ExportButton").value = "Request Export Status";
+
     $("ExportButton").style.backgroundColor = "#D8D8D8";
     //  XXXX FIX $("ExportStatus").innerHTML = "Processing, size=" + data.size + "MB, estimate " + data.wait + " seconds remaining";
     $("ExportStatus").innerHTML = "Processing, size estimate = " + data.size + " MB";
     RequestID = data.requestid;
     $("RequestIdPlace").innerHTML = data.requestid;
     $("StatusRequestID").value = data.requestid;
+
+    // we now know that the JSOC has seen the export request, and the has at some point had a pending request;
+    // it is safe to change state to cancel_enabled
+    if ($("ExportButton").retrieve('state', EB_STATE_DISABLED) == EB_STATE_SUBMIT)
+    {
+        $("ExportButton").store({ 'state' : EB_STATE_CANCEL_ENABLED });
+    }
+    else
+    {
+        // error
+        alert('unexpected eb state');
+    }
+
+    update_export_buttons();
+
     Cookie.setData("requestid",data.requestid);
     $("ExportLocation").innerHTML = "";
     $("FileUploadInfo").innerHTML = "File upload done, " + data.rcount + " records requested.";
@@ -3202,11 +3493,19 @@ function ProcessExportResponse(response)
     Cookie.setData("state",state);
     Cookie.setData("requestid","");
     var count = data.count;
-    $("ExportButtonMsg").innerHTML = "Fetch your data at URLs below before starting next request";
-    ExportReadyOK = 2;
-    $("ExportButton").value = "Submit Export Request";
-    $("ExportButton").style.backgroundColor = "#D8D8D8";
     RequestID = data.requestid;
+
+    if ($("ExportButton").retrieve('state', EB_STATE_DISABLED) == EB_STATE_PATH)
+    {
+        $("ExportButton").store({ 'state' : EB_STATE_DISABLED });
+    }
+    else
+    {
+        // error
+        alert('unexpected eb state');
+    }
+
+    update_export_buttons();
 
     if (RequestID.length == 0) RequestID = "N.A.";
     $("RequestIdPlace").innerHTML = RequestID;
@@ -3324,7 +3623,6 @@ function GetStatus()
       else if (data.status == 5)
         {
         $("StatusButtonMsg").innerHTML = "Requested RequestID is too old, data no longer online, error=" + data.error;
-        ExportReadyOK = 2;
         $("ExportButton").value = "Export timeout";
         $("ExportButtonMsg").innerHTML = data.error;
         $("RequestIdPlace").innerHTML = "";
@@ -3336,7 +3634,6 @@ function GetStatus()
       else if (data.status == 4)
         {
         StatusReadyOK = 0;
-        ExportReadyOK = 2;
         $("StatusButton").value = "Bad RecordSet";
         $("StatusButtonMsg").innerHTML = data.error;
         $("StatusValue").innerHTML = "Requested RecordSet returned error status=4";
@@ -3348,7 +3645,6 @@ function GetStatus()
         $("StatusButtonMsg").innerHTML = "Requested export size is too large: " + data.error + " Please contact the JSOC for help.";
         $("StatusButton").value = "Export Too Large";
         $("StatusButton").style.backgroundColor = "#D8D8D8";
-        ExportReadyOK = 2;
         $("StatusStatus").innerHTML = "Needs Intervention, size=" + data.size + "MB, contact: " + data.contact;
         $("RequestIdPlace").innerHTML = data.requestid;
         $("StatusValue").innerHTML = "Requested RecordSet returned error status=3";
@@ -3364,7 +3660,6 @@ function GetStatus()
           $("StatusButtonMsg").innerHTML = "Export request is being processed";
         else  // status==2
           $("StatusButtonMsg").innerHTML = "Export request waiting for processing";
-        ExportReadyOK = 2;
         $("StatusButton").value = "Submit Status Request";
         $("StatusButton").style.backgroundColor = "#D8D8D8";
         // XXXXX FIX $("StatusStatus").innerHTML = "Processing, size=" + data.size + "MB, estimate " + data.wait + " seconds remaining";
@@ -3377,7 +3672,6 @@ function GetStatus()
         }
       else // status == 0
         {
-        ExportReadyOK = 2;
         var valuetable = "";
         $("StatusButtonMsg").innerHTML = "Please only click once for status request.";
         $("StatusButton").value = "Submit Status Request";
@@ -3424,7 +3718,6 @@ function GetStatus()
       $("StatusButton").value = "FAILURE ...";
       $("StatusButton").style.backgroundColor = colorDarkPink;
       alert('[ GetStatus ] Something went wrong...');
-      ExportReadyOK = 2;
       },
     onComplete: function() { }
     });
