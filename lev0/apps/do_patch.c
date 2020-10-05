@@ -142,7 +142,7 @@ void do_patch6(short *adata0)
 // FSN range 179858033 - 179929229
 // Any value of 0 should be changed to 3110
 
-void do_patch6(short *adata0)
+void do_patch7(short *adata0)
 {
     int i;
     for (i=0; i<4096*4096; ++i)
