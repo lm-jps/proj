@@ -137,3 +137,14 @@ void do_patch6(short *adata0)
     for (i=0; i<4096*4096; ++i)
 	if (adata0[i] == 9784) adata0[i] = 6200;
 }
+
+// Camera 1 lookup table corruption 2020.10.04
+// FSN range 179858033 - 179929229
+// Any value of 0 should be changed to 3110
+
+void do_patch6(short *adata0)
+{
+    int i;
+    for (i=0; i<4096*4096; ++i)
+	if (adata0[i] == 0) adata0[i] = 3110;
+}
