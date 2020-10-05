@@ -18,7 +18,8 @@
  *          v2.3        Feb 13 2011
  *          v3.0        Oct 19 2017
  *          v4.0        Feb 22 2019
- *          v5.0        Sep 22 2019
+ *          v5.0        Sep 22 2020
+ *          v5.1        Oct 04 2020
  *
  *
  * Issues:
@@ -53,6 +54,8 @@
  *          number of threads now agree. The preprocessing summation is performed in
  *          single thread mode as OpenMP Kahan summation still yields different results
  *          for different threads; modified output to save as compressed ints
+ *          v5.1
+ *          Added wf, wd as keywords and passed to relax()
  *
  * Example:
  *          nlfff_v1 "in=su_xudong.B_720s_cea[12673][2017.09.06_11:36:00_TAI]" "out=su_xudong.nlfff" "PREP=1" "MULTI=3" "nz=256"
@@ -126,6 +129,8 @@ ModuleArgs_t module_args[] =
     {ARG_DOUBLE, "mu2", "1.0", "For vector magnetogram preprocessing."},
     {ARG_DOUBLE, "mu3", "0.001", "For vector magnetogram preprocessing."},
     {ARG_DOUBLE, "mu4", "0.01", "For vector magnetogram preprocessing."},
+    {ARG_DOUBLE, "wf", "1.0", "Weighting for the Lorentz force term in merit function."},
+    {ARG_DOUBLE, "wd", "1.0", "Weighting for the divergence term in merit function."},
     {ARG_INT, "maxit", "10000", "Maximum itertation number."},
     {ARG_INT, "MULTI", "1", "Levels of multigrid algorithm, 0 and 1 with no multigrid."},
     {ARG_INT, "VERB", "2", "Level of verbosity: 0=errors/warnings; 1=status; 2=all"},
@@ -166,7 +171,7 @@ int DoIt(void)
     int i, j, k, dpt, dpt0;
     int nx, ny, nz, nxny, nynz, nxnynz;
     int nd, nd_now, maxit;
-    double mu1, mu2, mu3, mu4;
+    double mu1, mu2, mu3, mu4, wf, wd;
     int multi, multi_now;
     int nx_now, ny_now, nz_now, nxny_now, nynz_now, nxnynz_now;
     int runnum;
@@ -193,6 +198,8 @@ int DoIt(void)
     mu2 = params_get_double(&cmdparams, "mu2");
     mu3 = params_get_double(&cmdparams, "mu3");
     mu4 = params_get_double(&cmdparams, "mu4");
+    wf = params_get_double(&cmdparams, "wf");
+    wd = params_get_double(&cmdparams, "wd");
     runnum = params_get_int(&cmdparams, "RUNNUM");
     multi = params_get_int(&cmdparams, "MULTI");
     if (multi < 1) multi = 1;
@@ -338,7 +345,7 @@ int DoIt(void)
             free(bx0_now); free(by0_now); free(bz0_now);
             
             /* Step 5: NLFFF relaxation */
-            relax(Bx, By, Bz, nx_now, ny_now, nz_now, nd_now, maxit, verbflag);
+            relax(Bx, By, Bz, nx_now, ny_now, nz_now, nd_now, wf, wd, maxit, verbflag);
             printf("Relaxation done\n"); fflush(stdout);
             /* Step 0: Grid */
             nx_now *= 2; ny_now *= 2; nz_now *= 2; nd_now *= 2;
@@ -438,6 +445,8 @@ int DoIt(void)
         drms_setkey_double(outRec, "MU2", mu2);
         drms_setkey_double(outRec, "MU3", mu3);
         drms_setkey_double(outRec, "MU4", mu4);
+        drms_setkey_double(outRec, "WF", wf);
+        drms_setkey_double(outRec, "WD", wd);
         
         /* Clean up */
         drms_free_array(inArrayBx);

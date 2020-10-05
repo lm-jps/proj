@@ -70,7 +70,7 @@ double calculateLi(double *Bx, double *By, double *Bz,
 
 void relax(double *Bx, double *By, double *Bz, 
            int nx, int ny, int nz, 
-           int nd, int maxit, int verb)
+           int nd, double wf, double wd, int maxit, int verb)
 {
     double Lx, Ly, Lz;
     double *Bx1, *By1, *Bz1, *Bx2, *By2, *Bz2;
@@ -189,7 +189,7 @@ void relax(double *Bx, double *By, double *Bz,
 #pragma omp parallel for private (i)
 #endif
     for (i = 0; i < nxnynz; i++) {
-        wa0[i] = wb0[i] = 1.0;
+        wa0[i] = wf; wb0[i] = wd;   // Oct 4 2020
     }
 
     if (nd > 1) {
