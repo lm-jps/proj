@@ -29,9 +29,9 @@ void preproc(double *Bx, double *By, double *Bz,
     double Bave, dt;
     double dx, dy, dxdy;
     double Emag, ihelp;
-    double dL, L, L1, L2, L12, L3, L4, L5;
-    double oldL12, oldL3, oldL4, oldL5, oldL;
-    double dL12, dL3, dL4, dL5;
+    double dL, L, L1, L2, L12, L3, L4;
+    double oldL12, oldL3, oldL4, oldL;
+    double dL12, dL3, dL4;
     double term1a, term1b, term1c, term1c1, term1c2; 
     double term2a, term2b, term2c;
     double term2a1, term2a2, term2b1, term2b2, term2c1, term2c2;
@@ -89,7 +89,7 @@ void preproc(double *Bx, double *By, double *Bz,
     }
     kahan_sum_sgl(Bave_arr, nxny, &Bave);   // single thread to keep consistent
     Bave = Bave / nx / ny;
-//  printf("\n Bave= %lf",Bave);
+    printf("\n Bave= %lf",Bave);
 
 #ifdef _OPENMP
 #pragma omp parallel for private (i)
@@ -115,7 +115,7 @@ void preproc(double *Bx, double *By, double *Bz,
 
     /* Do the Preprocessing */
     
-    dt = 0.1;
+    dt = 0.01;
     Emag = ihelp = 0.0;
 #ifdef _OPENMP
 #pragma omp parallel for private (i)
@@ -126,12 +126,12 @@ void preproc(double *Bx, double *By, double *Bz,
     }
     kahan_sum_sgl(Emag_arr, nxny, &Emag);
     kahan_sum_sgl(ihelp_arr, nxny, &ihelp);
-//  printf("\n Emag= %lf, ihelp= %lf",Emag,ihelp);
+    printf("\n Emag= %lf, ihelp= %lf",Emag,ihelp);
 
     /* Start Iteration */
     L = 10.0; dL=1.0; oldL=10.0;
     it = -1;
-//  printf("\n L12, L3, L4 are multiplied with 1.0e6");
+    printf("\n L12, L3, L4 are multiplied with 1.0e6");
     while(it < maxit && dL > 0.0001 && dt > 1.0e-6)
     {
         it++;
@@ -139,7 +139,7 @@ void preproc(double *Bx, double *By, double *Bz,
         term2a = term2b = term2c = 0.0;
         term2a1 = term2b1 = term2c1 = 0.0;
         term2a2 = term2b2 = term2c2 = 0.0;
-        L1 = L2 = L3 = L4 = L5 = 0.0;
+        L1 = L2 = L3 = L4 = 0.0;
 #ifdef _OPENMP
 #pragma omp parallel for private (i,ix,iy)
 #endif
@@ -214,7 +214,7 @@ void preproc(double *Bx, double *By, double *Bz,
         
         kahan_sum_sgl(L4_arr, nxny, &L4);
         L4 = dxdy * L4 / Emag;
-        L = mu1 * L1 + mu2 * L2 + mu3 * L3 + mu4 * L4 + mu5 * L5;
+        L = mu1 * L1 + mu2 * L2 + mu3 * L3 + mu4 * L4;
         
         /* Term 4 Smoothing */
 #ifdef _OPENMP
@@ -240,28 +240,26 @@ void preproc(double *Bx, double *By, double *Bz,
                         + 2 * LapBz[i2] + 2 * LapBz[i3] + 2 * LapBz[i4];
         }
         if (it > 0) {
-            dL12 = dL3 = dL4 = dL5 = 0.0;
+            dL12 = dL3 = dL4 = 0.0;
             if (L12 != 0.0) dL12 = fabs(L12 - oldL12) / L12;
             if (L3 != 0.0) dL3 = fabs(L3 - oldL3) / L3;
             if (L4 != 0.0) dL4 = fabs(L4 - oldL4) / L4;
-            if (L5 != 0.0) dL5 = fabs(L5 - oldL5) / L5;
-            /* dL=dL12+dL3+dL4; */
             if (L != 0.0) dL = (oldL - L) / L;
         }
         if (it % 100 == 0 && verb == 2) {
             printf("%i L12= %lf, L3= %lf, L4= %lf, L=%lf, dL= %lf\n", 
-            it, 1.0e6*L12, 1.0e6*L3, 1.0e6*L4, 1.0e6*L, dL);
+                   it, 1.0e6*L12, 1.0e6*L3, 1.0e6*L4, 1.0e6*L, dL);
         }
         if (oldL < L && it > 0) {
             dt = dt / 2;
             if (verb == 2) printf("dt reduced: %i, dt=%lf, dL=%lf, oldL=%lf, L=%lf\n",
-            it, dt, dL, 1.0e6*oldL, 1.0e6*L);
+                                  it, dt, dL, 1.0e6*oldL, 1.0e6*L);
             dL = 1.0;
             oldL = L;
         } else {
             if (it > 0) dt = dt * 1.001;
             oldL12 = L12; oldL3 = L3;
-            oldL4 = L4; oldL5 = L5;
+            oldL4 = L4;
             oldL = L;
         }
         
