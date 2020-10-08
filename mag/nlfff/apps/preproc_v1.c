@@ -36,7 +36,7 @@ void preproc(double *Bx, double *By, double *Bz,
     double term2a, term2b, term2c;
     double term2a1, term2a2, term2b1, term2b2, term2c1, term2c2;
     double term5;
-    int nxny;	//, nx, ny; 
+    int nxny;
     int i, ix, iy, it;
     int i1, i2, ix1, iy1;
     int i3, i4, ix2, iy2;
