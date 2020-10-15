@@ -58,6 +58,9 @@ function initVars()
     email_initVars($("ExportNotify"), $("ExportRequestor"));
 
     // registration has not been checked
+    $("ExportButtonMsg").store('cp_message', null);
+    $("ExportNotify").store('error_msg', null);
+    $("ExportRequestor").store('error_msg', null);
     $("ExportNotify").store('registration_pending', null);
 
     update_ui();
@@ -67,6 +70,8 @@ function getargs()
 {
     $("ExportNotify").value = '';
     $("ExportRequestor").value = '';
+
+    update_ui();
 }
 
 function OnLoadInit()
@@ -155,6 +160,12 @@ function update_ui()
         element_reg_button.value = 'error';
         element_reg_button.disabled = true;
         element_reg_button_description.innerHTML = error_msg;
+
+        if (!registration_pending)
+        {
+            element_address.disabled = false;
+            element_address_description.innerHTML = "REGISTRATION FAILURE";
+        }
     }
     else
     {
@@ -301,6 +312,7 @@ function validate_address()
 {
     var element_address = $("ExportNotify"); // address text-edit element
     var element_requestor = $("ExportRequestor"); // requestor text-edit element
+    var element_reg_button_description =$("ExportButtonMsg"); // CR description
     var requestor = element_requestor.value.trim();
     var address = element_address.value.trim();
 
@@ -317,6 +329,9 @@ function validate_address()
     valid = ValidateNotificationAddress(element_address);
 
     // reset registration pending
+    element_reg_button_description.store('cp_message', null);
+    element_address.store('error_msg', null);
+    element_requestor.store('error_msg', null);
     element_address.store('registration_pending', null);
 
     update_ui();

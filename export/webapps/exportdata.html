@@ -3050,6 +3050,10 @@ function SetExportNotify(clickedByUser)
     requestor = $("ExportRequestor").value.trim();
     $("RequestorMessage").innerHTML = "Provide an optional identifier."
 
+    $("ExportCheckMsg").store('cp_message', null);
+    $("ExportNotify").store('error_msg', null);
+    $("ExportNotify").store('registration_pending', null);
+
     if (doValidation)
     {
         valid = ValidateNotificationAddress($("ExportNotify"));
@@ -3271,6 +3275,12 @@ function update_export_buttons()
             if (error_msg !== null && error_msg.length > 0)
             {
                 $("ExportCheckButton").disabled = true;
+
+                if (!registration_pending)
+                {
+                    $("ExportNotify").disabled = false;
+                    $("ExportNotifyMsg").innerHTML = "REGISTRATION FAILURE";
+                }
             }
             else
             {

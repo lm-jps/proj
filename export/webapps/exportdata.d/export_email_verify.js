@@ -173,8 +173,8 @@ function call_address_ajax(address, requestor, element_address, callback_update_
                 addresses[address_internal].registration_status = true;
 
                 // ART - temp so I don't have to delete the cookie a milion times
-                // Cookie.setData("user", name);
-                // Cookie.setData("notify", address);
+                Cookie.setData("user", name);
+                Cookie.setData("notify", address);
 
                 // stop registration timer
                 element_address.store('seconds_remaining', 0);
