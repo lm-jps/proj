@@ -4,7 +4,7 @@ dirstack_$(sp)	:= $(d)
 d		:= $(dir)
 
 # Local variables
-MODEXE_$(d)	:= $(addprefix $(d)/, nlfff_v1 localpf test_nlfff test_localpf test_preproc nlfff_v2 localpf_mkl decomp_mkl)
+MODEXE_$(d)	:= $(addprefix $(d)/, nlfff_v1 localpf test_nlfff test_localpf test_preproc nlfff_v2)
 MODEXE		:= $(MODEXE) $(MODEXE_$(d))
 
 #MODEXE_SOCK_$(d):= $(MODEXE_$(d):%=%_sock)
