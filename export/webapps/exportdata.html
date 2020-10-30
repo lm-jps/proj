@@ -3830,6 +3830,7 @@ function CheckExportParamsInternal()
     }
     else
     {
+
         $("ExportRecordSet").store({ 'exportArgs' : null });
     }
 
@@ -3936,6 +3937,8 @@ function GetExport() // This is the code executed when the user clicks on the Ex
     		var arguments = null;
     		var jsocfetchCGI = null;
 
+        arguments = $('ExportRecordSet').retrieve('exportArgs', null);
+
     		// If this is the external host, then use jsocextfetch. This CGI will choose the correct db server to handle the series.
     		// If this is the internal host, then use jsoc_fetch, which will use the internal db server.
     		if (serverMap[Host.toLowerCase()] == INTERNAL_SERVER)
@@ -3945,7 +3948,6 @@ function GetExport() // This is the code executed when the user clicks on the Ex
     		else
     		{
       			jsocfetchCGI = JSOCEXTFETCH;
-            arguments = $('ExportRecordSet').retrieve('exportArgs', null);
 
             if (arguments !== null)
             {
