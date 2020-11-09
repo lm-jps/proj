@@ -1070,6 +1070,7 @@ printf("vrcenter=%f, rSun=%f, xcen=%f, ycen=%f, INVPHMAP=%s\n", vrcenter, rSun, 
      drms_copykey(orec, irec, "CRLT_OBS");
      drms_copykey(orec, irec, "CAR_ROT");
      drms_copykey(orec, irec, "DSUN_OBS");
+     drms_copykey(orec, irec, "CALVER64");
 					    /*  set output record key values  */
     kstat = 0;
     kstat += check_and_set_key_str   (orec, "WCSNAME", "Carrington Heliographic");
