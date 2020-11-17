@@ -17,6 +17,7 @@ char *module_name = "hmib3dailysynframe";
 #define PARAMETER_ERROR(PNAME)
 #define     PI     4.0 * atan(1.0)
 #define QUAL_CHECK      (0xfffefb00)
+#define LON_CORR        (0x10000000) // YL, Longitude Correction Bite
 
 void frebinbox(float *image_in, float *image_out, int nx, int ny, int nbinx, int nbiny);
 
@@ -72,6 +73,7 @@ int DoIt(void)
   float bscale = params_get_float(&cmdparams, "bscale");
   float bzero = params_get_float(&cmdparams, "bzero");
   int nbin = 5;
+  long long calVer;
 
   inQuery = (char *)params_get_str(&cmdparams, "in");
   outQuery = (char *)params_get_str(&cmdparams, "out");
@@ -80,7 +82,7 @@ int DoIt(void)
   drmethod = (char *)params_get_str(&cmdparams, "drmethod");
 
   char historyofthemodule[2048]; // put history info into the data
-  char *cvsinfo = strdup("$Id: hmib3dailysynframe.c,v 1.2 2017/01/17 21:20:21 yliu Exp $");
+  char *cvsinfo = strdup("$Id: hmib3dailysynframe.c,v 1.3 2020/11/17 01:45:05 yliu Exp $");
   cvsinfo = (char *)malloc(2048 * sizeof(char));
   sprintf(historyofthemodule,"o2helio.c bug corrected -- July 2013");
 
@@ -182,10 +184,14 @@ int DoIt(void)
   xmg = inArray->axis[0]; ymg = inArray->axis[1];
   t_rec = drms_getkey_time(inRecfinal, "T_REC", &status);
   t_rec0 = drms_getkey_time(inRecfinal, "T_OBS", &status);
+  calVer = drms_getkey_longlong(inRecfinal, "CALVER64", &status); // YL 2020-11-06
   crn = drms_getkey_int(inRecfinal, "CAR_ROT", &status);
   crlt = drms_getkey_float(inRecfinal, "CRLT_OBS", &status);
   crln = drms_getkey_float(inRecfinal, "CRLN_OBS", &status);
+  if (((calVer>>28) & 1) == 0) crln -= 0.081894; // YL 2020-11-06 
   clog0 = drms_getkey_double(inRecfinal, "CRVAL1", &status);
+  if (((calVer>>28) & 1) == 0) clog0 -= 0.081894; // YL 2020-11-06  
+
   idcamera = drms_getkey_int(inRecfinal, "CAMERA", &status);
 
   drms_copykey(outRec, inRecfinal, "DATASIGN");
@@ -209,7 +215,8 @@ int DoIt(void)
   drms_copykey(outRec, inRecfinal, "DIFROT_B");
   drms_copykey(outRec, inRecfinal, "DIFROT_C");
   drms_copykey(outRec, inRecfinal, "INSTRUME");
-  drms_copykey(outRec, inRecfinal, "CALVER64");
+  drms_setkey_longlong(outRec, "CALVER64", calVer | LON_CORR); //YL 2020-11-06
+//  drms_copykey(outRec, inRecfinal, "CALVER64");
 
 //  smalloutRec;
 int itmp;
@@ -237,7 +244,8 @@ double dtmp;
   drms_copykey(smalloutRec, inRecfinal, "DIFROT_B");
   drms_copykey(smalloutRec, inRecfinal, "DIFROT_C");
   drms_copykey(smalloutRec, inRecfinal, "INSTRUME");
-  drms_copykey(smalloutRec, inRecfinal, "CALVER64");
+  drms_setkey_longlong(smalloutRec, "CALVER64", calVer | LON_CORR); //YL 2020-11-06
+//drms_copykey(smalloutRec, inRecfinal, "CALVER64");
 
   drms_free_array(inArray);
 
@@ -284,7 +292,9 @@ double dtmp;
         inArray = drms_segment_read(inSeg, DRMS_TYPE_FLOAT, &status);
         float *inData = (float *)inArray->data;
         int crnn = drms_getkey_int(inRecfinal, "CAR_ROT", &status);
+        long long  calVern = drms_getkey_longlong(inRecfinal, "CALVER64", &status); // YL 2020-11-06
         float clogn = drms_getkey_float(inRecfinal, "CRVAL1", &status);
+        if (((calVern>>28) & 1) == 0) clogn -= 0.081894; // YL 2020-11-06  
         int xshift = (rint)(ppd * ((clogn - clog0) - 360.0 * (crnn - crn)));
         TIME Tobs = drms_getkey_time(inRecfinal, "T_OBS", &status);
         tobs_total += Tobs;
@@ -1017,4 +1027,12 @@ void frebinbox(float *image_in, float *image_out, int nx, int ny, int nbinx, int
   }
 }
 
+/* Modified to deal with new CRLN_OBS
+ * revision: 2020/11/16 Yang
+ *
+ *
+ *
+ *
+ *
+ *
 // ************ END ********** END ******** END ********** END ***********
