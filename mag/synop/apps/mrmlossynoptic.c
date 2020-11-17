@@ -53,6 +53,7 @@
 #define CR                     "CR"
 #define NBIN                   "NBIN"
 #define QUAL_CHECK      (0xfffefb00)
+#define LON_CORR        (0x10000000) // YL, Longitude Correction Bit
 
 const float kNOISE_EQ = 10.0;
 char *module_name = "mrmlossynoptic";
@@ -190,7 +191,7 @@ int DoIt(void)
   long long calVer;
   double eph[30];
   char historyofthemodule[2048]; // put history info into the data
-  char *cvsinfo = strdup("$Id: mrmlossynoptic.c,v 1.3 2016/11/16 21:58:08 yliu Exp $");
+  char *cvsinfo = strdup("$Id: mrmlossynoptic.c,v 1.4 2020/11/17 01:34:27 yliu Exp $");
   cvsinfo = (char *)malloc(2048 * sizeof(char));
   sprintf(historyofthemodule,"Carrington-Time conversion corrected; o2helio.c bug corrected -- July 2013");
 
@@ -516,7 +517,13 @@ for (ds=0; ds < nds; ds++)
                    }
 
                       clong = drms_getkey_double(inRec, "CRVAL1", &status);
+//                      printf("Orig clong = %f\n", clong);
+                      if (((calVer>>28) & 1) == 0) clong -= 0.081894; // YL, correct for Lon err
+//                      printf("Corr clong = %f\n", clong);
+
                       cmLong = drms_getkey_double(inRec, "CRLN_OBS", &status);
+                      if (((calVer>>28) & 1) == 0) cmLong -= 0.081894; //YL correct for Carr err
+
                       orot = drms_getkey_int(inRec, "CAR_ROT", &status);
                       if (drms_ismissing_float(clong) || drms_ismissing_int(orot)) 
                         {
@@ -1113,11 +1120,11 @@ printf("keywords wring half-way done\n");
         drms_setkey_float(outRec, HWNWIDTH, halfWindow);
         drms_setkey_float(outRec, EQPOINTS, nEquivPtsReq);
         drms_setkey_float(outRec, "NSIGMA", nsig);
-        drms_setkey_longlong(outRec, "CALVER64", calVer);
+        drms_setkey_longlong(outRec, "CALVER64", calVer | LON_CORR); //YL add CORR
         drms_setkey_float(outMlRec, HWNWIDTH, halfWindow);
         drms_setkey_float(outMlRec, EQPOINTS, nEquivPtsReq);
         drms_setkey_float(outMlRec, "NSIGMA", nsig);
-        drms_setkey_longlong(outMlRec, "CALVER64", calVer);
+        drms_setkey_longlong(outMlRec, "CALVER64", calVer | LON_CORR); // YL add CORR
 
 // save the differential rotation correction parameters 
         if (carrStretch > 0)
@@ -1286,12 +1293,12 @@ printf("keywords wring half-way done\n");
         drms_setkey_float(smallMrRec, HWNWIDTH, halfWindow);
         drms_setkey_float(smallMrRec, EQPOINTS, nEquivPtsReq);
         drms_setkey_float(smallMrRec, "NSIGMA", nsig);
-        drms_setkey_longlong(smallMrRec, "CALVER64", calVer);
+        drms_setkey_longlong(smallMrRec, "CALVER64", calVer | LON_CORR); // YL add CORR
         drms_setkey_string(smallMlRec, "IMG_ROT", tstr);
         drms_setkey_float(smallMlRec, HWNWIDTH, halfWindow);
         drms_setkey_float(smallMlRec, EQPOINTS, nEquivPtsReq);
         drms_setkey_float(smallMlRec, "NSIGMA", nsig);
-        drms_setkey_longlong(smallMlRec, "CALVER64", calVer);
+        drms_setkey_longlong(smallMlRec, "CALVER64", calVer | LON_CORR); //YL add CORR
 
 // save the differential rotation correction parameters 
         if (carrStretch > 0)
@@ -1939,11 +1946,13 @@ double earth_B(TIME t)
 */
 
 /*
-$Id: mrmlossynoptic.c,v 1.3 2016/11/16 21:58:08 yliu Exp $
+$Id: mrmlossynoptic.c,v 1.4 2020/11/17 01:34:27 yliu Exp $
 $Source: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/mag/synop/apps/mrmlossynoptic.c,v $
 $Author: yliu $
 */
-/* hmisynoptic.c is a version from hmisynop.c that produces
+/* Updated to take care of CRLN_OBS error
+ * revision: 2020/11/16 Yang 
+ * hmisynoptic.c is a version from hmisynop.c that produces
  * a lower resolution map using Jesper's code fresize.c.
  * revision: 2011/07/11 Yang
  *
@@ -1952,6 +1961,9 @@ $Author: yliu $
  * revision 2010/03/01   Yang
  *            
  * $Log: mrmlossynoptic.c,v $
+ * Revision 1.4  2020/11/17 01:34:27  yliu
+ * Modified for New CRLN_OBS
+ *
  * Revision 1.3  2016/11/16 21:58:08  yliu
  * Fixed a bug that causes CDELT2 wrong in small-version maps
  *

@@ -53,6 +53,7 @@
 #define CR                     "CR"
 #define NBIN                   "NBIN"
 #define QUAL_CHECK      (0xfffefb00)
+#define LON_CORR        (0x10000000) // YL, Longitude Correction Bit
 
 const float kNOISE_EQ = 10.0;
 char *module_name = "hmib3compsynoptic";
@@ -193,7 +194,7 @@ int DoIt(void)
   double eph[30];
   char historyofthemodule[2048]; // put history info into the data
     // set cvs commit version into keyword HEADER
-  char *cvsinfo = strdup("$Id: hmib3compsynoptic.c,v 1.2 2016/11/16 22:14:13 yliu Exp $");
+  char *cvsinfo = strdup("$Id: hmib3compsynoptic.c,v 1.3 2020/11/17 01:38:41 yliu Exp $");
 //  cvsinfo = (char *)malloc(2048 * sizeof(char));
 //  char cvsinfo[2048];
   sprintf(historyofthemodule,"New Module -- March 2014");
@@ -521,7 +522,10 @@ for (ds=0; ds < nds; ds++)
                    }
 
                       clong = drms_getkey_double(inRec, "CRVAL1", &status);
+                      if (((calVer>>28) & 1) == 0) clong -= 0.081894; // YL, correct for Lon err
                       cmLong = drms_getkey_double(inRec, "CRLN_OBS", &status);
+                      if (((calVer>>28) & 1) == 0) cmLong -= 0.081894; //YL correct for Carr err
+
                       orot = drms_getkey_int(inRec, "CAR_ROT", &status);
                       if (drms_ismissing_float(clong) || drms_ismissing_int(orot)) 
                         {
@@ -1130,7 +1134,7 @@ for (ds = 0; ds < nsynop; ds++)
         drms_setkey_float(outRec, HWNWIDTH, halfWindow);
         drms_setkey_float(outRec, EQPOINTS, nEquivPtsReq);
         drms_setkey_float(outRec, "NSIGMA", nsig);
-        drms_setkey_longlong(outRec, "CALVER64", calVer);
+        drms_setkey_longlong(outRec, "CALVER64", calVer | LON_CORR); // YL add CORR
 
 //        drms_copykey(outRec, inRec, "CALVER64");
 
@@ -1246,7 +1250,7 @@ for (ds = 0; ds < nsynop; ds++)
         drms_setkey_float(smallRec, HWNWIDTH, halfWindow);
         drms_setkey_float(smallRec, EQPOINTS, nEquivPtsReq);
         drms_setkey_float(smallRec, "NSIGMA", nsig);
-        drms_setkey_longlong(smallRec, "CALVER64", calVer);
+        drms_setkey_longlong(smallRec, "CALVER64", calVer | LON_CORR); //YL add CORR
 
 // save the differential rotation correction parameters 
         if (carrStretch > 0)
@@ -1950,11 +1954,13 @@ double earth_B(TIME t)
 */
 
 /*
-$Id: hmib3compsynoptic.c,v 1.2 2016/11/16 22:14:13 yliu Exp $
+$Id: hmib3compsynoptic.c,v 1.3 2020/11/17 01:38:41 yliu Exp $
 $Source: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/mag/synop/apps/hmib3compsynoptic.c,v $
 $Author: yliu $
 */
-/* hmisynoptic.c is a version from hmisynop.c that produces
+/* Correct for CRLN_OBS error
+ * revision: 2020/11/16 Yang
+ * hmisynoptic.c is a version from hmisynop.c that produces
  * a lower resolution map using Jesper's code fresize.c.
  * revision: 2011/07/11 Yang
  *
@@ -1963,6 +1969,9 @@ $Author: yliu $
  * revision 2010/03/01   Yang
  *            
  * $Log: hmib3compsynoptic.c,v $
+ * Revision 1.3  2020/11/17 01:38:41  yliu
+ * Modified for New CRLN_OBS
+ *
  * Revision 1.2  2016/11/16 22:14:13  yliu
  * Fixed a bug that causes CDELT2 incorrect in small-version maps
  *
