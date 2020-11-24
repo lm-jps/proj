@@ -5,10 +5,10 @@
  * This is a module that runs with DRMS and processes lev0
  * filtergrams to lev1.
  * It is scheduled by build_lev1_mgr either by qsub to the cluster
- * or by fork to run on the local machine. It is called with 
+ * or by fork to run on the local machine. It is called with
  * 12 (NUMRECLEV1 defined in lev0lev1.h) lev0 images at a time.
  * See the -h nice_intro() for details of the calling options.
- */ 
+ */
 
 #include <jsoc_main.h>
 #include <cmdparams.h>
@@ -27,8 +27,8 @@
 #include <fresize.h>
 #include <gapfill.h>
 #include "list.h"
-#include </home/jsoc/include/fftw3.h> 
-//#include "fftw3.h" 
+#include </home/jsoc/include/fftw3.h>
+//#include "fftw3.h"
 #include "imgdecode.h"
 #include "lev0lev1.h"
 #include "quallev1.h"
@@ -57,7 +57,7 @@
 #define NUMTIMERS 8		//number of seperate timers avail
 #define NOTSPECIFIED "***NOTSPECIFIED***"
 #define LOGTEST 0
-#define CAL_HCFTID 17		//image is cal mode 
+#define CAL_HCFTID 17		//image is cal mode
 #define STOP_FILE "/usr/local/logs/lev1/build_mgr_stop_iris"
 
 // SAA-HLZ
@@ -66,8 +66,8 @@
 int compare_rptr(const void *a, const void *b);
 static TIME SDO_to_DRMS_time(int sdo_s, int sdo_ss);
 
-// List of default parameter values. 
-ModuleArgs_t module_args[] = { 
+// List of default parameter values.
+ModuleArgs_t module_args[] = {
   {ARG_STRING, "mode", NOTSPECIFIED, "either recnum or fsn"},
   {ARG_STRING, "dsin", NOTSPECIFIED, "dataset of lev0 filtergrams"},
   {ARG_STRING, "dsout", NOTSPECIFIED, "dataset of lev1 output"},
@@ -84,10 +84,10 @@ ModuleArgs_t module_args[] = {
 };
 
 CmdParams_t cmdparams;
-// Module name presented to DRMS. 
+// Module name presented to DRMS.
 char *module_name = "build_lev1_iris_NEW";
 
-FILE *h1logfp;		// fp for h1 ouput log for this run 
+FILE *h1logfp;		// fp for h1 ouput log for this run
 static struct stat stbuf;
 static LEV0LEV1 lev0lev1;
 static LEV0LEV1 *l0l1 = &lev0lev1;
@@ -150,10 +150,10 @@ long long brec, erec, bfsn, efsn; //begin and end lev0 rec/fsn. must be same dat
 long long bnumx, enumx;		  //has either the brec/erec of bfsn/efsn pair accord to mode
 int verbose;
 int modeflg = 0;		//0=fsn, 1=recnum
-int imagecnt = 0;		// num of images since last commit 
+int imagecnt = 0;		// num of images since last commit
 int restartflg = 0;		// set when build_lev1 is called for a restart
 int abortflg = 0;
-int sigalrmflg = 0;             // set on signal so prog will know 
+int sigalrmflg = 0;             // set on signal so prog will know
 int ignoresigalrmflg = 0;       // set after a close_image()
 int quicklook;
 //global quality flags
@@ -171,8 +171,8 @@ char argbx[80], argex[80], argquick[80], argmode[80];
 char timetag[32];
 char tlmseriesname[128];	// e.g. hmi.tlm
 char lev0seriesname[128];	// e.g. hmi.lev0
-char *username;			// from getenv("USER") 
-char *logfile;			// optional log name passed in 
+char *username;			// from getenv("USER")
+char *logfile;			// optional log name passed in
 char *mode;			// given mode. recnum or fsn
 char *dsin;			// lev0 input dataset
 char *dsout;			// lev1 output dataset
@@ -296,13 +296,13 @@ char *do_datestr() {
 
   tval = time(NULL);
   t_ptr = localtime(&tval);
-  sprintf(datestr, "%d.%02d.%02d_%02d:%02d:%02d", 
+  sprintf(datestr, "%d.%02d.%02d_%02d:%02d:%02d",
 	  (t_ptr->tm_year+1900), (t_ptr->tm_mon+1),
 	  t_ptr->tm_mday, t_ptr->tm_hour, t_ptr->tm_min, t_ptr->tm_sec);
   return(datestr);
 }
 
-// Returns a time tag like  yyyy.mm.dd.hhmmss 
+// Returns a time tag like  yyyy.mm.dd.hhmmss
 char *gettimetag()
 {
   struct timeval tvalr;
@@ -343,8 +343,8 @@ int h1log(const char *fmt, ...)
   if(h1logfp) {
     fprintf(h1logfp, string);
     fflush(h1logfp);
-  } 
-  else {			// couldn't open log 
+  }
+  else {			// couldn't open log
     printf(string);		// also print to stdout
     fflush(stdout);
   }
@@ -365,7 +365,7 @@ int send_mail(char *fmt, ...)
   return(0);
 }
 
-// Got a fatal error. 
+// Got a fatal error.
 void abortit(int stat)
 {
   printk("***Abort in progress ...\n");
@@ -402,9 +402,9 @@ static int GetSaaHlz(DRMS_Env_t *env, DRMS_RecordSet_t *rs, double *tgttimes, in
     char timeStr[IORBIT_SAAHLZINFO_TIME_KEY_LEN];
     LIBASTRO_Error_t rv;
     int ret = 0;
-    
+
     rv = iorbit_getSaaHlzInfo(env, SAA_HLZ_SERIES, tgttimes, ntimes, &saahlzinfo);
-    
+
     if (rv == kLIBASTRO_Success)
     {
         for (itime = 0; itime < ntimes; itime++)
@@ -412,22 +412,22 @@ static int GetSaaHlz(DRMS_Env_t *env, DRMS_RecordSet_t *rs, double *tgttimes, in
             nhlz = 0;
             shlz = 0;
             saa = 0;
-            
+
             snprintf(timeStr, sizeof(timeStr), "%lf", tgttimes[itime]);
-            
+
             if ((pColToList = hcon_lookup(saahlzinfo, timeStr)) != NULL)
             {
                 colToList = *pColToList;
-                
+
                 if ((pList = hcon_lookup(colToList, IORBIT_SAAHLZINFO_KW_EVENT_TYPE)) != NULL)
                 {
                     list = *pList;
                     list_llreset(list);
-                    
+
                     while((node = list_llnext(list)) != NULL)
                     {
                         eventType = (char *)node->data;
-                        
+
                         if (strcasecmp(eventType, "NHLZ") == 0)
                         {
                             nhlz = 1;
@@ -441,7 +441,7 @@ static int GetSaaHlz(DRMS_Env_t *env, DRMS_RecordSet_t *rs, double *tgttimes, in
                             saa = 1;
                         }
                     }
-                    
+
                     /* Set SAA-HLZ keywords */
                     if (nhlz && shlz)
                     {
@@ -459,11 +459,11 @@ static int GetSaaHlz(DRMS_Env_t *env, DRMS_RecordSet_t *rs, double *tgttimes, in
                         printf("  Setting HLZ to 2.\n");
                         drms_setkey_int(rs->records[itime], "HLZ", 2);
                     }
-                    else 
+                    else
                     {
-                        drms_setkey_int(rs->records[itime], "HLZ", 0);                    
+                        drms_setkey_int(rs->records[itime], "HLZ", 0);
                     }
-                    
+
                     if (saa)
                     {
                         drms_setkey_int(rs->records[itime], "SAA", 1);
@@ -485,7 +485,7 @@ static int GetSaaHlz(DRMS_Env_t *env, DRMS_RecordSet_t *rs, double *tgttimes, in
                 ret = 1;
             }
         }
-        
+
         iorbit_cleanSaaHlzInfo(&saahlzinfo);
     }
     else
@@ -493,7 +493,7 @@ static int GetSaaHlz(DRMS_Env_t *env, DRMS_RecordSet_t *rs, double *tgttimes, in
         myprintkerr("ERROR - Couldn't query db properly.\n");
         ret = 1;
     }
-    
+
     return ret;
 }
 
@@ -565,13 +565,13 @@ int do_ingest(long long bbrec, long long eerec)
       rs0 = &rptr[i];
       recnum0 = rs0->recnum;
       //must get fsn in case got record from last lev1 record
-      fsnx = drms_getkey_int(rs0, "FSN", &rstatus); 
+      fsnx = drms_getkey_int(rs0, "FSN", &rstatus);
       fsnarray[i] = fsnx;
       printk("*0 %u %u\n", recnum0, fsnx);
       //also set up call for get_pointing_info() and iorbit_getinfo()
       tobs[i] = drms_getkey_time(rs0, "t_obs", &rstatus);
       if(rstatus) {
-        printk("Error on drms_getkey_time() fsn=%u. Use DRMS_MISSING_TIME\n", 
+        printk("Error on drms_getkey_time() fsn=%u. Use DRMS_MISSING_TIME\n",
 		fsnx);
        tobs[i] = DRMS_MISSING_TIME;
       }
@@ -585,17 +585,18 @@ int do_ingest(long long bbrec, long long eerec)
     {
         IOstatus = kLIBASTRO_OutOfMemory;
     }
-    else {
-        hcon_insert(keymap, "kXGCI", "geixobs");
-        hcon_insert(keymap, "kYGCI", "geiyobs");
-        hcon_insert(keymap, "kZGCI", "geizobs");
-        hcon_insert(keymap, "kXHCI", "heixobs");
-        hcon_insert(keymap, "kYHCI", "heiyobs");
-        hcon_insert(keymap, "kZHCI", "heizobs");
-        hcon_insert(keymap, "kRSUNOBS", "rsunobs");
-        hcon_insert(keymap, "kOBSVR", "obsvr");
-        hcon_insert(keymap, "kDSUNOBS", "dsunobs");
-        hcon_insert(keymap, "kOBSDATE", "obsdate");
+    else
+    {
+        hcon_insert(keymap, IORBIT_STRINGIFY(IORBIT_KEYWORD_GAE_X), "geixobs");
+        hcon_insert(keymap, IORBIT_STRINGIFY(IORBIT_KEYWORD_GAE_Y), "geiyobs");
+        hcon_insert(keymap, IORBIT_STRINGIFY(IORBIT_KEYWORD_GAE_Z), "geizobs");
+        hcon_insert(keymap, IORBIT_STRINGIFY(IORBIT_KEYWORD_HAE_X), "heixobs");
+        hcon_insert(keymap, IORBIT_STRINGIFY(IORBIT_KEYWORD_HAE_Y), "heiyobs");
+        hcon_insert(keymap, IORBIT_STRINGIFY(IORBIT_KEYWORD_HAE_Z), "heizobs");
+        hcon_insert(keymap, IORBIT_STRINGIFY(IORBIT_KEYWORD_RSUN_OBS), "rsunobs");
+        hcon_insert(keymap, IORBIT_STRINGIFY(IORBIT_KEYWORD_OBS_VR), "obsvr");
+        hcon_insert(keymap, IORBIT_STRINGIFY(IORBIT_KEYWORD_DSUN_OBS), "dsunobs");
+        hcon_insert(keymap, IORBIT_STRINGIFY(IORBIT_KEYWORD_OBS_DATE), "obsdate");
 
         IOstatus = iorbit_getinfo_ext(drms_env,
                                 orbseries,
@@ -620,9 +621,9 @@ int do_ingest(long long bbrec, long long eerec)
       }
       return(1);                //abort. new 2/22/2011
     }
-    
+
     /* IOStatus == kLIBASTRO_Success */
-    
+
     rset1 = drms_create_records(drms_env, ncnt, dsout, DRMS_PERMANENT,&dstatus);
     if(dstatus) {
       printk("**ERROR: Can't create records for %s\n", dsout);
@@ -631,25 +632,25 @@ int do_ingest(long long bbrec, long long eerec)
       }
       return(1);	//new 2/22/2011
     }
-    
+
     /*****************************************************************/
     /* Obtain SAA-HLZ information, and set the SAA and HLZ keywords. */
-    
+
     if (GetSaaHlz(drms_env, rset1, tobs, ncnt, printkerr))
     {
         printk("***Error - Unable to fetch SAA-HLZ information.\n");
         return 1;
     }
-    
+
     /* End SAA-HLZ                                                   */
     /*****************************************************************/
-    
+
 
     for(i=0; i < ncnt; i++) { 	//do for all the sorted lev0 records
       //StartTimer(2);	//!!TEMP
       rs0 = &rptr[i];
       recnum0 = rs0->recnum;
-      fsnx = fsnarray[i]; 
+      fsnx = fsnarray[i];
       sprintf(lev0name, "%s[%u]", dsin, fsnx);
       if(drms_getkey_int(rs0, "QUALITY", 0) < 0) {
         printk("Bad QUALITY for %s, no lev1 made\n", lev0name);
@@ -660,7 +661,7 @@ int do_ingest(long long bbrec, long long eerec)
       int seg0sz = segment0->axis[0]*segment0->axis[1];
       Array0 = drms_segment_read(segment0, DRMS_TYPE_SHORT, &rstatus);
       if(!Array0) {
-        printk("Can't do drms_segment_read() %s status=%d\n", 
+        printk("Can't do drms_segment_read() %s status=%d\n",
 			lev0name, rstatus);
         noimage[i] = 1;
         return(1);	//return until we learn
@@ -677,9 +678,9 @@ int do_ingest(long long bbrec, long long eerec)
       l0l1->missvals = drms_getkey_int(rs0, "MISSVALS", &rstatus);
 
       sprintf(open_dsname, "%s[%u]", dsout, fsnx);
-      rs = rset1->records[i]; 
+      rs = rset1->records[i];
 
-      // 
+      //
       // find closest iris.pointing_data record and set scroll
       //
       {
@@ -694,7 +695,7 @@ int do_ingest(long long bbrec, long long eerec)
 	      t_obs = DRMS_MISSING_TIME;
           }
           else {
-	  sprintf(open_dsname, "iris.pointing_data[? date_obs > %f and date_obs <= %f ?]", t_obs-5, t_obs+5); 
+	  sprintf(open_dsname, "iris.pointing_data[? date_obs > %f and date_obs <= %f ?]", t_obs-5, t_obs+5);
           printf("%s\n", open_dsname);
 	  rset = drms_open_records(drms_env, open_dsname, &st);
 	  if (!rset || !rset->n || st) {
@@ -730,7 +731,7 @@ int do_ingest(long long bbrec, long long eerec)
           }
         }
       }
-      
+
       drms_record_directory(rs, rs1_path, 0);
       if(!*rs1_path) {
         printk("***ERROR: No path to segment for %s\n", open_dsname);
@@ -773,10 +774,10 @@ int do_ingest(long long bbrec, long long eerec)
       drms_setkey_int(rs, "QUALLEV0", qualint);
       fid = drms_getkey_int(rs0, "FID", &rstatus);
 
-      short isqisysn = drms_getkey_short(rs0, "ISQISYSN", &rstatus);  
+      short isqisysn = drms_getkey_short(rs0, "ISQISYSN", &rstatus);
       int iimgots1 = drms_getkey_int(rs0, "IIMGOTS1", &rstatus);
       int iimgots2 = drms_getkey_int(rs0, "IIMGOTS2", &rstatus);
-      int iimgots3 = drms_getkey_int(rs0, "IIMGOTS3", &rstatus); 
+      int iimgots3 = drms_getkey_int(rs0, "IIMGOTS3", &rstatus);
       switch (isqisysn) {
           case 0:
             drms_setkey_int(rs, "IIMGOTS", iimgots1);
@@ -787,7 +788,7 @@ int do_ingest(long long bbrec, long long eerec)
           case 2:
             drms_setkey_int(rs, "IIMGOTS", iimgots3);
             break;
-      } 
+      }
 
       drms_setkey_time(rs, "T_OBS", tobs[i]);
       printk("t_obs for lev0 = %10.5f fsn=%u\n", tobs[i], fsnarray[i]);  //!!TEMP
@@ -809,21 +810,15 @@ int do_ingest(long long bbrec, long long eerec)
            drms_setkey_double(rs, "RSUN_OBS", IOdata.rsun_obs);
            drms_setkey_double(rs, "DSUN_OBS", IOdata.dsun_obs);
            drms_setkey_double(rs, "OBS_VR", IOdata.obs_vr);
-           drms_setkey_double(rs, "GEIX_OBS", IOdata.gciX);
-           drms_setkey_double(rs, "GEIY_OBS", IOdata.gciY);
-           drms_setkey_double(rs, "GEIZ_OBS", IOdata.gciZ);
-           drms_setkey_double(rs, "HEIX_OBS", IOdata.hciX);
-           drms_setkey_double(rs, "HEIY_OBS", IOdata.hciY);
-           drms_setkey_double(rs, "HEIZ_OBS", IOdata.hciZ);
-           drms_setkey_string(rs, "ORB_REC", IOdata.orb_rec); 
+           drms_setkey_double(rs, "GEIX_OBS", IOdata.gae_x);
+           drms_setkey_double(rs, "GEIY_OBS", IOdata.gae_y);
+           drms_setkey_double(rs, "GEIZ_OBS", IOdata.gae_z);
+           drms_setkey_double(rs, "HEIX_OBS", IOdata.hae_x);
+           drms_setkey_double(rs, "HEIY_OBS", IOdata.hae_y);
+           drms_setkey_double(rs, "HEIZ_OBS", IOdata.hae_z);
+           drms_setkey_string(rs, "ORB_REC", IOdata.orb_rec);
       }
-        
-        
 
-        
-        
-                
-        
       drms_setkey_float(rs, "X0_MP", imageloc[i].x);
       drms_setkey_float(rs, "Y0_MP", imageloc[i].y);
       drms_setkey_float(rs, "INST_ROT", imageloc[i].instrot);
@@ -942,7 +937,7 @@ int do_ingest(long long bbrec, long long eerec)
 
           crsint = drms_getkey_int(crsrec, "WIN_FLIP", &status);
           l0l1->winflip = crsint;
-          drms_setkey_int(rs, "WIN_FLIP", crsint); 
+          drms_setkey_int(rs, "WIN_FLIP", crsint);
           printk("Close: %s\n", open_dsname);
           drms_close_records(crsset, DRMS_FREE_RECORD);
         }
@@ -1075,7 +1070,7 @@ int do_ingest(long long bbrec, long long eerec)
       }
       //printf("!!TEMP Flat field query: %s\n", open_dsname); //!!TEMP
       //printk("!!TEMP Flat field query: %s\n", open_dsname); //!!TEMP
-      rsetff = drms_open_records(drms_env, open_dsname, &rstatus); //open FF 
+      rsetff = drms_open_records(drms_env, open_dsname, &rstatus); //open FF
       if(!rsetff || (rsetff->n == 0) || rstatus) {
         printk("Can't do drms_open_records(%s)\n", open_dsname);
         flatmiss[i] = 1; noimage[i] = 1;
@@ -1105,7 +1100,7 @@ int do_ingest(long long bbrec, long long eerec)
       segmentff = drms_segment_lookup(rsff, "flatfield");
       Arrayff = drms_segment_read(segmentff, DRMS_TYPE_FLOAT, &rstatus);
       if(!Arrayff) {
-        printk("Can't do drms_segment_read() for Flat Field status=%d\n", 
+        printk("Can't do drms_segment_read() for Flat Field status=%d\n",
 			rstatus);
         return(1);
       }
@@ -1125,7 +1120,7 @@ int do_ingest(long long bbrec, long long eerec)
       ArrayBad = drms_segment_read(badseg, DRMS_TYPE_INT, &rstatus);
       nbad = drms_array_size(ArrayBad)/sizeof(int);
       if(!ArrayBad) {
-        printk("Can't do drms_segment_read() for bad_pixel. status=%d\n", 
+        printk("Can't do drms_segment_read() for bad_pixel. status=%d\n",
 			rstatus);
         return(1);
       }
@@ -1136,7 +1131,7 @@ int do_ingest(long long bbrec, long long eerec)
       //}
       l0l1->rs1 = rs;
       l0l1->rsff = rsff;
-      l0l1->recnum1 = rs->recnum;  
+      l0l1->recnum1 = rs->recnum;
       l0l1->darkflag = 0;
       l0l1->sumx = drms_getkey_short(rs0, "SUMSPTRL", &rstatus);
       l0l1->sumy = drms_getkey_short(rs0, "SUMSPAT", &rstatus);
@@ -1180,11 +1175,11 @@ int do_ingest(long long bbrec, long long eerec)
         if(missvals > 0) missflg[i] = missflg[i] | Q_1_MISS0;
         if(missvals > (uint32_t)(totvals * 0.01))
            missflg[i] = missflg[i] | Q_1_MISS1;
-        if(missvals > (uint32_t)(totvals * 0.05)) 
+        if(missvals > (uint32_t)(totvals * 0.05))
            missflg[i] = missflg[i] | Q_1_MISS2;
-        if(missvals > (uint32_t)(totvals * 0.25)) 
+        if(missvals > (uint32_t)(totvals * 0.25))
            missflg[i] = missflg[i] | Q_1_MISS3;
-        if(l0l1->datavals == 0) 
+        if(l0l1->datavals == 0)
            missflg[i] = missflg[i] | Q_MISSALL; //high bit, no data
         //if(nspikes) {
         //  if (spikeseg = drms_segment_lookup(rs,"spikes") ) {
@@ -1271,9 +1266,9 @@ int compare_rptr(const void *a, const void *b)
   int rstatus;
   DRMS_Record_t *x=(DRMS_Record_t *)a, *y=(DRMS_Record_t *)b;
 
-  t1 = drms_getkey_time(x, "t_obs", &rstatus); 
+  t1 = drms_getkey_time(x, "t_obs", &rstatus);
   if(rstatus) t1 = DRMS_MISSING_TIME;	//treat error as missing t_obs
-  t2 = drms_getkey_time(y, "t_obs", &rstatus); 
+  t2 = drms_getkey_time(y, "t_obs", &rstatus);
   if(rstatus) t2 = DRMS_MISSING_TIME;
   if(t1 < t2) return(-1);
   if(t1 > t2) return(1);
@@ -1289,14 +1284,14 @@ void setup()
 
   sdo_epoch = sscan_time("1958.01.01_00:00:00_TAI");
   do_datestr();
-  printk_set(h1log, h1log);	// set for printk calls 
+  printk_set(h1log, h1log);	// set for printk calls
   printk("%s\n", datestr);
   gethostname(idstr, 256);
   printf("Host: %s\n", idstr);
   printk("Host: %s\n", idstr);
   getcwd(cwdbuf, 126);
   sprintf(idstr, "Cwd: %s\nCall: ", cwdbuf);
-  sprintf(string, "build_lev1_iris started as pid=%d ppid=%d user=%s\n", 
+  sprintf(string, "build_lev1_iris started as pid=%d ppid=%d user=%s\n",
 		getpid(), getppid(), username);
   strcat(idstr, string);
   printk("%s", idstr);
@@ -1315,12 +1310,12 @@ void setup()
   }
   sprintf(argquick, "quicklook=%d", quicklook);
   sprintf(arglogfile, "logfile=%s", logname);
-  printk("%s %s %s %s %s %s %s\n", 
+  printk("%s %s %s %s %s %s %s\n",
 	argmode, argdsin, argdsout, argbx, argex, argquick, arglogfile);
-  printf("%s %s %s %s %s %s %s\n", 
+  printf("%s %s %s %s %s %s %s\n",
 	argmode, argdsin, argdsout, argbx, argex, argquick, arglogfile);
   if(!restartflg) {
-    //printk("tlmseriesname=%s\nlev0seriesname=%s\n", 
+    //printk("tlmseriesname=%s\nlev0seriesname=%s\n",
     //		tlmseriesname, lev0seriesname);
   }
   sprintf(bld_vers, "%s", jsoc_version);
@@ -1334,8 +1329,8 @@ void setup()
     printk("%s\n", idstr);
     system(idstr);
   }
-  umask(002);			// allow group write 
-  //Image.initialized = 0;	// init the two image structures 
+  umask(002);			// allow group write
+  //Image.initialized = 0;	// init the two image structures
   //ImageOld.initialized = 0;
   //Img = &Image;
   //ImgO = &ImageOld;
@@ -1343,7 +1338,7 @@ void setup()
   //ImgO->initialized = 0;
 }
 
-// Module main function. 
+// Module main function.
 int DoIt(void)
 {
   long long numofrecs, frec, lrec;
@@ -1352,7 +1347,7 @@ int DoIt(void)
 
   if (nice_intro())
     return (0);
-  if(!(username = (char *)getenv("USER"))) username = "nouser"; 
+  if(!(username = (char *)getenv("USER"))) username = "nouser";
   mode = cmdparams_get_str(&cmdparams, "mode", NULL);
   if(strcmp(mode, "recnum") && strcmp(mode, "fsn")) {
     printf("Error: mode= must be given as 'recnum' or 'fsn'\n");
@@ -1424,8 +1419,8 @@ int DoIt(void)
     frec = lrec+1; lrec = (frec + numrec)-1;
     if(lrec > enumx) lrec=enumx;
     if(do_ingest(frec, lrec)) {  //do a chunk to get files from the lev0
-      printf("build_lev1_iris abort\nSee log: %s\n", logname); 
-      send_mail("build_lev1_iris abort\nSee log: %s\n", logname); 
+      printf("build_lev1_iris abort\nSee log: %s\n", logname);
+      send_mail("build_lev1_iris abort\nSee log: %s\n", logname);
       return(0);
     }
     if(modeflg) {               //only do for recnum mode
@@ -1435,6 +1430,6 @@ int DoIt(void)
       }
     }
   }
-  printf("build_lev1_iris done last fsn=%u\n", fsnx); 
+  printf("build_lev1_iris done last fsn=%u\n", fsnx);
   return(0);
 }

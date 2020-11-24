@@ -9,7 +9,33 @@
 #define kALLDATAMISSING         0
 #define kMaxRecQuery            128
 
-typedef enum 
+/* These defines are suitable for sdo.fds_orbit_vectors, but not for other series. The
+ * caller should pass in to the API functions a map (these defines --> series keywords)
+ * of orbit-series keywords if they differ from these.
+ */
+#define IORBIT_STRINGIFY(x) #x
+
+#define IORBIT_KEYWORD_GAE_X "GCIEC_X"
+#define IORBIT_KEYWORD_GAE_Y "GCIEC_Y"
+#define IORBIT_KEYWORD_GAE_Z "GCIEC_Z"
+#define IORBIT_KEYWORD_GAE_VX "GCIEC_VX"
+#define IORBIT_KEYWORD_GAE_VY "GCIEC_VY"
+#define IORBIT_KEYWORD_GAE_VZ "GCIEC_VZ"
+#define IORBIT_KEYWORD_HAE_X "HCIEC_X"
+#define IORBIT_KEYWORD_HAE_Y "HCIEC_Y"
+#define IORBIT_KEYWORD_HAE_Z "HCIEC_Z"
+#define IORBIT_KEYWORD_HAE_VX "HCIEC_VX"
+#define IORBIT_KEYWORD_HAE_VY "HCIEC_VY"
+#define IORBIT_KEYWORD_HAE_VZ "HCIEC_VZ"
+#define IORBIT_KEYWORD_OBS_DATE "OBS_DATE"
+
+/* Some other series have these keywords. The union of this set and the one immediately above
+ * form the set of all known keywords from any orbit series. */
+#define IORBIT_KEYWORD_RSUN_OBS "RSUN_OBS"
+#define IORBIT_KEYWORD_OBS_VR "OBS_VR"
+#define IORBIT_KEYWORD_DSUN_OBS "DSUN_OBS"
+
+typedef enum
 {
    kLIBASTRO_InterBilinear = 0,
    kLIBASTRO_InterCubic = 1,
@@ -67,18 +93,18 @@ typedef enum IORBIT_CacheAction_enum IORBIT_CacheAction_t;
 struct IORBIT_Info_struct
 {
   double obstime;
-  double hciX;
-  double hciY;
-  double hciZ;
-  double hciVX;
-  double hciVY;
-  double hciVZ;
-  double gciX;
-  double gciY;
-  double gciZ;
-  double gciVX;
-  double gciVY;
-  double gciVZ;
+  double hae_x;
+  double hae_y;
+  double hae_z;
+  double hae_vx;
+  double hae_vy;
+  double hae_vz;
+  double gae_x;
+  double gae_y;
+  double gae_z;
+  double gae_vx;
+  double gae_vy;
+  double gae_vz;
   double dsun_obs;
   double rsun_obs;
   double obs_vr;
@@ -86,6 +112,7 @@ struct IORBIT_Info_struct
   double obs_vn;
   double crln_obs;
   double crlt_obs;
+  double hgln_obs;
   int car_rot;
   char orb_rec[kMaxRecQuery];
 };
@@ -103,27 +130,27 @@ typedef HContainer_t IORBIT_SaaHlzInfo_t;
 
 LIBASTRO_Error_t iorbit_test(DRMS_Env_t *env, const char *orbseries);
 void iorbit_carrcoords(TIME t, double obsdist, double b, double hci_long, int *crot, double *L, double *B);
-LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env, 
-                                const char *srcseries, 
-                                const char *optfilter, 
+LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
+                                const char *srcseries,
+                                const char *optfilter,
                                 IORBIT_Alg_t alg,
-                                const double *tgttimes, 
-                                int nitems, 
+                                const double *tgttimes,
+                                int nitems,
                                 IORBIT_CacheAction_t ctype,
                                 IORBIT_Info_t **info);
-LIBASTRO_Error_t iorbit_getinfo_ext(DRMS_Env_t *env, 
+LIBASTRO_Error_t iorbit_getinfo_ext(DRMS_Env_t *env,
                                     const char *srcseries,
-                                    const char *optfilter, 
+                                    const char *optfilter,
                                     IORBIT_Alg_t alg,
-                                    const double *tgttimes, 
-                                    int nitems, 
+                                    const double *tgttimes,
+                                    int nitems,
                                     IORBIT_CacheAction_t ctype,
                                     IORBIT_Info_t **info,
                                     HContainer_t *keymap);
-LIBASTRO_Error_t iorbit_getSaaHlzInfo(DRMS_Env_t *env, 
-                                      const char *series, 
-                                      const double *tgttimes, 
-                                      int nitems, 
+LIBASTRO_Error_t iorbit_getSaaHlzInfo(DRMS_Env_t *env,
+                                      const char *series,
+                                      const double *tgttimes,
+                                      int nitems,
                                       IORBIT_SaaHlzInfo_t **info);
 
 void iorbit_cleanup();
@@ -134,4 +161,3 @@ TIME HeliographicTime(int crot, double L);
 
 
 #endif // _DRMS_LIBASTRO_H
-

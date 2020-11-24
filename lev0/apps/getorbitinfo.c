@@ -1,4 +1,4 @@
-/* 
+/*
  *  getorbitinfo.
  */
 
@@ -14,13 +14,6 @@
 #define kNOVELOCITY "n"
 #define kSAAHLZ "s"
 
-#define kOBSDATE "OBS_DATE"
-#define kHCIX "HCIEC_X"
-#define kHCIY "HCIEC_Y"
-#define kHCIZ "HCIEC_Z"
-#define kHCIVX "HCIEC_VX"
-#define kHCIVY "HCIEC_VY"
-#define kHCIVZ "HCIEC_VZ"
 
 ModuleArgs_t module_args[] =
 {
@@ -31,7 +24,7 @@ ModuleArgs_t module_args[] =
     {ARG_STRING, kGRIDTIMES, "unspecified", "Record-set query that specifies grid-vector internal times."},
     {ARG_FLAG, kTESTINTERP, "", "Test interpolation routine."},
     {ARG_FLAG, kNOVELOCITY, "", "The orbit series has no velocity keywords (like iris.orbitvectors)"},
-    {ARG_FLAG, kSAAHLZ, "", "Test the SAA-HLZ stuff out."},    
+    {ARG_FLAG, kSAAHLZ, "", "Test the SAA-HLZ stuff out."},
     {ARG_END}
 };
 
@@ -117,8 +110,8 @@ int DoIt(void)
                      while (!(fgets(lineBuf, LINE_MAX, atfile) == NULL))
                      {
                         fullline = realloc(fullline, strlen(fullline) + strlen(lineBuf) + 1);
-                        snprintf(fullline + strlen(fullline), 
-                                 strlen(lineBuf) + 1, 
+                        snprintf(fullline + strlen(fullline),
+                                 strlen(lineBuf) + 1,
                                  "%s",
                                  lineBuf);
                         if (strlen(lineBuf) > 1 && lineBuf[strlen(lineBuf) - 1] == '\n')
@@ -152,8 +145,8 @@ int DoIt(void)
 
                   itgt++;
                }
-                  
-               ntimes = itgt;                  
+
+               ntimes = itgt;
             }
          }
       }
@@ -193,42 +186,42 @@ int DoIt(void)
    if (status == kSDOORB_success)
    {
        int rv = 0;
-       
+
       if (drms_env->verbose)
       {
          /* time solar velocity calculation */
          tmr = CreateTimer();
       }
-       
+
        if (novelocity)
        {
            HContainer_t *keymap = NULL;
-           
+
            keymap = hcon_create(DRMS_MAXKEYNAMELEN, DRMS_MAXKEYNAMELEN, NULL, NULL, NULL, NULL, 0);
-           
+
            if (keymap)
            {
-               hcon_insert(keymap, "kXGCI", "geixobs");
-               hcon_insert(keymap, "kYGCI", "geiyobs");
-               hcon_insert(keymap, "kZGCI", "geizobs");
-               hcon_insert(keymap, "kXHCI", "heixobs");
-               hcon_insert(keymap, "kYHCI", "heiyobs");
-               hcon_insert(keymap, "kZHCI", "heizobs");
-               hcon_insert(keymap, "kRSUNOBS", "rsunobs");
-               hcon_insert(keymap, "kOBSVR", "obsvr");
-               hcon_insert(keymap, "kDSUNOBS", "dsunobs");
-               hcon_insert(keymap, "kOBSDATE", "obsdate");
-               
-               rv = iorbit_getinfo_ext(drms_env, 
+               hcon_insert(keymap, IORBIT_STRINGIFY(IORBIT_KEYWORD_GAE_X), "geixobs");
+               hcon_insert(keymap, IORBIT_STRINGIFY(IORBIT_KEYWORD_GAE_Y), "geiyobs");
+               hcon_insert(keymap, IORBIT_STRINGIFY(IORBIT_KEYWORD_GAE_Z), "geizobs");
+               hcon_insert(keymap, IORBIT_STRINGIFY(IORBIT_KEYWORD_HAE_X), "heixobs");
+               hcon_insert(keymap, IORBIT_STRINGIFY(IORBIT_KEYWORD_HAE_Y), "heiyobs");
+               hcon_insert(keymap, IORBIT_STRINGIFY(IORBIT_KEYWORD_HAE_Z), "heizobs");
+               hcon_insert(keymap, IORBIT_STRINGIFY(IORBIT_KEYWORD_RSUN_OBS), "rsunobs");
+               hcon_insert(keymap, IORBIT_STRINGIFY(IORBIT_KEYWORD_OBS_VR), "obsvr");
+               hcon_insert(keymap, IORBIT_STRINGIFY(IORBIT_KEYWORD_DSUN_OBS), "dsunobs");
+               hcon_insert(keymap, IORBIT_STRINGIFY(IORBIT_KEYWORD_OBS_DATE), "obsdate");
+
+               rv = iorbit_getinfo_ext(drms_env,
                                        orbseries,
-                                       gridtimes, 
-                                       interpalg, 
-                                       tgttimes, 
-                                       ntimes, 
+                                       gridtimes,
+                                       interpalg,
+                                       tgttimes,
+                                       ntimes,
                                        kIORBIT_CacheAction_DontCache,
                                        &info,
                                        keymap);
-               
+
                hcon_destroy(&keymap);
            }
            else
@@ -251,9 +244,9 @@ int DoIt(void)
            HContainer_t *colToList = NULL;
            HContainer_t **pColToList = NULL;
            char timeStr[IORBIT_SAAHLZINFO_TIME_KEY_LEN];
-           
+
            rv = iorbit_getSaaHlzInfo(drms_env, "iris.saa_hlz", tgttimes, ntimes, &saahlzinfo);
-           
+
            if (rv == kLIBASTRO_Success)
            {
                for (itime = 0; itime < ntimes; itime++)
@@ -261,22 +254,22 @@ int DoIt(void)
                    nhlz = 0;
                    shlz = 0;
                    saa = 0;
-                   
+
                    snprintf(timeStr, sizeof(timeStr), "%lf", tgttimes[itime]);
-                   
+
                    if ((pColToList = hcon_lookup(saahlzinfo, timeStr)) != NULL)
                    {
                        colToList = *pColToList;
-                       
+
                        if ((pList = hcon_lookup(colToList, IORBIT_SAAHLZINFO_KW_EVENT_TYPE)) != NULL)
                        {
                            list = *pList;
                            list_llreset(list);
-                           
+
                            while((node = list_llnext(list)) != NULL)
                            {
                                eventType = (char *)node->data;
-                               
+
                                if (strcasecmp(eventType, "NHLZ") == 0)
                                {
                                    nhlz = 1;
@@ -290,9 +283,9 @@ int DoIt(void)
                                    saa = 1;
                                }
                            }
-                           
+
                            printf("For time %lf:\n", tgttimes[itime]);
-                           
+
                            if (nhlz && shlz)
                            {
                                /* ERROR - set HLZ to 0. */
@@ -306,23 +299,23 @@ int DoIt(void)
                            {
                                printf("  Setting HLZ to 2.\n");
                            }
-                           else 
+                           else
                            {
                                printf("  Setting HLZ to 0.\n");
                            }
-                           
+
                            if (saa)
                            {
                                printf("  Setting SAA to 1.\n");
                            }
                            else
                            {
-                               printf("  Setting SAA to 0.\n");                   
+                               printf("  Setting SAA to 0.\n");
                            }
                        }
                    }
                }
-               
+
                iorbit_cleanSaaHlzInfo(&saahlzinfo);
            }
            else
@@ -330,17 +323,17 @@ int DoIt(void)
                printf("Couldn't query db properly.\n");
                status = kSDOORB_failure;
            }
-           
+
            return status;
        }
        else
        {
-           rv = iorbit_getinfo(drms_env, 
+           rv = iorbit_getinfo(drms_env,
                           orbseries,
-                          gridtimes, 
-                          interpalg, 
-                          tgttimes, 
-                          ntimes, 
+                          gridtimes,
+                          interpalg,
+                          tgttimes,
+                          ntimes,
                           kIORBIT_CacheAction_DontCache,
                           &info);
        }
@@ -356,83 +349,83 @@ int DoIt(void)
               fprintf(stdout, "iorbit_getinfo() seconds elapsed: %f\n", GetElapsedTime(tmr));
               DestroyTimer(&tmr);
           }
-          
+
           /* This is a demonstration module - just print */
           IORBIT_Info_t *infoitem = NULL;
           char timestr[128];
           int iinfo;
-          
+
           if (novelocity)
           {
-              fprintf(stdout, "%-24s%-22s%-22s%-22s%-22s%-22s%-22s%-22s%-22s%-22s\n", 
-                      "obstime", "hciX-interp", "hciY-interp", "hciZ-interp", "gciX-interp", "gciY-interp", "gciZ-interp", "rsunobs-interp", "obsvr-interp", "dsunobs-interp");
-              
+              fprintf(stdout, "%-24s%-22s%-22s%-22s%-22s%-22s%-22s%-22s%-22s%-22s\n",
+                      "obstime", "hae_x-interp", "hae_y-interp", "hae_z-interp", "gciX-interp", "gciY-interp", "gciZ-interp", "rsunobs-interp", "obsvr-interp", "dsunobs-interp");
+
               for (iinfo = 0; iinfo < ntimes; iinfo++)
               {
                   /* interpolated values */
                   infoitem = &(info[iinfo]);
                   sprint_time(timestr, infoitem->obstime, "UTC", 0);
-                  
+
                   if (!testinterp)
                   {
-                      fprintf(stdout, "%-24s%-22.4f%-22.4f%-22.4f%-22.4f%-22.4f%-22.4f%-22.4f%-22.4f%-22.4f\n", 
-                              timestr, infoitem->hciX, infoitem->hciY, infoitem->hciZ, 
-                              infoitem->gciX, infoitem->gciY, infoitem->gciZ, infoitem->rsun_obs, infoitem->obs_vr, infoitem->dsun_obs);
+                      fprintf(stdout, "%-24s%-22.4f%-22.4f%-22.4f%-22.4f%-22.4f%-22.4f%-22.4f%-22.4f%-22.4f\n",
+                              timestr, infoitem->hae_x, infoitem->hae_y, infoitem->hae_z,
+                              infoitem->gae_x, infoitem->gae_y, infoitem->gae_z, infoitem->rsun_obs, infoitem->obs_vr, infoitem->dsun_obs);
                   }
               }
           }
           else
           {
-              fprintf(stdout, "%-32s%-20s%-15s%-15s%-15s%-12s%-12s%-12s%-10s%-32s\n", 
+              fprintf(stdout, "%-32s%-20s%-15s%-15s%-15s%-12s%-12s%-12s%-10s%-32s\n",
                       "obstime", "dsun_obs", "obs_vr", "obs_vw", "obs_vn", "rsun_obs", "crln_obs", "crlt_obs", "car_rot", "orb_rec");
-              
+
               for (iinfo = 0; iinfo < ntimes; iinfo++)
               {
                   infoitem = &(info[iinfo]);
                   sprint_time(timestr, infoitem->obstime, "UTC", 0);
-                  
-                  fprintf(stdout, "%-32s%-20.3f%-15.3f%-15.3f%-15.3f%-12.3f%-12.3f%-12.3f%-10d%-32s\n", 
-                          timestr, infoitem->dsun_obs, infoitem->obs_vr, infoitem->obs_vw, infoitem->obs_vn, 
+
+                  fprintf(stdout, "%-32s%-20.3f%-15.3f%-15.3f%-15.3f%-12.3f%-12.3f%-12.3f%-10d%-32s\n",
+                          timestr, infoitem->dsun_obs, infoitem->obs_vr, infoitem->obs_vw, infoitem->obs_vn,
                           infoitem->rsun_obs, infoitem->crln_obs, infoitem->crlt_obs, infoitem->car_rot, infoitem->orb_rec);
               }
-              
+
               /* Now, let's print out interpolated heliocentric vectors for kicks */
               fprintf(stdout, "\n\n");
-              
+
               if (!testinterp)
               {
-                  fprintf(stdout, "%-24s%-14s%-22s%-22s%-22s%-22s%-22s%-22s\n", 
-                          "obstime", "secs", "hciX-interp", "hciY-interp", "hciZ-interp", "hciVX-interp", "hciVY-interp", "hciVZ-interp");
+                  fprintf(stdout, "%-24s%-14s%-22s%-22s%-22s%-22s%-22s%-22s\n",
+                          "obstime", "secs", "hae_x-interp", "hae_y-interp", "hae_z-interp", "hae_vx-interp", "hae_vy-interp", "hae_vz-interp");
               }
               else
               {
-                  fprintf(stdout, "%-24s%-12s%-22s%-22s%-22s%-22s%-22s%-22s%-20s%-20s%-20s%-14s%-14s%-14s\n", 
-                          "obstime", "secs", 
-                          "hciX-interp", "hciX-actual",
-                          "hciY-interp", "hciY-actual",
-                          "hciZ-interp", "hciZ-actual",
-                          "hciVX-interp", "hciVX-actual",
-                          "hciVY-interp", "hciVY-actual",
-                          "hciVZ-interp", "hciVZ-actual");
+                  fprintf(stdout, "%-24s%-12s%-22s%-22s%-22s%-22s%-22s%-22s%-20s%-20s%-20s%-14s%-14s%-14s\n",
+                          "obstime", "secs",
+                          "hae_x-interp", "hae_x-actual",
+                          "hae_y-interp", "hae_y-actual",
+                          "hae_z-interp", "hae_z-actual",
+                          "hae_vx-interp", "hae_vx-actual",
+                          "hae_vy-interp", "hae_vy-actual",
+                          "hae_vz-interp", "hae_vz-actual");
               }
-              
+
               for (iinfo = 0; iinfo < ntimes; iinfo++)
               {
                   /* interpolated values */
                   infoitem = &(info[iinfo]);
                   sprint_time(timestr, infoitem->obstime, "UTC", 0);
-                  
+
                   if (!testinterp)
                   {
-                      fprintf(stdout, "%-24s%-14.1f%-22.4f%-22.4f%-22.4f%-22.4f%-22.4f%-22.4f\n", 
-                              timestr, infoitem->obstime, infoitem->hciX, infoitem->hciY, infoitem->hciZ, 
-                              infoitem->hciVX, infoitem->hciVY, infoitem->hciVZ);
+                      fprintf(stdout, "%-24s%-14.1f%-22.4f%-22.4f%-22.4f%-22.4f%-22.4f%-22.4f\n",
+                              timestr, infoitem->obstime, infoitem->hae_x, infoitem->hae_y, infoitem->hae_z,
+                              infoitem->hae_vx, infoitem->hae_vy, infoitem->hae_vz);
                   }
                   else
                   {
-                      /* actual values - this will only work if the tgttimes are whole seconds, and they 
-                       * are in the range of the grid vectors. If so, print out the actual values 
-                       * because the user is obviously testing this module. 
+                      /* actual values - this will only work if the tgttimes are whole seconds, and they
+                       * are in the range of the grid vectors. If so, print out the actual values
+                       * because the user is obviously testing this module.
                        * Use psql to find the actual value given timestr - not the most efficient way to do this
                        * but this is just a test anyway.
                        */
@@ -440,43 +433,43 @@ int DoIt(void)
                       int drmsstatus = DRMS_SUCCESS;
                       DRMS_RecordSet_t *rs = NULL;
                       TIME obstime;
-                      double actual_hciX = 0;
-                      double actual_hciY = 0;
-                      double actual_hciZ = 0;
-                      double actual_hciVX = 0;
-                      double actual_hciVY = 0;
-                      double actual_hciVZ = 0;
-                      
+                      double actual_hae_x = 0;
+                      double actual_hae_y = 0;
+                      double actual_hae_z = 0;
+                      double actual_hae_vx = 0;
+                      double actual_hae_vy = 0;
+                      double actual_hae_vz = 0;
+
                       snprintf(query, sizeof(query), "%s[%s]", orbseries, timestr);
-                      
+
                       rs = drms_open_records(drms_env, query, &drmsstatus);
                       if (rs && rs->n == 1)
                       {
-                          obstime = drms_getkey_time(rs->records[0], kOBSDATE, &drmsstatus);
-                          
+                          obstime = drms_getkey_time(rs->records[0], IORBIT_KEYWORD_OBS_DATE, &drmsstatus);
+
                           if (obstime == infoitem->obstime)
                           {
-                              actual_hciX = drms_getkey_double(rs->records[0], kHCIX, &drmsstatus);
-                              actual_hciY = drms_getkey_double(rs->records[0], kHCIY, &drmsstatus);
-                              actual_hciZ = drms_getkey_double(rs->records[0], kHCIZ, &drmsstatus);
-                              actual_hciVX = drms_getkey_double(rs->records[0], kHCIVX, &drmsstatus);
-                              actual_hciVY = drms_getkey_double(rs->records[0], kHCIVY, &drmsstatus);
-                              actual_hciVZ = drms_getkey_double(rs->records[0], kHCIVZ, &drmsstatus);
+                              actual_hae_x = drms_getkey_double(rs->records[0], IORBIT_KEYWORD_HAE_X, &drmsstatus);
+                              actual_hae_y = drms_getkey_double(rs->records[0], IORBIT_KEYWORD_HAE_Y, &drmsstatus);
+                              actual_hae_z = drms_getkey_double(rs->records[0], IORBIT_KEYWORD_HAE_Z, &drmsstatus);
+                              actual_hae_vx = drms_getkey_double(rs->records[0], IORBIT_KEYWORD_HAE_VX, &drmsstatus);
+                              actual_hae_vy = drms_getkey_double(rs->records[0], IORBIT_KEYWORD_HAE_VY, &drmsstatus);
+                              actual_hae_vz = drms_getkey_double(rs->records[0], IORBIT_KEYWORD_HAE_VZ, &drmsstatus);
                           }
                       }
-                      
-                      fprintf(stdout, "%-24s%-12.1f%-22.8f%-22.8f%-22.8f%-22.8f%-22.8f%-22.8f%-22.8f%-22.8f%-22.8f%-14.8f%-14.8f%-14.8f\n", 
-                              timestr, infoitem->obstime, 
-                              infoitem->hciX, actual_hciX, 
-                              infoitem->hciY, actual_hciY,
-                              infoitem->hciZ, actual_hciZ,
-                              infoitem->hciVX, actual_hciVX,
-                              infoitem->hciVY, actual_hciVY,
-                              infoitem->hciVZ, actual_hciVZ);
+
+                      fprintf(stdout, "%-24s%-12.1f%-22.8f%-22.8f%-22.8f%-22.8f%-22.8f%-22.8f%-22.8f%-22.8f%-22.8f%-14.8f%-14.8f%-14.8f\n",
+                              timestr, infoitem->obstime,
+                              infoitem->hae_x, actual_hae_x,
+                              infoitem->hae_y, actual_hae_y,
+                              infoitem->hae_z, actual_hae_z,
+                              infoitem->hae_vx, actual_hae_vx,
+                              infoitem->hae_vy, actual_hae_vy,
+                              infoitem->hae_vz, actual_hae_vz);
                   }
               }
           }
-          
+
           /* clean up info */
           if (info)
           {
