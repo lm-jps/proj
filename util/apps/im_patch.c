@@ -157,11 +157,12 @@ char *module_name = "im_patch";
 #define     Deg2Rad    (M_PI/180.0)
 #define	    Rad2arcsec (3600.0/Deg2Rad)
 #define	    Rad2Deg    (180.0/M_PI)
+#define     VERBOSE	0
 
 ModuleArgs_t module_args[] =
   {
-    {ARG_STRING, "in", "NOTSPECIFIED", "input series. e.g 'mdi.fd_M_96m_lev18'"},
-    {ARG_STRING, "out", "NOTSPECIFIED", "output seies. e.g. 'su_bala.extractreg'"},
+    {ARG_STRING, "in", "NOTSPECIFIED", "input series. e.g 'hmi.M_720s'"},
+    {ARG_STRING, "out", "NOTSPECIFIED", "output seies. e.g. 'su_phil.hmi_cutout'"},
     {ARG_STRING, "log", "NOTSPECIFIED", "output log file of records made"},
     {ARG_STRING, "requestid", "NOTSPECIFIED", "RequestID if im_patch call originated in an export request."},
     {ARG_INT, "car_rot", "-1", "Carrington Rotation when the region crosses CM"},
@@ -171,19 +172,19 @@ ModuleArgs_t module_args[] =
     {ARG_TIME, "t_start", "JD_0", "Start time, defaults to time at 90E"},
     {ARG_TIME, "t_stop", "JD_0", "End time, defauolts to 90W"},
     {ARG_TIME, "cadence", "NOTSPECIFIED", "Cadence of product, defaults to input cadence."},
-    {ARG_TIME, "t_ref", "JD_0", "Time for which x and y apply, implies ref image."},
+    {ARG_TIME, "t_ref", "JD_0", "Time for which x and y apply, selects reference image for tracking."},
     {ARG_STRING, "locunits", "NOTSPECIFIED", "Location units in 'pixels', 'arcsec', 'stony', or 'carrlong'"},
     {ARG_STRING, "where", "NOTSPECIFIED", "Additional 'where' clause if needed"},
-    {ARG_FLOAT, "x", "0", "Location of extract box center in pixels in array (1,1), arcsec from Sun center, degrees from Sun center, or Carrington longitude"},
+    {ARG_FLOAT, "x", "0", "Location of extract box center in pixels in locunits: arcsec from Sun center, degrees from Sun center, or Carrington longitude"},
     {ARG_FLOAT, "y", "0", "Location of extract box center, same units as x"},
     {ARG_FLAG, "A", NULL, "Generate output for all input segments"},
     {ARG_FLAG, "t", "0", "Disable Carrington rate tracking"},
     {ARG_FLAG, "h", "0", "Export keywords, i.e. include full metadata in FITS files"},
     {ARG_FLAG, "c", "0", "Crop at limb, useful for HMI M data."},
-    {ARG_FLAG, "f", "0", "FAKE tracking target added, val=0"},
-    {ARG_FLAG, "F", "0", "FAKE tracking target added, val=datamax"},
+    {ARG_FLAG, "f", "0", "FAKE tracking target added for transits, val=0"},
+    {ARG_FLAG, "F", "0", "FAKE tracking target added for transits, val=datamax"},
     {ARG_FLAG, "r", "0", "Register to fractional CRPIXi, all frames to first frame round(crpix)"},
-    {ARG_STRING, "FDS", "NOTSPECIFIED", "FDS file for tracking coords"},
+    {ARG_STRING, "FDS", "NOTSPECIFIED", "FDS file for tracking transit objects"},
     {ARG_END}
   };
 
@@ -224,6 +225,65 @@ char *get_input_recset(DRMS_Env_t *drms_env, char *inQuery);
 #define TIMES_RECSET 0   // recordset spec contains time range
 #define TIMES_GIVEN 1    // explicit t_start and t_stop provided
 #define TIMES_IMPLICIT 2 // times to be deduced for disk transit of specified box
+
+// Two functions to get CRLN_OBS corrected and to store new CALVERxx value.
+// Use update_CALVERxx to fetch CALVERxx and or it with e.g. 1<<28 to indicate new CRLN_OBS
+// CALVERxx may be either of CALVER64 or CALVER32.
+int update_CALVERxx(DRMS_Record_t *inrec, DRMS_Record_t *outrec, int calver)
+  {
+  int status;
+  DRMS_Keyword_t *calver_kw;
+  if (calver_kw = drms_keyword_lookup(inrec, "CALVER64", 1))
+    {
+    long long calver64 = calver_kw->value.longlong_val;
+    drms_setkey_longlong(outrec, "CALVER64", calver64 | calver);
+    }
+  else
+    {
+    if (calver_kw = drms_keyword_lookup(inrec, "CALVER32", 1))
+      {
+      int calver32 = calver_kw->value.int_val;
+      drms_setkey_int(outrec, "CALVER32", calver32 | calver);
+      }
+    }
+  }
+
+// Use get_new_CRLN_OBS as a direct replacement for drms_getkey_double or drms_getkey_float.
+// If there is a CALVERxx keyword present, it will check the bit #28 and if not set then
+// the correction to CRLN_OBS will be made.
+double get_new_CRLN_OBS(DRMS_Record_t *inrec, int *status)
+  {
+  int this_status;
+  double CRLN_CORRECTION = -0.0818941;
+  long long calver64;
+  int calver32;
+  DRMS_Keyword_t *calver_kw;
+  calver32 = 1<<31;
+  double crln_obs = drms_getkey_double(inrec, "CRLN_OBS", &this_status); 
+  if (this_status || isnan(crln_obs)) 
+    *status = this_status;
+  else // CRLN_OBS exists and is not missing, check for one of CALVER keywords.
+    {
+    if (calver_kw = drms_keyword_lookup(inrec, "CALVER64", 1))
+      {
+      calver64 = calver_kw->value.longlong_val;
+      if (calver64 >= 0)
+        calver32 = calver64 & 0xFFFFFFFF;
+      }
+    else
+      {
+      if (calver_kw = drms_keyword_lookup(inrec, "CALVER32", 1))
+        calver32 = calver_kw->value.int_val;
+      }
+    if (!((calver32>>31) & 1) && !((calver32>>28) & 1)) // good CALVER but new CRLN_OBS is not present
+      {
+      crln_obs += CRLN_CORRECTION;
+      }
+    }
+  return(crln_obs);
+  }
+
+    
 int DoIt(void)
 {
   CmdParams_t *params = &cmdparams;
@@ -316,6 +376,7 @@ int DoIt(void)
   char *tmpstr = NULL;
   int hasSegList = 0;
   int doingAllSegs = params_isflagset(params, "A");
+  int calver;
 
   FILE *log = NULL;
 
@@ -484,7 +545,7 @@ int DoIt(void)
 // XXXXX Get box location in Carrington Coords for all location types, also initial center_X, center_y in NoTrack case  XXXXX
   if (do_reftime) // Arc-sec, pixel, or Stonyhurst specification, get ref image information
     { // the image for ref_time is supposed to be present in the series.
-fprintf(stderr,"doing reftime\n");
+if (VERBOSE) fprintf(stderr,"doing reftime\n");
     int okrec = -1;
     char t_ref_pre[100];
     char t_ref_post[100];
@@ -494,7 +555,7 @@ fprintf(stderr,"doing reftime\n");
       sprint_at(t_ref_pre, t_ref-search_width);
       sprint_at(t_ref_post, t_ref+search_width);
       sprintf(in, "%s[%s-%s][? QUALITY >= 0 ?]%s%s", inseries, t_ref_pre, t_ref_post, moreQuery, where);
-fprintf(stderr,"searchwidth=%f, t_ref query is: %s\n",search_width,in);
+if (VERBOSE) fprintf(stderr,"searchwidth=%f, t_ref query is: %s\n",search_width,in);
       inRS = drms_open_records(drms_env, in, &status);
       if (!status && inRS->n > 0)
         {
@@ -504,12 +565,12 @@ fprintf(stderr,"searchwidth=%f, t_ref query is: %s\n",search_width,in);
           {
           TIME newdiff;
           inRec = inRS->records[irec];
-fprintf(stderr,"irec=%d, tdiff=%lf\n",irec,tdiff);
+if (VERBOSE) fprintf(stderr,"irec=%d, tdiff=%lf\n",irec,tdiff);
           if ((newdiff=(fabs(drms_getkey_time(inRec,"T_OBS",NULL) - t_ref))) > tdiff)
             break;
           okrec = irec;
           tdiff = newdiff;
-          }
+	  }
         }
       if (okrec >= 0)
         break;
@@ -521,7 +582,8 @@ fprintf(stderr,"irec=%d, tdiff=%lf\n",irec,tdiff);
     inRec = inRS->records[okrec];
     this_car_rot = drms_getkey_int(inRec, "CAR_ROT", &status); TEST_PARAM("CAR_ROT");
     crlt_obs = drms_getkey_double(inRec, "CRLT_OBS", &status); TEST_PARAM("CRLT_OBS");
-    crln_obs = drms_getkey_double(inRec, "CRLN_OBS", &status); TEST_PARAM("CRLN_OBS");
+    // crln_obs = drms_getkey_double(inRec, "CRLN_OBS", &status); TEST_PARAM("CRLN_OBS");
+    crln_obs = get_new_CRLN_OBS(inRec, &status); TEST_PARAM("CRLN_OBS");
     crpix1 = drms_getkey_double(inRec, "CRPIX1", &status); TEST_PARAM("CRPIX1");
     x0 = crpix1 - 1;
     crpix2 = drms_getkey_double(inRec, "CRPIX2", &status); TEST_PARAM("CRPIX2");
@@ -796,12 +858,14 @@ fprintf(stderr,"at do reftime, center_x=%f\n", center_x);
       TIME t_obs = drms_getkey_time(inRec, "T_OBS", NULL);
       if(get_tracking_xy((char *)FDSfile, t_obs, &trackx, &tracky, &track_radius))
         DIE("Failed to open FDS file");
+if (VERBOSE) fprintf(stderr,"xxxx called get_tracking, trackx=%f, tracky=%f, radius=%f\n",trackx,tracky,track_radius);
       }
     
     // get coordinate information for this image
     this_car_rot = drms_getkey_int(inRec, "CAR_ROT", &status); TEST_PARAM("CAR_ROT");
     crlt_obs = drms_getkey_double(inRec, "CRLT_OBS", &status); TEST_PARAM("CRLT_OBS");
-    crln_obs = drms_getkey_double(inRec, "CRLN_OBS", &status); TEST_PARAM("CRLN_OBS");
+    // crln_obs = drms_getkey_double(inRec, "CRLN_OBS", &status); TEST_PARAM("CRLN_OBS");
+    crln_obs = get_new_CRLN_OBS(inRec, &status); TEST_PARAM("CRLN_OBS");
     crpix1 = drms_getkey_double(inRec, "CRPIX1", &status); TEST_PARAM("CRPIX1");
     x0 = crpix1 - 1;
     crpix2 = drms_getkey_double(inRec, "CRPIX2", &status); TEST_PARAM("CRPIX2");
@@ -812,9 +876,9 @@ fprintf(stderr,"at do reftime, center_x=%f\n", center_x);
     
     int paIs180 = 0;
     if (fabs(fabs(pa)-180.0) < 1.0)
-    {
+        {
         paIs180 = 1;
-    }
+        }
     
     crlt_obs_rad = Deg2Rad * crlt_obs;
     crln_obs_rad = Deg2Rad * crln_obs;
@@ -822,7 +886,7 @@ fprintf(stderr,"at do reftime, center_x=%f\n", center_x);
     sina = sin(crota*Deg2Rad);
     cosa = cos(crota*Deg2Rad);
 
-fprintf(stderr,"T_OBS=%s, crpix1=%f, crpix2=%f\n", drms_getkey_string(inRec,"T_OBS", NULL), crpix1, crpix2);
+if (VERBOSE) fprintf(stderr,"T_OBS=%s, crpix1=%f, crpix2=%f\n", drms_getkey_string(inRec,"T_OBS", NULL), crpix1, crpix2);
 
 //  XXXXXXXXXXXXXXXXX get coordinate mapping info using keywords from first record
     if (firstimage)
@@ -942,7 +1006,7 @@ fprintf(stderr,"center_x=%f,center_y=%f\n",center_x,center_y);
       }
     crpix1 = 1 + x0 - x1;
     crpix2 = 1 + y0 - y1;
-fprintf(stderr,"at box define, crpix1=%f, x0=%f, x1=%d\n",crpix1,x0,x1);
+if (VERBOSE) fprintf(stderr,"at box define, crpix1=%f, x0=%f, x1=%d\n",crpix1,x0,x1);
 
     int start1[2] = {x1, y1};
     int end1[2] = {x2, y2};
@@ -983,7 +1047,7 @@ fprintf(stderr,"at box define, crpix1=%f, x0=%f, x1=%d\n",crpix1,x0,x1);
 
         crpix1 = 1 + x2 - x0;
         crpix2 = 1 + y2 - y0;
-fprintf(stderr,"after rotate, crpix1=%f\n",crpix1);
+if (VERBOSE) fprintf(stderr,"after rotate, crpix1=%f\n",crpix1);
 
         // adjust internal quantities for after the flip, may be needed by do_register. 
         /* But we will need the original values of x1 and y1 in the code that handles the patch-image intersection.
@@ -995,7 +1059,7 @@ fprintf(stderr,"after rotate, crpix1=%f\n",crpix1);
         target_y = inAxis[1] - 1 - center_y;
         // cosa = 1.0; sina = 0.0;
         strcat(history, "Image rotated 180 degrees.");
-fprintf(stderr,"after flip x1=%d, target_x=%lf, y1=%d, target_y=%lf\n",x1,target_x,y1,target_y);
+if (VERBOSE) fprintf(stderr,"after flip x1=%d, target_x=%lf, y1=%d, target_y=%lf\n",x1,target_x,y1,target_y);
     }
     
     /* At this point, all the modifications to x1, y1, target_x, and target_y have been performed, 
@@ -1134,7 +1198,9 @@ fprintf(stderr,"after flip x1=%d, target_x=%lf, y1=%d, target_y=%lf\n",x1,target
     drms_setkey_time(outRec, "HGTSTOP", t_stop);
     drms_setkey_time(outRec, "DATE", time(0) + UNIX_EPOCH);
     drms_setkey_string(outRec, "HGQUERY", in);
-fprintf(stderr,"DATAMIN=%f, DATAMAX=%f\n",drms_getkey_float(outRec,"DATAMIN",NULL),drms_getkey_float(outRec,"DATAMAX",NULL));
+    drms_setkey_double(outRec, "CRLN_OBS", crln_obs);
+    update_CALVERxx(inRec, outRec, 1<<28);
+if (VERBOSE) fprintf(stderr,"DATAMIN=%f, DATAMAX=%f\n",drms_getkey_float(outRec,"DATAMIN",NULL),drms_getkey_float(outRec,"DATAMAX",NULL));
 
 /*
  *               writing the extracted region data file
@@ -1250,7 +1316,7 @@ fprintf(stderr, "patch completely outside image, x1=%d, y1=%d, x2=%d, y2=%d\n", 
             status = 0;
             outArray = drms_segment_readslice(inSeg, DRMS_TYPE_FLOAT, start1, end1, &status);
             if (status) DIE("Cant read input record");
-fprintf(stderr,"$$$$$$$ outArray bzero, bscale are %f, %f\n", outArray->bzero, outArray->bscale);
+if (VERBOSE) fprintf(stderr,"$$$$$$$ outArray bzero, bscale are %f, %f\n", outArray->bzero, outArray->bscale);
         }
         else
         { // patch partly outside image.
@@ -1419,8 +1485,11 @@ fprintf(stderr,"$$$$$$$ outArray bzero, bscale are %f, %f\n", outArray->bzero, o
             outArray->bscale = use_bscale;
         }
     
+        set_statistics(outSeg, outArray, 1);  // do this before adding possible FAKE image
+        
         if (wantFAKE && FDSfile)
         {
+// fprintf(stderr,"XXXX in wantFAKE and FDSfile\n");
             double r;
             int ix0, iy0;
             int nx = outArray->axis[0];
@@ -1441,6 +1510,7 @@ fprintf(stderr,"$$$$$$$ outArray bzero, bscale are %f, %f\n", outArray->bzero, o
                 y0 = ny/2.0;
             }
     
+if (VERBOSE) fprintf(stderr,"XXXXx x0=%f, yo=%f\n",x0,y0);
             ix0 = x0+0.5;
             iy0 = y0+0.5;
             // r = 28.9/cdelt;  // venus radius in pixels
@@ -1482,8 +1552,6 @@ fprintf(stderr,"$$$$$$$ outArray bzero, bscale are %f, %f\n", outArray->bzero, o
             drms_setkey_double(outRec, "CRPIX2", crpix2);
             }
     
-        set_statistics(outSeg, outArray, 1);
-        
         if (export_keys)
           {
           status = drms_segment_writewithkeys(outSeg, outArray, 0);
@@ -1945,25 +2013,26 @@ int get_tracking_xy(char *FDSfile, TIME want, double *xp, double *yp, double *ra
   if (!data)
     return(1);
 
-  // skip first 13 lines, for lunar transit data
+  // skip first 13 lines, for lunar transit data, was 14 lines
   for (iline=0; iline<13; iline++)
     fgets(buf, 200, data);
-
+  // fprintf(stderr,"line before using: %s\n",buf);
   // read info until end, stop at first time after want
   while (fscanf(data, "%s %s %lf %lf %lf %lf %lf %lf", object, now_txt, &lambda, &phi, &x, &y, &dist, &obj_radius) == 8)
     {
+    char tmp_txt[100];
     int yyyy, doy, hh, mm, ss;
     int m,d;
     int dim[] = {31,28,31,30,31,30,31,31,30,31,30,31};
     double distance;
     TIME now;
-    // fix doordinate system to match HMI view
+    // fix coordinate system to match HMI view
 // not for ISON
     x = -x;
     y = -y;
     obj_radius *= 3600;
     // extract time
-    sscanf(now_txt,"%4d%3d.%2d%2d%2d", &yyyy, &doy, &hh, &mm, &ss);
+    sscanf(tmp_txt,"%4d%3d.%2d%2d%2d", &yyyy, &doy, &hh, &mm, &ss);
     if (yyyy % 4 == 0) dim[1] = 29; else dim[1] = 28;
     for (m=1; m<=12; m++)
       {
@@ -1974,8 +2043,8 @@ int get_tracking_xy(char *FDSfile, TIME want, double *xp, double *yp, double *ra
       }
     d = doy;
 
-    sprintf(now_txt, "%4d.%02d.%02d_%02d:%02d:%02d_UTC", yyyy, m, d, hh, mm, ss);
-    now = sscan_time(now_txt);
+    sprintf(tmp_txt, "%4d.%02d.%02d_%02d:%02d:%02d_UTC", yyyy, m, d, hh, mm, ss);
+    now = sscan_time(tmp_txt);
     // report closest x,y for time want
     if (now < want)
       {

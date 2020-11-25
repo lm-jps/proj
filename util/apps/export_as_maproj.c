@@ -1046,6 +1046,64 @@ static int check_and_set_key_float(DRMS_Record_t *outRec, const char *key, float
     return 0;
 }
 
+// Two functions to get CRLN_OBS corrected and to store new CALVERxx value.
+// Use update_CALVERxx to fetch CALVERxx and or it with e.g. 1<<28 to indicate new CRLN_OBS
+// CALVERxx may be either of CALVER64 or CALVER32.
+int update_CALVERxx(DRMS_Record_t *inrec, DRMS_Record_t *outrec, int calver)
+  {
+  int status;
+  DRMS_Keyword_t *calver_kw;
+  if (calver_kw = drms_keyword_lookup(inrec, "CALVER64", 1))
+    {
+    long long calver64 = calver_kw->value.longlong_val;
+    drms_setkey_longlong(outrec, "CALVER64", calver64 | calver);
+    }
+  else
+    {
+    if (calver_kw = drms_keyword_lookup(inrec, "CALVER32", 1))
+      {
+      int calver32 = calver_kw->value.int_val;
+      drms_setkey_int(outrec, "CALVER32", calver32 | calver);
+      }
+    }
+  }
+
+// PHS added to make correction to CRLN_OBS before use.
+// Use get_new_CRLN_OBS as a direct replacement for drms_getkey_double or drms_getkey_float.
+// If there is a CALVERxx keyword present, it will check the bit #28 and if not set then
+// the correction to CRLN_OBS will be made.
+double get_new_CRLN_OBS(DRMS_Record_t *inrec, int *status)
+  {
+  int this_status;
+  double CRLN_CORRECTION = -0.0818941;
+  long long calver64;
+  int calver32;
+  DRMS_Keyword_t *calver_kw;
+  calver32 = 1<<31;
+  double crln_obs = drms_getkey_double(inrec, "CRLN_OBS", &this_status);
+  if (this_status || isnan(crln_obs))
+    *status = this_status;
+  else // CRLN_OBS exists and is not missing, check for one of CALVER keywords.
+    {
+    if (calver_kw = drms_keyword_lookup(inrec, "CALVER64", 1))
+      {
+      calver64 = calver_kw->value.longlong_val;
+      if (calver64 >= 0)
+      calver32 = calver64 & 0xFFFFFFFF;
+      }
+    else
+      {
+      if (calver_kw = drms_keyword_lookup(inrec, "CALVER32", 1))
+        calver32 = calver_kw->value.int_val;
+      }
+    if (!((calver32>>31) & 1) && !((calver32>>28) & 1)) // good CALVER but new CRLN_OBS is not present
+      {
+      crln_obs += CRLN_CORRECTION;
+      }
+    }
+  return(crln_obs);
+  }
+
 int DoIt (void) {
   CmdParams_t *params = &cmdparams;
   DRMS_RecordSet_t *ids, *ods;
@@ -1301,7 +1359,12 @@ int DoIt (void) {
             return 1; 
         }
 	
-        img_lon = drms_getkey_double(inrec, clon_key, &status);
+        if (strcmp(clon_key,"CRLN_OBS")==0)
+          {
+          img_lon = get_new_CRLN_OBS(inrec, &status);
+          }
+        else
+          img_lon = drms_getkey_double(inrec, clon_key, &status);
         img_lat = drms_getkey_double(inrec, clat_key, &status);
 
         status = solar_image_info(inrec, &img_xscl, &img_yscl, &img_xc, &img_yc, &img_radius, rsun_key, apsd_key, &img_pa, &ellipse_e, &ellipse_pa, &x_invrt, &y_invrt, &need_ephem, 0);
@@ -1436,6 +1499,7 @@ int DoIt (void) {
         kstat += check_and_set_key_time  (orec, "Created", CURRENT_SYSTEM_TIME);
         kstat += check_and_set_key_str   (orec, "Source", source);
         kstat += check_and_set_key_str   (orec, "Input", inset);
+        update_CALVERxx(inrec, orec, 1<<28);  // PHS update CALVERxx if present in outrec.
 
         // XXX PHS if running_as_export ignore setkey failures and add HISTORY for mapping params since
         // input_series"_mod" will not have the maproj specific keywords.
