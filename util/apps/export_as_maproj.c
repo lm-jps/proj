@@ -1056,6 +1056,7 @@ int update_CALVERxx(DRMS_Record_t *inrec, DRMS_Record_t *outrec, int calver)
   if (calver_kw = drms_keyword_lookup(inrec, "CALVER64", 1))
     {
     long long calver64 = calver_kw->value.longlong_val;
+    if ((1<<63) & calver64) calver64 = 0;
     drms_setkey_longlong(outrec, "CALVER64", calver64 | calver);
     }
   else
@@ -1063,6 +1064,7 @@ int update_CALVERxx(DRMS_Record_t *inrec, DRMS_Record_t *outrec, int calver)
     if (calver_kw = drms_keyword_lookup(inrec, "CALVER32", 1))
       {
       int calver32 = calver_kw->value.int_val;
+      if ((1<<31) & calver32) calver32 = 0;
       drms_setkey_int(outrec, "CALVER32", calver32 | calver);
       }
     }
