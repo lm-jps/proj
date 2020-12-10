@@ -563,7 +563,7 @@ int do_flat_aia(LEV0LEV1 *info)
       if(isfinite(out[i])) { 
         if (out[i] < MINOUT_AIA) out[i] = MINOUT_AIA;
         if (out[i] > MAXOUT_AIA) out[i] = MAXOUT_AIA;
-        itemp = out[i];
+        itemp = roundf(out[i]);
         ++hist[itemp-MINOUT_AIA]; 
         ++npix; 
       }
