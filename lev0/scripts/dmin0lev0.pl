@@ -17,7 +17,7 @@ $to_list = join ",", $to_list, 'green@lmsal.com',
         'wolfsonjake@gmail.com', 'mbobra@sun.stanford.edu',
         'aanorton@stanford.edu', 'baldner@sun.stanford.edu',
         'william.d.pesnell@nasa.gov', 'cheung@lmsal.com',
-        '4084317110@txt.att.net', '4086125678@vtext.com', 
+        '4086125678@vtext.com', 
         '4089338703@txt.att.net'
         unless $test;
 
