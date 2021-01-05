@@ -42,6 +42,8 @@ var EB_STATE_SUBMIT = 'submit';
 var EB_STATE_CANCEL_ENABLED = 'cancel_enabled';
 var EB_STATE_PATH = 'path';
 var EB_STATE_CANCEL = 'cancel';
+var EB_STATE_CANCELED = 'canceled';
+var EB_STATE_TIMEOUT = 'timeout';
 
 var KEYWORD_CTYPE1 = 'CTYPE1';
 var KEYWORD_CTYPE2 = 'CTYPE2';
@@ -155,13 +157,18 @@ var MANAGE_REQUEST_ON_SUCCESS_INTERVAL = function(op, callback_fn)
             var state = $("ExportButton").retrieve('state', EB_STATE_DISABLED);
             var interval_fn_timer = $("ExportButton").retrieve('interval', null);
             var clear_interval_fn_timer = false;
+            var interval_fn_timeout = $("ExportButton").retrieve('interval_timeout', null);
             var error = false;
 
             if (status < 0)
-              {
+            {
                 // error calling MR - do nothing (don't change state)
                 $("ExportButtonMsg").innerHTML = mr_status_obj.msg;
                 error = true;
+            }
+            else if (state == EB_STATE_TIMEOUT)
+            {
+                // do not do anything; set_eb_state_disabled() will take care of stopping the interval function
             }
             else if (op == MR_OPERATION_CHECK)
             {
@@ -200,7 +207,7 @@ var MANAGE_REQUEST_ON_SUCCESS_INTERVAL = function(op, callback_fn)
 
                         // successful cancelation (or failure to cancel, followed by natural completion);
                         // back to the original pre-check-for-parameters state
-                        state = EB_STATE_DISABLED;
+                        state = EB_STATE_CANCELED;
                     }
                     else
                     {
@@ -213,7 +220,26 @@ var MANAGE_REQUEST_ON_SUCCESS_INTERVAL = function(op, callback_fn)
                 {
                     if (state == EB_STATE_ENABLED)
                     {
+                        // cancel short-cut taken
                         state = EB_STATE_CANCEL_ENABLED;
+
+                        if (interval_fn_timer === null)
+                        {
+                            // start-up interval
+                            internal_fn = CHECK_FOR_PENDING_REQUEST(true);
+                            interval_fn_timer = setInterval(internal_fn, 1000);
+                            $("ExportButton").store('interval', interval_fn_timer);
+                        }
+
+                        // do not allow the pending-request check to last forever (EB is in EB_STATE_CANCEL_ENABLED); 86400000 ==> 1 day
+                        // reset the timeout if it is already set
+                        if (interval_fn_timeout !== null)
+                        {
+                            clearTimeout(interval_fn_timeout);
+                        }
+
+                        interval_fn_timeout = setTimeout(function () { $("ExportButton").store('state', EB_STATE_TIMEOUT); set_eb_state_disabled(false);}, 86400000);
+                        $("ExportButton").store('interval_timeout', interval_fn_timeout);
                     }
                     else if (state == EB_STATE_SUBMIT_ENABLED)
                     {
@@ -294,10 +320,16 @@ var MANAGE_REQUEST_ON_SUCCESS_INTERVAL = function(op, callback_fn)
                 if (interval_fn_timer !== null && clear_interval_fn_timer)
                 {
                     clearInterval(interval_fn_timer);
-                    $("ExportButton").store({ 'interval' : null });
+                    $("ExportButton").store('interval', null);
+
+                    if (interval_fn_timeout !== null)
+                    {
+                        clearTimeout(interval_fn_timeout);
+                        $("ExportButton").store('interval_timeout', null);
+                    }
                 }
 
-                $("ExportButton").store({ 'state' : state });
+                $("ExportButton").store('state', state);
                 update_export_buttons();
             }
         }
@@ -311,6 +343,8 @@ var MANAGE_REQUEST_ON_SUCCESS_INTERVAL = function(op, callback_fn)
     return success_fn;
 }
 
+// handles only a subset of all EB states since on-demand checks are used only in
+// certain circumstances
 var MANAGE_REQUEST_ON_SUCCESS_ON_DEMAND = function(callback_fn)
 {
     var success_fn = function(response)
@@ -329,9 +363,9 @@ var MANAGE_REQUEST_ON_SUCCESS_ON_DEMAND = function(callback_fn)
                 $("ExportButtonMsg").innerHTML = mr_status_obj.msg;
                 error = true;
             }
-            else if (state != EB_STATE_DISABLED)
+            else if (state != EB_STATE_ENABLED && state != EB_STATE_DISABLED)
             {
-                // for disabled state only
+                // for enabled, disabled state only
                 $("ExportButtonMsg").innerHTML = 'unexpected export-button state ' + state.toString();
                 error = true;
             }
@@ -340,13 +374,20 @@ var MANAGE_REQUEST_ON_SUCCESS_ON_DEMAND = function(callback_fn)
                 // action depends on status
                 if (status == MR_STATUS_NOT_PENDING)
                 {
-                    // do nothing; the callback will take care of setting up the interval function and eb state
+                    if (state == EB_STATE_ENABLED)
+                    {
+                        state = EB_STATE_SUBMIT_ENABLED;
+                    }
                 }
                 else if (status == MR_STATUS_PENDING)
                 {
-                    // set the EB state to EB_STATE_CANCEL_ENABLED
-                    if (state == EB_STATE_DISABLED)
+                    if (state == EB_STATE_ENABLED)
                     {
+                        state = EB_STATE_CANCEL_ENABLED;
+                    }
+                    else if (state == EB_STATE_DISABLED)
+                    {
+                        // set the EB state to EB_STATE_CANCEL_ENABLED (the user has a pending export request)
                         state = EB_STATE_CANCEL_ENABLED;
                     }
                     else
@@ -363,7 +404,7 @@ var MANAGE_REQUEST_ON_SUCCESS_ON_DEMAND = function(callback_fn)
                 }
             }
 
-            $("ExportButton").store({ 'state' : state })
+            $("ExportButton").store('state', state)
             update_export_buttons();
         }
 
@@ -3186,6 +3227,7 @@ function set_eb_state_disabled(make_dirty)
 {
     var state = null;
     var interval_fn_timer = null;
+    var interval_fn_timeout = null;
 
     if (make_dirty)
     {
@@ -3203,21 +3245,31 @@ function set_eb_state_disabled(make_dirty)
     {
 
     }
-    else if (state == EB_STATE_SUBMIT_ENABLED || state == EB_STATE_PATH || state == EB_STATE_CANCEL)
+    else if (state == EB_STATE_SUBMIT_ENABLED || state == EB_STATE_PATH || state == EB_STATE_CANCEL || state == EB_STATE_CANCELED || statue == EB_STATE_TIMEOUT)
     {
         // EB_STATE_SUBMIT_ENABLED - user wants to change input instead of clicking on `submit`
         // EB_STATE_PATH - export request complete, time to reset for the next request
         // EB_STATE_CANCEL - user clicked on `cancel` button, and the export request was canceled
+        // EB_STATE_CANCELED - user clicked on `continue` button, and the canceled export request was cleared
+        // EB_STATE_TIMEOUT - the export button interval function ran for too long without user intervention,
+        //                    (like clicking on the button)
 
         // clear interval
         interval_fn_timer = $("ExportButton").retrieve('interval', null);
         if (interval_fn_timer !== null)
         {
             clearInterval(interval_fn_timer);
-            $("ExportButton").store({ 'interval' : null });
+            $("ExportButton").store('interval', null);
         }
 
-        $("ExportButton").store({ 'state' : EB_STATE_DISABLED });
+        interval_fn_timeout = $("ExportButton").retrieve('interval_timeout', null);;
+        if (interval_fn_timeout !== null)
+        {
+            clearTimeout(interval_fn_timeout);
+            $("ExportButton").store('interval_timeout', null);
+        }
+
+        $("ExportButton").store('state', EB_STATE_DISABLED);
         // $("ExportCheckMsg").store({ 'cp_message' : '' });
         $("ExportCheckMsg").store('cp_message', null);
     }
@@ -3428,6 +3480,13 @@ function update_export_buttons()
         $("ExportButton").disabled = true;
 
         disable_input();
+    }
+    else if (state == EB_STATE_CANCELED)
+    {
+        $("ExportButton").style.backgroundColor = colorRed;
+        $("ExportButton").value = "CANCELED";
+        $("ExportButton").disabled = false;
+        $("ExportButtonMsg").innerHTML = 'Export request canceled; click to continue';
     }
 }
 
@@ -3653,6 +3712,7 @@ function check_for_cancel_enabled_shortcut()
                         var state = null;
                         var internal_fn = null;
                         var interval_fn_timer = null;
+                        var interval_fn_timeout = null;
 
                         // we're done performing an on_demand for a pending request
                         $("ExportCheckButton").store({ 'on_demand' : false });
@@ -3663,9 +3723,17 @@ function check_for_cancel_enabled_shortcut()
                         // (which is indicated by the EB state)
                         if (state == EB_STATE_CANCEL_ENABLED)
                         {
-                            internal_fn = CHECK_FOR_PENDING_REQUEST(true);
-                            interval_fn_timer = setInterval(internal_fn, 1000);
-                            $("ExportButton").store({ 'interval' : interval_fn_timer });
+                            interval_fn_timer = $("ExportButton").retrieve('interval', null);
+                            if (interval_fn_timer === null)
+                            {
+                                internal_fn = CHECK_FOR_PENDING_REQUEST(true);
+                                interval_fn_timer = setInterval(internal_fn, 1000);
+                                $("ExportButton").store('interval', interval_fn_timer);
+
+                                // do not allow the pending-request check to last forever (EB is in EB_STATE_CANCEL_ENABLED)
+                                interval_fn_timeout = setTimeout(function () { $("ExportButton").store('state', EB_STATE_TIMEOUT); set_eb_state_disabled(false);}, 10000);
+                                $("ExportButton").store('interval_timeout', interval_fn_timeout);
+                            }
                         }
                         else
                         {
@@ -3763,6 +3831,7 @@ function CheckExportParamsInternal()
     if (isOK)
     {
         var args = {};
+        var check_pending_fn = null;
 
         if ($("ExportMethod").options[$("ExportMethod").selectedIndex].value == 'url_direct')
         {
@@ -3813,20 +3882,12 @@ function CheckExportParamsInternal()
         update_export_buttons();
         ExportShowQuery();
 
-        if ($("ExportButton").retrieve('interval', null) === null)
-        {
-            // disable the 'submit' button, and start the interval function that:
-            //   1. ensures that there is no pending request for this user; or
-            //   2. presents the user with an enabled 'submit'/'cancel' button
-            var check_pending_fn = CHECK_FOR_PENDING_REQUEST(true);
-            var interval_fn_timer = null;
+        $("ExportButton").store('state', EB_STATE_ENABLED);
+        update_export_buttons();
 
-            $("ExportButton").store({ 'state' : EB_STATE_ENABLED })
-            update_export_buttons();
-
-            interval_fn_timer = setInterval(check_pending_fn, 1000);
-            $("ExportButton").store({ 'interval' : interval_fn_timer });
-        }
+        // on-demand (check once, not in intervals); presents the user with an enabled 'submit'/'cancel' button
+        check_pending_fn = CHECK_FOR_PENDING_REQUEST(false);
+        check_pending_fn();
     }
     else
     {
@@ -3857,6 +3918,7 @@ function cancel_export()
     var cancel_pending_fn = null;
     var internal_fn = null;
     var interval_fn_timer = null;
+    var interval_fn_timeout = null;
 
     if (address !== null && address.length > 0)
     {
@@ -3868,12 +3930,17 @@ function cancel_export()
         // null -> do nothing on success; let interval function handle the resulting state changes
         cancel_pending_fn(null);
 
-        if ($("ExportButton").retrieve('interval', null) === null)
+        interval_fn_timer = $("ExportButton").retrieve('interval', null);
+        if (interval_fn_timer === null)
         {
             // start-up interval
             internal_fn = CHECK_FOR_PENDING_REQUEST(true);
             interval_fn_timer = setInterval(internal_fn, 1000);
-            $("ExportButton").store({ 'interval' : interval_fn_timer })
+            $("ExportButton").store('interval', interval_fn_timer);
+
+            // do not allow the pending-request check to last forever (EB is in EB_STATE_CANCEL)
+            interval_fn_timeout = setTimeout(function () { $("ExportButton").store('state', EB_STATE_TIMEOUT); set_eb_state_disabled(false);}, 30000);
+            $("ExportButton").store('interval_timeout', interval_fn_timeout);
         }
     }
 }
@@ -3882,14 +3949,47 @@ function GetExport() // This is the code executed when the user clicks on the Ex
 {
     // if the use was able to click this button, then it was OK to submit an export request
     var EB_state = $("ExportButton").retrieve('state', EB_STATE_DISABLED);
+    var internal_fn = null;
+    var interval_fn_timer = null;
+    var interval_fn_timeout = null;
 
     if (EB_state == EB_STATE_SUBMIT_ENABLED)
     {
         EB_state = EB_STATE_SUBMIT;
+        $("ExportButton").store('state', EB_state);
+        update_export_buttons();
+
+        // start up interval function (so we know when to switch to EB_STATE_CANCEL_ENABLED)
+        interval_fn_timer = $("ExportButton").retrieve('interval', null);
+        if (interval_fn_timer === null)
+        {
+            // start-up interval
+            internal_fn = CHECK_FOR_PENDING_REQUEST(true);
+            interval_fn_timer = setInterval(internal_fn, 1000);
+            $("ExportButton").store('interval', interval_fn_timer);
+
+            // do not allow the pending-request check to last forever (EB is in EB_STATE_SUBMIT); next state is EB_STATE_CANCEL_ENABLED,
+            // which should happen relatively quickly
+            interval_fn_timeout = setTimeout(function () { $("ExportButton").store('state', EB_STATE_TIMEOUT); set_eb_state_disabled(false);}, 10000);
+            $("ExportButton").store('interval_timeout', interval_fn_timeout);
+        }
     }
     else if (EB_state == EB_STATE_CANCEL_ENABLED)
     {
         EB_state = EB_STATE_CANCEL;
+        $("ExportButton").store('state', EB_state);
+        update_export_buttons();
+
+        // there is no need to start-up interval function - it is already running (when the state changed to EB_STATE_CANCEL_ENABLED);
+        // but the timeout can be decreased (we no longer have to wait for the export to complete)
+        interval_fn_timeout = $("ExportButton").retrieve('interval_timeout', null);
+        if (interval_fn_timeout !== null)
+        {
+            clearTimeout(interval_fn_timeout);
+        }
+
+        interval_fn_timeout = setTimeout(function () { $("ExportButton").store('state', EB_STATE_TIMEOUT); set_eb_state_disabled(false);}, 20000);
+        $("ExportButton").store('interval_timeout', interval_fn_timeout);
 
         // this state transition is handled by calling manage-request, not jsoc_fetch (the code below
         // is all about jsoc_fetch); run this:
@@ -3897,6 +3997,10 @@ function GetExport() // This is the code executed when the user clicks on the Ex
         // if this call fails for any reason, no worries, the export simply is not canceled, and
         // we get stuck in the EB_STATE_CANCEL state until it completes by natural causes
         cancel_export();
+    }
+    else if (EB_state == EB_STATE_CANCELED)
+    {
+        set_eb_state_disabled(false);
     }
     else if (EB_state == EB_STATE_PATH)
     {
@@ -3906,13 +4010,12 @@ function GetExport() // This is the code executed when the user clicks on the Ex
     else
     {
         EB_state = EB_STATE_DISABLED;
+        $("ExportButton").store('state', EB_state);
+        update_export_buttons();
         $("ExportButtonMsg").innerHTML = "Unexpected export button state";
     }
 
-    $("ExportButton").store({ 'state' : EB_state });
-    update_export_buttons();
-
-    if (EB_state == EB_STATE_DISABLED || EB_state == EB_STATE_CANCEL)
+    if (EB_state == EB_STATE_DISABLED || EB_state == EB_STATE_CANCEL || EB_state == EB_STATE_CANCELED)
     {
         return;
     }
@@ -4104,6 +4207,8 @@ function GetReExport()
 function ProcessExportResponse(response)
 {
     var data = response.evalJSON();
+    var interval_fn_timer = null;
+    var interval_fn_timeout = null;
 
     // state gets set to 0 before leaving this function, so this statement has no effect
     state = 3;
@@ -4191,15 +4296,34 @@ function ProcessExportResponse(response)
     // it is safe to change state to cancel_enabled
     if ($("ExportButton").retrieve('state', EB_STATE_DISABLED) == EB_STATE_SUBMIT)
     {
-        $("ExportButton").store({ 'state' : EB_STATE_CANCEL_ENABLED });
+        $("ExportButton").store('state', EB_STATE_CANCEL_ENABLED);
+        update_export_buttons();
+
+        interval_fn_timer = $("ExportButton").retrieve('interval', null);
+        if (interval_fn_timer === null)
+        {
+            // start-up interval
+            internal_fn = CHECK_FOR_PENDING_REQUEST(true);
+            interval_fn_timer = setInterval(internal_fn, 1000);
+            $("ExportButton").store('interval', interval_fn_timer);
+        }
+
+        // do not allow the pending-request check to last forever (EB is in EB_STATE_CANCEL_ENABLED); export processing could take a while
+        // so set a 1 day timeout (86400000)
+        interval_fn_timeout = $("ExportButton").retrieve('interval_timeout', null);
+        if (interval_fn_timeout !== null)
+        {
+            clearTimeout(interval_fn_timeout);
+        }
+
+        interval_fn_timeout = setTimeout(function () { $("ExportButton").store('state', EB_STATE_TIMEOUT); set_eb_state_disabled(false);}, 86400000);
+        $("ExportButton").store('interval_timeout', interval_fn_timeout);
     }
     else
     {
         // error
         alert('unexpected eb state');
     }
-
-    update_export_buttons();
 
     Cookie.setData("requestid",data.requestid);
     $("ExportLocation").innerHTML = "";
