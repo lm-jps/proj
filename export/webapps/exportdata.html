@@ -3484,7 +3484,7 @@ function update_export_buttons()
     else if (state == EB_STATE_CANCELED)
     {
         $("ExportButton").style.backgroundColor = colorRed;
-        $("ExportButton").value = "CANCELED";
+        $("ExportButton").value = "canceled";
         $("ExportButton").disabled = false;
         $("ExportButtonMsg").innerHTML = 'Export request canceled; click to continue';
     }
@@ -3729,11 +3729,20 @@ function check_for_cancel_enabled_shortcut()
                                 internal_fn = CHECK_FOR_PENDING_REQUEST(true);
                                 interval_fn_timer = setInterval(internal_fn, 1000);
                                 $("ExportButton").store('interval', interval_fn_timer);
+                            }
 
-                                // do not allow the pending-request check to last forever (EB is in EB_STATE_CANCEL_ENABLED)
+                            // do not allow the pending-request check to last forever (EB is in EB_STATE_CANCEL_ENABLED)
+                            if (interval_fn_timeout !== null)
+                            {
+                                clearTimeout(interval_fn_timeout);
+                            }
+
+                            if (interval_fn_timer !== null)
+                            {
                                 interval_fn_timeout = setTimeout(function () { $("ExportButton").store('state', EB_STATE_TIMEOUT); set_eb_state_disabled(false);}, 10000);
                                 $("ExportButton").store('interval_timeout', interval_fn_timeout);
                             }
+
                         }
                         else
                         {
@@ -3886,6 +3895,8 @@ function CheckExportParamsInternal()
         update_export_buttons();
 
         // on-demand (check once, not in intervals); presents the user with an enabled 'submit'/'cancel' button
+        // (it will be 'submit' because the call to check_for_cancel_enabled_shortcut() will have set the state
+        // to 'cancel' if a request was pending and execution will never have gotten here).
         check_pending_fn = CHECK_FOR_PENDING_REQUEST(false);
         check_pending_fn();
     }
@@ -3945,7 +3956,8 @@ function cancel_export()
     }
 }
 
-function GetExport() // This is the code executed when the user clicks on the ExportButton button.
+// this is the code executed when the user clicks on the ExportButton button
+function ExportButtonOnClickAction()
 {
     // if the use was able to click this button, then it was OK to submit an export request
     var EB_state = $("ExportButton").retrieve('state', EB_STATE_DISABLED);
@@ -3959,20 +3971,7 @@ function GetExport() // This is the code executed when the user clicks on the Ex
         $("ExportButton").store('state', EB_state);
         update_export_buttons();
 
-        // start up interval function (so we know when to switch to EB_STATE_CANCEL_ENABLED)
-        interval_fn_timer = $("ExportButton").retrieve('interval', null);
-        if (interval_fn_timer === null)
-        {
-            // start-up interval
-            internal_fn = CHECK_FOR_PENDING_REQUEST(true);
-            interval_fn_timer = setInterval(internal_fn, 1000);
-            $("ExportButton").store('interval', interval_fn_timer);
-
-            // do not allow the pending-request check to last forever (EB is in EB_STATE_SUBMIT); next state is EB_STATE_CANCEL_ENABLED,
-            // which should happen relatively quickly
-            interval_fn_timeout = setTimeout(function () { $("ExportButton").store('state', EB_STATE_TIMEOUT); set_eb_state_disabled(false);}, 10000);
-            $("ExportButton").store('interval_timeout', interval_fn_timeout);
-        }
+        // call jsoc_fetch now
     }
     else if (EB_state == EB_STATE_CANCEL_ENABLED)
     {
@@ -3980,16 +3979,30 @@ function GetExport() // This is the code executed when the user clicks on the Ex
         $("ExportButton").store('state', EB_state);
         update_export_buttons();
 
-        // there is no need to start-up interval function - it is already running (when the state changed to EB_STATE_CANCEL_ENABLED);
-        // but the timeout can be decreased (we no longer have to wait for the export to complete)
+        // start up interval function (so we know when export request has been completely processed)
+        interval_fn_timer = $("ExportButton").retrieve('interval', null);
+        if (interval_fn_timer === null)
+        {
+            // start-up interval
+            internal_fn = CHECK_FOR_PENDING_REQUEST(true);
+            interval_fn_timer = setInterval(internal_fn, 1000);
+            $("ExportButton").store('interval', interval_fn_timer);
+        }
+
+        // set or reset timeout timer
         interval_fn_timeout = $("ExportButton").retrieve('interval_timeout', null);
         if (interval_fn_timeout !== null)
         {
-            clearTimeout(interval_fn_timeout);
+            // do not allow the pending-request check to last forever (EB is in EB_STATE_CANCEL); next state is EB_STATE_CANCELED
+            // which should happen relatively quickly
+              clearTimeout(interval_fn_timeout);
         }
 
-        interval_fn_timeout = setTimeout(function () { $("ExportButton").store('state', EB_STATE_TIMEOUT); set_eb_state_disabled(false);}, 20000);
-        $("ExportButton").store('interval_timeout', interval_fn_timeout);
+        if (interval_fn_timer !== null)
+        {
+            interval_fn_timeout = setTimeout(function () { $("ExportButton").store('state', EB_STATE_TIMEOUT); set_eb_state_disabled(false);}, 15000);
+            $("ExportButton").store('interval_timeout', interval_fn_timeout);
+        }
 
         // this state transition is handled by calling manage-request, not jsoc_fetch (the code below
         // is all about jsoc_fetch); run this:
@@ -3997,10 +4010,16 @@ function GetExport() // This is the code executed when the user clicks on the Ex
         // if this call fails for any reason, no worries, the export simply is not canceled, and
         // we get stuck in the EB_STATE_CANCEL state until it completes by natural causes
         cancel_export();
+
+        // do not continue onto calling jsoc_fetch
+        return;
     }
     else if (EB_state == EB_STATE_CANCELED)
     {
         set_eb_state_disabled(false);
+
+        // do not continue onto calling jsoc_fetch
+        return;
     }
     else if (EB_state == EB_STATE_PATH)
     {
@@ -4013,10 +4032,8 @@ function GetExport() // This is the code executed when the user clicks on the Ex
         $("ExportButton").store('state', EB_state);
         update_export_buttons();
         $("ExportButtonMsg").innerHTML = "Unexpected export button state";
-    }
 
-    if (EB_state == EB_STATE_DISABLED || EB_state == EB_STATE_CANCEL || EB_state == EB_STATE_CANCELED)
-    {
+        // do not continue onto calling jsoc_fetch
         return;
     }
 
@@ -4083,6 +4100,14 @@ function GetExport() // This is the code executed when the user clicks on the Ex
     // Just call the function. It will determine if it should use the internal or external version of the CGI.
     doFetchReqFn();
 }
+
+// the name of the function in the html; this simply calls a function with a function name that denotes it is called
+// when a button gets clicked
+function GetExport()
+{
+    return ExportButtonOnClickAction();
+}
+
 
 function ExportOrigin(requestID, webserver)
 {
@@ -4292,7 +4317,10 @@ function ProcessExportResponse(response)
     $("RequestIDDesc").update(HTML_REQUESTID_DESC);
     $("StatusRequestID").value = data.requestid;
 
-    // we now know that the JSOC has seen the export request, and the user has at some point had a pending request;
+    // we now know that the JSOC has seen the export request; before jsoc_fetch returns, it inserts a row
+    // into export_pending_reqs, which means the user has a pending request; jsoc_fetch sets status to 2
+    // when starting a new request (not 1, which is what the status check will return)
+
     // it is safe to change state to cancel_enabled
     if ($("ExportButton").retrieve('state', EB_STATE_DISABLED) == EB_STATE_SUBMIT)
     {
@@ -4316,8 +4344,11 @@ function ProcessExportResponse(response)
             clearTimeout(interval_fn_timeout);
         }
 
-        interval_fn_timeout = setTimeout(function () { $("ExportButton").store('state', EB_STATE_TIMEOUT); set_eb_state_disabled(false);}, 86400000);
-        $("ExportButton").store('interval_timeout', interval_fn_timeout);
+        if (interval_fn_timer !== null)
+        {
+            interval_fn_timeout = setTimeout(function () { $("ExportButton").store('state', EB_STATE_TIMEOUT); set_eb_state_disabled(false);}, 86400000);
+            $("ExportButton").store('interval_timeout', interval_fn_timeout);
+        }
     }
     else
     {
