@@ -460,6 +460,9 @@ var MANAGE_REQUEST_XHR = function(address, op, interval, callback_fn)
         {
             alert('unable to check for a pending export request');
 
+            // true ==> do not allow the user to change email address (must reload to do that)
+            set_eb_state_disabled(true);
+
             if (callback_fn !== null && callback_fn !== undefined)
             {
                 callback_fn();
@@ -1238,7 +1241,7 @@ function ParseSpec(spec, processSpec)
         'method' : 'get',
         'parameters' : { 'spec' : spec },
         'onSuccess' : onSuccess,
-        'onFailure' : function() { $("RSCountPlace").innerHTML = 'ERROR - unable to parse record-set specification ' + spec; $('ExportRecordSet').disabled = false; },
+        'onFailure' : function() { $("RSCountPlace").innerHTML = 'ERROR - unable to parse record-set specification ' + spec; $('ExportRecordSet').disabled = false; set_eb_state_disabled(true); },
         'onComplete' : function() { }
     });
 }
@@ -1626,7 +1629,7 @@ function ObtainFastRecordCount(errMsg, spec, callback)
             'method': 'get',
             'parameters': arguments,
             'onSuccess': onSuccess,
-            'onFailure': function() { RecordCount = null; $('ExportRecordSet').store({ 'count': RecordCount }); $("RSCountPlace").innerHTML = 'ERROR - failure calling jsoc_info'; ExportRecordSetOK = 0; SeriesName = ''; $('ExportRecordSet').disabled = false; },
+            'onFailure': function() { RecordCount = null; $('ExportRecordSet').store({ 'count': RecordCount }); $("RSCountPlace").innerHTML = 'ERROR - failure calling jsoc_info'; ExportRecordSetOK = 0; SeriesName = ''; $('ExportRecordSet').disabled = false; set_eb_state_disabled(true); },
             'onComplete': function() { }
         });
     }
@@ -1670,7 +1673,7 @@ function RequestRSInfo(errMsg, spec, lastRecord, callback)
             'method': 'get',
             'parameters': arguments,
             'onSuccess': onSuccess,
-            'onFailure': function() { RecordCount = null; $('ExportRecordSet').store({ 'count': RecordCount }); $("RSCountPlace").innerHTML = 'ERROR - failure calling jsoc_info'; ExportRecordSetOK = 0; SeriesName = ''; $('ExportRecordSet').disabled = false; },
+            'onFailure': function() { RecordCount = null; $('ExportRecordSet').store({ 'count': RecordCount }); $("RSCountPlace").innerHTML = 'ERROR - failure calling jsoc_info'; ExportRecordSetOK = 0; SeriesName = ''; $('ExportRecordSet').disabled = false; set_eb_state_disabled(true); },
             'onComplete': function() { }
         });
     }
@@ -1911,7 +1914,7 @@ function RequestSeriesInfo(series, callback)
         'method': 'get',
         'parameters': { 'series' : series, 'atts' : 1, 'keys' : '*', 'segs' : '*' },
         'onSuccess': onSuccess,
-        'onFailure': function() { RecordCount = null; $('ExportRecordSet').store({ 'count': RecordCount }); SeriesName = ''; ExportRecordSetOK = 0; $("RSCountPlace").innerHTML = 'ERROR - failure calling series-info'; $('ExportRecordSet').disabled = false; },
+        'onFailure': function() { RecordCount = null; $('ExportRecordSet').store({ 'count': RecordCount }); SeriesName = ''; ExportRecordSetOK = 0; $("RSCountPlace").innerHTML = 'ERROR - failure calling series-info'; $('ExportRecordSet').disabled = false; set_eb_state_disabled(true); },
         'onComplete': function() { }
     });
 }
@@ -2183,7 +2186,7 @@ function GetDefaultFormat()
 					alert('Unable to retrieve series information for record-set ' + RecordSet + '. ' + SeriesInfo.error)
 				}
 			},
-			onFailure: function() { alert('[ GetDefaultFormat ] Something went wrong...'); },
+			onFailure: function() { alert('[ GetDefaultFormat ] Something went wrong...'); set_eb_state_disabled(true); },
 			onComplete: function() { }
 		});
 	};
@@ -2252,7 +2255,7 @@ function GetDefaultFormat()
                                 AiaLev1KeywordsGlobal = null;
                             }
                         },
-            'onFailure': function() { AiaLev1AttributesGlobal = null; AiaLev1KeywordsGlobal = null; },
+            'onFailure': function() { AiaLev1AttributesGlobal = null; AiaLev1KeywordsGlobal = null; set_eb_state_disabled(true); },
             'onComplete': function() { }
         });
     }
@@ -3231,6 +3234,7 @@ function set_eb_state_disabled(make_dirty)
 
     if (make_dirty)
     {
+        // do not allow the user to change email address at this point (do that on reload)
         $("ExportCheckButton").store({ 'dirty' : true });
     }
     else
@@ -3772,7 +3776,7 @@ function check_for_cancel_enabled_shortcut()
 // This function is called when the user clicks on the "Check Params for Export"
 // button.
 // A lot of the calls in this function are asynchronous.
-function CheckExportParamsInternal()
+function CheckExportButtonOnClickAction()
 {
     var isOK = null;
 
@@ -3920,7 +3924,7 @@ function CheckExportParams()
     // Up till now, SetProcessing() gets called whenever a processing option checkbox gets clicked.
     // But SetProcessing() does not get called when the user changes processing option values. Call it
     // now with -1 (which means the record-set spec has not changed).
-    SetProcessing(-1, CheckExportParamsInternal);  // asynchronous - can't do the rest until this asynchronous call completes.
+    SetProcessing(-1, CheckExportButtonOnClickAction);  // asynchronous - can't do the rest until this asynchronous call completes.
 }
 
 function cancel_export()
@@ -4092,6 +4096,8 @@ function ExportButtonOnClickAction()
                 $("ExportButton").value = "FAILURE ...";
                 $("ExportButton").style.backgroundColor = colorDarkPink;
                 alert('[ GetExport ] Something went wrong...');
+
+                set_eb_state_disabled(true);
             },
             onComplete: function() { }
         });
@@ -4223,6 +4229,8 @@ function GetReExport()
             $("ReExportButton").value = "FAILURE ...";
             $("ReExportButton").style.backgroundColor = colorDarkPink;
             alert('[ GetReExport ] Something went wrong...');
+
+            set_eb_state_disabled(true);
         },
         onComplete: function() { }
     });
@@ -4620,6 +4628,7 @@ function GetStatus()
       $("StatusButton").value = "FAILURE ...";
       $("StatusButton").style.backgroundColor = colorDarkPink;
       alert('[ GetStatus ] Something went wrong...');
+      set_eb_state_disabled(true);
       },
     onComplete: function() { }
     });
