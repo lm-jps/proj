@@ -242,3 +242,6 @@ su_tplarson.mdi_V_sht_modes
 su_tplarson.mdi_V_sht_2drls
 su_yang.B3comp_noisemask_remap_deglatlon_720s
 su_yang.B3comp_noisemask_remap_deglatlon_test_720s
+su_mbobra.smarp_96m
+su_mbobra.smarp_cea_96m
+su_mbobra.sharp_loskeys_720s
