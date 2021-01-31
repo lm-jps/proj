@@ -547,7 +547,7 @@ int do_flat_aia(LEV0LEV1 *info)
     //
     double bscale = info->bscale;
     double bzero = info->bzero;
-    double dtemp[4096*4096];
+    static double dtemp[4096*4096];
     npix = 0; memset(hist, 0, 4*NBINS);
     for (i=0; i<4096*4096; i++) {
       int itemp;
