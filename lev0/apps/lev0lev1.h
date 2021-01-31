@@ -32,6 +32,8 @@ typedef struct {
   int datamin;
   int datamax;
   int datamedn;
+  double bscale;
+  double bzero;
   double datamean;
   double data_rms;
   double dataskew;

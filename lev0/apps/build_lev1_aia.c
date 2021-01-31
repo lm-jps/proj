@@ -591,6 +591,13 @@ int do_ingest(long long bbrec, long long eerec, const char *dpath)
 
     for(i=0; i < ncnt; i++) { 	//do for all the sorted lev0 records
       //StartTimer(2);	//!!TEMP
+      if ((imageloc[i].wavelength == 94) && fp94) {
+          l0l1->bscale = bs94;
+          l0l1->bzero = bz94;
+      } else {
+          l0l1->bscale = 1.0;
+          l0l1->bzero = 0.0;
+      }
       rs0 = &rptr[i];
       recnum0 = rs0->recnum;
       fsnx = fsnarray[i];

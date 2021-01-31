@@ -361,6 +361,8 @@ int do_flat(LEV0LEV1 *info)
 }
 
 ///////////////////////////
+int dstats(int n, double arr[], double *min, double *max, double *medn, double *mean, double *sig, double *skew, double *kurt, int *ngood);
+
 int do_flat_aia(LEV0LEV1 *info)
 {
     int i,j,idx,IDX;
@@ -402,8 +404,6 @@ int do_flat_aia(LEV0LEV1 *info)
 
     info->oscnmean = info->oscnrms = DRMS_MISSING_DOUBLE;
 
-    memset(hist, 0, 4*NBINS);
-
     //
     // apply dark, flat correction quadrant by quadrant
     // and squeeze out the overscan rows and columns
@@ -423,8 +423,6 @@ int do_flat_aia(LEV0LEV1 *info)
 		else if (ftmp >= MAXOUT_AIA) out[IDX] = MAXOUT_AIA;
 		else {
 		    out[IDX] = ftmp;
-		    ++hist[itmp-MINOUT_AIA];
-		    ++npix;
                 }
 		++IDX;
 	    }
@@ -444,8 +442,6 @@ int do_flat_aia(LEV0LEV1 *info)
 		else if (ftmp >= MAXOUT_AIA) out[IDX] = MAXOUT_AIA;
 		else {
 		    out[IDX] = ftmp;
-		    ++hist[itmp-MINOUT_AIA];
-		    ++npix;
                 }
 		++IDX;
 	    }
@@ -465,8 +461,6 @@ int do_flat_aia(LEV0LEV1 *info)
 		else if (ftmp >= MAXOUT_AIA) out[IDX] = MAXOUT_AIA;
 		else {
 		    out[IDX] = ftmp;
-		    ++hist[itmp-MINOUT_AIA];
-		    ++npix;
                 }
 		++IDX;
 	    }
@@ -486,16 +480,11 @@ int do_flat_aia(LEV0LEV1 *info)
 		else if (ftmp >= MAXOUT_AIA) out[IDX] = MAXOUT_AIA;
 		else {
 		    out[IDX] = ftmp;
-		    ++hist[itmp-MINOUT_AIA];
-		    ++npix;
                 }
 		++IDX;
 	    }
 	}
     }
-
-    info->datavals = npix;
-    info->missvals = dvals[info->himgcfid] - npix;
 
     //
     // fill in blanks around the borders
@@ -548,7 +537,6 @@ int do_flat_aia(LEV0LEV1 *info)
     //
     // do statistics
     //
-    npix = 0; memset(hist, 0, 4*NBINS);
     /*******Original Code
     for (i=0; i<4096*4096; i++) {
       if(out[i] != DRMS_MISSING_INT) { ++hist[out[i]-MINOUT_AIA]; ++npix; }
@@ -557,65 +545,44 @@ int do_flat_aia(LEV0LEV1 *info)
     //
     // do statistics
     //
+    double bscale = info->bscale;
+    double bzero = info->bzero;
+    double dtemp[4096*4096];
     npix = 0; memset(hist, 0, 4*NBINS);
     for (i=0; i<4096*4096; i++) {
       int itemp;
       if(isfinite(out[i])) { 
         if (out[i] < MINOUT_AIA) out[i] = MINOUT_AIA;
         if (out[i] > MAXOUT_AIA) out[i] = MAXOUT_AIA;
-        itemp = roundf(out[i]);
-        ++hist[itemp-MINOUT_AIA]; 
-        ++npix; 
+	itemp = roundf(out[i]);
+	dtemp[npix] = bscale * round((out[i]-bzero)/bscale) + bzero;
+	++hist[itemp-MINOUT_AIA]; 
+	++npix;
       }
     }
+    
+    double dmin,dmax,dmean,dmedn,dsig,dskew,dkurt;
+    int junk;
+    dstats(npix, dtemp, &dmin, &dmax, &dmedn, &dmean, &dsig, &dskew, &dkurt, &junk);
 
     info->datavals = npix;
     info->missvals = dvals[info->himgcfid] - npix;
-    info->datamin = info->datamax = info->datamedn = DRMS_MISSING_INT;
-    //info->datavals = info->missvals = DRMS_MISSING_INT;
-    info->datamean = info->data_rms = info->dataskew 
-	= info->datakurt = DRMS_MISSING_DOUBLE;
+    info->datamin = round(dmin);
+    info->datamax = round(dmax);
+    info->datamedn = round(dmedn);
+    info->datamean = dmean;
+    info->data_rms = dsig;
+    info->dataskew = dskew;
+    info->datakurt = dkurt;
 
     min = 0;
     max = NBINS-1;
     if (npix) {
 	while (hist[min] == 0)
 	    ++min;
-	info->datamin = min + MINOUT_AIA;
 
 	while (hist[max] == 0)
 	    --max;
-	info->datamax = max + MINOUT_AIA;
-
-	medn = min;
-	i = hist[medn];
-	while (2*i < npix)
-	    i += hist[++medn];
-	info->datamedn = medn + MINOUT_AIA;
-
-	for (i=min; i<=max; ++i) {
-	    double ii = i + MINOUT_AIA;
-	    s += (dtmp = ii*hist[i]);
-	    s2 += (dtmp *= ii);
-	    s3 += (dtmp *= ii);
-	    s4 += (dtmp *= ii);
-	}
-	s /= npix;
-	info->datamean = s;
-	ss = s*s;
-	s2 /= npix;
-	s3 /= npix;
-	s4 /= npix;
-	if (npix > 1) {
-	    dtmp = npix * (s2-ss) / (npix-1);
-	    info->data_rms = sqrt(dtmp);
-	    if (dtmp > 0.0) {
-		info->dataskew = (s3 - s * (3*s2 - 2*ss)) / 
-		    (dtmp*info->data_rms);
-		info->datakurt = (s4 - 4*s*s3 + 3*ss*(2*s2-ss)) / 
-		    (dtmp*dtmp) - 3;
-	    }
-	}
 
         {                       //aia
             int n=0, nsatpix=0, sum=0, dp[8];
