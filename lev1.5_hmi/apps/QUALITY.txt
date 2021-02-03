@@ -54,6 +54,7 @@ QUAL_NOCOSMICRAY             (0x00000400)  //some cosmic-ray hit lists could not
 QUAL_ECLIPSE                 (0x00000200)  //at least one lev1 record was taken during an eclipse
 QUAL_LARGEFTSID              (0x00000100)  //HFTSACID of target filtergram > 4000, which adds noise to observables
 QUAL_TEMPERROR               (0x00000080)  //Code error discovered, will be corrected in later versions, see notes at http://jsoc2.stanford.edu/doc/data/hmi/Quality_Bits
+QUAL_LARGEFTSID              (0x00000040)  //HFTSACID of target filtergram > 4000, which adds noise to observables
 QUAL_POORQUALITY             (0x00000020)  //poor quality: careful when using these observables due to eclipse, or lunar transit, or thermal recovery, or open ISS, or other issues...
 
 //OBSERVABLES CREATED AND QUALITY == 0
