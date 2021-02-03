@@ -797,9 +797,9 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
   drms_setkey_double(rs, "DATE", CURRENT_SYSTEM_TIME);
   do_quallev0(rs, img, fsn);		//set the QUALLEV0 keyword
 
-  status = drms_segment_write(seg, array, 0);
+  status = drms_segment_writewithkeys(seg, array, 0);
   if (status) {
-    printk("ERROR: drms_segment_write error=%d for fsn=%u\n", status, fsn);
+    printk("ERROR: drms_segment_writewithkeys error=%d for fsn=%u\n", status, fsn);
   }
   add_small_array(rs, array, 8, 16); //add Phil's png and small fits
   array->data = NULL;        // must do before free 
