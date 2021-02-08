@@ -368,6 +368,7 @@ int do_flat_aia(LEV0LEV1 *info)
     int i,j,idx,IDX;
     int nr,nc,r1,r2,c1,c2;
     int status;
+    int is_dark = info->darkflag;
     float *flat = info->adataff;
     float *dark = info->adatadark;
     short *in = info->adata0;
@@ -417,7 +418,8 @@ int do_flat_aia(LEV0LEV1 *info)
 	    if (DRMS_MISSING_SHORT == tmp)
 		out[IDX++] = DRMS_MISSING_FLOAT;
 	    else {
-		ftmp = (tmp - dark[IDX]) / flat[IDX];
+		if (is_dark) { ftmp = (tmp - dark[IDX]); }
+                else { ftmp = (tmp - dark[IDX]) / flat[IDX]; }
                 itmp = roundf(ftmp);
 		if (ftmp < MINOUT_AIA) out[IDX] = MINOUT_AIA;
 		else if (ftmp >= MAXOUT_AIA) out[IDX] = MAXOUT_AIA;
@@ -436,7 +438,8 @@ int do_flat_aia(LEV0LEV1 *info)
 	    if (DRMS_MISSING_SHORT == tmp)
 		out[IDX++] = DRMS_MISSING_FLOAT;
 	    else {
-		ftmp = (tmp - dark[IDX]) / flat[IDX];
+		if (is_dark) { ftmp = (tmp - dark[IDX]); }
+                else { ftmp = (tmp - dark[IDX]) / flat[IDX]; }
                 itmp = roundf(ftmp);
 		if (ftmp < MINOUT_AIA) out[IDX] = MINOUT_AIA;
 		else if (ftmp >= MAXOUT_AIA) out[IDX] = MAXOUT_AIA;
@@ -455,7 +458,8 @@ int do_flat_aia(LEV0LEV1 *info)
 	    if (DRMS_MISSING_SHORT == tmp)
 		out[IDX++] = DRMS_MISSING_FLOAT;
 	    else {
-		ftmp = (tmp - dark[IDX]) / flat[IDX];
+		if (is_dark) { ftmp = (tmp - dark[IDX]); }
+                else { ftmp = (tmp - dark[IDX]) / flat[IDX]; }
                 itmp = roundf(ftmp);
 		if (ftmp < MINOUT_AIA) out[IDX] = MINOUT_AIA;
 		else if (ftmp >= MAXOUT_AIA) out[IDX] = MAXOUT_AIA;
@@ -474,7 +478,8 @@ int do_flat_aia(LEV0LEV1 *info)
 	    if (DRMS_MISSING_SHORT == tmp)
 		out[IDX++] = DRMS_MISSING_FLOAT;
 	    else {
-		ftmp = (tmp - dark[IDX]) / flat[IDX];
+		if (is_dark) { ftmp = (tmp - dark[IDX]); }
+                else { ftmp = (tmp - dark[IDX]) / flat[IDX]; }
                 itmp = roundf(ftmp);
 		if (ftmp < MINOUT_AIA) out[IDX] = MINOUT_AIA;
 		else if (ftmp >= MAXOUT_AIA) out[IDX] = MAXOUT_AIA;
