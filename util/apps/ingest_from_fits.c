@@ -2,7 +2,7 @@
 /*
  * ingest_from_fits [-j] [in=]<fitsfile> [map=<mapfile>] [ds=<series>]
  *   -j means print JSD for the fitsfile.
- *   -c means create the series if ds= is given and 
+ *   -c means create the series if ds= is given and
  *      a primekey is given and
  *      if the series does not exist already.
  *  in= is optional, but the fitsfile name is required.
@@ -15,7 +15,7 @@
  *  to get a sample JSD file then, once that JSD file has been
  *  modified and create_series has been called with the JSD file,
  *  this program can be called again to ingest the fitsfile.
- *  
+ *
 
  *  Several things need to be changed in the JSD template file:
  *    The target seriesname must be specified.
@@ -65,7 +65,7 @@
  *  If the -c flag is given and a series and primekey are specified and the series does not
  *  already exist then JSD that is created will
  *  be used to create a series.  It will also be printed if the -j flag is present.
- */  
+ */
 
 /**
 \defgroup ingest_from_fits ingest_from_fits
@@ -271,14 +271,14 @@ int DoIt(void)
     pjsd += sprintf(pjsd, "PrimeKeys:   %s\n", (haveprime ? primekey : "<PRIME KEYS HERE OR DELETE LINE>"));
     pjsd += sprintf(pjsd, "DBIndex:     %s\n", (haveprime ? primekey : "<PRIME KEYS HERE OR DELETE LINE>"));
     pjsd += sprintf(pjsd, "Description: \"From: %s\"\n", in);
-  
+
     pjsd += sprintf(pjsd, "#===== Keywords\n");
-  
+
     // drms_fitsrw_read() does not place reserved fits keywords in the keywords container.
     // The BITPIX, NAXIS, BLANK, BZERO, BSCALE, SIMPLE, EXTEND values are copied or
     // set in various fields in the in the DRMS_Array_t struct returned. END is dropped.
     // Another function, fitsrw_read(), WILL put every FITS keyword into the keywords
-    // container, but it does not convert their names into DRMS-compatible keyword names, 
+    // container, but it does not convert their names into DRMS-compatible keyword names,
     // unlike drms_fitsrw_read().
     datatype = data->type;
     naxis = data->naxis;
@@ -286,13 +286,13 @@ int DoIt(void)
     bzero = data->bzero;
     bscale = data->bscale;
 
-    hiter_new (&hit, keywords);
+    hiter_new_sort(&hit, keywords, drms_keyword_ranksort);
     while ( key = (DRMS_Keyword_t *)hiter_getnext(&hit) )
       {
       strcpy(keyname, key->info->name);
-  
+
       colon = index(key->info->description, ':');
-      // check for lllegal or reserved DRMS names 
+      // check for lllegal or reserved DRMS names
       // In this case the FITS Keyword structure note section will contain the
       // original FITS keyword.
       if (*(key->info->description) == '[')
@@ -309,9 +309,9 @@ int DoIt(void)
         newnames[nmap] = strdup(keyname);
         oldnames[nmap] = strdup(originalname);
         actions[nmap] = strdup("copy");
-        nmap++; 
+        nmap++;
         }
-      
+
       pjsd += sprintf(pjsd, "Keyword: %s, ", keyname);
       // make all but note section of jsd.
       switch (key->info->type)
@@ -346,15 +346,15 @@ int DoIt(void)
       }
 
     hiter_free(&hit);
-  
+
     pjsd += sprintf(pjsd, "#======= Segments =======\n");
     pjsd += sprintf(pjsd, "Data: array, variable, %s, %d, ", drms_type2str(datatype), naxis);
 
     for (iaxis = 0; iaxis < naxis; iaxis++)
       pjsd += sprintf(pjsd, "%d, ", dims[iaxis]);
-    pjsd += sprintf(pjsd, "\"\", fits, \"%s\", %f, %f, \"%s\"\n", 
-                    (datatype != DRMS_TYPE_FLOAT && 
-                     datatype != DRMS_TYPE_DOUBLE && 
+    pjsd += sprintf(pjsd, "\"\", fits, \"%s\", %f, %f, \"%s\"\n",
+                    (datatype != DRMS_TYPE_FLOAT &&
+                     datatype != DRMS_TYPE_DOUBLE &&
                      datatype != DRMS_TYPE_LONGLONG) ? "compress Rice" : "",
                     bzero, bscale, in);
     pjsd += sprintf(pjsd, "#======= End JSD =======\n");
@@ -457,7 +457,8 @@ int DoIt(void)
        DIE("Could not create new records in series");
     }
     rec = rs->records[0];
-    hiter_new (&hit, keywords);
+
+    hiter_new_sort(&hit, keywords, drms_keyword_ranksort);
     while ( key = (DRMS_Keyword_t *)hiter_getnext(&hit) )
       {
       DRMS_Keyword_t *outkey;
