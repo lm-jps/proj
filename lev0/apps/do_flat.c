@@ -517,7 +517,7 @@ int do_flat_aia(LEV0LEV1 *info)
     switch (wl) {
       case 1600:
       case 1700:
-      case 4500:
+//    case 4500:
         respike = 1;
         break;
        default:
