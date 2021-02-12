@@ -110,6 +110,7 @@ static DRMS_Record_t *rs;
 static DRMS_Record_t *rs0, *rs1, *rsff, *rsbad_pix, *rec_bad_aia, *rt, *rresp;
 static DRMS_Record_t *rptr;
 static DRMS_Segment_t *segment;
+static DRMS_Segment_t *segflt;
 static DRMS_Segment_t *segmentff;
 static DRMS_Segment_t *darkseg;
 static DRMS_Segment_t *badseg;
@@ -1130,6 +1131,9 @@ TEMPSKIP:
         if (dstatus) {
           printk("ERROR: drms_segment_write error=%d for fsn=%u\n", dstatus,fsnx);
           noimage[i] = 1;
+        }
+        if (segflt = drms_segment_lookup(rs,"image_flt") ) {
+          dstatus = drms_segment_writewithkeys(segflt, segArray, 0);
         }
         recnum1 = rs->recnum;
         printk("*1 %u %u\n", recnum1, fsnx);
