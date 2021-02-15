@@ -8,7 +8,7 @@
 #   The intermediate input series cannot be overridden by the options file in
 #	continuation test runs
 
-set SCRIPT_VERSION = 2.5
+set SCRIPT_VERSION = 2.6
 
 @ TEST = 0	# set to 1 for production in namespace hmi_test
 set TW
@@ -516,7 +516,6 @@ while ($STRIP < $STRIPCT)
   $TRACK out= $TSER in= $ISER tmid= $CARTIM length= $LNGTH \
       bckgn= "$BCK" qmask= $QMASK max_miss= $MMISS reject= $RJCT \
       map= Postel scale= $SCALE cols= $SIZE rows= $SIZE \
-      tobs_key= T_REC \
       lat= "{$LATLIST}" lon= "{$LONLIST}" mai= "{$MAILIST}" >>& $RLOG
   if ($status) then
     set SUBJ = "HMI $SYSE-deg ring-diagram $TW processing for $CARTIM incomplete"

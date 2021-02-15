@@ -45,6 +45,8 @@
  *				defaults to output series default
  *	bzero	float	NaN		Value offset parameter for output
  *				defaults to output series default
+ *	ldcoef	float*	(1.0}		coefficients for polynomial
+ *				limb-darkening function
  *	qmask	int	0x80000000	Quality mask for data acceptability;
  *				records rejected if (qmask & qkey:value) != 0
  *	qual_key str	Quality		Key name of uint type keyword describing
@@ -71,13 +73,10 @@
  *		center-to-limb angle)
  *
  *  Bugs:
- *    Basic functionality is present, but with several fixed and inappropriate
- *	defaults and some missing arguments
- *    No provision for propagation of default or selected keywords
+ *    No provision for propagation of default or selected keywords; only tries
+ *	to copy all common keys before explicit setting
  *    Uses considerable replicated code from mtrack, esp. array_imaginterp()
  *	function and its dependencies; should be consolidated
- *    Values for Input and Source are inappropriate, refer to whole input
- *	data set
  *    No provision for anisotropic scaling (CDELT1 != CDELT2); PCi_j not
  *	adjusted either
  *    There is evidently no WCS conventional name for the Cassini-Soldner
@@ -92,9 +91,9 @@
  */
 /******************************************************************************/
 
-#define MODULE_VERSION_NUMBER	("1.3")
-#define CARTOGRAPHY_VERSION "cartography_v10.c"
-#define KEYSTUFF_VERSION "keystuff_v10.c"
+#define MODULE_VERSION_NUMBER	("1.4")
+#define CARTOGRAPHY_VERSION "cartography_v11.c"
+#define KEYSTUFF_VERSION "keystuff_v11.c"
 
 #include <jsoc_main.h>
 #include CARTOGRAPHY_VERSION
@@ -128,6 +127,8 @@ ModuleArgs_t module_args[] = {
   {ARG_FLOAT,	"map_pa", "0.0", "position angle of north on output map [deg]"},
   {ARG_FLOAT,	"bscale", "0.0", "output scaling factor"},
   {ARG_FLOAT,	"bzero", "Default", "output offset"},
+  {ARG_FLOATS,	"ldcoef", "{1.0}",
+      "coefficients in limb darkening polynomial in mu"},
   {ARG_INT,	"qmask", "0x80000000", "quality bit mask for image rejection"},
   {ARG_STRING,	"qual_key", "Quality", "keyname for 32-bit image quality field"},
   {ARG_STRING,	"clon_key", "CRLN_OBS", "keyname for image central longitude"}, 
@@ -149,6 +150,59 @@ ModuleArgs_t module_args[] = {
 		 /*  global declaration of missing to be initialized as NaN  */
 float missing_val;
 
+double limbdark (double mu, double *coef, int order) {
+/*
+ *  Approximation to a limb-darkening function in powers of mu
+ *    [cos (central angle)]; order >= 0 with array coef[order+1]
+ *  For HMI continuum, the first order function 0.5 + 0.5 * mu does a better
+ *    job of at least visually flattening than the canonical second order
+ *    function 0.3 + 0.93 * mu - 0.23 * mu^2. A piecewsie linear fit:
+ *	0.5 + 0.5 * mu (mu >= 0.5),
+ *	0.375 + 0.75 * mu (0 <= mu < 0.5)
+ *    does an even better job.
+ */
+  double fc, mup;
+  int n;
+
+  fc = 0.0;
+  mup = 1.0;
+  for (n = 0; n <= order; n++) {
+    fc += coef[n] * mup;
+    mup *= mu;
+  }
+  return fc;
+}
+  /*  adjust intensity values (presumably) for limb darkening before mapping  */
+int adjust_for_limb_dark (DRMS_Array_t *img, double img_xc, double img_yc,
+    double rsun, double *ldcoef, int ldorder) {
+  double rsun2, xp, xp2, xctr, yp, yp2, yctr;
+  double mu, mu2;
+  int n, col, cols, row, rows;
+
+  float *v = (float *)img->data;
+  int status = 0;
+			      /*  no point in just multiplying by a constant  */
+  if (ldorder < 1) return status;
+
+  cols = img->axis[0];
+  rows = img->axis[1];
+  xctr = img_xc + 0.5 * cols - 0.5;
+  yctr = img_yc + 0.5 * rows - 0.5;
+  rsun2 = rsun * rsun;
+  for (row = 0, n = 0; row < rows; row++) {
+    yp = row - yctr;
+    yp2 = yp * yp;
+    for (col = 0; col < cols; col++, n++) {
+      xp = col - xctr;
+      xp2 = xp * xp;
+      mu2 = 1.0 - (xp2 + yp2) / rsun2;
+      if (mu2 < 0) continue;
+      mu = sqrt (mu2);
+      v[n] /= limbdark (mu, ldcoef, ldorder);
+    }
+  }
+  return status;
+}
 				/*  Calculate the interpolation kernel.  */
 void ccker (double *u, double s) {
   double s2, s3;
@@ -168,6 +222,7 @@ float ccint2 (float *f, int nx, int ny, double x, double y) {
 
   if (x < 1.0 || x >= (float)(nx-2) || y < 1.0 || y >= (float)(ny-2))
     return missing_val;
+  if (isnan (x) || isnan (y)) return missing_val;
 
   ix = (int)x;
   ccker (ux,  x - (double)ix);
@@ -191,6 +246,7 @@ float linint2 (float *f, int cols, int rows, double x, double y) {
 
   if (x < 0.0 || x > cols  || y < 0.0 || y >= rows)
     return missing_val;
+  if (isnan (x) || isnan (y)) return missing_val;
   p = x - col;
   q = y - row;
   val = (1 - p) * (1 - q) * f[col + onerow]
@@ -204,6 +260,7 @@ float nearest_val (float *f, int cols, int rows, double x, double y) {
   int col, row;
   if (x < -0.5 || x >= (cols - 0.5) || y < -0.5 || y >= (rows - 0.5))
     return missing_val;
+  if (isnan (x) || isnan (y)) return missing_val;
   col = x + 0.5;
   row = y + 0.5;
   return f[col + row * cols];
@@ -476,6 +533,7 @@ int DoIt (void) {
   DRMS_Segment_t *iseg, *oseg;
   DRMS_Array_t *image = NULL, *map = NULL;
   double *maplat, *maplon, *map_coslat, *map_sinlat;
+  double *ldcoef;
   double x, y, x0, y0, xstp, ystp, xrot, yrot;
   double lat, lon, cos_phi, sin_phi;
   double img_lat, img_lon;
@@ -509,6 +567,8 @@ int DoIt (void) {
   missing_val = 0.0 / 0.0;
   float bblank = -1.0 / 0.0;
   float wblank = 1.0 / 0.0;
+  int adjust_values = 0;
+  int fix_limb_dark = 0;
 						  /*  process command params  */
   char *inset = strdup (params_get_str (params, "in"));
   char *outser = strdup (params_get_str (params, "out"));
@@ -525,6 +585,7 @@ int DoIt (void) {
   int map_rows = params_get_int (params, "rows");
   int proj = params_get_int (params, "map");
   int intrpopt = params_get_int (params, "interp");
+  int ldcvals = params_get_int (params, "ldcoef_nvals");
   char *qual_key = strdup (params_get_str (params, "qual_key"));
   char *clon_key = strdup (params_get_str (params, "clon_key"));
   char *clat_key = strdup (params_get_str (params, "clat_key"));
@@ -541,6 +602,7 @@ int DoIt (void) {
   int cvlostor = params_isflagset (params, "R");
 
   int dispose = (no_save) ? DRMS_FREE_RECORD : DRMS_INSERT_RECORD;
+  int ldorder = ldcvals - 1;
 
   snprintf (module_ident, 64, "%s v %s", module_name, version_id);
   if (verbose) printf ("%s: JSOC version %s\n", module_ident, jsoc_version);
@@ -557,6 +619,16 @@ int DoIt (void) {
     fprintf (stderr, "       scale parameter must be set.\n");
     return 1;
   }
+		     /*  optional parameters for preprocessing of image data  */
+  if (ldorder) {
+    adjust_values = fix_limb_dark = 1;
+    ldcoef = (double *)malloc (ldcvals * sizeof (double));
+    for (n = 0; n < ldcvals; n++) {
+      sprintf (key, "ldcoef_%d_value", n);
+      ldcoef[n] = params_get_double (params, key);
+    }
+  }
+
   need_lat = center || isnan (clat);
   need_lon = center || isnan (clon);
   MDI_correct = MDI_correct_distort = MDI_proc;
@@ -608,7 +680,6 @@ int DoIt (void) {
 	  input);
       fprintf (stderr, "       using \"%s\"\n", isegname);
     }
-    iseg = drms_segment_lookup (irec, isegname);
   } else {
     fprintf (stderr, "Error: no data segments in input series %s\n", input);
     drms_close_records (ids, DRMS_FREE_RECORD);
@@ -637,7 +708,7 @@ int DoIt (void) {
   axes[0] = map_cols;
   axes[1] = map_rows;
   if (check_output_record_structure (orec, 2, axes, &osegnum, no_save) < 1)
-  return 1;
+    return 1;
 						 /*  create output map array  */
   map = drms_array_create (DRMS_TYPE_FLOAT, 2, axes, NULL, &status);
   if (status) {
@@ -697,7 +768,7 @@ int DoIt (void) {
   }
 
   data = (float *)map->data;
-					  /*  process individual input mages  */
+					 /*  process individual input images  */
   for (img = 0; img < imgct; img++) {
     irec = ids->records[img];
 			  /*  check for record quality, reject as applicable  */
@@ -795,8 +866,14 @@ int DoIt (void) {
     img_xc -= 0.5 * (image->axis[0] - 1);
     img_yc -= 0.5 * (image->axis[1] - 1);
 		 	/*  should be taken care of in solar_ephemeris_info  */
-img_lon *= raddeg;
-img_lat *= raddeg;
+    img_lon *= raddeg;
+    img_lat *= raddeg;
+    if (adjust_values) {
+      if (fix_limb_dark) {
+        adjust_for_limb_dark (image, img_xc, img_yc, img_radius, ldcoef,
+	    ldorder);
+      }
+    }
 						    /*  set up output record  */
     orec = drms_create_record (drms_env, outser, DRMS_PERMANENT, &status);
     oseg = drms_segment_lookupnum (orec, osegnum);
@@ -881,7 +958,7 @@ img_lat *= raddeg;
 /*
  *  Revision History (all mods by Rick Bogart unless otherwise noted)
  *
- *  08.04.22 	created this file, based on fastrack
+ *  2008.04.22 	created this file, based on fastrack
  *  10.10.04	updated output keyword set and fleshed out arguments, commented
  *		added setting of WCS PC matrix elements as necessary; added
  *		input data processing, mapping with interpolation options
@@ -889,7 +966,7 @@ img_lat *= raddeg;
  *  11.05.02	added option for grid overlay; removed inappropriate defaults
  *  12.01.17	added option for removal of MDI distortion
  *  12.03.07	added promiscuous copy to target keys before careful setting
- *  v 0.9 frozen 12.08.03
+ *  v 0.9 frozen 2012.08.03
  *  13.02.01	removed unused variable
  *  13.04.23	added detail for failures when geometry keywords missing
  *  14.03.27	added option for copying of selected keywords from input to
@@ -904,12 +981,12 @@ img_lat *= raddeg;
  *  14.11.17	changed copykeys to avoid copying implicit indexing keys
  *		added setting of optional keywords LoS2Rad and MDICorr depending
  *		on flag values
- *  v 1.0 frozen 15.01.13
+ *  v 1.0 frozen 2015.01.13
  *  15.07.27	free each input image array
- *  v 1.1 frozen 15.09.21
+ *  v 1.1 frozen 2015.09.21
  *  16.02.09	trap failed segment reads
  *  16.02.26	added nomap option -n for testing
- *  v 1.2 frozen 16.06.20
+ *  v 1.2 frozen 2016.06.20
  *  16.09.07	added function for parsing optional segment list in input
  *		specification; changed to use segment names rather than internal
  *		numbers which get mangled by links
@@ -918,6 +995,13 @@ img_lat *= raddeg;
  *  18.09.14	added option and related arguments for checking quality key
  *		value against bit mask; improved checking of acceptability of
  *		output series; some version control of include files
- *  v 1.3 frozen 19.02.11
+ *  v 1.3 frozen 2019.02.11
+ *  19.08.09	added option for removal of limb darkening before mapping
+ *  20.07.13	fixed bug occurring when no appropriate input segments found
+ *  20.12.08	added trap for NaN values in map target locations which can be
+ *	  	returned in rare circumstances by version 10 of plane2sphere()
+ *	  	without setting the offsun flag to the interpolation routines
+ *		use v 11 of cartographic routines
+ *  v 1.4 frozen 2021.02.15
  *
  */

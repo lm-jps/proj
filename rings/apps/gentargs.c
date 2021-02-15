@@ -121,13 +121,15 @@
  *  Revision history is at end of file.
  */
 
+#define MODULE_VERSION_NUMBER	("1.3")
+
 #include <drms.h>
 #include <math.h>
 		/*  include static versions of functions for soho_ephemeris  */
 #include "soho_ephem.c"
 						      /*  module identifier  */
 char *module_name = "track_target_list";
-char *version_id = "1.3";
+char *version_id = MODULE_VERSION_NUMBER;
 
 ModuleArgs_t module_args[] = {
   {ARG_TIME,   "time",  "now-120deg", "midpoint of desired tracking interval"},
@@ -2347,4 +2349,5 @@ for (n = L25_825S; n <= L25_825N; n++) printf ("%5.1f: %d\n", lat25[n], trlat25[
  *	15.08.19	Added option for providing polar coordinates relative
  *		to disc center
  *	15.09.21	Removed documentation code for orig_hmi5_pack_list()
+ *  v 1.3 frozen 2021.02.15
  */

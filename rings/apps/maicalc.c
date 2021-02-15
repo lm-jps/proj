@@ -34,11 +34,13 @@
  *	floor	float	50.0	"noise" floor for inclusion in integration
  *				[gauss]
  *	reject	string	NotSpec	If specified, name of a file with a
- *			list of input images to be rejected unconditionally
+ *				list of input images to be rejected unconditionally
  *	qmask	int	0x80000000 Quality mask for data acceptability;
  *				records rejected if (qmask & qkey:value) != 0
  *	trec_key string	T_REC		Keyname of time type prime keyword for
  *				input data series
+ *	tobs_key string	T_OBS		Keyname of time type keyword describing
+ *				observation time (midpoint) of each input image
  *	tstp_key string	Cadence		Keyname of float type keyword describing
  *				observing cadence of input data
  *	qual_key string	Quality	Keyname of int type keyword describing
@@ -50,12 +52,13 @@
  *	apsd_key string	RSUN_OBS
  *	dsun_key string	DSUN_OBS Keyname of double type keyword for
  *				distance from sun in m for of each image
+ *	cvkey	 string	CalVer64	Key name of 64-bit mask type keyword
+ *				describing calibration version used
  *	max_reach float	0.5	maximum distance from target sample to search
- *			when target is unaaceptable, in units of sample spacing
+ *				when target is unaaceptable, in units of
+ *				sample spacing
  *
  *  Flags
- *	-M	correct for MDI distortion using new model
- *	-O	correct for MDI distortion using old model
  *	-f	force filling or reporting of records for which there are
  *		no valid data
  *	-l	list MAI's on stdout
@@ -63,6 +66,9 @@
  *	-r	turn off apodization
  *	-s	turn off despiking (elimination of outliers)
  *	-v	run verbose
+ *	-M	correct for MDI distortion using new model
+ *	-O	correct for MDI distortion using old model
+ *	-S	suppress correction of SDO Carrington Longitude
  *
  *  Bugs:
  *    Variables los_series and vec_series are unused
@@ -97,15 +103,25 @@
  */
 /******************************************************************************/
 
+/******************** defines, includes, and global declarations **************/
+#define MODULE_VERSION_NUMBER	("2.4")
+#define KEYSTUFF_VERSION "keystuff_v11.c"
+
 #include <jsoc_main.h>
+
+#include KEYSTUFF_VERSION
 
 char *module_name = "maicalc";
 char *module_desc = "integration of mapped and tracked magnetogram data";
-char *version_id = "2.2";
+char *version_id = MODULE_VERSION_NUMBER;
+
+#define OBS_CRLN_FIXED	(0x10000000)
+#define OBS_CROT_FIXED	(0x00000010)
 
 ModuleArgs_t module_args[] = {
   {ARG_STRING,	"los", "",
-      "input LOS magnetogram data series or dataset"}, 
+      "input LOS magnetogram d *	-S	suppress correction of SDO Carrington Longitude
+ata series or dataset"}, 
   {ARG_STRING,	"los_seg", "Not Specified",
       "LOS magnetogram series segment (default: first rank 2)"}, 
   {ARG_STRING,	"vec", "Not Specified",
@@ -146,24 +162,175 @@ ModuleArgs_t module_args[] = {
   {ARG_STRING,	"apsd_key", "RSUN_OBS",
       "keyname for apparent solar semi-diameter (arcsec)"}, 
   {ARG_STRING,	"dsun_key", "DSUN_OBS", "keyname for observer distance"}, 
-  {ARG_FLAG,	"M",	"", "correct for MDI distortion using new model"}, 
-  {ARG_FLAG,	"O",	"", "correct for MDI distortion using old model"}, 
+  {ARG_STRING,	"cvkey", "CalVer64", "keyname for Calibration Version key"}, 
   {ARG_FLAG,	"f",	"", "force filling/reporting of records with no data"}, 
   {ARG_FLAG,	"l",	"", "list MAI values only on stdout"}, 
   {ARG_FLAG,	"n",	"", "turns off tracking; target cl only determines time"}, 
   {ARG_FLAG,	"r",	"", "turns off apodization"}, 
   {ARG_FLAG,	"s",	"", "turns off despiking (elimination of outliers)"}, 
   {ARG_FLAG,	"v",	"", "verbose mode (overrides -l flag)"},
+  {ARG_FLAG,	"M",	"", "correct for MDI distortion using new model"}, 
+  {ARG_FLAG,	"O",	"", "correct for MDI distortion using old model"}, 
+  {ARG_FLAG,	"S",	"", "suppress correction of SDO Carrington longitude"}, 
   {}
 };
 
 #include "selstuff.c"
-#include "keystuff.c"
 #include "soho_ephem.c"
 #include "cartography.c"
 #include "imginfo.c"
 #include "mdistuff.c"
 
+typedef struct {
+  TIME trec;
+  TIME tobs;
+  double clon;
+  double clat;
+  double dist;
+  double apsd;
+  int crot;
+} OBS_EPHEMERIS;
+
+/***************************** internal functions *****************************/
+/*
+ *  Interpolate Carrington longitude of disc center, and if necessary
+ *    Carrington Rotation number, from tobs to trec
+ */
+int interp_crlfix (double *tobs, double trec, int nt, double **crcl,
+    double *clfix, int *crfix) {
+  double clt, dt, dl, fac;
+  int n = 0;
+			      /*  if target out of bounds, can't interpolate  */
+  if (trec < tobs[0] || trec > tobs[nt-1]) return 1;
+  while (trec >= tobs[n] && n < nt) n++;
+  if (n == nt) return 1;
+					  /*  likewise if obstime is missing  */
+  if (time_is_invalid ((TIME)(tobs[n])) ||
+      time_is_invalid ((TIME)(tobs[n-1]))) return 1;
+  dt = tobs[n] - tobs[n-1];
+  if (isnan (dt)) return 1;
+  fac = (trec - tobs[n-1]) / dt;
+  dl = crcl[1][n] - crcl[1][n-1];
+  *crfix = crcl[0][n-1] + 0.001;
+  if (dl > 180.0) {
+    dl -= 360.0;
+    *crfix += 1;
+  }
+  if (dl < -180.0) {
+    dl += 360.0;
+    *crfix -= 1;
+  }
+
+  clt = crcl[1][n-1] + fac * dl;
+  if (clt < 0.0) {
+    clt += 360.0;
+    *crfix += 1;
+  }
+  *clfix = clt;
+  return 0;
+}
+/*
+ *  Interpolate standard, non-periodic variables from tobs to trec
+ */
+int interp_hmi_fixes (double *x, double x0, int nx, double **yt, double *y,
+    int yct) {
+  double dx, dy, fac;
+  int i;
+  int n = 0;
+			      /*  if target out of bounds, can't interpolate  */
+  if (x0 < x[0] || x0 > x[nx-1]) return 1;
+  while (x0 >= x[n] && n < nx) n++;
+  if (n == nx) return 1;
+					  /*  likewise if obstime is missing  */
+  if (time_is_invalid ((TIME)(x[n])) ||
+      time_is_invalid ((TIME)(x[n-1]))) return 1;
+  dx = x[n] - x[n-1];
+  fac = (x0 - x[n-1]) / dx;
+  for (i = 0; i < yct; i++) {
+    dy = yt[i][n] - yt[i][n-1];
+    y[i] = yt[i][n-1] + fac * dy;
+  }
+  return 0;
+}
+/*
+ *  Adjust ephemeris values applicable to T_OBS to T_REC by interpolation
+ */
+void adjust_obs2rec (OBS_EPHEMERIS *rec, DRMS_RecordSet_t *ids, int ct,
+    char *trec_key, char *tobs_key, char *crot_key, char *clon_key,
+    char *clat_key, char *dsun_key, char *apsd_key, TIME tstrt, TIME tstop,
+    double data_cadence, char *source_series) {
+  DRMS_Record_t *irec;
+  DRMS_Array_t *sdoephvec, *sdocrlvec;
+  double **efixp, **crlfix;
+  double *tfix, *efix;
+  double loncfix;
+  int l, m, n, tblct, valct;
+  int nr, status;
+  int fixct, efixct, crfix;
+  char rec_query[DRMS_MAXQUERYLEN];
+  char keylist[256], tbuf0[64], tbuf1[64];
+				   /*  fill ephemeris vector from key values  */
+  for (nr = 0; nr < ct; nr++) {
+    irec = ids->records[nr];
+    rec[nr].trec = drms_getkey_time (irec, trec_key, &status);
+    rec[nr].tobs = drms_getkey_time (irec, tobs_key, &status);
+    rec[nr].crot = drms_getkey_int (irec, crot_key, &status);
+    rec[nr].clon = drms_getkey_double (irec, clon_key, &status);
+    rec[nr].clat = drms_getkey_double (irec, clat_key, &status);
+    rec[nr].dist = drms_getkey_double (irec, dsun_key, &status);
+    rec[nr].apsd = drms_getkey_double (irec, apsd_key, &status);
+  }
+  sprint_time (tbuf0, tstrt - data_cadence, "TAI", 0);
+  sprint_time (tbuf1, tstop + data_cadence, "TAI", 0);
+  sprintf (rec_query, "%s[%s-%s]\n", source_series, tbuf0, tbuf1);
+  sprintf (keylist, "%s,%s,%s,%s", tobs_key, clat_key,
+        dsun_key, apsd_key);
+  sdoephvec = drms_record_getvector (drms_env, rec_query, keylist,
+	DRMS_TYPE_DOUBLE, 0, &status);
+  tblct = sdoephvec->axis[1];
+  valct = sdoephvec->axis[0];
+  tfix = (double *)malloc (tblct * sizeof (double));
+  for (n = 0; n < tblct; n++)
+    tfix[n] = ((double *)sdoephvec->data)[n];
+  efixp = (double **)malloc (valct * sizeof (double *));
+  efix = (double *)malloc (valct * sizeof (double));
+  for (l = 0; l < valct; l++) {
+    efixp[l] = (double *)malloc (tblct * sizeof (double));
+    for (m = 0; m < tblct; m++, n++)
+      efixp[l][m] = ((double *)sdoephvec->data)[n];
+  }
+  drms_free_array (sdoephvec);
+  fixct = tblct;
+  efixct = valct;
+  sprint_time (tbuf0, tstrt - data_cadence, "TAI", 0);
+  sprint_time (tbuf1, tstop + data_cadence, "TAI", 0);
+  sprintf (rec_query, "%s[%s-%s]\n", source_series, tbuf0, tbuf1);
+  sprintf (keylist, "%s,%s,%s", tobs_key, crot_key, clon_key);
+  sdocrlvec = drms_record_getvector (drms_env, rec_query, keylist,
+      DRMS_TYPE_DOUBLE, 0, &status);
+  valct = sdocrlvec->axis[0];
+  crlfix = (double **)malloc (valct * sizeof (double *));
+  n = tblct;
+  for (l = 0; l < valct; l++) {
+    crlfix[l] = (double *)malloc (tblct * sizeof (double));
+    for (m = 0; m < tblct; m++, n++)
+      crlfix[l][m] = ((double *)sdocrlvec->data)[n];
+  }
+  drms_free_array (sdocrlvec);
+  for (nr = 0; nr < ct; nr++) {
+    status = interp_crlfix (tfix, (double)(rec[nr].trec), fixct,
+	crlfix, &loncfix, &crfix);
+    if (status) continue;
+    rec[nr].crot = crfix;
+    rec[nr].clon = loncfix;
+    status = interp_hmi_fixes (tfix, (double)(rec[nr].trec), fixct,
+	efixp, efix, efixct);
+    if (status) continue;
+    rec[nr].clat = efix[0];
+    rec[nr].dist = efix[1];
+    rec[nr].apsd = efix[2];
+  }
+}
 		/*  new local function for MDI distortion correction,
 					eventually goes into mdistuff.c */
 /*
@@ -680,6 +847,7 @@ int DoIt (void) {
     double lon;
     double wt;
   } *mloc;
+  OBS_EPHEMERIS *obsval;
   TIME *tmin, *tmax;
   TIME tcm, tbase, tmid, tstrt, tstop, avgtobs;
   double *sum, *suma, *sum_wt, *area;
@@ -710,6 +878,7 @@ int DoIt (void) {
   int rank, off, count;
   int kstat, status;
   int MDI_correct, MDI_correct_distort, old_MDI_correct, old_MDI_correct_distort;
+  int SDO_fixclon, SDO_fixcrot;
   short *adjust;
   char *short_time, *source_series, *los_series, *vec_series, *eoser;
   char rec_query[DRMS_MAXQUERYLEN];
@@ -756,6 +925,7 @@ int DoIt (void) {
   char *rsun_key = strdup (params_get_str (params, "rsun_key"));
   char *apsd_key = strdup (params_get_str (params, "apsd_key"));
   char *dsun_key = strdup (params_get_str (params, "dsun_key"));
+  char *calverkey = strdup (params_get_str (params, "cvkey"));
 
   int fillbadrec = params_isflagset (params, "f");
   int listmais = params_isflagset (params, "l");
@@ -765,10 +935,13 @@ int DoIt (void) {
   int verbose = params_isflagset (params, "v");
   int MDI_proc = params_isflagset (params, "M");
   int old_MDI_proc = params_isflagset (params, "O");
+  int SDO_fixkeys = (params_isflagset (params, "S")) ? 0 : 1;
 
   int uselos = strcmp (losset, "Not Specified");
   int usevec = strcmp (vecset, "Not Specified");
   int no_out = strcmp (maiser, "Not Specified") ? 0 : 1;
+
+  int obs2recfix = strcasecmp (trec_key, tobs_key);
 
   if (MDI_proc && old_MDI_proc) {
     fprintf (stderr, "Error: -M or -O flag may be specified, but not both\n");
@@ -832,7 +1005,9 @@ int DoIt (void) {
     if (verbose) {
       fprintf (stderr,
 	"No output series specified, results will only be reported\n");
+/*
       printf (" Lon   Lat       |Bz|   d|Bz|/dt    Bz     dBz/dt   FillFac [Gauss(/sec)]:\n");
+*/
     }
     else listmais = 1;
   } else {
@@ -900,6 +1075,8 @@ return 1;
   }
   if (platform == LOC_UNKNOWN) fprintf (stderr,
 	"Warning: observing location unknown, assumed geocenter\n");
+  if (platform != LOC_SDO) SDO_fixkeys = 0;
+  SDO_fixclon = SDO_fixcrot = SDO_fixkeys;
   if (tmid_unknown) {
 			   /*  tmid specified as CR:CL : need ephemeris info  */
     tmid = (geo_times) ?
@@ -1060,6 +1237,12 @@ return 1;
   sumt = sumtwt = 0.0;
   tnegct = tposct = 0;
   usefit0 = usefit1 = 1;
+		   /*  adjust ephemeris values for mapping from tobs to trec  */
+  if (obs2recfix) {
+    obsval = (OBS_EPHEMERIS *)malloc (recct * sizeof (OBS_EPHEMERIS));
+    adjust_obs2rec (obsval, ds, recct, trec_key, tobs_key, crot_key, clon_key,
+        clat_key, dsun_key, apsd_key, tstrt, tstop, data_cadence, source_series);
+  }
 					      /*  loop through input records  */
   for (nrec = rec_step / 2; nrec < recct; nrec += rec_step) {
     TIME tobs, trec;
@@ -1122,6 +1305,21 @@ return 1;
       fprintf (stderr, "solar_image_info() returned %08x\n", status);
       continue;
     }
+    if (SDO_fixcrot) {
+      keywd = drms_keyword_lookup (rec, calverkey, 1);
+      if (keywd) {
+        long long calver = drms_getkey_longlong (rec, calverkey, &status);
+	if (calver & OBS_CROT_FIXED) ;
+        else peff -= 0.00702 * raddeg;
+      } else {
+        fprintf (stderr, "Warning: required keyword %s not found\n", calverkey);
+	fprintf (stderr, "         no calibration version filtering applied\n");
+	fprintf (stderr, "         %s and %s values assumed valid\n", clon_key,
+	    crot_key);
+	SDO_fixclon = SDO_fixcrot = SDO_fixkeys = 0;
+      }
+    }
+    if (obs2recfix) img_radius = obsval[use].apsd / xscale;
     if (old_MDI_correct) {
       mtrack_MDI_correct_imgctr (&xc, &yc, img_radius);
       mtrack_MDI_correct_pa (&peff);
@@ -1130,7 +1328,7 @@ return 1;
       mtrack_MDI_correct_pa (&peff);
     }
 			       /*  append to list of records used in history  */
-    sprint_time (time_str, trec, "TAI", 0);
+    sprint_time (time_str, tobs, "TAI", 0);
     time_str[19] = '\0';
     if (strlen (reclist) < 8170) {
       if (strlen (reclist)) {
@@ -1139,8 +1337,27 @@ return 1;
 	strcat (reclist, short_time);
       } else strcat (reclist, time_str);
     }
-    lonc = drms_getkey_double (rec, clon_key, &status) * raddeg;
-    latc = drms_getkey_double (rec, clat_key, &status) * raddeg;
+    if (obs2recfix) {
+      lonc = raddeg * obsval[use].clon;
+      latc = raddeg * obsval[use].clat;;
+    } else {
+      lonc = drms_getkey_double (rec, clon_key, &status) * raddeg;
+      latc = drms_getkey_double (rec, clat_key, &status) * raddeg;
+    }
+    if (SDO_fixclon) {
+      keywd = drms_keyword_lookup (rec, calverkey, 1);
+      if (keywd) {
+        long long calver = drms_getkey_longlong (rec, calverkey, &status);
+	if (calver & OBS_CRLN_FIXED) ;
+        else lonc -= 0.081894 * raddeg;
+      } else {
+        fprintf (stderr, "Warning: required keyword %s not found\n", calverkey);
+	fprintf (stderr, "         no calibration version filtering applied\n");
+	fprintf (stderr, "         %s and %s values assumed valid\n", clon_key,
+	    crot_key);
+	SDO_fixclon = SDO_fixcrot = SDO_fixkeys = 0;
+      }
+    }
     coslatc = cos (latc);
     sinlatc = sin (latc);
     if (no_track) lonc = tmid_cl * raddeg;
@@ -1244,9 +1461,6 @@ printf ("%s %.4f %.4f %.4f %.4f %.4f\n", time_str, twt, suma[0], sum[0], sf[0], 
   if (valct < 2) {
     fprintf (stderr, "Error: <2 usable magnetograms in interval\n");
     return 1;
-  }
-  if (valct < 3) {
-			     /* do not attempt linear fit, just report means  */
   }
 	/*  trap cases with no valid data either before or after target time  */
   if (!tnegct || !tposct) usefit0 = 0;
@@ -1461,6 +1675,14 @@ printf ("sf = %f, sb = %f\n", sf[0], sb[0]);
  *  	keyword names corrected to those in use
  *  2018.09.20	Added check for validity of input data series  
  *  v 2.2 frozen 2020.03.17
+ *  2020.09.07	Added calibration version-sensitive correction of SDO CMLon
+ *	and position angle, flag for suppression of corrections
+ *  v 2.3 frozen 2020.09.22
+ *  2020.12.18	Fixed possible bug introduced in previous version for
+ *	correction of SDO CMLon (but probably never reached)
+ *  2021.01.08	Fixed additional possible bug introduced in previous version for
+ *	correction of SDO CMLon (but probably never reached)
+ *  v 2.4 frozen 2021.02.15
  *		
  */
 /******************************************************************************/

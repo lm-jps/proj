@@ -2,7 +2,7 @@
 # Create averages of hmi.rdv_pspec_fd* power spectra over a rotation by
 #   Stonyhurst coordinates (cf. avgpscrsyn)
 
-set SCRIPT_VERSION = 2.0
+set SCRIPT_VERSION = 2.1
 
 @ TEST = 0	# set to 1 for production in namespace hmi_test
 set TW
@@ -45,16 +45,8 @@ else
 endif
 
 # select from synoptic series
-set TILESS = (  05    15    30)
-# set VMEMS =  ( 250  5200 10000)
-set VMEMS =  ( 300  4000 8000)
-# New VMEM limits assume no power map output with datavg v 1.5+
-# set PCMDS =  ( ""  "" "-pe smp 2")
-# PCMD should be set for dual if max number of jobs on one node * max vmem
-#   would exceed 120 GB; max number of jobs on one node is either 24, or 12
-#   if smp 2 invoked; but max number of jobs from this script is 9 for 30 deg
-#   or 21 for 15 deg
-#   However, max number of jobs is 65 for 5 deg
+set TILESS = ( 05    15   30)
+set VMEMS =  (600  4000 8000)
 
 @ NT = 1
 while ($NT <= $#TILESS)
@@ -69,8 +61,14 @@ if ($NT > $#TILESS) then
   exit
 endif
 
-set QSUB = qsub2
+set QSUB = qsub
 set QUEUE = k.q
+
+# check platform: qsub will only run on avx host
+if ($JPLAT != 'linux_avx') then
+  echo required qsub command will only run on avx platform
+  exit
+endif
 
 #  check that required scripts and programs are in path or rooted
 foreach CMD ($QSUB $DATAVG)
@@ -220,7 +218,7 @@ foreach TLAT ($TLATS)
   @ QJOK = `grep "exited with exit code 0." $RLOG | wc -l`
   @ TOTCT = $QJOK + $EXPCT
   echo "#\!/bin/csh -f" > $SCRIPT
-  echo "limit vm $VMEM"M >> $SCRIPT
+#  echo "limit vm $VMEM"M >> $SCRIPT
   echo set noglob >> $SCRIPT
   echo 'set LONS =  ('"$LONS"')' >> $SCRIPT
   echo 'set LON = $LONS[$SGE_TASK_ID]' >> $SCRIPT
