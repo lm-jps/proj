@@ -9,15 +9,26 @@
  *  Usage:
  *    drms_rebin [-nv] in= ...
  *
- *  Arguments: (type		default         description)
- *    in	DataSet		-		Input dataset
- *    out	DataSeries	in		Output dataseries
- *    seg	String		"Not Specified	Output data segment if required
- *    copy	String		"+"		List of keys to propagate from
- *			input to output records, if possible
+ *  Arguments: (type	default         description)
+ *    in	DataSet	-	input dataset
+ *    out	DataSeries in	output dataseries
+ *    seg	str	Not Specoutput data segment if required
+ *    bin	int*	{1}	array of per-axis bin widths
+ *    start	int*	{0}	array of per-axis crop start pixels
+ *    stop	int*	{-1}	array of per-axis crop end pixels
+ *    wmin	float*	{NaN}
+ *    copy	str	"+"	list of keys to propagate from input to output
+ *	records, if possible
+ *    scale	str	Not Spec
+ *    offset	str	Not Spec
+ *    qmask	Int	0x80000000
+ *    qual_key	str	Quality
+ *    idkey	str	Not Spec	prime key to set to pval
+ *    idval	str	Not Spec	value to set for pkey
  *
  *  Flags
  *	-c	collapse output rank if possible
+ *	-m	merge output into higher rank array
  *	-n	do not save results (diagnostic only)
  *	-o	remove radial component of orbital velocity from signal
  *	-O	remove radial component of vector orbital velocity from signal
@@ -35,7 +46,11 @@
  *
  *  Bugs:
  *    Status of keyword setting not checked
- *    The collapse option is a quick hack and has not been well tested
+ *    The merge option is a quick hack and does not work in many
+ *	cases: fails with seg fault if rebinning 6 hours or more of GONG
+ *	images for example
+ *    The merge and collapse options cannot both be invoked; the merge option
+ *	takes precedence
  *    Recalculation of target arrays for vardim input has not been tested
  *    Only one input segment and one output segment can be processed; there
  *	is currently no way of dealing with the situation when there are
@@ -50,12 +65,16 @@
  *
  *  Revision history is at end of file.
  */
+
+#define MODULE_VERSION_NUMBER	("1.1")
+#define KEYSTUFF_VERSION "keystuff_v10.c"
+
 #include <jsoc_main.h>
 #include <fftw3.h>
-#include "keystuff.c"
+#include KEYSTUFF_VERSION
 
 char *module_name = "drms_rebin";
-char *version_id = "1.0";
+char *version_id = "1.1";
 char *module_desc = "rectangular region binning";
 
 ModuleArgs_t module_args[] = {
@@ -72,8 +91,14 @@ ModuleArgs_t module_args[] = {
   {ARG_STRING, "scale",  "Not Specified", "scaling value (number or keyword)"},
   {ARG_STRING, "offset",  "Not Specified", "offset value (number or keyword)"},
   {ARG_INT,    "qmask", "0x80000000", "quality bit mask for image rejection"},
-  {ARG_STRING, "qual_key", "Quality", "keyname for 32-bit input image quality field"}, 
+  {ARG_STRING, "qual_key", "Quality",
+	"keyname for 32-bit input image quality field"},
+  {ARG_STRING,	"idkey", "Not Specified", "name of (prime) key to set to idval"},
+  {ARG_STRING,	"idval", "Not Specified",
+      "value to set for idkey (:XXX for value of keyword XXX"},
   {ARG_FLAG,   "c", "", "collapse rank of output for unit axes"},
+  {ARG_FLAG,   "m", "",
+      "increase rank of output by merging along principal axis"},
   {ARG_FLAG,   "n", "", "do not save output (for testing)"},
   {ARG_FLAG,   "o", "",
       "remove orbital velocity from signal (radial component only)"},
@@ -273,6 +298,11 @@ static int check_input_series (char *inds, int *segnum) {
     fprintf (stderr, "Error: unable to open record set %s\n", inds);
     return 1;
   }
+  rec_ct = drs->n;
+  if (rec_ct < 1) {
+    fprintf (stderr, "Error: no records in selected dataset %s\n", inds);
+    return 1;
+  }
   irec = drs->records[0];
 		    /*  must use iterator in case segment name is included
 					   as part of record set specifier  */
@@ -292,11 +322,6 @@ static int check_input_series (char *inds, int *segnum) {
   if (valid_ct < 1) {
     fprintf (stderr, "Error: input data set %s\n", inds);
     fprintf (stderr, "       contains no segments of appropriate protocol\n");
-    status = 1;
-  }
-  rec_ct = drs->n;
-  if (rec_ct < 1) {
-    fprintf (stderr, "No records in selected set %s\n", inds);
     status = 1;
   }
   drms_close_records (drs, DRMS_FREE_RECORD);
@@ -421,7 +446,7 @@ int DoIt (void) {
   DRMS_RecordSet_t *drs = NULL;
   DRMS_Record_t *irec, *orec;
   DRMS_Segment_t *iseg, *oseg;
-  DRMS_Array_t *orig_array, *bind_array;
+  DRMS_Array_t *orig_array, *binned_array;
   double *vdat, *vbin;
   double crpix, cdelt;
   double scale, bias, vr, vw, vn;
@@ -431,12 +456,12 @@ int DoIt (void) {
   unsigned int qual_inp, qual_out;
   int **loc;
   int *np;
-  int *in_axes, *out_axes;
+  int *in_axes, *out_axes, *oslice_strt, *oslice_stop;
   int *bin, *strt, *stop, *strt0, *stop0;
   int axis, npmax;
   int m, n, key_n, rec_n, rec_ct;
-  int isegnum, osegnum, rank, crank, axis_check;
-  int bias_mult, bias_sign, scale_mult, scale_sign;
+  int isegnum, osegnum, rank, crank, mrank, axis_check;
+  int bias_mult, bias_sign, scale_mult, scale_sign, scaling_warned;
   int prefilter;
   int kstat, status = 0;
   int keyct = sizeof (propagate) / sizeof (char *);
@@ -456,7 +481,10 @@ int DoIt (void) {
   char *propagate_req = strdup (params_get_str (params, "copy"));
   unsigned int qmask = cmdparams_get_int64 (params, "qmask", &status);
   char *qual_key = strdup (params_get_str (params, "qual_key"));
+  char *idkey = strdup (params_get_str (params, "idkey"));
+  char *idval = strdup (params_get_str (params, "idval"));
   int collapse = params_isflagset (params, "c");
+  int merge = params_isflagset (params, "m");
   int no_save = params_isflagset (params, "n");
   int add_orbital_vr = params_isflagset (params, "o");
   int add_orbital_full = params_isflagset (params, "O");
@@ -488,24 +516,31 @@ int DoIt (void) {
   rec_ct = drs->n;
   irec = drs->records[0];
   iseg = drms_segment_lookupnum (irec, isegnum);
-  crank = rank = iseg->info->naxis;
+  crank = mrank = rank = iseg->info->naxis;
+  if (merge) {
+    mrank++;
+    oslice_strt = (int *)malloc (mrank * sizeof (int));
+    oslice_stop = (int *)malloc (mrank * sizeof (int));
+		     /*  forbid both collapse and merge, too complex for now  */
+    collapse = 0;
+  }
 	  /*  fill the per-axis arrays of bin, start, stop, and wmin values,
 				extending with the last element as necessary  */
-  bin = (int *)malloc (rank * sizeof (int));
-  strt = (int *)malloc (rank * sizeof (int));
-  stop = (int *)malloc (rank * sizeof (int));
-  strt0 = (int *)malloc (rank * sizeof (int));
-  stop0 = (int *)malloc (rank * sizeof (int));
-  wmin = (float *)malloc (rank * sizeof (float));
-  if (binvals > rank) binvals = rank;
-  if (strtvals > rank) strtvals = rank;
-  if (stopvals > rank) stopvals = rank;
-  if (wminvals > rank) wminvals = rank;
+  bin = (int *)malloc (mrank * sizeof (int));
+  strt = (int *)malloc (mrank * sizeof (int));
+  stop = (int *)malloc (mrank * sizeof (int));
+  strt0 = (int *)malloc (mrank * sizeof (int));
+  stop0 = (int *)malloc (mrank * sizeof (int));
+  wmin = (float *)malloc (mrank * sizeof (float));
+  if (binvals > mrank) binvals = mrank;
+  if (strtvals > mrank) strtvals = mrank;
+  if (stopvals > mrank) stopvals = mrank;
+  if (wminvals > mrank) wminvals = mrank;
   for (n = 0; n < binvals; n++) {
     sprintf (key, "bin_%d_value", n);
     bin[n] = params_get_int (params, key);
   }
-  while (n < rank) {
+  while (n < mrank) {
     bin[n] = bin[n-1];
     n++;
   }
@@ -513,7 +548,7 @@ int DoIt (void) {
     sprintf (key, "start_%d_value", n);
     strt[n] = params_get_int (params, key);
   }
-  while (n < rank) {
+  while (n < mrank) {
     strt[n] = strt[n-1];
     n++;
   }
@@ -521,7 +556,7 @@ int DoIt (void) {
     sprintf (key, "stop_%d_value", n);
     stop[n] = params_get_int (params, key);
   }
-  while (n < rank) {
+  while (n < mrank) {
     stop[n] = stop[n-1];
     n++;
   }
@@ -529,12 +564,12 @@ int DoIt (void) {
     sprintf (key, "wmin_%d_value", n);
     wmin[n] = params_get_float (params, key);
   }
-  while (n < rank) {
+  while (n < mrank) {
     wmin[n] = wmin[n-1];
     n++;
   }
 			   /*  save argument values for case of vardim input  */
-  for (n = 0; n < rank; n++) {
+  for (n = 0; n < mrank; n++) {
     strt0[n] = strt[n];
     stop0[n] = stop[n];
   }
@@ -571,13 +606,24 @@ int DoIt (void) {
     }
   }
   if (collapse) {
-    for (n = 0; n < rank; n++) {
-      if (out_axes[n] == 1) {
-	crank--;
-	for (m = n; m < crank; m++) out_axes[m] = out_axes[m + 1];
-      }
+    int *new_axes = (int *)malloc (rank * sizeof (int));
+    for (n = 0, m = 0; n < rank; n++) {
+      if (out_axes[n] == 1) crank--;
+      else new_axes[m++] = out_axes[n];
+    }
+					   /*  do not collapse to zero rank  */
+    if (crank < 1) {
+      crank = 1;
+      new_axes[0] = 1;
     }
     if (crank == rank) collapse = 0;
+    else for (n = 0; n < crank; n++) out_axes[n] = new_axes[n];
+    free (new_axes);
+  }
+  if (merge) {
+    strt[rank] = 0;
+    stop[rank] = rec_ct - 1;
+    out_axes[rank] = rec_ct;
   }
 	/*  use first input record segment to find appropriate output segment
 								   if needed  */
@@ -646,7 +692,15 @@ int DoIt (void) {
       add_orbital_full = 0;
     }
   }
-  if (!collapse && oseg->info->naxis != rank) {
+  if (merge) {
+    if (oseg->info->naxis != mrank) {
+      fprintf (stderr,
+	  "Error: rank of output data segment inconsistent with merged input\n");
+      drms_free_record (orec);
+      drms_close_records (drs, DRMS_FREE_RECORD);
+      return 1;
+    }
+  } else if (!collapse && oseg->info->naxis != rank) {
     fprintf (stderr,
 	"Error: ranks of input and output data segments do not match\n");
     drms_free_record (orec);
@@ -755,6 +809,8 @@ int DoIt (void) {
      /*  the output and the input both have fixed sizes; they'd better match  */
     for (n = 0; n < rank; n++) {
       if (out_axes[n] != oseg->axis[n]) {
+	    /*  don't worry about missing axis if collapse option is invoked  */
+        if (collapse && oseg->axis[n] == 0) continue;
 	fprintf (stderr,
 	    "Error: array mismatch between output segment definition\n");
 	fprintf (stderr,
@@ -795,10 +851,18 @@ int DoIt (void) {
   vbin = (double *)malloc (ntbin * sizeof (double));
   int *bind_axes = (int *)malloc (rank * sizeof (int));
   memcpy (bind_axes, out_axes, rank * sizeof (int));
-  bind_array = drms_array_create (DRMS_TYPE_DOUBLE, rank, out_axes,
+  binned_array = drms_array_create (DRMS_TYPE_DOUBLE, rank, out_axes,
       (void *)vbin, &status);
-  bind_array->bscale = oseg->bscale;
-  bind_array->bzero = oseg->bzero;
+/*
+  binned_array->bscale = oseg->bscale;
+  binned_array->bzero = oseg->bzero;
+*/
+  if (merge) {
+    for (n = 0; n < rank; n++) {
+      oslice_strt[n] = 0;
+      oslice_stop[n] = binned_array->axis[n];
+    }
+  }
   drms_free_record (orec);
 
   propct = construct_stringlist (propagate_req, ',', &copykeylist);
@@ -818,31 +882,110 @@ int DoIt (void) {
 */
   }
 
-  for (rec_n = 0; rec_n < rec_ct; rec_n++) {
-    if (verbose) printf ("record %d:\n", rec_n);
-    irec = drs->records[rec_n];
-    drms_sprint_rec_query (source, irec);
+  if (merge) {
     orec = drms_create_record (drms_env, outser, DRMS_PERMANENT, &status);
-    if (verbose) printf ("  processing record %d: %s\n", rec_n, source);
-    kstat = 0;
-		/*  copy in values for new record's prime keys if possible
-			   (they may be recopied or even overwritten later)  */
-    kstat += copy_prime_keys (orec, irec);
-    for (key_n = 0; key_n < propct; key_n++) {
-      if (strcmp (copykeylist[key_n], "+"))
-        kstat += check_and_copy_key (orec, irec, copykeylist[key_n]);
-      else kstat += propagate_keys (orec, irec, propagate, keyct);
+    oseg = drms_segment_lookupnum (orec, osegnum);
+    if (oseg->info->scope == DRMS_VARDIM) {
+      for (n = 0; n < rank; n++) oseg->axis[n] = binned_array->axis[n];
+      oseg->axis[rank] = rec_ct;
     }
+    kstat = 0;
     kstat += check_and_set_key_time (orec, "Date", CURRENT_SYSTEM_TIME);
     kstat += check_and_set_key_time (orec, "Created", CURRENT_SYSTEM_TIME);
     kstat += check_and_set_key_str (orec, "Module", module_ident);
     kstat += check_and_set_key_str (orec, "Input", inds);
-    kstat += check_and_set_key_str (orec, "Source", source);
     kstat += check_and_set_key_str (orec, "BLD_VERS", jsoc_version);
+							 /*  parameter keys  */
+    for (n = 0; n < rank; n++) {
+      sprintf (key, "binwdth_%d", n);
+      kstat += check_and_set_key_int (orec, key, bin[n]);
+      sprintf (key, "startpx_%d", n);
+      kstat += check_and_set_key_int (orec, key, strt[n]);
+      sprintf (key, "stoppx_%d", n);
+      kstat += check_and_set_key_int (orec, key, stop[n]);
+    }
+    irec = drs->records[0];
+    drms_sprint_rec_query (source, irec);
+    kstat += check_and_set_key_str (orec, "startrec", source);
+    irec = drs->records[rec_ct-1];
+    drms_sprint_rec_query (source, irec);
+    kstat += check_and_set_key_str (orec, "stoprec", source);
+  }
+  scaling_warned = 0;
+  for (rec_n = 0; rec_n < rec_ct; rec_n++) {
+    irec = drs->records[rec_n];
+    drms_sprint_rec_query (source, irec);
+    if (verbose) printf ("processing record %d: %s\n", rec_n, source);
+    if (merge) {
+      oslice_stop[rank] = rec_n;
+    } else {
+      orec = drms_create_record (drms_env, outser, DRMS_PERMANENT, &status);
+			    /*  set basic key values (including optional id)  */
+      kstat = 0;
+		/*  copy in values for new record's prime keys if possible
+			   (they may be recopied or even overwritten later)  */
+      kstat += copy_prime_keys (orec, irec);
+      for (key_n = 0; key_n < propct; key_n++) {
+	if (strcmp (copykeylist[key_n], "+"))
+          kstat += check_and_copy_key (orec, irec, copykeylist[key_n]);
+	else kstat += propagate_keys (orec, irec, propagate, keyct);
+      }
+      kstat += check_and_set_key_time (orec, "Date", CURRENT_SYSTEM_TIME);
+      kstat += check_and_set_key_time (orec, "Created", CURRENT_SYSTEM_TIME);
+      kstat += check_and_set_key_str (orec, "Module", module_ident);
+      kstat += check_and_set_key_str (orec, "Input", inds);
+      kstat += check_and_set_key_str (orec, "Source", source);
+      kstat += check_and_set_key_str (orec, "BLD_VERS", jsoc_version);
+      if (strcmp (idkey, "Not Specified")) {
+					    /*  set the special id key value  */
+	DRMS_Type_t keytyp;
+	drms_getkey (orec, idkey, &keytyp, &status);
+	if (!status) {
+	  TIME tval;
+	  double dval;
+          float fval;
+	  int ival;
+	  short sval;
+	  char *strval;
+	  switch (keytyp) {
+	    case (DRMS_TYPE_SHORT):
+	      sval = params_get_short (params, "idval");
+	      kstat += check_and_set_key_short (orec, idkey, sval);
+	      break;
+	  case (DRMS_TYPE_INT):
+	  ival = params_get_short (params, "idval");
+	  kstat += check_and_set_key_int (orec, idkey, ival);
+	  break;
+	  case (DRMS_TYPE_FLOAT):
+	  fval = params_get_float (params, "idval");
+	  kstat += check_and_set_key_float (orec, idkey, fval);
+	  break;
+	  case (DRMS_TYPE_DOUBLE):
+	  dval = params_get_double (params, "idval");
+	  kstat += check_and_set_key_double (orec, idkey, dval);
+	  break;
+	  case (DRMS_TYPE_TIME):
+	  tval = params_get_time (params, "idval");
+	  kstat += check_and_set_key_time (orec, idkey, tval);
+	  break;
+	  case (DRMS_TYPE_STRING):
+	  strval = strdup (params_get_str (params, "idval"));
+	  kstat += check_and_set_key_str (orec, idkey, strval);
+	  break;
+	  default:
+	  fprintf (stderr, "Warning unsupported type %s for keyword %s\n",
+	      drms_type_names[keytyp], idkey);
+	  }
+	} else if (verbose) {
+	  printf ("Warning: requested ID key %s is not in output data series\n",
+	      idkey);
+	}
+      }
+    }
 			/*  check quality flag for presence of data segment  */
     qual_inp = drms_getkey_int (irec, qual_key, &status);
     if ((qual_inp & qmask) && !status) {
-      kstat += check_and_set_key_int (orec, "Quality", 0x80000000);
+      if (!merge) kstat += check_and_set_key_int (orec, "Quality", 0x80000000);
       drms_close_record (orec, dispose);
       continue;
     }
@@ -951,10 +1094,20 @@ int DoIt (void) {
       }
     }
 			      /*  for now, match scaling of output to input  */
-/*
-    bind_array->bscale = orig_array->bscale;
-    bind_array->bzero = orig_array->bzero;
-*/
+    binned_array->bscale = orig_array->bscale;
+    binned_array->bzero = orig_array->bzero;
+    if (verbose && !scaling_warned) {
+      if (orig_array->bscale != oseg->bscale ||
+	  orig_array->bzero != oseg->bzero) {
+	printf
+	    ("Warning: data BSCALE/BZERO differ from output series defaults\n");
+	printf ("input BSCALE = %f BZERO = %f\n", orig_array->bscale,
+	    orig_array->bzero);
+	printf ("default output BSCALE = %f BZERO = %f\n", oseg->bscale,
+	    oseg->bzero);
+	scaling_warned = 1;
+      }
+    }
     if (bias_values) {
       if (bias_mult) {
         bias = drms_getkey_double (irec, key_bias, &status);
@@ -991,52 +1144,67 @@ int DoIt (void) {
     }
     drms_free_array (orig_array);
     
+		/*  why does this code have to replicate that at line 604?  */
+			/*  because out_axes was re-mallocd (without free)  */
     if (collapse) {
       DRMS_Array_t *coll_array;
-      int crank = rank;
-      for (n = 0; n < rank; n++) {
-        if (out_axes[n] == 1) {
-	  crank--;
-	  for (m = n; m < crank; m++) out_axes[m] = out_axes[m + 1];
-	}
+      int *new_axes = (int *)malloc (rank * sizeof (int));
+      int ccrank = rank;
+      for (n = 0, m = 0; n < rank; n++) {
+        if (out_axes[n] == 1) ccrank--;
+	else new_axes[m++] = out_axes[n];
       }
-      coll_array = drms_array_create (DRMS_TYPE_DOUBLE, crank, out_axes,
+					   /*  do not collapse to zero rank  */
+      if (ccrank < 1) {
+	ccrank = 1;
+	new_axes[0] = 1;
+      }
+      if (ccrank == rank) collapse = 0;
+      else for (n = 0; n < ccrank; n++) out_axes[n] = new_axes[n];
+      free (new_axes);
+      coll_array = drms_array_create (DRMS_TYPE_DOUBLE, ccrank, out_axes,
 	  (void *)vbin, &status);
-      coll_array->bscale = bind_array->bscale;
-      coll_array->bzero = bind_array->bzero;
+      coll_array->bscale = binned_array->bscale;
+      coll_array->bzero = binned_array->bzero;
       drms_segment_write (oseg, coll_array, 0);
-    } else drms_segment_write (oseg, bind_array, 0);
-    kstat += check_and_set_key_int (orec, "Quality", qual_out);
-							 /*  parameter keys  */
-    for (n = 0; n < rank; n++) {
-      sprintf (key, "binwdth_%d", n);
-      kstat += check_and_set_key_int (orec, key, bin[n]);
-      sprintf (key, "startpx_%d", n);
-      kstat += check_and_set_key_int (orec, key, strt[n]);
-      sprintf (key, "stoppx_%d", n);
-      kstat += check_and_set_key_int (orec, key, stop[n]);
+    } else if (merge) {
+      drms_segment_writeslice (oseg, binned_array, oslice_strt, oslice_stop, 0);
+    } else {
+      kstat += check_and_set_key_int (orec, "Quality", qual_out);
+      drms_segment_write (oseg, binned_array, 0);
     }
+							 /*  parameter keys  */
+    if (!merge) {
+      for (n = 0; n < rank; n++) {
+	sprintf (key, "binwdth_%d", n);
+	kstat += check_and_set_key_int (orec, key, bin[n]);
+	sprintf (key, "startpx_%d", n);
+	kstat += check_and_set_key_int (orec, key, strt[n]);
+	sprintf (key, "stoppx_%d", n);
+	kstat += check_and_set_key_int (orec, key, stop[n]);
+      }
 							/*  adjust WCS keys  */
-    for (n = 0; n < rank; n++) {
-      sprintf (key, "CTYPE%d", n + 1);
-      kstat += check_and_copy_key (orec, irec, key);
-      sprintf (key, "CRVAL%d", n + 1);
-      kstat += check_and_copy_key (orec, irec, key);
-      sprintf (key, "CRPIX%d", n + 1);
-      crpix = drms_getkey_double (irec, key, &status);
-      if (!status) {
-        crpix -= strt[n];
-        crpix /= bin[n];
-	kstat += check_and_set_key_double (orec, key, crpix);
+      for (n = 0; n < rank; n++) {
+	sprintf (key, "CTYPE%d", n + 1);
+	kstat += check_and_copy_key (orec, irec, key);
+	sprintf (key, "CRVAL%d", n + 1);
+	kstat += check_and_copy_key (orec, irec, key);
+	sprintf (key, "CRPIX%d", n + 1);
+	crpix = drms_getkey_double (irec, key, &status);
+	if (!status) {
+          crpix -= strt[n];
+          crpix /= bin[n];
+	  kstat += check_and_set_key_double (orec, key, crpix);
+	}
+	sprintf (key, "CDELT%d", n + 1);
+	cdelt = drms_getkey_double (irec, key, &status);
+	if (!status) {
+          cdelt *= bin[n];
+	  kstat += check_and_set_key_double (orec, key, cdelt);
+	}
+	sprintf (key, "CROTA%d", n + 1);
+	kstat += check_and_copy_key (orec, irec, key);
       }
-      sprintf (key, "CDELT%d", n + 1);
-      cdelt = drms_getkey_double (irec, key, &status);
-      if (!status) {
-        cdelt *= bin[n];
-	kstat += check_and_set_key_double (orec, key, cdelt);
-      }
-      sprintf (key, "CROTA%d", n + 1);
-      kstat += check_and_copy_key (orec, irec, key);
     }
     if (bias_values) {
       if (bias_mult) {
@@ -1048,7 +1216,7 @@ int DoIt (void) {
 	  else snprintf (valuestr, 256, "%s", key_bias);
 	}
       } else snprintf (valuestr, 256, "%g", bias);
-      kstat += check_and_set_key_str (orec, "OffsetBy", valuestr);
+      if (!merge) kstat += check_and_set_key_str (orec, "OffsetBy", valuestr);
       if (verbose) {
         printf ("  offset by ");
 	if (bias_mult) printf ("%s = ", valuestr);
@@ -1065,7 +1233,7 @@ int DoIt (void) {
 	  else snprintf (valuestr, 256, "%s", key_scale);
 	}
       } else snprintf (valuestr, 256, "%g", scale);
-      kstat += check_and_set_key_str (orec, "ScaledBy", valuestr);
+      if (!merge) kstat += check_and_set_key_str (orec, "ScaledBy", valuestr);
       if (verbose) {
         printf ("  scaled by ");
 	if (scale_mult) printf ("%s = ", valuestr);
@@ -1073,10 +1241,13 @@ int DoIt (void) {
       }
     }
 							/*  statistics keys  */
-    kstat += set_stats_keys (orec, bind_array, ntbin);
-    drms_close_record (orec, dispose);
+    if (!merge) {
+      kstat += set_stats_keys (orec, binned_array, ntbin);
+      drms_close_record (orec, dispose);
+    }
   }
   drms_close_records (drs, DRMS_FREE_RECORD);
+  if (merge) drms_close_record (orec, dispose);
 
   return 0;
 }
@@ -1110,4 +1281,13 @@ int DoIt (void) {
  *		Added collapse option
  *		Fixed setting of array bzero
  *  v 1.0 frozen 2011.11.15
+ *  v 1.1	Added option for merging output records along principal axis
+ *		Skip consistency check for collapsed axes
+ *		Fixed axis collapse code for case in which multiple axes are
+ *	collapsed
+ *		Default output FITS scaling same as input; no way to override,
+ *	but warning issued if differs from output segment default
+ *		Fixed check for existence of input records
+ *		Added version control for included local source files
+ *  v 1.1 frozen 2018.08.20
  */
