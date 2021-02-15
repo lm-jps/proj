@@ -19,6 +19,13 @@ if ($#argv < 1) then
   echo "       default spacing = 480 min"
   exit
 endif
+
+# check platform: qsub will only run on avx host
+if ($JPLAT != 'linux_avx') then
+  echo required qsub command will only run on avx platform
+  exit
+endif
+
 @ YYMMDD0 = `echo $1 | sed  -e "s/^0*//"`
 @ YYMMDD1 = $YYMMDD0
 
@@ -54,7 +61,9 @@ foreach CMD ($SCRIPT)
   endif
 end
 
-set QUEUE = j.q
+set QSUB = qsub
+
+set QUEUE = k.q
 
 # auxiliary files
 set HOSTID = `hostname | awk -F. '{print $1}'`
@@ -128,7 +137,7 @@ while ($YYMMDD <= $YYMMDD1)
     if ($NOGO) goto TURNOUT
 
     set NOW = `date +%Y.%m.%d_%T`
-    set QINFO = `qsub -q $QUEUE -e $QRES -o $QRES $SCRIPT $ARG $YYMMDD $HR`
+    set QINFO = `$QSUB -q $QUEUE -e $QRES -o $QRES $SCRIPT $ARG $YYMMDD $HR`
     if ($#QINFO) then
       set QPID = `echo $QINFO | awk '{print $3}'`
       echo $NOW $SCRIPT $ARG $YYMMDD $HR submitted to $QUEUE as job $QPID >> $RLOG
@@ -187,4 +196,5 @@ else
     echo "   Reason: $RES[2-]" >> $MMSG
   endif
 endif
-
+echo "HMI time-distance $TW pipeline aborted" > $MSGS/subj.$PROCID
+echo "$NOTIFY" > $MSGS/list.$PROCID

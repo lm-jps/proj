@@ -18,6 +18,12 @@ endif
 @ YYMMDD = `echo $1 | sed  -e "s/^0*//"`
 @ HR = `echo $2 | sed  -e "s/^0*//"`
 
+# check platform: qsub2 will only run on avx host
+if ($JPLAT != 'linux_avx') then
+  echo required qsub2 command will only run on avx platform
+  exit
+endif
+
 @ SKIPTRK = 0
 @ SKIPFIT = 0
 set PROG = `basename $0`
@@ -35,6 +41,9 @@ set GENTG = gentargs
 set TRACK = mtrack
 set TTFIT = travel_times
 set TDINV = invert_td_hr
+set QSUB = qsub
+
+set QUEUE = k.q
 
 if ($TEST) then
   set TSTOPT = ~rick/hmi/timed/testoptions
@@ -51,6 +60,10 @@ if ($TEST) then
   if ($status == 0) set TTFIT = `grep "^TTFIT =" $TSTOPT | awk '{print $3}'`
   grep -q "^TDINV =" $TSTOPT
   if ($status == 0) set TDINV = `grep "^TDINV =" $TSTOPT | awk '{print $3}'`
+  grep -q "^QUEUE =" $TSTOPT
+  if ($status == 0) set QUEUE = `grep "^QUEUE =" $TSTOPT | awk '{print $3}'`
+  grep -q "^QSUB =" $TSTOPT
+  if ($status == 0) set QSUB = `grep "^QSUB =" $TSTOPT | awk '{print $3}'`
 else
   set NMSP = hmi
 endif
@@ -86,7 +99,6 @@ set QMASK = 0x80004000
 @ MMISS = 5000
 @ MINCV = 900
 @ MMINCV = 500
-set QUEUE = j.q
 
 # output series
 set TSER = $NMSP.$BASE\track$SUFX
@@ -311,7 +323,6 @@ endif
 $TRACK out= $TSER in= $ISER tmid= $TMID length= $LNGTH \
   bckgn= "$BCK" qmask= $QMASK max_miss= $MMISS reject= $RJCT \
   scale= $SCALE cols= $SIZE rows= $SIZE \
-  tobs_key= T_REC \
   lat= "{$LATLIST}" lon= "{$LONLIST}" >>& $RLOG
 if ($status) then
   set SUBJ = "$SUBJ incomplete"
@@ -375,7 +386,7 @@ echo "$TTFIT \" >> $SCRIPT
 echo '  in= '$TSER'"['$TMID'][][$LAT][$LON]" \' >> $SCRIPT
 echo '  pxloc= '$PLOC' \' >> $SCRIPT
 echo "  out= $OSER "'>>&' $RLOG >> $SCRIPT
-qsub -sync yes -t 1-$RGNCT -q $QUEUE -e $QRES -o $QRES $SCRIPT >>& $RLOG
+$QSUB -sync yes -t 1-$RGNCT -q $QUEUE -e $QRES -o $QRES $SCRIPT >>& $RLOG
 echo log is $RLOG >> $LOGF
 @ QJOK = `grep "exited with exit code 0." $RLOG | wc -l`
 @ FAIL = $RGNCT - $QJOK

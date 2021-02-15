@@ -21,7 +21,7 @@ set OSER = $NMSP.fsVbinned$SUFX
 
 # auxiliary files
 set HOSTNAME = `hostname`
-set HOSTID = `basename $HOSTNAME .Stanford.EDU`
+set HOSTID = `hostname | awk -F. '{print $1}'`
 set PROCID = $HOSTID\_$$
 set TMPFSLOC = ~rick/hmi/tmpfs
 set TMPARSE = ~rick/bin/tmplocs
@@ -38,7 +38,8 @@ set MSGS = $TEMP/msgs
 set NOTE = ~rick/rings/notify
 set MMSG = $MSGS/msg.$PROCID
 
-set JPLAT = linux_x86_64
+#set JPLAT = linux_x86_64
+set JPLAT = linux_avx
 setenv SGE_ROOT /SGE
 set path = (~rick/bin/_linux4 ~rick/bin/$JPLAT ~rick/jsoc/bin/$JPLAT $SGE_ROOT/bin/lx24-amd64 $path)
 setenv KMP_BLOCKTIME 10
@@ -235,6 +236,7 @@ endif
 exit
 
 TURNOUT:
+set PROG = `basename $0`
 echo "-> Script $PROG aborted! <-" >> $MMSG
 if ($NOGO < 0) then
   echo "   watcher script $TURN called with invalid argument" >> $MMSG
@@ -249,5 +251,10 @@ else
   if ($#RES > 1) then
     echo "   Reason: $RES[2-]" >> $MMSG
   endif
+endif
+set NOTIFY = `grep ^$TYPE $NOTE | awk '{print $2}'`
+if ($#NOTIFY) then
+  echo $SUBJ > $MSGS/subj.$PROCID
+  echo "$NOTIFY" > $MSGS/list.$PROCID
 endif
 
