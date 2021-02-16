@@ -120,8 +120,7 @@ char *version_id = MODULE_VERSION_NUMBER;
 
 ModuleArgs_t module_args[] = {
   {ARG_STRING,	"los", "",
-      "input LOS magnetogram d *	-S	suppress correction of SDO Carrington Longitude
-ata series or dataset"}, 
+      "input LOS magnetogram data series or dataset"}, 
   {ARG_STRING,	"los_seg", "Not Specified",
       "LOS magnetogram series segment (default: first rank 2)"}, 
   {ARG_STRING,	"vec", "Not Specified",
