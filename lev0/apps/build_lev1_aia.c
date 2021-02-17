@@ -1132,9 +1132,6 @@ TEMPSKIP:
           printk("ERROR: drms_segment_write error=%d for fsn=%u\n", dstatus,fsnx);
           noimage[i] = 1;
         }
-        if (segflt = drms_segment_lookup(rs,"image_flt") ) {
-          dstatus = drms_segment_writewithkeys(segflt, segArray, 0);
-        }
         recnum1 = rs->recnum;
         printk("*1 %u %u\n", recnum1, fsnx);
         free(Array0->data);
@@ -1373,6 +1370,15 @@ WCSEND:
       if (dstatus) {
         printk("ERROR: drms_segment_write error=%d for fsn=%u\n", dstatus,fsnx);
         noimage[i] = 1;
+      }
+      if (segflt = drms_segment_lookup(rs,"image_flt") ) {
+        float bs_cur = segArray->bscale;
+        float bz_cur = segArray->bzero;
+        segArray->bscale = 0.0009765625;
+        segArray->bzero = 0;
+        dstatus = drms_segment_writewithkeys(segflt, segArray, 0);
+        segArray->bscale = bs_cur; 
+        segArray->bzero = bz_cur;
       }
       recnum1 = rs->recnum;
       printk("*1 %u %u\n", recnum1, fsnx);
