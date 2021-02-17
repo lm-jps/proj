@@ -10,8 +10,10 @@ dir     := $(d)/libs
 # Subdirectories. Directory-specific rules are optional here. The
 # order DOES matter, always define libraries before applications
 # that use those libraries.
+ifeq ($(JSOC_MACHINE), linux_avx)
 dir     := $(d)/apps
 -include                $(SRCDIR)/$(dir)/Rules.mk
+endif
 
 # Standard things
 d               := $(dirstack_$(sp))
