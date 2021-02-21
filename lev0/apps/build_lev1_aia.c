@@ -82,6 +82,7 @@ ModuleArgs_t module_args[] = {
   {ARG_INTS, "fp94", "1", "use custom BSCALE, BZERO for 94A images"},
   {ARG_STRING, "bs94", "0.25", "94A output segment BSCALE"},
   {ARG_STRING, "bz94", "8183.75", "94A output segment BZERO"},
+  {ARG_STRING, "onlydarks", "0", "only process DARK images"},
   {ARG_INTS, "brec", "0", "first lev0 rec# to process. 0=error must be given by build_lev1_mgr"},
   {ARG_INTS, "erec", "0", "last lev0 rec# to process. 0=error must be given by build_lev1_mgr"},
   {ARG_INTS, "bfsn", "0", "first lev0 fsn# to process. 0=error must be given by build_lev1_mgr"},
@@ -170,6 +171,7 @@ int abortflg = 0;
 int sigalrmflg = 0;             // set on signal so prog will know
 int ignoresigalrmflg = 0;       // set after a close_image()
 int fp94 = 1;                   // use special BSCALE and BZERO for 94A images.
+int onlydarks = 0;              // only process DARK images
 int quicklook;
 //global quality flags
 int flatmiss[NUMRECLEV1];
@@ -470,6 +472,7 @@ int do_ingest(long long bbrec, long long eerec, const char *dpath)
   char recrange[128], lev0name[128], flatrec[128];
   int version_flag = 0;
   //char tmpname[80];
+  char *imgtype;
 
   if(modeflg) sprintf(recrange, ":#%lld-#%lld", bbrec, eerec);
   else sprintf(recrange, "%lld-%lld", bbrec, eerec);
@@ -622,6 +625,11 @@ int do_ingest(long long bbrec, long long eerec, const char *dpath)
       l0l1->recnum0 = recnum0;
       l0l1->fsn = fsnx;
       if(hmiaiaflg) {			//aia
+
+        imgtype = drms_getkey_string(rs0, "IMG_TYPE", &rstatus);
+        if (onlydarks) {
+          if (strcmp(imgtype, "DARK")) continue;
+        }
 
 	// Lookup table #18 corruption 2017.02.07
 	// FSN range 145600147 - 145616603, WAVELNTH 1700 only
@@ -1523,6 +1531,7 @@ int DoIt(void)
   bs94 = cmdparams_get_float(&cmdparams, "bs94", NULL);
   bz94 = cmdparams_get_float(&cmdparams, "bz94", NULL);
   quicklook = cmdparams_get_int(&cmdparams, "quicklook", NULL);
+  onlydarks = cmdparams_get_int(&cmdparams, "onlydarks", NULL);
 
   dpath = cmdparams_get_str(&cmdparams, kDpath, NULL);
   if (quicklook) mpt = "sdo.master_pointing";
