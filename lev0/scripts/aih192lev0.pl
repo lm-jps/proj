@@ -8,8 +8,6 @@
 if ($t = shift @ARGV) { $threshold = $t; } else { $threshold = 5; }
 $test = shift @ARGV or $test = 0;
 $to_list = join ",", 'jps@lmsal.com',
-          '6509965043@txt.att.net',
-          '6504503716@txt.att.net',
           '5178969022@txt.att.net',
           '6507436500@tmomail.net',
           '4088964682@messaging.sprintpcs.com',
