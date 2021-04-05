@@ -245,4 +245,3 @@ su_yang.B3comp_noisemask_remap_deglatlon_test_720s
 su_mbobra.smarp_96m
 su_mbobra.smarp_cea_96m
 su_mbobra.sharp_loskeys_720s
-su_mbobra.sharp_loskeystest_720s

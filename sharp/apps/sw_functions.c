@@ -1022,22 +1022,16 @@ int computeShearAngle(float *bx_err, float *by_err, float *bz_err, float *bx, fl
     }
     /* For mean 3D shear angle, area with shear greater than 45*/
     *meanshear_angleptr = (sumsum)/(count);                 /* Units are degrees */
-    
-    // For the error in the mean 3D shear angle:
-    // If count_mask is 0, then we run into a divide by zero error. In this case, set *meanshear_angle_err_ptr to NAN
-    // If count_mask is greater than zero, then compute the error.
-    if (count_mask == 0)
-        *meanshear_angle_err_ptr = NAN;
-    else
-        *meanshear_angle_err_ptr = (sqrt(err)/count_mask)*(180./PI);
+    *meanshear_angle_err_ptr = (sqrt(err)/count_mask)*(180./PI);
     
     /* The area here is a fractional area -- the % of the total area. This has no error associated with it. */
     *area_w_shear_gt_45ptr   = (count_mask/(count))*(100.0);
     
     //printf("MEANSHR=%f\n",*meanshear_angleptr);
-    //printf("ERRMSHA=%f\n",*meanshear_angle_err_ptr);
+    //printf("MEANSHR_err=%f\n",*meanshear_angle_err_ptr);
     //printf("SHRGT45=%f\n",*area_w_shear_gt_45ptr);
-    return 0;
+    
+	return 0;
 }
 
 /*===========================================*/
