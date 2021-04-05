@@ -197,7 +197,7 @@ function HmiB2ptrCheck(fromSetProcessing)
 
   ExportProcessingOptions[HmiB2ptrOption].Size = HmiB2ptrSizeRatio;
   this.paramsValid = (isok ? args : "");
-
+  CheckRediness();
   return (isok ? args : "");
   }
 
@@ -480,7 +480,7 @@ function AiaScaleCheck(fromSetProcessing)
 
     ExportProcessingOptions[AiaScaleOption].Size = AiaScaleSizeRatio;
     this.paramsValid = (isok ? args : "");
-
+    CheckRediness();
     return (isok ? args : "");
 }
 
@@ -656,7 +656,7 @@ function RebinCheck(fromSetProcessing)
 
   ExportProcessingOptions[RebinOption].Size = RebinSizeRatio*RebinSizeRatio;
   this.paramsValid = (isok ? rv : "");
-
+  CheckRediness();
   return (isok ? rv : "");
   }
 
@@ -786,7 +786,7 @@ function ResizeCheck(fromSetProcessing)
 
   ExportProcessingOptions[ResizeOption].Size = ResizeSizeRatio;
   this.paramsValid = (isok ? rv : "");
-
+  CheckRediness();
   return (isok ? rv : "");
   }
 
@@ -1214,7 +1214,7 @@ function ImPatchCheck(fromSetProcessing)
     }
   ExportProcessingOptions[ImPatchOption].Size = localImPatchSizeRatio;
   this.paramsValid = (isok ? args : "");
-
+  CheckRediness();
   return (isok ? args : "");
   }
 
@@ -1523,7 +1523,7 @@ function MaprojCheck(fromSetProcessing)
 
   ExportProcessingOptions[MaprojOption].Size = MaprojSizeRatio;
   this.paramsValid = (isok ? args : "");
-
+  CheckRediness();
   return (isok ? args : "");
   }
 

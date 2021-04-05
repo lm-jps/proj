@@ -1,9 +1,0 @@
-#--------------real time processing of asd hk  minute dayfile from Lockheed machine to production data series -setup by carl---#
-0  * * * 0-6   exec /usr/bin/perl  /home/carl/cvs/myprod/JSOC/proj/lev0/scripts/hk/gdfrt.pl apid=129 pkt_size=128  >/dev/null 2>&1
-#--------------ingest dayfile from RTMON server rtmon files for production data series - setup by carl------------------#
-0  18 * * 0-6 /usr/bin/perl  /home/production/cvs/JSOC/proj/lev0/scripts/hk/dsdf.pl rtmon  >/dev/null 2>&1
-#--------------ingest dayfiles from HSB for production dayfile drms series -setup by carl-------------------------------#
-0  21 * * 0-6 /usr/bin/perl  /home/production/cvs/JSOC/proj/lev0/scripts/hk/getdf.pl hsb  >/dev/null 2>&1
-#---------------checks lockheed queue file on jim@solserv for update of STANFORD_TLM_HMI_AIA.txt and GROUND_CODE file--#
-#---------------commented out or removed since not getting any updated of these files anymore--------------------------#
-#20,50 9-18 * * 1-5 /usr/bin/perl/home/production/cvs/JSOC/proj/lev0/scripts/hk/clmq.pl >/dev/null 2>&1
