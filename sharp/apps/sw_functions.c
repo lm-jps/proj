@@ -1,7 +1,7 @@
 
 /*===========================================
  
- The following 14 functions calculate the following spaceweather indices:
+ The following functions calculate these spaceweather indices from the vector magnetic field data:
  
  USFLUX Total unsigned flux in Maxwells
  MEANGAM Mean inclination angle, gamma, in degrees
@@ -18,6 +18,12 @@
  MEANPOT Mean photospheric excess magnetic energy density in ergs per cubic centimeter
  TOTPOT Total photospheric magnetic energy density in ergs per cubic centimeter
  MEANSHR Mean shear angle (measured using Btotal) in degrees
+ CMASK The total number of pixels that contributed to the calculation of all the indices listed above
+
+ And these spaceweather indices from the line-of-sight magnetic field data:
+ USFLUXL Total unsigned flux in Maxwells
+ MEANGBL Mean value of the line-of-sight field gradient, in Gauss/Mm
+ CMASKL The total number of pixels that contributed to the calculation of USFLUXL and MEANGBL
  R_VALUE Karel Schrijver's R parameter
  
  The indices are calculated on the pixels in which the conf_disambig segment is greater than 70 and
@@ -1255,8 +1261,8 @@ int computeLorentz(float *bx,  float *by, float *bz, float *fx, float *fy, float
 //  (Gauss/pix^2)(CDELT1)^2(RSUN_REF/RSUN_OBS)^2(100.cm/m)^2
 //  =Gauss*cm^2
 
-int computeAbsFlux_los(float *los, int *dims, float *absFlux,
-                       float *mean_vf_ptr, float *count_mask_ptr,
+int computeAbsFlux_los(float *los, int *dims, float *absFlux_los,
+                       float *mean_vf_los_ptr, float *count_mask_los_ptr,
                        int *bitmask, float cdelt1, double rsun_ref, double rsun_obs)
 
 {
@@ -1265,10 +1271,10 @@ int computeAbsFlux_los(float *los, int *dims, float *absFlux,
     int ny = dims[1];
     int i = 0;
     int j = 0;
-    int count_mask = 0;
+    int count_mask_los = 0;
     double sum = 0.0;
-    *absFlux = 0.0;
-    *mean_vf_ptr = 0.0;
+    *absFlux_los = 0.0;
+    *mean_vf_los_ptr = 0.0;
     
      
     if (nx <= 0 || ny <= 0) return 1;
@@ -1280,12 +1286,15 @@ int computeAbsFlux_los(float *los, int *dims, float *absFlux,
 	    if ( bitmask[j * nx + i] < 30 ) continue;
             if isnan(los[j * nx + i]) continue;
             sum += (fabs(los[j * nx + i]));
-            count_mask++;
+            count_mask_los++;
 	   }
 	}
     
-    *mean_vf_ptr     = sum*cdelt1*cdelt1*(rsun_ref/rsun_obs)*(rsun_ref/rsun_obs)*100.0*100.0;
-    *count_mask_ptr  = count_mask;
+    *mean_vf_los_ptr     = sum*cdelt1*cdelt1*(rsun_ref/rsun_obs)*(rsun_ref/rsun_obs)*100.0*100.0;
+    *count_mask_los_ptr  = count_mask_los;
+
+    printf("USFLUXL=%f\n",*mean_vf_los_ptr);
+    printf("CMASKL=%f\n",*count_mask_los_ptr);
 
     return 0;
 }
@@ -1371,7 +1380,8 @@ int computeLOSderivative(float *los, int *dims, float *mean_derivative_los_ptr, 
     }
     
     *mean_derivative_los_ptr = (sum)/(count_mask); // would be divided by ((nx-2)*(ny-2)) if shape of count_mask = shape of magnetogram
-    //printf("mean_derivative_los_ptr=%f\n",*mean_derivative_los_ptr);
+    
+    printf("MEANGBL=%f\n",*mean_derivative_los_ptr);
     
 	return 0;
 }
