@@ -1137,10 +1137,10 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 
 void setSWIndex(DRMS_Record_t *outRec, struct swIndex *swKeys_ptr)
 {
-    drms_setkey_float(outRec, "USFLUX",  swKeys_ptr->mean_vf);
-    drms_setkey_float(outRec, "MEANGBZ", swKeys_ptr->mean_derivative_los);
+    drms_setkey_float(outRec, "USFLUXL",  swKeys_ptr->mean_vf);
+    drms_setkey_float(outRec, "MEANGBL", swKeys_ptr->mean_derivative_los);
     drms_setkey_float(outRec, "R_VALUE", swKeys_ptr->Rparam);
-    drms_setkey_float(outRec, "CMASK", swKeys_ptr->count_mask);
+    drms_setkey_float(outRec, "CMASKL", swKeys_ptr->count_mask);
 };
 
 /*
