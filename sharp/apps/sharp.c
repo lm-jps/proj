@@ -27,7 +27,7 @@
  *              v0.6 Aug 12 2013
  *              v0.7 Jan 02 2014
  *              v0.8 Feb 12 2014
- *				v0.9 Mar 04 2014
+ *		v0.9 Mar 04 2014
  *
  *	Notes:
  *		v0.0
@@ -147,13 +147,17 @@
 // Space weather keywords
 struct swIndex {
     float mean_vf;
+    float mean_vf_los;
     float count_mask;
+    float count_mask_los;
     float absFlux;
+    float absFlux_los;
     float mean_hf;
     float mean_gamma;
     float mean_derivative_btotal;
     float mean_derivative_bh;
     float mean_derivative_bz;
+    float mean_derivative_los;
     float mean_jz;
     float us_i;
     float mean_alpha;
@@ -1978,6 +1982,8 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 	float *bpz     = (float *) (malloc(nxny * sizeof(float)));
 	float *derx    = (float *) (malloc(nxny * sizeof(float)));
 	float *dery    = (float *) (malloc(nxny * sizeof(float)));
+        float *derx_los = (float *) (malloc(nxny * sizeof(float)));
+        float *dery_los = (float *) (malloc(nxny * sizeof(float)));
 	float *derx_bt = (float *) (malloc(nxny * sizeof(float)));
 	float *dery_bt = (float *) (malloc(nxny * sizeof(float)));
 	float *derx_bh = (float *) (malloc(nxny * sizeof(float)));
@@ -2031,6 +2037,14 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
                 swKeys_ptr->count_mask  = DRMS_MISSING_INT;
 	}
     
+        if (computeAbsFlux_los(los, dims, &(swKeys_ptr->absFlux_los), &(swKeys_ptr->mean_vf_los),
+                           &(swKeys_ptr->count_mask_los), bitmask, cdelt1, rsun_ref, rsun_obs))
+        {
+                swKeys_ptr->absFlux_los = DRMS_MISSING_FLOAT;               // If fail, fill in NaN
+                swKeys_ptr->mean_vf_los = DRMS_MISSING_FLOAT;
+                swKeys_ptr->count_mask_los = DRMS_MISSING_INT;
+        }
+
 	for (int i = 0; i < nxny; i++) bpz[i] = bz[i];
 	greenpot(bpx, bpy, bpz, nx, ny);
 	
@@ -2063,6 +2077,11 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
         {
 		swKeys_ptr->mean_derivative_bz = DRMS_MISSING_FLOAT; // If fail, fill in NaN
                 swKeys_ptr->mean_derivative_bz_err = DRMS_MISSING_FLOAT;
+        }
+
+        if (computeLOSderivative(los, dims, &(swKeys_ptr->mean_derivative_los), bitmask, derx_los, dery_los))
+        {
+                swKeys_ptr->mean_derivative_los = DRMS_MISSING_FLOAT; // If fail, fill in NaN
         }
 	
 	computeJz(bx_err, by_err, bx, by, dims, jz, jz_err, jz_err_squared, mask, bitmask, cdelt1, rsun_ref, rsun_obs,
@@ -2163,6 +2182,7 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 	free(derx_bt); free(dery_bt);
 	free(derx_bz); free(dery_bz);
 	free(derx_bh); free(dery_bh);
+        free(derx_los); free(dery_los);
 	free(bt_err); free(bh_err);  free(jz_err);
         free(jz_err_squared); free(jz_rms_err);
         free(jz_err_squared_smooth);
@@ -2200,10 +2220,12 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 void setSWIndex(DRMS_Record_t *outRec, struct swIndex *swKeys_ptr)
 {
     drms_setkey_float(outRec, "USFLUX",  swKeys_ptr->mean_vf);
+    drms_setkey_float(outRec, "USFLUXL", swKeys_ptr->mean_vf_los);
     drms_setkey_float(outRec, "MEANGAM", swKeys_ptr->mean_gamma);
     drms_setkey_float(outRec, "MEANGBT", swKeys_ptr->mean_derivative_btotal);
     drms_setkey_float(outRec, "MEANGBH", swKeys_ptr->mean_derivative_bh);
     drms_setkey_float(outRec, "MEANGBZ", swKeys_ptr->mean_derivative_bz);
+    drms_setkey_float(outRec, "MEANGBL", swKeys_ptr->mean_derivative_los);
     drms_setkey_float(outRec, "MEANJZD", swKeys_ptr->mean_jz);
     drms_setkey_float(outRec, "TOTUSJZ", swKeys_ptr->us_i);
     drms_setkey_float(outRec, "MEANALP", swKeys_ptr->mean_alpha);
@@ -2216,6 +2238,7 @@ void setSWIndex(DRMS_Record_t *outRec, struct swIndex *swKeys_ptr)
     drms_setkey_float(outRec, "MEANSHR", swKeys_ptr->meanshear_angle);
     drms_setkey_float(outRec, "SHRGT45", swKeys_ptr->area_w_shear_gt_45);
     drms_setkey_float(outRec, "CMASK",   swKeys_ptr->count_mask);
+    drms_setkey_float(outRec, "CMASKL",  swKeys_ptr->count_mask_los);
     drms_setkey_float(outRec, "ERRBT",   swKeys_ptr->mean_derivative_btotal_err);
     drms_setkey_float(outRec, "ERRVF",   swKeys_ptr->mean_vf_err);
     drms_setkey_float(outRec, "ERRGAM",  swKeys_ptr->mean_gamma_err);
@@ -2341,7 +2364,7 @@ void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *mharpRec, DRMS_Record_t *bhar
     drms_setkey_time(outRec, "DATE", tnow);
 	
     // set cvs commit version into keyword HEADER
-    char *cvsinfo  = strdup("$Id: sharp.c,v 1.38 2015/03/18 00:28:26 xudong Exp $");
+    char *cvsinfo  = strdup("$Id: sharp.c,v 1.39 2021/05/24 22:17:37 mbobra Exp $");
     char *cvsinfo2 = sw_functions_version();
     char cvsinfoall[2048];
     strcat(cvsinfoall,cvsinfo);
