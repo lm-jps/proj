@@ -195,9 +195,9 @@ int DoIt(void)
 
     // Flags to indicate which keyword will be recalculated
     int meanvflosflag = (strstr(keylist,"USFLUXLOS")  != NULL);
-    int meanglosflag  = (strstr(keylist,"MEANGBZLOS") != NULL);
-	int meanvfflag    = (strstr(keylist,"USFLUX")  != NULL); 
-	int totpotflag    = (strstr(keylist,"TOTPOT")  != NULL);  
+    int meanglosflag  = (strstr(keylist,"MEANGBZLOS") != NULL)
+    int meanvfflag    = (strstr(keylist,"USFLUX")  != NULL); 
+    int totpotflag    = (strstr(keylist,"TOTPOT")  != NULL);  
     int meangamflag   = (strstr(keylist,"MEANGAM") != NULL);
     int meangbtflag   = (strstr(keylist,"MEANGBT") != NULL);
     int meangbzflag   = (strstr(keylist,"MEANGBZ") != NULL);
@@ -277,7 +277,7 @@ int DoIt(void)
         // prepare to set CODEVER7 (CVS Version of the SHARP module)
 	    char *cvsinfo0;
 	    char *history0;
-	    char *cvsinfo1 = strdup("$Id: update_sharp_keys.c,v 1.16 2020/06/30 22:38:53 mbobra Exp $");
+	    char *cvsinfo1 = strdup("$Id: update_sharp_keys.c,v 1.17 2021/05/24 22:17:58 mbobra Exp $");
 	    char *cvsinfo2 = sw_functions_version();
 	    char *cvsinfoall = (char *)malloc(2048);
         char historyofthemodule[2048];
@@ -743,19 +743,19 @@ int DoIt(void)
         /***** USFLUX, Example Function 17 *************************************/ 
 	    if (meanvflosflag)
 	    {
-            // Compute unsigned flux 
-            if (computeAbsFlux_los(los, dims, &absFlux, &mean_vf, 
-                               &count_mask, bitmask, cdelt1, rsun_ref, rsun_obs))
-            {
-                mean_vf = DRMS_MISSING_FLOAT;
-                count_mask = DRMS_MISSING_INT;
-            }
+               if (computeAbsFlux_los(los, dims, &(swKeys_ptr->absFlux_los), &(swKeys_ptr->mean_vf_los),
+                           &(swKeys_ptr->count_mask_los), bitmask, cdelt1, rsun_ref, rsun_obs))
+               {
+                absFlux_los = DRMS_MISSING_FLOAT;               // If fail, fill in NaN
+                mean_vf_los = DRMS_MISSING_FLOAT;
+                count_mask_los = DRMS_MISSING_INT;
+               }
 
-            drms_setkey_float(sharpoutrec, "USFLUX",  mean_vf);
-            drms_setkey_float(sharpoutrec, "CMASK",   count_mask); 	
+            drms_setkey_float(sharpoutrec, "USFLUXL",  mean_vf_los);
+            drms_setkey_float(sharpoutrec, "CMASKL",   count_mask_los); 	
 
-            drms_setkey_float(sharpceaoutrec, "USFLUX",  mean_vf);
-            drms_setkey_float(sharpceaoutrec, "CMASK",   count_mask); 	
+            drms_setkey_float(sharpceaoutrec, "USFLUXL",  mean_vf_los);
+            drms_setkey_float(sharpceaoutrec, "CMASKL",   count_mask_los); 	
         }
 
         /***** MEANGBZ, Example Function 18 ************************************/
@@ -769,10 +769,10 @@ int DoIt(void)
             }
 	
             // Set sharp keys   
-            drms_setkey_float(sharpoutrec, "MEANGBZ",  mean_derivative_los); 
+            drms_setkey_float(sharpoutrec, "MEANGBL",  mean_derivative_los); 
 	
             // Set sharp cea keys   
-            drms_setkey_float(sharpceaoutrec, "MEANGBZ", mean_derivative_los); 
+            drms_setkey_float(sharpceaoutrec, "MEANGBL", mean_derivative_los); 
         }
 
         /******************************* END FLAGS **********************************/
