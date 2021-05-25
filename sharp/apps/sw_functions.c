@@ -1366,7 +1366,6 @@ int computeLOSderivative(float *los, int *dims, float *mean_derivative_los_ptr, 
         for (j = 0; j <= ny-1; j++)
         {
             if ( bitmask[j * nx + i] < 30 ) continue;
-            if ( (derx_los[j * nx + i] + dery_los[j * nx + i]) == 0) continue;
             if isnan(los[j * nx + i])      continue;
             if isnan(los[(j+1) * nx + i])  continue;
             if isnan(los[(j-1) * nx + i])  continue;
