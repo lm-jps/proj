@@ -170,18 +170,16 @@ int computeLOSderivative(float *los, int *dims, float *mean_derivative_los_ptr, 
         dery_los[j * nx + i] = ( (3*los[j * nx + i]) + (-4*los[(j-1) * nx + i]) - (-los[(j-2) * nx + i]) )*0.5;
     }
     
-    
-    for (i = 0; i <= nx-1; i++)
+    for (i = 1; i <= nx-2; i++)
     {
-        for (j = 0; j <= ny-1; j++)
+        for (j = 1; j <= ny-2; j++)
         {
             if ( bitmask[j * nx + i] < 36 ) continue;
-            if ( (derx_los[j * nx + i] + dery_los[j * nx + i]) == 0) continue;
-            if isnan(los[j * nx + i])      continue;
-            if isnan(los[(j+1) * nx + i])  continue;
-            if isnan(los[(j-1) * nx + i])  continue;
-            if isnan(los[j * nx + i-1])    continue;
-            if isnan(los[j * nx + i+1])    continue;
+            if isnan(los[j * nx + i]) continue;
+            if isnan(los[(j+1) * nx + i]) continue;
+            if isnan(los[(j-1) * nx + i]) continue;
+            if isnan(los[j * nx + i-1]) continue;
+            if isnan(los[j * nx + i+1]) continue;
             if isnan(derx_los[j * nx + i]) continue;
             if isnan(dery_los[j * nx + i]) continue;
             sum += sqrt( derx_los[j * nx + i]*derx_los[j * nx + i]  + dery_los[j * nx + i]*dery_los[j * nx + i] ); /* Units of Gauss */
@@ -191,8 +189,10 @@ int computeLOSderivative(float *los, int *dims, float *mean_derivative_los_ptr, 
     
     *mean_derivative_los_ptr = (sum)/(count_mask); // would be divided by ((nx-2)*(ny-2)) if shape of count_mask = shape of magnetogram
     //printf("mean_derivative_los_ptr=%f\n",*mean_derivative_los_ptr);
-    
-	return 0;
+    //printf("nx=%d\n",nx);
+    //printf("ny=%d\n",ny);
+    //printf("sum=%f\n",sum);
+    return 0;
 }
 
 /*===========================================*/
