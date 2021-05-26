@@ -177,6 +177,7 @@ mdi.hr_v_12s
 mdi.hr_v_bin2x2
 mdi.ice
 mdi.limb_figure
+mdi.lostarp_96m
 mdi.meanpf_96m
 mdi.mtarp
 mdi.pfss_synop
@@ -192,6 +193,8 @@ mdi.rwbin_ic
 mdi.rwbin_ld
 mdi.scale_corrections
 mdi.sinrho_table
+mdi.smarp_96m
+mdi.smarp_cea_96m
 mdi.synoptic_Ml_96m
 mdi.synoptic_Ml_small_96m
 mdi.synoptic_Mr_96m
