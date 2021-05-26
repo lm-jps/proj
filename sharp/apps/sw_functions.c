@@ -1272,7 +1272,6 @@ int computeAbsFlux_los(float *los, int *dims, float *absFlux_los,
     int i = 0;
     int j = 0;
     int count_mask_los = 0;
-    int countabit = 0;
     double sum = 0.0;
     *absFlux_los = 0.0;
     *mean_vf_los_ptr = 0.0;
@@ -1285,8 +1284,7 @@ int computeAbsFlux_los(float *los, int *dims, float *absFlux_los,
 	   for (j = 0; j < ny; j++)
 	   {
 	    if ( bitmask[j * nx + i] < 30 ) continue;
-            if isnan(los[j * nx + i])
-              {countabit++; continue;}
+            if isnan(los[j * nx + i]) continue;
             sum += (fabs(los[j * nx + i]));
             count_mask_los++;
 	   }
