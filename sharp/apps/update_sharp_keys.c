@@ -63,9 +63,10 @@
 #define ARRLENGTH(ARR) (sizeof(ARR) / sizeof(ARR[0]))
 #define DIE(msg) {fflush(stdout); fprintf(stderr,"%s, status=%d\n", msg, status); return(status);}
 #define SHOW(msg) {printf("%s", msg); fflush(stdout);}
+#define DEBUG(true)
 
 char *module_name = "update_sharp_keys";  /* Module name */
-char *version_id  = "2020 Jun 29";        /* Version number */
+char *version_id  = "2021 May 25";        /* Version number */
 
 ModuleArgs_t module_args[] =
 {
@@ -89,9 +90,12 @@ int DoIt(void)
 	int nrecs, irec;
 
     /* Keywords */
-	float mean_vf; 
+	float mean_vf;
+        float mean_vf_los; 
 	float absFlux;
-    float count_mask;
+        float absFlux_los;
+        float count_mask;
+        float count_mask_los;
 	float mean_hf;
 	float mean_gamma;
 	float mean_derivative_btotal;
@@ -111,39 +115,39 @@ int DoIt(void)
 	float meanshear_angle;
 	float area_w_shear_gt_45h;
 	float meanshear_angleh; 
-    float mean_derivative_btotal_err;
-    float mean_vf_err;
-    float mean_gamma_err;
-    float mean_derivative_bh_err;
-    float mean_derivative_bz_err;
-    float mean_jz_err;
-    float us_i_err; 
-    float mean_alpha_err;
-    float mean_ih_err;
-    float total_us_ih_err;
-    float total_abs_ih_err;
-    float totaljz_err;
-    float meanpot_err;
-    float totpot_err;
-    float Rparam;
-    float meanshear_angle_err;
-    float totfx;
-    float totfy;
-    float totfz;
-    float totbsq;
-    float epsx;
-    float epsy;
-    float epsz;
+        float mean_derivative_btotal_err;
+        float mean_vf_err;
+        float mean_gamma_err;
+        float mean_derivative_bh_err;
+        float mean_derivative_bz_err;
+        float mean_jz_err;
+        float us_i_err; 
+        float mean_alpha_err;
+        float mean_ih_err;
+        float total_us_ih_err;
+        float total_abs_ih_err;
+        float totaljz_err;
+        float meanpot_err;
+        float totpot_err;
+        float Rparam;
+        float meanshear_angle_err;
+        float totfx;
+        float totfy;
+        float totfz;
+        float totbsq;
+        float epsx;
+        float epsy;
+        float epsz;
 
 	char *sharpseriesin = (char *) params_get_str(&cmdparams, "sharpseriesin");
 	char *sharpceaseriesin = (char *) params_get_str(&cmdparams, "sharpceaseriesin");
 	char *sharpseriesout = (char *) params_get_str(&cmdparams, "sharpseriesout");
 	char *sharpceaseriesout = (char *) params_get_str(&cmdparams, "sharpceaseriesout");
 
-    int sameflag = strcmp(sharpseriesin, sharpseriesout) == 0;
-    int testflag = strcmp(sharpceaseriesin, sharpceaseriesout) == 0;
-    if (testflag != sameflag)
-    DIE("Either both outputs must be the same as their inputs, or both be different.");
+        int sameflag = strcmp(sharpseriesin, sharpseriesout) == 0;
+        int testflag = strcmp(sharpceaseriesin, sharpceaseriesout) == 0;
+        if (testflag != sameflag)
+        DIE("Either both outputs must be the same as their inputs, or both be different.");
 
 	int harpnum = params_get_int(&cmdparams, "HARPNUM");
 
@@ -194,8 +198,8 @@ int DoIt(void)
 	char *debug   = (char *) params_get_str(&cmdparams, "debug");
 
     // Flags to indicate which keyword will be recalculated
-    int meanvflosflag = (strstr(keylist,"USFLUXLOS")  != NULL);
-    int meanglosflag  = (strstr(keylist,"MEANGBZLOS") != NULL)
+    int meanvflosflag = (strstr(keylist,"USFLUXL")  != NULL);
+    int meanglosflag  = (strstr(keylist,"MEANGBL") != NULL);
     int meanvfflag    = (strstr(keylist,"USFLUX")  != NULL); 
     int totpotflag    = (strstr(keylist,"TOTPOT")  != NULL);  
     int meangamflag   = (strstr(keylist,"MEANGAM") != NULL);
@@ -229,7 +233,6 @@ int DoIt(void)
 	int ny = inseg->axis[1];
 	int nxny = nx * ny;
 	int dims[2] = {nx, ny};
-
 	// Temp arrays 	
 	float *bh      = (float *) (malloc(nxny * sizeof(float)));
 	float *bt      = (float *) (malloc(nxny * sizeof(float)));
@@ -247,20 +250,21 @@ int DoIt(void)
 	float *dery_bz = (float *) (malloc(nxny * sizeof(float)));
 	float *bt_err  = (float *) (malloc(nxny * sizeof(float)));
 	float *bh_err  = (float *) (malloc(nxny * sizeof(float)));
-    float *jz_err  = (float *) (malloc(nxny * sizeof(float)));
-    float *jz_err_squared = (float *) (malloc(nxny * sizeof(float)));
-    float *jz_rms_err = (float *) (malloc(nxny * sizeof(float)));
-    float *jz_err_squared_smooth = (float *) (malloc(nxny * sizeof(float)));
+        float *jz_err  = (float *) (malloc(nxny * sizeof(float)));
+        float *jz_err_squared = (float *) (malloc(nxny * sizeof(float)));
+        float *jz_rms_err = (float *) (malloc(nxny * sizeof(float)));
+        float *jz_err_squared_smooth = (float *) (malloc(nxny * sizeof(float)));
 	float *jz_smooth = (float *) (malloc(nxny * sizeof(float)));
 	float *err_term1 = (float *) (calloc(nxny, sizeof(float)));
 	float *err_term2 = (float *) (calloc(nxny, sizeof(float)));
-    float *fx        = (float *) (malloc(nxny * sizeof(float)));
-    float *fy        = (float *) (malloc(nxny * sizeof(float)));
-    float *fz        = (float *) (malloc(nxny * sizeof(float)));
-    float *derx_los  = (float *) (malloc(nxny * sizeof(float)));
+        float *fx        = (float *) (malloc(nxny * sizeof(float)));
+        float *fy        = (float *) (malloc(nxny * sizeof(float)));
+        float *fz        = (float *) (malloc(nxny * sizeof(float)));
+        float *derx_los  = (float *) (malloc(nxny * sizeof(float)));
 	float *dery_los  = (float *) (malloc(nxny * sizeof(float)));
 
 	for (irec=0;irec<nrecs;irec++)
+	//for (irec=5;irec<nrecs;irec++)
 	{
 
         //DRMS_Record_t *sharpinrec = sharpinrecset->records[irec];
@@ -270,31 +274,31 @@ int DoIt(void)
         // ephemeris variables
 	    float  cdelt1_orig, cdelt1, dsun_obs, imcrpix1, imcrpix2, crpix1, crpix2;
 	    double rsun_ref, rsun_obs;
-
+         
         // outrecords 
 	    DRMS_Record_t *sharpoutrec, *sharpceaoutrec, *testrec;
 
         // prepare to set CODEVER7 (CVS Version of the SHARP module)
 	    char *cvsinfo0;
 	    char *history0;
-	    char *cvsinfo1 = strdup("$Id: update_sharp_keys.c,v 1.17 2021/05/24 22:17:58 mbobra Exp $");
+	    char *cvsinfo1 = strdup("$Id: update_sharp_keys.c,v 1.18 2021/05/26 04:43:52 mbobra Exp $");
 	    char *cvsinfo2 = sw_functions_version();
 	    char *cvsinfoall = (char *)malloc(2048);
-        char historyofthemodule[2048];
-        cvsinfo0    = drms_getkey_string(sharpinrec, "CODEVER7", &status);
-        strcpy(cvsinfoall,cvsinfo0);
-        strcat(cvsinfoall,"\n");
-        strcat(cvsinfoall,cvsinfo2);
+            char historyofthemodule[2048];
+            cvsinfo0    = drms_getkey_string(sharpinrec, "CODEVER7", &status);
+            strcpy(cvsinfoall,cvsinfo0);
+            strcat(cvsinfoall,"\n");
+            strcat(cvsinfoall,cvsinfo2);
 
         // prepare to set HISTORY (History of the data)
 	    char timebuf[1024];
 	    float UNIX_epoch = -220924792.000; 	
 	    sprint_time(timebuf, (double)time(NULL) + UNIX_epoch, "ISO", 0);
-        sprintf(historyofthemodule,"The following keywords were re-computed on %s: %s.",timebuf,keylist); 
+            sprintf(historyofthemodule,"The following keywords were re-computed on %s: %s.",timebuf,keylist); 
 	    //printf("historyofthemodule=%s\n",historyofthemodule);
 	    history0    = drms_getkey_string(sharpinrec, "HISTORY", &status);
 	    strcat(historyofthemodule,"\n");
-        strcat(historyofthemodule,history0);
+            strcat(historyofthemodule,history0);
  
         // grab one record such that we can malloc the R-parameter calculation arrays outside of the loop
         // assume scale = round(2./cdelt1) does not change for any given HARP
@@ -302,7 +306,6 @@ int DoIt(void)
         dsun_obs = drms_getkey_float(testrec, "DSUN_OBS",   &status); 
         rsun_ref = drms_getkey_double(testrec, "RSUN_REF", &status);
         cdelt1_orig = drms_getkey_float(testrec, "CDELT1",   &status);
-        cdelt1      = (atan((rsun_ref*cdelt1_orig*RADSINDEG)/(dsun_obs)))*(1/RADSINDEG)*(3600.);
         int scale = round(2.0/cdelt1);
         int nx1 = nx/scale;
         int ny1 = ny/scale;
@@ -311,10 +314,9 @@ int DoIt(void)
 
         // check to make sure that the dimensions passed into fsample() are adequate
 	    if (nx1 > floor((nx-1)/scale + 1) )
-		    DIE("X-dimension of output array in fsample() is too large.");
+		DIE("X-dimension of output array in fsample() is too large.");
 	    if (ny1 > floor((ny-1)/scale + 1) )
         	DIE("Y-dimension of output array in fsample() is too large.");
- 
         // malloc some arrays for the R parameter calculation
         float *rim     = (float *)malloc(nx1*ny1*sizeof(float));
         float *p1p0    = (float *)malloc(nx1*ny1*sizeof(float));
@@ -337,6 +339,7 @@ int DoIt(void)
         imcrpix2      = drms_getkey_float(sharpinrec, "IMCRPIX2", &status);
         crpix1        = drms_getkey_float(sharpinrec, "CRPIX1", &status);
         crpix2        = drms_getkey_float(sharpinrec, "CRPIX2", &status);
+        cdelt1      = (atan((rsun_ref*cdelt1_orig*RADSINDEG)/(dsun_obs)))*(1/RADSINDEG)*(3600.);
 
         sharpoutrec = sharpoutrecset->records[irec];
         sharpceaoutrec = sharpceaoutrecset->records[irec];
@@ -355,56 +358,79 @@ int DoIt(void)
               printf("i=%d\n",irec);
            }
 
-        // set CODEVER7 and HISTORY and DATE
+            // set CODEVER7 and HISTORY and DATE
 	    drms_setkey_string(sharpoutrec, "CODEVER7", cvsinfoall);
-        drms_setkey_string(sharpoutrec,"HISTORY",historyofthemodule);           
+            drms_setkey_string(sharpoutrec,"HISTORY",historyofthemodule);           
 	    drms_setkey_string(sharpceaoutrec, "CODEVER7", cvsinfoall);
-        drms_setkey_string(sharpceaoutrec,"HISTORY",historyofthemodule);
-        drms_setkey_time(sharpoutrec,"DATE",tnow);  
-        drms_setkey_time(sharpceaoutrec,"DATE",tnow);
+            drms_setkey_string(sharpceaoutrec,"HISTORY",historyofthemodule);
+            drms_setkey_time(sharpoutrec,"DATE",tnow);  
+            drms_setkey_time(sharpceaoutrec,"DATE",tnow);
 
-	    // Get bx, by, bz, mask	
-	    // Use HARP (Turmon) bitmap as a threshold on spaceweather quantities
+	    // Get all the segments if computing vector magnetic field keywords
+
 	    DRMS_Segment_t *bitmaskSeg = drms_segment_lookup(sharpceainrec, "bitmap");
 	    DRMS_Array_t *bitmaskArray = drms_segment_read(bitmaskSeg, DRMS_TYPE_INT, &status);
 	    int *bitmask = (int *) bitmaskArray->data;	 // get the previously made mask array	
-
-	    //Use conf_disambig map as a threshold on spaceweather quantities 
+ 
 	    DRMS_Segment_t *maskSeg = drms_segment_lookup(sharpceainrec, "conf_disambig");       
 	    DRMS_Array_t *maskArray = drms_segment_read(maskSeg, DRMS_TYPE_INT, &status);	
-           if (status != DRMS_SUCCESS)
-              DIE("No CONF_DISAMBIG segment.");
-	       int *mask = (int *) maskArray->data;		// get the previously made mask array	
+            if (status != DRMS_SUCCESS)
+            DIE("No CONF_DISAMBIG segment.");
+	    int *mask = (int *) maskArray->data;		// get the previously made mask array	
 
- 	    //Use magnetogram map to compute R
 	    DRMS_Segment_t *losSeg = drms_segment_lookup(sharpceainrec, "magnetogram");
 	    DRMS_Array_t *losArray = drms_segment_read(losSeg, DRMS_TYPE_FLOAT, &status);
+            if (status != DRMS_SUCCESS)
+            DIE("No magnetogram segment.");
 	    float *los = (float *) losArray->data;		// los
+            //printf("Line 387");
 
 	    DRMS_Segment_t *bxSeg = drms_segment_lookup(sharpceainrec, "Bp");
 	    DRMS_Array_t *bxArray = drms_segment_read(bxSeg, DRMS_TYPE_FLOAT, &status);
+            if (status != DRMS_SUCCESS)
+            DIE("No Bp segment.");
 	    float *bx = (float *) bxArray->data;		// bx
-	
+            //printf("Line 393");	
+
 	    DRMS_Segment_t *bySeg = drms_segment_lookup(sharpceainrec, "Bt");
 	    DRMS_Array_t *byArray = drms_segment_read(bySeg, DRMS_TYPE_FLOAT, &status);
-	    float *by = (float *) byArray->data;		// by
+	    if (status != DRMS_SUCCESS)
+            DIE("No Bt segment.");
+            float *by = (float *) byArray->data;		// by
 	    for (int i = 0; i < nxny; i++) by[i] *= -1;
+            //printf("Line 399");
 	
 	    DRMS_Segment_t *bzSeg = drms_segment_lookup(sharpceainrec, "Br");
-	    DRMS_Array_t *bzArray = drms_segment_read(bzSeg, DRMS_TYPE_FLOAT, &status);
-	    float *bz = (float *) bzArray->data;		// bz
+	    //printf("Line 408\n");
+            if (bzSeg == NULL)
+            DIE("somekind of pointer problem.");            
 
-   	    DRMS_Segment_t *bz_errSeg = drms_segment_lookup(sharpceainrec, "Br_err");
+            DRMS_Array_t *bzArray = drms_segment_read(bzSeg, DRMS_TYPE_FLOAT, &status);
+	    //printf("status=%d\n",status);
+            if (status != DRMS_SUCCESS)
+            DIE("No Br segment.");
+            float *bz = (float *) bzArray->data;		// bz
+            //printf("Line 414");
+   	    
+            DRMS_Segment_t *bz_errSeg = drms_segment_lookup(sharpceainrec, "Br_err");
 	    DRMS_Array_t *bz_errArray = drms_segment_read(bz_errSeg, DRMS_TYPE_FLOAT, &status);
-	    float *bz_err = (float *) bz_errArray->data;		// bz_err
-
-	    DRMS_Segment_t *by_errSeg = drms_segment_lookup(sharpceainrec, "Bt_err");
+	    if (status != DRMS_SUCCESS)
+            DIE("No Br_err segment.");
+            float *bz_err = (float *) bz_errArray->data;		// bz_err
+            //printf("Line 408");
+	    
+            DRMS_Segment_t *by_errSeg = drms_segment_lookup(sharpceainrec, "Bt_err");
 	    DRMS_Array_t *by_errArray = drms_segment_read(by_errSeg, DRMS_TYPE_FLOAT, &status);
-	    float *by_err = (float *) by_errArray->data;		// by_err
-
-	    DRMS_Segment_t *bx_errSeg = drms_segment_lookup(sharpceainrec, "Bp_err");
+	    if (status != DRMS_SUCCESS)
+            DIE("No Bt_err segment.");
+            float *by_err = (float *) by_errArray->data;		// by_err
+            //printf("Line 412");
+	    
+            DRMS_Segment_t *bx_errSeg = drms_segment_lookup(sharpceainrec, "Bp_err");
 	    DRMS_Array_t *bx_errArray = drms_segment_read(bx_errSeg, DRMS_TYPE_FLOAT, &status);
-	    float *bx_err = (float *) bx_errArray->data;		// bx_err
+	    if (status != DRMS_SUCCESS)
+            DIE("No Bp_err segment.");
+            float *bx_err = (float *) bx_errArray->data;		// bx_err
 
         /***** USFLUX, Example Function 1 *************************************/ 
 	    if (meanvfflag)
@@ -544,8 +570,8 @@ int DoIt(void)
 
             // Then take the derivative of Bh
 	        if (computeBhderivative(bh, bh_err, dims, &mean_derivative_bh, &mean_derivative_bh_err, mask, bitmask, derx_bh, dery_bh, err_term1, err_term2))
-            {
-	            mean_derivative_bh       = DRMS_MISSING_FLOAT;
+                {
+	        mean_derivative_bh       = DRMS_MISSING_FLOAT;
                 mean_derivative_bh_err   = DRMS_MISSING_FLOAT;
 	        }
 
@@ -570,10 +596,9 @@ int DoIt(void)
                                &mean_jz_err, &us_i, &us_i_err, mask, bitmask, cdelt1,
                                rsun_ref, rsun_obs, derx, dery))
 
-
-            {
+                {
                 mean_jz                = DRMS_MISSING_FLOAT;
-	            us_i                   = DRMS_MISSING_FLOAT;
+	        us_i                   = DRMS_MISSING_FLOAT;
                 mean_jz_err            = DRMS_MISSING_FLOAT;
                 us_i_err               = DRMS_MISSING_FLOAT;
 	        }
@@ -601,10 +626,10 @@ int DoIt(void)
             // Then compute alpha quantities on select pixels
 	        if (computeAlpha(jz_err, bz_err, bz, dims, jz, jz_smooth, &mean_alpha, &mean_alpha_err, 
                              mask, bitmask, cdelt1, rsun_ref, rsun_obs))
-            {
-	            mean_alpha             = DRMS_MISSING_FLOAT;
+                {
+	        mean_alpha             = DRMS_MISSING_FLOAT;
                 mean_alpha_err         = DRMS_MISSING_FLOAT;
-            }
+                }
 
             // Set sharp keys   	
             drms_setkey_float(sharpoutrec, "MEANALP", mean_alpha); 
@@ -626,10 +651,10 @@ int DoIt(void)
             // Then compute helicity quantities on select pixels
             if (computeHelicity(jz_err, jz_rms_err, bz_err, bz, dims, jz, &mean_ih, &mean_ih_err, &total_us_ih, 
                                 &total_abs_ih, &total_us_ih_err, &total_abs_ih_err, mask, bitmask, cdelt1, rsun_ref, rsun_obs))
-            {  
-	            mean_ih                = DRMS_MISSING_FLOAT; 
-	            total_us_ih            = DRMS_MISSING_FLOAT;
-  	            total_abs_ih           = DRMS_MISSING_FLOAT;
+                {  
+	        mean_ih                = DRMS_MISSING_FLOAT; 
+	        total_us_ih            = DRMS_MISSING_FLOAT;
+  	        total_abs_ih           = DRMS_MISSING_FLOAT;
                 mean_ih_err            = DRMS_MISSING_FLOAT;
                 total_us_ih_err        = DRMS_MISSING_FLOAT;
                 total_abs_ih_err       = DRMS_MISSING_FLOAT;
@@ -662,8 +687,8 @@ int DoIt(void)
             // Then compute sums of Jz on select pixels
   	        if (computeSumAbsPerPolarity(jz_err, bz_err, bz, jz, dims, &totaljz, &totaljz_err, 
 				                         mask, bitmask, cdelt1, rsun_ref, rsun_obs))
-            {
-	            totaljz = DRMS_MISSING_FLOAT;
+                {
+	        totaljz = DRMS_MISSING_FLOAT;
                 totaljz_err = DRMS_MISSING_FLOAT;
 	        }
 
@@ -687,9 +712,9 @@ int DoIt(void)
 	        if (computeShearAngle(bx_err, by_err, bh_err, bx, by, bz, bpx, bpy, bpz, dims, 
 		   		                  &meanshear_angle, &meanshear_angle_err, &area_w_shear_gt_45,  
 				                  mask, bitmask)) 
-            {
-	            meanshear_angle    = DRMS_MISSING_FLOAT; // If fail, fill in NaN
-		        area_w_shear_gt_45 = DRMS_MISSING_FLOAT;
+                {
+	        meanshear_angle    = DRMS_MISSING_FLOAT; // If fail, fill in NaN
+		area_w_shear_gt_45 = DRMS_MISSING_FLOAT;
                 meanshear_angle_err= DRMS_MISSING_FLOAT;
 	        }
 
@@ -711,12 +736,12 @@ int DoIt(void)
         	if (computeLorentz(bx, by, bz, fx, fy, fz, dims, &totfx, &totfy, &totfz, &totbsq,
                                &epsx, &epsy, &epsz, mask, bitmask, cdelt1, rsun_ref, rsun_obs))
             {  
-		        totfx = DRMS_MISSING_FLOAT;
+		totfx = DRMS_MISSING_FLOAT;
                 totfy = DRMS_MISSING_FLOAT;
-		        totfz = DRMS_MISSING_FLOAT;
-		        totbsq = DRMS_MISSING_FLOAT;
+		totfz = DRMS_MISSING_FLOAT;
+		totbsq = DRMS_MISSING_FLOAT;
                 epsx = DRMS_MISSING_FLOAT;
-		        epsy = DRMS_MISSING_FLOAT;
+		epsy = DRMS_MISSING_FLOAT;
                 epsz = DRMS_MISSING_FLOAT;
             }
 
@@ -743,14 +768,20 @@ int DoIt(void)
         /***** USFLUX, Example Function 17 *************************************/ 
 	    if (meanvflosflag)
 	    {
-               if (computeAbsFlux_los(los, dims, &(swKeys_ptr->absFlux_los), &(swKeys_ptr->mean_vf_los),
-                           &(swKeys_ptr->count_mask_los), bitmask, cdelt1, rsun_ref, rsun_obs))
+               //printf("772");
+               if (computeAbsFlux_los(los, dims, &absFlux_los, &mean_vf_los,
+                           &count_mask_los, bitmask, cdelt1, rsun_ref, rsun_obs))
                {
                 absFlux_los = DRMS_MISSING_FLOAT;               // If fail, fill in NaN
                 mean_vf_los = DRMS_MISSING_FLOAT;
                 count_mask_los = DRMS_MISSING_INT;
                }
-
+            //printf("line757\n");
+            //printf("mean_vf_los=%f\n",mean_vf_los);
+            //printf("cdelt1=%f\n",cdelt1); 
+            //printf("rsun_ref=%f\n",rsun_ref);
+            //printf("rsun_obs=%f\n",rsun_obs);
+            //printf("Key #%d done.\n", irec); 
             drms_setkey_float(sharpoutrec, "USFLUXL",  mean_vf_los);
             drms_setkey_float(sharpoutrec, "CMASKL",   count_mask_los); 	
 
@@ -761,14 +792,16 @@ int DoIt(void)
         /***** MEANGBZ, Example Function 18 ************************************/
         if (meanglosflag)
         {
+        //printf("line 794\n");
             // Compute Bz derivative
-            if (computeLOSderivative(los, dims, &mean_derivative_los, 
-                                     bitmask, derx_los, dery_los))
+            if (computeLOSderivative(los, dims, &mean_derivative_los, bitmask, derx_los, dery_los))
             {
+                //printf("line 799\n");
                 mean_derivative_los     = DRMS_MISSING_FLOAT; 
             }
 	
-            // Set sharp keys   
+            // Set sharp keys
+            //printf("mean_derivative_los=%f\n",mean_derivative_los);
             drms_setkey_float(sharpoutrec, "MEANGBL",  mean_derivative_los); 
 	
             // Set sharp cea keys   
@@ -776,7 +809,7 @@ int DoIt(void)
         }
 
         /******************************* END FLAGS **********************************/
-
+        //printf("line809\n");
 	drms_free_array(bitmaskArray);		
 	drms_free_array(maskArray);
 	drms_free_array(bxArray);           
@@ -787,35 +820,34 @@ int DoIt(void)
 	drms_free_array(bz_errArray);
 	drms_free_array(losArray);
 	free(cvsinfoall);
-
-    free(rim);
-    free(p1p0);
-    free(p1n0);
-    free(p1p);
-    free(p1n);
-    free(p1);
-    free(pmap);
-    free(p1pad); 
-    free(pmapn);
+        free(rim);
+        free(p1p0);
+        free(p1n0);
+        free(p1p);
+        free(p1n);
+        free(p1);
+        free(pmap);
+        free(p1pad); 
+        free(pmapn);
 
 	} //endfor
-
-    // free all the arrays
-    free(fx); free(fy); free(fz);
-	free(bh); free(bt); free(jz); 
-	free(bpx); free(bpy); free(bpz); 
-	free(derx); free(dery);	 
-	free(derx_bt); free(dery_bt); 
-	free(derx_los); free(dery_los);	
-	free(derx_bz); free(dery_bz);	 
-	free(derx_bh); free(dery_bh); 
-	free(bt_err); free(bh_err);  free(jz_err); 
-    free(jz_err_squared); free(jz_rms_err);
-    free(jz_err_squared_smooth);
-    free(jz_smooth);
-    free(err_term2); 
-    free(err_term1); 
     
+        free(fx); free(fy); free(fz);
+        free(bh); free(bt); free(jz);
+        free(bpx); free(bpy); free(bpz);
+        free(derx); free(dery);
+        free(derx_bt); free(dery_bt);
+        free(derx_los); free(dery_los);
+        free(derx_bz); free(dery_bz);
+        free(derx_bh); free(dery_bh);
+        free(bt_err); free(bh_err);  free(jz_err);
+        free(jz_err_squared); free(jz_rms_err);
+        free(jz_err_squared_smooth);
+        free(jz_smooth);
+        free(err_term2);
+        free(err_term1);
+
+
     // Close all the records
  	drms_close_records(sharpinrecset, DRMS_FREE_RECORD);
 	drms_close_records(sharpceainrecset, DRMS_FREE_RECORD);
