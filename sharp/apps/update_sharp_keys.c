@@ -83,19 +83,19 @@ ModuleArgs_t module_args[] =
 
 int DoIt(void)                    
 {
-        int errbufstat=setvbuf(stderr, NULL, _IONBF, BUFSIZ);
-        int outbufstat=setvbuf(stdout, NULL, _IONBF, BUFSIZ);
+    int errbufstat=setvbuf(stderr, NULL, _IONBF, BUFSIZ);
+    int outbufstat=setvbuf(stdout, NULL, _IONBF, BUFSIZ);
 
 	int status = DRMS_SUCCESS;
 	int nrecs, irec;
 
     /* Keywords */
 	float mean_vf;
-        float mean_vf_los; 
+    float mean_vf_los; 
 	float absFlux;
-        float absFlux_los;
-        float count_mask;
-        float count_mask_los;
+    float absFlux_los;
+    float count_mask;
+    float count_mask_los;
 	float mean_hf;
 	float mean_gamma;
 	float mean_derivative_btotal;
@@ -115,39 +115,39 @@ int DoIt(void)
 	float meanshear_angle;
 	float area_w_shear_gt_45h;
 	float meanshear_angleh; 
-        float mean_derivative_btotal_err;
-        float mean_vf_err;
-        float mean_gamma_err;
-        float mean_derivative_bh_err;
-        float mean_derivative_bz_err;
-        float mean_jz_err;
-        float us_i_err; 
-        float mean_alpha_err;
-        float mean_ih_err;
-        float total_us_ih_err;
-        float total_abs_ih_err;
-        float totaljz_err;
-        float meanpot_err;
-        float totpot_err;
-        float Rparam;
-        float meanshear_angle_err;
-        float totfx;
-        float totfy;
-        float totfz;
-        float totbsq;
-        float epsx;
-        float epsy;
-        float epsz;
+    float mean_derivative_btotal_err;
+    float mean_vf_err;
+    float mean_gamma_err;
+    float mean_derivative_bh_err;
+    float mean_derivative_bz_err;
+    float mean_jz_err;
+    float us_i_err; 
+    float mean_alpha_err;
+    float mean_ih_err;
+    float total_us_ih_err;
+    float total_abs_ih_err;
+    float totaljz_err;
+    float meanpot_err;
+    float totpot_err;
+    float Rparam;
+    float meanshear_angle_err;
+    float totfx;
+    float totfy;
+    float totfz;
+    float totbsq;
+    float epsx;
+    float epsy;
+    float epsz;
 
 	char *sharpseriesin = (char *) params_get_str(&cmdparams, "sharpseriesin");
 	char *sharpceaseriesin = (char *) params_get_str(&cmdparams, "sharpceaseriesin");
 	char *sharpseriesout = (char *) params_get_str(&cmdparams, "sharpseriesout");
 	char *sharpceaseriesout = (char *) params_get_str(&cmdparams, "sharpceaseriesout");
 
-        int sameflag = strcmp(sharpseriesin, sharpseriesout) == 0;
-        int testflag = strcmp(sharpceaseriesin, sharpceaseriesout) == 0;
-        if (testflag != sameflag)
-        DIE("Either both outputs must be the same as their inputs, or both be different.");
+    int sameflag = strcmp(sharpseriesin, sharpseriesout) == 0;
+    int testflag = strcmp(sharpceaseriesin, sharpceaseriesout) == 0;
+    if (testflag != sameflag)
+    DIE("Either both outputs must be the same as their inputs, or both be different.");
 
 	int harpnum = params_get_int(&cmdparams, "HARPNUM");
 
@@ -193,7 +193,6 @@ int DoIt(void)
 		DIE("Problem creating sharp cea records.");
         }
 
-
 	char *keylist = (char *) params_get_str(&cmdparams, "keylist");
 	char *debug   = (char *) params_get_str(&cmdparams, "debug");
 
@@ -226,50 +225,45 @@ int DoIt(void)
     int epszflag      = (strstr(keylist,"EPSZ")    != NULL);
     int debugflag     = (strstr(debug,"debug")     != NULL);
     
-	DRMS_Record_t *sharpinrec = sharpinrecset->records[0];
-	DRMS_Record_t *sharpceainrec = sharpceainrecset->records[0];
-	DRMS_Segment_t *inseg = drms_segment_lookup(sharpceainrec, "Br");
-	int nx = inseg->axis[0];
-	int ny = inseg->axis[1];
-	int nxny = nx * ny;
-	int dims[2] = {nx, ny};
-	// Temp arrays 	
-	float *bh      = (float *) (malloc(nxny * sizeof(float)));
-	float *bt      = (float *) (malloc(nxny * sizeof(float)));
-	float *jz      = (float *) (malloc(nxny * sizeof(float)));
-	float *bpx     = (float *) (malloc(nxny * sizeof(float)));
-	float *bpy     = (float *) (malloc(nxny * sizeof(float)));
-	float *bpz     = (float *) (malloc(nxny * sizeof(float)));
-	float *derx    = (float *) (malloc(nxny * sizeof(float)));
-	float *dery    = (float *) (malloc(nxny * sizeof(float)));
-	float *derx_bt = (float *) (malloc(nxny * sizeof(float)));
-	float *dery_bt = (float *) (malloc(nxny * sizeof(float)));
-	float *derx_bh = (float *) (malloc(nxny * sizeof(float)));
-	float *dery_bh = (float *) (malloc(nxny * sizeof(float)));
-	float *derx_bz = (float *) (malloc(nxny * sizeof(float)));
-	float *dery_bz = (float *) (malloc(nxny * sizeof(float)));
-	float *bt_err  = (float *) (malloc(nxny * sizeof(float)));
-	float *bh_err  = (float *) (malloc(nxny * sizeof(float)));
+	for (irec=0;irec<nrecs;irec++)
+	{
+        DRMS_Record_t *sharpinrec = sharpinrecset->records[irec];
+	    DRMS_Record_t *sharpceainrec = sharpceainrecset->records[irec];
+	    DRMS_Segment_t *inseg = drms_segment_lookup(sharpceainrec, "Br");
+	    int nx = inseg->axis[0];
+	    int ny = inseg->axis[1];
+	    int nxny = nx * ny;
+	    int dims[2] = {nx, ny};
+
+	    // Temp arrays 	
+	    float *bh      = (float *) (malloc(nxny * sizeof(float)));
+	    float *bt      = (float *) (malloc(nxny * sizeof(float)));
+	    float *jz      = (float *) (malloc(nxny * sizeof(float)));
+	    float *bpx     = (float *) (malloc(nxny * sizeof(float)));
+	    float *bpy     = (float *) (malloc(nxny * sizeof(float)));
+	    float *bpz     = (float *) (malloc(nxny * sizeof(float)));
+	    float *derx    = (float *) (malloc(nxny * sizeof(float)));
+	    float *dery    = (float *) (malloc(nxny * sizeof(float)));
+	    float *derx_bt = (float *) (malloc(nxny * sizeof(float)));
+	    float *dery_bt = (float *) (malloc(nxny * sizeof(float)));
+	    float *derx_bh = (float *) (malloc(nxny * sizeof(float)));
+	    float *dery_bh = (float *) (malloc(nxny * sizeof(float)));
+	    float *derx_bz = (float *) (malloc(nxny * sizeof(float)));
+	    float *dery_bz = (float *) (malloc(nxny * sizeof(float)));
+	    float *bt_err  = (float *) (malloc(nxny * sizeof(float)));
+	    float *bh_err  = (float *) (malloc(nxny * sizeof(float)));
         float *jz_err  = (float *) (malloc(nxny * sizeof(float)));
         float *jz_err_squared = (float *) (malloc(nxny * sizeof(float)));
         float *jz_rms_err = (float *) (malloc(nxny * sizeof(float)));
         float *jz_err_squared_smooth = (float *) (malloc(nxny * sizeof(float)));
-	float *jz_smooth = (float *) (malloc(nxny * sizeof(float)));
-	float *err_term1 = (float *) (calloc(nxny, sizeof(float)));
-	float *err_term2 = (float *) (calloc(nxny, sizeof(float)));
+	    float *jz_smooth = (float *) (malloc(nxny * sizeof(float)));
+	    float *err_term1 = (float *) (calloc(nxny, sizeof(float)));
+	    float *err_term2 = (float *) (calloc(nxny, sizeof(float)));
         float *fx        = (float *) (malloc(nxny * sizeof(float)));
         float *fy        = (float *) (malloc(nxny * sizeof(float)));
         float *fz        = (float *) (malloc(nxny * sizeof(float)));
         float *derx_los  = (float *) (malloc(nxny * sizeof(float)));
-	float *dery_los  = (float *) (malloc(nxny * sizeof(float)));
-
-	for (irec=0;irec<nrecs;irec++)
-	//for (irec=5;irec<nrecs;irec++)
-	{
-
-        //DRMS_Record_t *sharpinrec = sharpinrecset->records[irec];
-	    DRMS_Record_t *sharpceainrec = sharpceainrecset->records[irec];
-	    DRMS_Segment_t *inseg = drms_segment_lookup(sharpceainrec, "Br");
+	    float *dery_los  = (float *) (malloc(nxny * sizeof(float)));
  
         // ephemeris variables
 	    float  cdelt1_orig, cdelt1, dsun_obs, imcrpix1, imcrpix2, crpix1, crpix2;
@@ -281,7 +275,7 @@ int DoIt(void)
         // prepare to set CODEVER7 (CVS Version of the SHARP module)
 	    char *cvsinfo0;
 	    char *history0;
-	    char *cvsinfo1 = strdup("$Id: update_sharp_keys.c,v 1.18 2021/05/26 04:43:52 mbobra Exp $");
+	    char *cvsinfo1 = strdup("$Id: update_sharp_keys.c,v 1.19 2021/05/26 19:25:17 mbobra Exp $");
 	    char *cvsinfo2 = sw_functions_version();
 	    char *cvsinfoall = (char *)malloc(2048);
             char historyofthemodule[2048];
@@ -820,33 +814,31 @@ int DoIt(void)
 	drms_free_array(bz_errArray);
 	drms_free_array(losArray);
 	free(cvsinfoall);
-        free(rim);
-        free(p1p0);
-        free(p1n0);
-        free(p1p);
-        free(p1n);
-        free(p1);
-        free(pmap);
-        free(p1pad); 
-        free(pmapn);
+    free(rim);
+    free(p1p0);
+    free(p1n0);
+    free(p1p);
+    free(p1n);
+    free(p1);
+    free(pmap);
+    free(p1pad); 
+    free(pmapn);
+    free(fx); free(fy); free(fz);
+    free(bh); free(bt); free(jz);
+    free(bpx); free(bpy); free(bpz);
+    free(derx); free(dery);
+    free(derx_bt); free(dery_bt);
+    free(derx_los); free(dery_los);
+    free(derx_bz); free(dery_bz);
+    free(derx_bh); free(dery_bh);
+    free(bt_err); free(bh_err);  free(jz_err);
+    free(jz_err_squared); free(jz_rms_err);
+    free(jz_err_squared_smooth);
+    free(jz_smooth);
+    free(err_term2);
+    free(err_term1);
 
 	} //endfor
-    
-        free(fx); free(fy); free(fz);
-        free(bh); free(bt); free(jz);
-        free(bpx); free(bpy); free(bpz);
-        free(derx); free(dery);
-        free(derx_bt); free(dery_bt);
-        free(derx_los); free(dery_los);
-        free(derx_bz); free(dery_bz);
-        free(derx_bh); free(dery_bh);
-        free(bt_err); free(bh_err);  free(jz_err);
-        free(jz_err_squared); free(jz_rms_err);
-        free(jz_err_squared_smooth);
-        free(jz_smooth);
-        free(err_term2);
-        free(err_term1);
-
 
     // Close all the records
  	drms_close_records(sharpinrecset, DRMS_FREE_RECORD);
