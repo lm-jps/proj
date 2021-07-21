@@ -5,7 +5,7 @@ from enum import Enum
 __all__ = [ 'ErrorCode', 'ActionError', 'ActionApiError', 'Action' ]
 
 class ErrorCode(Enum):
-    UNKNOWN = 1, 'unknown'
+    UNKNOWN = 1, 'unknown error'
     API_ERROR = 2, 'API error'
 
     def __new__(cls, value, name):
