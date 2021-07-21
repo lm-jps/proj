@@ -25,77 +25,79 @@ import json
 import psycopg2
 from drmsCmdl import CmdlParser
 from drmsparams import DRMSParams
-from statuscode import StatusCode as SC
+from statuscode import StatusCode as ExportStatusCode
 from arguments import Arguments as Args
 from response import Response
-from error import Error as ExportError
+from error import Error as ExportError, ErrorCode as ExportErrorCode
 
 
-class StatusCode(SC):
+class StatusCode(ExportStatusCode):
     REGISTRATION_INITIATED = 1, f'registration of {address} initiated'
     REGISTRATION_PENDING = 2, f'registration of {address} is pending'
     REGISTERED_ADDRESS = 3, f'{address} is registered'
     UNREGISTERED_ADDRESS = 4, f'{address} is not registered'
 
-class ErrorCode(SC):
-    PARAMETERS = 2, 'failure locating DRMS parameters'
-    ARGUMENTS = 3, 'bad arguments'
-    MAIL = 4, 'failure sending mail'
-    DB = 5, 'failure executing database command'
-    DB_CONNECTION = 6, 'failure connecting to database'
-    DUPLICATION = 7, 'address is already registered'
+class ErrorCode(ExportErrorCode):
+    PARAMETERS = 1, 'failure locating DRMS parameters'
+    ARGUMENTS = 2, 'bad arguments'
+    MAIL = 3, 'failure sending mail'
+    DB = 4, 'failure executing database command'
+    DB_CONNECTION = 5, 'failure connecting to database'
+    DUPLICATION = 6, 'address is already registered'
 
 class ParametersError(ExportError):
-    _status_code = StatusCode(ErrorCode.PARAMETERS)
+    _error_code = ErrorCode(ErrorCode.PARAMETERS)
 
     def __init__(self, *, msg=None):
         super().__init__(msg=msg)
 
 class ArgumentsError(ExportError):
-    _status_code = StatusCode(ErrorCode.ARGUMENTS)
+    _error_code = ErrorCode(ErrorCode.ARGUMENTS)
 
     def __init__(self, *, msg=None):
         super().__init__(msg=msg)
 
 class MailError(ExportError):
-    _status_code = StatusCode(ErrorCode.MAIL)
+    _error_code = ErrorCode(ErrorCode.MAIL)
 
     def __init__(self, *, msg=None):
         super().__init__(msg=msg)
 
 class DBError(ExportError):
-    _status_code = StatusCode(ErrorCode.DB)
+    _error_code = ErrorCode(ErrorCode.DB)
 
     def __init__(self, *, msg=None):
         super().__init__(msg=msg)
 
 class DBConnectionError(ExportError):
-    _status_code = StatusCode(ErrorCode.DB_CONNECTION)
+    _error_code = ErrorCode(ErrorCode.DB_CONNECTION)
 
     def __init__(self, *, msg=None):
         super().__init__(msg=msg)
 
 class DuplicationError(ExportError):
-    _status_code = StatusCode(ErrorCode.DUPLICATION)
+    _error_code = ErrorCode(ErrorCode.DUPLICATION)
 
     def __init__(self, *, msg=None):
         super().__init__(msg=msg)
 
-class RegistrationInitiatedResponse(Response):
-    def __init__(self, *, address):
-        super().__init__(status_code=StatusCode.REGISTRATION_INITIATED)
+class CheckAddressResponse(Response):
+    _status_code = None
 
-class RegistrationPendingResponse(Response):
-    def __init__(self, *, address):
-        super().__init__(status_code=StatusCode.REGISTRATION_PENDING)
+    def __init__(self, *, address, **kwargs):
+        super().__init__(msg=self._status_code.fullname, **kwargs)
 
-class RegisteredResponse(Response):
-    def __init__(self, *, address):
-        super().__init__(status_code=StatusCode.REGISTERED_ADDRESS)
+class RegistrationInitiatedResponse(CheckAddressResponse):
+    _status_code = StatusCode(StatusCode.REGISTRATION_INITIATED)
 
-class UnregisteredResponse(Response):
-    def __init__(self, *, address):
-        super().__init__(status_code=StatusCode.UNREGISTERED_ADDRESS)
+class RegistrationPendingResponse(CheckAddressResponse):
+    _status_code = StatusCode(StatusCode.REGISTRATION_PENDING)
+
+class RegisteredResponse(CheckAddressResponse):
+    _status_code = StatusCode(StatusCode.REGISTERED_ADDRESS)
+
+class UnregisteredResponse(CheckAddressResponse):
+    _status_code = StatusCode(StatusCode.UNREGISTERED_ADDRESS)
 
 class UnquoteAction(argparse.Action):
     def __call__(self, parser, namespace, value, option_string=None):
@@ -130,7 +132,7 @@ class Arguments(Args):
             # all arguments are considered optional in argparse (see `prefix_chars`); we can therefore do this:
             # parser.add_argument('-H', 'H', '--dbhost', ...)
             parser.add_argument('a', 'address', help='the email address to register or check', metavar='<email address>', dest='address', action=UnquoteAction, required=True)
-            parser.add_argument('o', 'operation', help='the operation: register or check', metavar='<operation>', choices=[ 'register', 'check'], dest='operation', required=True)
+            parser.add_argument('o', 'operation', help='the operation: register or check', metavar='<operation>', choices=[ 'check', 'register' ], dest='operation', required=True)
 
             parser.add_argument('-n', '--name', help='the user name to register', metavar='<export user\'s name>', dest='name', action=UnquoteAction, default='NULL')
             parser.add_argument('-s', '--snail', help='the user snail-mail address to register', metavar='<export user\'s snail mail>', dest='snail', action=UnquoteAction, default='NULL')
@@ -170,15 +172,12 @@ def SendMail(address, timeout, confirmation):
         server.quit()
     except Exception as exc:
         # If any exception happened, then the email message was not received.
-        raise MailError(f'unable to send email message to {','.join(toAddrs)} to confirm address')
+        raise MailError(f'unable to send email message to {",".join(toAddrs)} to confirm address')
 
 def get_arguments(**kwargs):
-    args = None
-
-    if len(kwargs) > 0:
-        args = []
-        for key, val in kwargs.items():
-            args.append(f'{key} = {val}'')
+    args = []
+    for key, val in kwargs.items():
+        args.append(f'{key} = {val}')
 
     drms_params = DRMSParams()
 
@@ -203,14 +202,83 @@ def generate_registered_or_pending_response(arguments, confirmation):
 
     if confirmation is None or len(confirmation) == 0:
         # if confirmation == None ==> registered
-        response = Response.generate_response(status_code=StatusCode.REGISTERED_ADDRESS, user_id=user_id)
+        response = RegisteredResponse(address=arguments.address, user_id=user_id)
     else:
         # if confirmation != None ==> pending registration
-        response = Response.generate_response(status_code=StatusCode.REGISTRATION_PENDING, user_id=user_id)
+        response = RegistrationPendingResponse(address=arguments.address, user_id=user_id)
 
     return response
 
-def check(**kwargs):
+# for use in export web app
+from action import Action
+class CheckAddressAction(Action):
+    actions = [ 'check_address', 'register_address' ]
+    def __init__(self, *, method, address, dbhost=None, dbport=None, dbname=None, dbuser=None):
+        self._method = getattr(self, method)
+        self._address = address
+        self._options = {}
+        self._options['dbhost'] = dbhost
+        self._options['dbport'] = dbport
+        self._options['dbname'] = dbname
+        self._options['dbuser'] = dbuser
+
+    def check_address(self):
+        # returns dict
+        response = perform_action(operation='check', address=self._address, options=self._options)
+        return response.generate_dict()
+
+    def register_address(self):
+        # returns dict
+        response = perform_action(operation='register', address=self._address, options=self._options)
+        return response.generate_dict()
+
+def initiate_registration(arguments, cursor):
+    # the address is not in the db, and the user did request registration ==> registration initiated
+    confirmation = uuid.uuid4()
+
+    # ensure confirmation does not already exist in addresses_tab
+    cmd = f'SELECT confirmation FROM {arguments.address_info_fn}() WHERE confirmation = \'{str(confirmation)}\''
+
+    try:
+        cursor.execute(cmd)
+        rows = cursor.fetchall()
+        if len(rows) > 0:
+            raise DuplicationError(f'cannot insert row into address table; confirmation {str(confirmation)} already exists')
+    except psycopg2.Error as exc:
+        # Handle database-command errors.
+        raise DBError(f'{str(exc)}')
+
+    # insert into the addresses table (and domains table if need be)
+    cmd = f'SELECT * FROM {arguments.address_info_insert_fn}(\'{arguments.address}\', \'{str(confirmation)}\')'
+    try:
+        cursor.execute(cmd)
+    except psycopg2.Error as exc:
+        # Handle database-command errors.
+        raise DBError(f'{str(exc)}')
+
+    # we have to also insert into the export user table since we have that information now, not after the user has replied to the registration email
+    # (which is processed by registerAddress.py); if a failure happens anywhere along the way, we need to delete the entry from the export user table
+    cmd = f'SELECT id FROM {arguments.user_info_insert_fn}(\'{arguments.address}\', \'{arguments.name}\', \'{arguments.snail}\')'
+
+    try:
+        cursor.execute(cmd)
+        rows = cursor.fetchall()
+    except psycopg2.Error as exc:
+        # Handle database-command errors.
+        raise DBError(f'{str(exc)}')
+
+    user_id = rows[0][0]
+
+    # send an email message out with a new confirmation code
+    SendMail(arguments.address, arguments.regemail_timeout, confirmation)
+
+    msg = f'Your email address is being registered for use with the export system. You will receive an email message from user jsoc. Please reply to this email message within {arguments.regemail_timeout} minutes without modifying the body.'
+
+    response = RegistrationInitiatedResponse(msg=msg, user_id=user_id)
+
+    return response
+
+def perform_action(**kwargs):
     response = None
 
     try:
@@ -226,98 +294,25 @@ def check(**kwargs):
                         rows = cursor.fetchall()
 
                         if len(rows) == 0:
-                            # the address is not in the db, and the user did not request registration ==> not registered
-                            response = Response.generate_response(status_code=StatusCode.UNREGISTERED_ADDRESS, user_id=-1)
+                            # action depends on operation
+                            if arguments.operation == 'check':
+                                # the address is not in the db, and the user did not request registration ==> not registered
+                                response = UnregisteredResponse(address=arguments.address, user_id=-1)
+                            else:
+                                response = initiate_registration(arguments, cursor)
+
                         elif len(rows) == 1:
                             # the address is in the db
                             confirmation = rows[0][0]
+                            response = generate_registered_or_pending_response(arguments, confirmation)
                         else:
                             raise DBError(f'unexpected number of rows returned: {cmd}')
                     except psycopg2.Error as exc:
                         # handle database-command errors
                         raise DBError(f'{str(exc)}')
-
-                    if response is None:
-                        response = generate_registered_or_pending_response(arguments, confirmation)
         except psycopg2.OperationalError as exc:
             # closes the cursor and connection
             raise DBConnectionError(f'unable to connect to the database: {str(exc)}')
-    except ExportError as exc:
-        response = exc.response
-
-    return response
-
-def check_and_register(**kwargs):
-    try:
-        arguments = get_arguments(kwargs)
-
-        try:
-            with psycopg2.connect(database=arguments.dbname, user=arguments.dbuser, host=arguments.dbhost, port=str(arguments.dbport)) as conn:
-                with conn.cursor() as cursor:
-                    cmd = f'SELECT confirmation FROM {arguments.address_info_fn}(\'{arguments.address}\')'
-
-                    try:
-                        cursor.execute(cmd)
-                        rows = cursor.fetchall()
-
-                        if len(rows) == 0:
-                            # the address is not in the db, and the user did request registration ==> registration initiated
-                            confirmation = uuid.uuid4()
-
-                            # ensure confirmation does not already exist in addresses_tab
-                            cmd = f'SELECT confirmation FROM {arguments.address_info_fn}() WHERE confirmation = \'{str(confirmation)}\''
-
-                            try:
-                                cursor.execute(cmd)
-                                rows = cursor.fetchall()
-                                if len(rows) > 0:
-                                    raise DuplicationError(f'cannot insert row into address table; confirmation {str(confirmation)} already exists')
-                            except psycopg2.Error as exc:
-                                # Handle database-command errors.
-                                raise DBError(f'{str(exc)}')
-
-                            # insert into the addresses table (and domains table if need be)
-                            cmd = f'SELECT * FROM {arguments.address_info_insert_fn}(\'{arguments.address}\', \'{str(confirmation)}\')'
-                            try:
-                                cursor.execute(cmd)
-                            except psycopg2.Error as exc:
-                                # Handle database-command errors.
-                                raise DBError(f'{str(exc)}')
-
-                            # we have to also insert into the export user table since we have that information now, not after the user has replied to the registration email
-                            # (which is processed by registerAddress.py); if a failure happens anywhere along the way, we need to delete the entry from the export user table
-                            cmd = f'SELECT id FROM {arguments.user_info_insert_fn}(\'{arguments.address}\', \'{arguments.name}\', \'{arguments.snail}\')'
-
-                            try:
-                                cursor.execute(cmd)
-                                rows = cursor.fetchall()
-                            except psycopg2.Error as exc:
-                                # Handle database-command errors.
-                                raise DBError(f'{str(exc)}')
-
-                            user_id = rows[0][0]
-
-                            # send an email message out with a new confirmation code
-                            SendMail(arguments.address, arguments.regemail_timeout, confirmation)
-
-                            msg = f'Your email address is being registered for use with the export system. You will receive an email message from user jsoc. Please reply to this email message within {arguments.regemail_timeout} minutes without modifying the body.'
-
-                            response = Response.generate_response(status_code=StatusCode.REGISTRATION_INITIATED, msg=msg, user_id=user_id)
-                        elif len(rows) == 1:
-                            # the address is in the db
-                            confirmation = rows[0][0]
-                        else:
-                            raise DBError(f'unexpected number of rows returned: {cmd}')
-                    except psycopg2.Error as exc:
-                        # handle database-command errors
-                        raise DBError(f'{str(exc)}')
-
-                    if response is None:
-                        response = generate_registered_or_pending_response(arguments, confirmation)
-        except psycopg2.OperationalError as exc:
-            # closes the cursor and connection
-            raise DBConnectionError(f'unable to connect to the database: {str(exc)}')
-
     except ExportError as exc:
         response = exc.response
 
@@ -325,13 +320,7 @@ def check_and_register(**kwargs):
 
 if __name__ == "__main__":
     try:
-        arguments = get_arguments(kwargs)
-
-        if arguments.operation == 'register':
-            response = check_and_register()
-        else:
-            response = check()
-
+        response = perform_action()
     except ExportError as exc:
         response = exc.response
 
@@ -339,3 +328,5 @@ if __name__ == "__main__":
 
     # Always return 0. If there was an error, an error code (the 'status' property) and message (the 'statusMsg' property) goes in the returned HTML.
     sys.exit(0)
+else:
+    pass
