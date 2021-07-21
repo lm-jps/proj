@@ -38,9 +38,10 @@ class ActionType(type):
     _classes = {}
 
     def __new__(cls, name, bases, attributes):
-        for required_att in __required_attributes:
+        for required_att in cls._required_attributes:
             if required_att not in attributes:
                 raise ActionApiError(msg=f'missing required attribute {required_att} in ActionType class {str(cls)}')
+
         for action in attributes['actions']:
             if action in cls._methods:
                 raise ActionApiError(msg=f'duplicate action {action} defined in ActionType class {str(cls)}')
