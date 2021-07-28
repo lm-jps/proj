@@ -14,28 +14,28 @@
 #   dbuser (optional) - The database account to be used when connecting to the database. The default is the value of the WEB_DBUSER parameter in DRMSParams.
 #   checkonly (optional) - If set to 1, then no attept is made to register an unregistered email. In this case, if no error occurs then the possible return status codes are StatusCode.REGISTERED_ADDRESS, StatusCode.REGISTRATION_PENDING, or StatusCode.UNREGISTERED_ADDRESS. The default is False (unknown addresses are registered).
 
-import sys
+from argparse import Action as ArgsAction
+import json
 import os
 import pwd
 import re
 import uuid
 from urllib.parse import unquote
 import smtplib
-import json
+import sys
 import psycopg2
-from drmsCmdl import CmdlParser
-from drmsparams import DRMSParams
-from statuscode import StatusCode as ExportStatusCode
-from arguments import Arguments as Args
-from response import Response
-from error import Error as ExportError, ErrorCode as ExportErrorCode
+
+from drms_export import Error as ExportError, ErrorCode as ExportErrorCode, Response
+from drms_parameters import DRMSParams, DPMissingParameterError
+from drms_utils import Arguments as Args, CmdlParser, StatusCode as ExportStatusCode
+
 
 
 class StatusCode(ExportStatusCode):
-    REGISTRATION_INITIATED = 1, f'registration of {address} initiated'
-    REGISTRATION_PENDING = 2, f'registration of {address} is pending'
-    REGISTERED_ADDRESS = 3, f'{address} is registered'
-    UNREGISTERED_ADDRESS = 4, f'{address} is not registered'
+    REGISTRATION_INITIATED = 1, 'registration of {address} initiated'
+    REGISTRATION_PENDING = 2, 'registration of {address} is pending'
+    REGISTERED_ADDRESS = 3, '{address} is registered'
+    UNREGISTERED_ADDRESS = 4, '{address} is not registered'
 
 class ErrorCode(ExportErrorCode):
     PARAMETERS = 1, 'failure locating DRMS parameters'
@@ -99,7 +99,7 @@ class RegisteredResponse(CheckAddressResponse):
 class UnregisteredResponse(CheckAddressResponse):
     _status_code = StatusCode(StatusCode.UNREGISTERED_ADDRESS)
 
-class UnquoteAction(argparse.Action):
+class UnquoteAction(ArgsAction):
     def __call__(self, parser, namespace, value, option_string=None):
         unquoted = unquote(value)
         setattr(namespace, self.dest, unquoted)

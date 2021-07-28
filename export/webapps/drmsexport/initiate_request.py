@@ -2,19 +2,15 @@
 
 # basically calls jsoc_fetch
 
-from drmsCmdl import CmdlParser
-from drmsparams import DRMSParams
-from statuscode import StatusCode as ExportStatusCode
-from arguments import Arguments as Args
-from response import Response
-from error import Error as ExportError, ErrorCode as ExportErrorCode
-from util import MakeObject
-import securedrms
+from argparse import Action as ArgsAction
+from drms_export import Error as ExportError, ErrorCode as ExportErrorCode, Response, SecureClientFactory
+from drms_parameters import DRMSParams, DPMissingParameterError
+from drms_utils import Arguments as Args, CmdlParser, MakeObject, StatusCode as SC
 
 
 FILE_NAME_SIZE = 256
 
-class StatusCode(ExportStatusCode):
+class StatusCode(SC):
     SUCCESS = 0, 'success'
     REQUEST_NOT_FOUND = 1, 'request not found'
     REQUEST_QUEUED = 2, 'request is in queue'
@@ -79,7 +75,7 @@ class StreamFormatError(ExportError):
     def __init__(self, *, msg=None):
         super().__init__(msg=msg)
 
-class ExportTypeAction(argparse.Action):
+class ExportTypeAction(ArgsAction):
     def __call__(self, parser, namespace, value, option_string=None):
         if value == 'premium':
             setattr(namespace, 'package', None)
@@ -93,7 +89,7 @@ class ExportTypeAction(argparse.Action):
 
         setattr(namespace, self.dest, value)
 
-class ExportArgumentsAction(argparse.Action):
+class ExportArgumentsAction(ArgsAction):
     def __call__(self, parser, namespace, value, option_string=None):
         # convert json arguments to dict
         arguments_dict = json.loads(value)
@@ -102,7 +98,7 @@ class ExportArgumentsAction(argparse.Action):
         setattr(namespace, self.dest, arguments_dict)
 
 def create_webserver_action(drms_params):
-    class WebserverAction(argparse.Action):
+    class WebserverAction(ArgsAction):
         def __call__(self, parser, namespace, value, option_string=None):
             webserver_dict = {}
             webserver_dict['host'] = value
@@ -117,10 +113,10 @@ class Arguments(Args):
     def get_arguments(cls, *, program_args, drms_params):
         if cls._arguments is None:
             try:
-                dbhost = drms_params.get_required('SERVER')
-                dbport = int(drms_params.get_required('DRMSPGPORT'))
-                dbname = drms_params.get_required('DBNAME')
-                dbuser = drms_params.get_required('WEB_DBUSER')
+                db_host = drms_params.get_required('SERVER')
+                db_port = int(drms_params.get_required('DRMSPGPORT'))
+                db_name = drms_params.get_required('DBNAME')
+                db_user = drms_params.get_required('WEB_DBUSER')
             except DPMissingParameterError as exc:
                 raise ParametersError(msg=str(exc))
 
@@ -133,10 +129,10 @@ class Arguments(Args):
 
             # optional
             parser.add_argument('-r', '--requestor', help='the name of the export user', metavar='<requestor>', dest='requestor', default=None)
-            parser.add_argument('-H', '--dbhost', help='the machine hosting the database that contains export requests from this site', metavar='<db host>', dest='dbhost', default=dbhost)
-            parser.add_argument('-P', '--dbport', help='the port on the host machine that is accepting connections for the database', metavar='<db host port>', dest='dbport', type=int, default=int(dbport))
-            parser.add_argument('-N', '--dbname', help='the name of the database that contains export requests', metavar='<db name>', dest='dbname', default=dbname)
-            parser.add_argument('-U', '--dbuser', help='the name of the database user account', metavar='<db user>', dest='dbuser', default=dbuser)
+            parser.add_argument('-H', '--dbhost', help='the machine hosting the database that contains export requests from this site', metavar='<db host>', dest='db_host', default=dbhost)
+            parser.add_argument('-P', '--dbport', help='the port on the host machine that is accepting connections for the database', metavar='<db host port>', dest='db_port', type=int, default=int(dbport))
+            parser.add_argument('-N', '--dbname', help='the name of the database that contains export requests', metavar='<db name>', dest='db_name', default=dbname)
+            parser.add_argument('-U', '--dbuser', help='the name of the database user account', metavar='<db user>', dest='dbuser', default=db_user)
 
             # required
             parser.add_argument('export_type', help='the export type: premium, mini, or streamed', metavar='<webserver>', choices=Choices(['premium', 'mini', 'streamed']), action=ExportTypeAction, dest='export_type', required=True)
@@ -173,7 +169,7 @@ def jsonify(data_frame):
     # ]
     return data_frame.to_json(orient='records')
 
-def export_premium(*, drms_client, address, export_arguments, requestor=None, processing=None, package=None, access=None, file_format=None):
+def export_premium(*, drms_client, address, requestor=None, export_arguments):
     '''
     export_arguments:
     {
@@ -316,9 +312,9 @@ def perform_action(**kwargs):
         arguments = get_arguments(kwargs)
 
         try:
-            factory = securedrms.SecureClientFactory(debug=False)
+            factory = SecureClientFactory(debug=False)
 
-            connection_info = { 'dbhost' : , 'dbport' : , }
+            connection_info = { 'dbhost' : arguments.db_host, 'dbport' : arguments.db_port, 'dbname' : arguments.db_name, 'dbuser' : arguments.db_user }
             sshclient_internal = factory.create_ssh_client(use_internal=True)
             sshclient_external = factory.create_ssh_client(use_internal=False)
 
@@ -345,9 +341,42 @@ def perform_action(**kwargs):
                 else:
                     drms_client = sshclient_internal
 
-                if arguments.export_type == 'premium':
-                    response = export_premium(drms_client)
+            # there are four potential attributes an export request can have:
+            #   processing (processed ==> original image is modified); NA for keyword-only exports
+            #   package (tar ==> exported files are packaged into a tar file)
+            #   access (ftp ==> exported produce is accessible from ftp server; http ==> exported produce is accessible from http server; stream ==> data are streamed back to user)
+            #   file format (NATIVE, FITS, JPEG, MPEG, MP4); NA for keyword-only exports
+            # depending on the operation selected, some of these attributes may be determined and immutable; also, some file-format conversions are not possible (for example, if an export contains metadata, but no image data, then none of the image file formats are relevant)
 
+            # possible export arguments (from webapp):
+            #   specification [RecordSet] (record-set specification)
+            #   address [Notify] (registered email address)
+            #   requestor [Requestor] export user's name, either entered in text edit, or from cookie
+            #   export_type [Method - url, url_direct, url_quick, ftp, url-tar, ftp-tar] these map to...
+            #     url ==> export_premium (no tar)
+            #     url_direct ==> export_streamed
+            #     url_quick ==> export_mini
+            #     ftp ==> export_premium (ftp-access)
+            #     url-tar ==> export_premium (tar)
+            #     ftp-tar ==> export_premium (tar, ftp access)
+            #   processing_info [Processing] (processing-program-specific arguments)
+            #   tar [from Method (name contains '-tar' string)]
+            #   access [from Method]
+            #   file_format [Protocol - as-is, FITS, JPEG, MPEG, MP4] (exported file type)
+            #   file_name_format [Filename Format]
+            #   size_ratio [not shown] determined by code in processing.js plus keyword metadata
+
+            export_arguments = arguments.arguments # dict
+
+            if arguments.export_type == 'premium':
+                # supports all export four export attributes; use securedrms.SecureClient.export(method='url')
+                response = export_premium(drms_client=drms_client, address=arguments.address, requestor=arguments.requestor, **export_arguments)
+            elif arguments.export_type == 'mini_export':
+                # supports no processing, no tar, http access, native file format attributes; use securedrms.SecureClient.export(method='url_quick')
+                response = export_mini(drms_client=sshclient, specification=arguments.specification, address=arguments.address, requestor=arguments.requestor, **export_arguments)
+            elif arguments.export_type == 'streamed_export':
+                # supports no-processing, no-tar, stream-access, native file format attributes; exports a single file only, all SUs must be online; use securedrms.SecureClient.export_package()
+                response = export_streamed(drms_client=sshclient, specification=arguments.specification, address=arguments.address, requestor=arguments.requestor, **export_arguments)
 
         except SecureDRMSError as exc:
             raise DRMSClientError(str(exc))
@@ -415,67 +444,6 @@ class InitiateRequestAction(Action):
 if __name__ == "__main__":
     try:
         response = perform_action()
-    except ExportError as exc:
-        response = exc.response
-
-    print(response.generate_json())
-
-    # Always return 0. If there was an error, an error code (the 'status' property) and message (the 'statusMsg' property) goes in the returned HTML.
-    sys.exit(0)
-else:
-    pass
-
-
-    try:
-
-        # if this script is invoked from the external web server, determine the db host that can handle all series in the request
-        if arguments.public_server:
-            # `arguments.db_host` is the db for a public site
-            # extract series - call into seriesinfo.py
-
-            # call check_dbserver.py code
-            action = Action.action(action_type='determine_db_server', args={ "--dbport" : str(dbport), "--dbname" : dbname, "--dbuser" : dbuser, "--public" : True, "dbhost" : arguments.dbhost, "series" : json.dumps(series) })
-            response = action()
-
-
-
-        # there are four potential attributes an export request can have:
-        #   processing (processed ==> original image is modified); NA for keyword-only exports
-        #   package (tar ==> exported files are packaged into a tar file)
-        #   access (ftp ==> exported produce is accessible from ftp server; http ==> exported produce is accessible from http server; stream ==> data are streamed back to user)
-        #   file format (NATIVE, FITS, JPEG, MPEG, MP4); NA for keyword-only exports
-        # depending on the operation selected, some of these attributes may be determined and immutable; also, some file-format conversions are not possible (for example, if an export contains metadata, but no image data, then none of the image file formats are relevant)
-
-        # possible export arguments (from webapp):
-        #   specification [RecordSet] (record-set specification)
-        #   address [Notify] (registered email address)
-        #   requestor [Requestor] export user's name, either entered in text edit, or from cookie
-        #   export_type [Method - url, url_direct, url_quick, ftp, url-tar, ftp-tar] these map to...
-        #     url ==> export_premium (no tar)
-        #     url_direct ==> export_streamed
-        #     url_quick ==> export_mini
-        #     ftp ==> export_premium (ftp-access)
-        #     url-tar ==> export_premium (tar)
-        #     ftp-tar ==> export_premium (tar, ftp access)
-        #   processing_info [Processing] (processing-program-specific arguments)
-        #   tar [from Method (name contains '-tar' string)]
-        #   access [from Method]
-        #   file_format [Protocol - as-is, FITS, JPEG, MPEG, MP4] (exported file type)
-        #   file_name_format [Filename Format]
-        #   size_ratio [not shown] determined by code in processing.js plus keyword metadata
-
-        export_arguments = arguments.arguments # dict
-
-        if arguments.operation == 'premium':
-            # supports all export four export attributes; use securedrms.SecureClient.export(method='url')
-            response = export_premium(drms_client=sshclient, specification=arguments.specification, address=arguments.address, requestor=arguments.requestor, export_type=arguments.export_type, processing=arguments.processing, package=arguments.package, access=arguments.access, **export_arguments)
-        elif arguments.operation == 'mini_export':
-            # supports no processing, no tar, http access, native file format attributes; use securedrms.SecureClient.export(method='url_quick')
-            response = export_mini(drms_client=sshclient, specification=arguments.specification, address=arguments.address, requestor=arguments.requestor, **export_arguments)
-        elif arguments.operation == 'streamed_export':
-            # supports no-processing, no-tar, stream-access, native file format attributes; exports a single file only, all SUs must be online; use securedrms.SecureClient.export_package()
-            response = export_streamed(drms_client=sshclient, specification=arguments.specification, address=arguments.address, requestor=arguments.requestor, **export_arguments)
-
     except ExportError as exc:
         response = exc.response
 

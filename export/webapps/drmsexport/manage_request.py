@@ -23,8 +23,9 @@ import os
 from datetime import timedelta
 import json
 import psycopg2
-from drmsparams import DRMSParams, DPMissingParameterError
-from drmsCmdl import CmdlParser
+from drms_export import Error as ExportError, ErrorCode as ExportErrorCode, Response
+from drms_parameters import DRMSParams, DPMissingParameterError
+from drms_utils import Arguments as Args, CmdlParser, StatusCode as SC
 
 
 #test
@@ -40,60 +41,60 @@ MR_ERROR_CANCEL = -6
 
 
 class StatusCode(SC):
-    NOT_PENDING = 1, f'request {id} is not pending'
-    PENDING = 2, f'request {id} is pending'
-    REQUEST_CANCELED = 3, f'pending request {id} was canceled'
+    NOT_PENDING = 1, 'request {id} is not pending'
+    PENDING = 2, 'request {id} is pending'
+    REQUEST_CANCELED = 3, 'pending request {id} was canceled'
 
-class ErrorCode(SC):
+class ErrorCode(ExportErrorCode):
     PARAMETERS = 1, 'failure locating DRMS parameters'
     ARGUMENTS = 2, 'bad arguments'
     DB = 3, 'failure executing database command'
     DB_CONNECTION = 4, 'failure connecting to database'
-    CHECK = 5, f'unable to check export request for export user {address}'
-    CANCEL = 6, f'unable to cancel export request for export user {address}'
+    CHECK = 5, 'unable to check export request for export user {address}'
+    CANCEL = 6, 'unable to cancel export request for export user {address}'
 
 
 # exceptions
 class ParametersError(ExportError):
-    _status_code = StatusCode(ErrorCode.PARAMETERS)
+    _error_code = ErrorCode(ErrorCode.PARAMETERS)
     # _header = f'if present, then `[cls.header]` will appear at the beginning of the error message'
 
     def __init__(self, *, msg=None):
         super().__init__(msg=msg)
 
 class ArgumentsError(ExportError):
-    _status_code = StatusCode(ErrorCode.ARGUMENTS)
+    _error_code = ErrorCode(ErrorCode.ARGUMENTS)
 
     def __init__(self, *, msg=None):
         super().__init__(msg=msg)
 
 class DBError(ExportError):
-    _status_code = StatusCode(ErrorCode.DB)
+    _error_code = ErrorCode(ErrorCode.DB)
 
     def __init__(self, *, msg=None):
         super().__init__(msg=msg)
 
 class DBConnectionError(ExportError):
-    _status_code = StatusCode(ErrorCode.DB_CONNECTION)
+    _error_code = ErrorCode(ErrorCode.DB_CONNECTION)
 
     def __init__(self, *, msg=None):
         super().__init__(msg=msg)
 
 class CheckError(ExportError):
-    _status_code = StatusCode(ErrorCode.CHCECK)
+    _error_code = ErrorCode(ErrorCode.CHECK)
 
     def __init__(self, *, address, msg=None):
-        error_msg = self._status_code.fullname
+        error_msg = self._error_code.fullname(address=address)
         if msg is not None and len(msg) > 0:
             error_msg = f'{error_msg}: {msg}'
         super().__init__(msg=error_msg)
 
 class CancelError(ExportError):
-    _status_code = StatusCode(ErrorCode.CANCEL)
+    _error_code = ErrorCode(ErrorCode.CANCEL)
 
     def __init__(self, *, address, request_id, start_time, msg=None):
         # not_pending == True ==> cannot find a pending request for `address`
-        error_msg = self._status_code.fullname
+        error_msg = self._error_code.fullname(address=address)
         if msg is not None and len(msg) > 0:
             error_msg = f'{error_msg}: {msg}'
         self._msg = error_msg
@@ -111,80 +112,45 @@ class CancelError(ExportError):
             super().__init__(msg=f'unable to check export request for user {self._address}')
 
         if msg is not None:
-            self._msg += '(' + msg + ')'
+            self._msg += f'({msg})'
 
 
 # classes
-class Arguments(object):
-    def __init__(self, parser, args=None):
-        # This could raise in a few places. Let the caller handle these exceptions.
-        self.parser = parser
-
-        # Parse the arguments.
-        self.parse(args)
-
-        # Set all args.
-        self.set_all_args()
-
-    def parse(self, args=None):
-        try:
-            self.parsed_args = self.parser.parse_args(args)
-        except Exception as exc:
-            if len(exc.args) == 2:
-                type, msg = exc
-
-                if type != 'CmdlParser-ArgUnrecognized' and type != 'CmdlParser-ArgBadformat':
-                    raise # Re-raise
-
-                raise ArgumentError(msg=msg)
-            else:
-                raise # Re-raise
-
-    def __getattr__(self, name):
-        # only called if object.__getattribute__(self, name) raises; and if that is true, then we want
-        # to look in self.parsed_args for it, and set the instance attribute if it does exist in self.params
-        value = None
-        if name in vars(self.parsed_args):
-            value = vars(self.parsed_args)[name]
-            object.__setattr__(self, name, value)
-            return value
-
-        raise AttributeError('invalid argument ' + name)
-
-    def set_all_args(self):
-        # store in instance dict
-        for name, value in vars(self.parsed_args).items():
-            setattr(self, name, value)
+class Arguments(Args):
+    _arguments = None
 
     @classmethod
     def get_arguments(cls, program_args, drms_params):
-        try:
-            dbhost = drms_params.get_required('SERVER')
-            dbport = drms_params.get_required('DRMSPGPORT')
-            dbname = drms_params.get_required('DBNAME')
-            dbuser = drms_params.get_required('WEB_DBUSER')
-        except DPMissingParameterError as exc:
-            raise ParameterError(str(exc))
+        if cls._arguments is None:
+            try:
+                dbhost = drms_params.get_required('SERVER')
+                dbport = drms_params.get_required('DRMSPGPORT')
+                dbname = drms_params.get_required('DBNAME')
+                dbuser = drms_params.get_required('WEB_DBUSER')
+            except DPMissingParameterError as exc:
+                raise ParameterError(str(exc))
 
-        # check for arguments from cgi form
-        args = None
+            # check for arguments from cgi form
+            args = None
 
-        if program_args is not None and len(program_args) > 0:
-            args = program_args
+            if program_args is not None and len(program_args) > 0:
+                args = program_args
 
-        parser = CmdlParser(usage='%(prog)s address=<registered email address> operation=<check, cancel> [ --dbhost=<db host> ] [ --dbport=<db port> ] [ --dbname=<db name> ] [ --dbuser=<db user>] ')
-        # all arguments are considered optional in argparse (see `prefix_chars`); we can therefore do this:
-        # parser.add_argument('-H', 'H', '--dbhost', ...)
-        parser.add_argument('A', 'address', help='the export-registered email address', metavar='<email address>', dest='address', required=True)
-        parser.add_argument('O', 'operation', help='the export-request operation to perform (check, cancel)', metavar='<operation>', dest='op', default='check', required=True)
-        parser.add_argument('-H', 'H', '--dbhost', help='the host machine of the database that is used to manage pending export requests', metavar='<db host>', dest='dbhost', default=dbhost)
-        parser.add_argument('-P', 'P', '--dbport', help='The port on the host machine that is accepting connections for the database', metavar='<db host port>', dest='dbport', default=dbport)
-        parser.add_argument('-N', 'N', '--dbname', help='the name of the database used to manage pending export requests', metavar='<db name>', dest='dbname', default=dbname)
-        parser.add_argument('-U', 'U', '--dbuser', help='the name of the database user account', metavar='<db user>', dest='dbuser', default=dbuser)
+            parser = CmdlParser(usage='%(prog)s address=<registered email address> operation=<check, cancel> [ --dbhost=<db host> ] [ --dbport=<db port> ] [ --dbname=<db name> ] [ --dbuser=<db user>] ')
+            # all arguments are considered optional in argparse (see `prefix_chars`); we can therefore do this:
+            # parser.add_argument('-H', 'H', '--dbhost', ...)
+            parser.add_argument('A', 'address', help='the export-registered email address', metavar='<email address>', dest='address', required=True)
+            parser.add_argument('O', 'operation', help='the export-request operation to perform (check, cancel)', metavar='<operation>', dest='op', default='check', required=True)
+            parser.add_argument('-H', 'H', '--dbhost', help='the host machine of the database that is used to manage pending export requests', metavar='<db host>', dest='dbhost', default=dbhost)
+            parser.add_argument('-P', 'P', '--dbport', help='The port on the host machine that is accepting connections for the database', metavar='<db host port>', dest='dbport', default=dbport)
+            parser.add_argument('-N', 'N', '--dbname', help='the name of the database used to manage pending export requests', metavar='<db name>', dest='dbname', default=dbname)
+            parser.add_argument('-U', 'U', '--dbuser', help='the name of the database user account', metavar='<db user>', dest='dbuser', default=dbuser)
 
-        arguments = Arguments(parser, args)
+            arguments = Arguments(parser, args)
 
-        return arguments
+            cls._arguments = arguments
+
+        return cls._arguments
 
 class OperationFactory(object):
     def __new__(cls, operation='UNKNOWN_OPERATION', address='UNKNOWN_EXPORT_USER', table='UNKNOWN_PENDING_REQUESTS_TABLE', timeout=timedelta(minutes=60)):
