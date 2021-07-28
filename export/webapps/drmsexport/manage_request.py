@@ -26,21 +26,6 @@ import psycopg2
 from drmsparams import DRMSParams, DPMissingParameterError
 from drmsCmdl import CmdlParser
 
-# for use in export web app
-from action import Action
-class PendingRequestAction(Action):
-    actions = [ 'check_pending_request', 'cancel_pending_request' ]
-    def __init__(self, *, method, address):
-        self._method = getattr(self, method)
-        self._address = address
-
-    def check_pending_request(self):
-        # returns dict
-        return check(self._address)
-
-    def cancel_pending_request(self):
-        # returns dict
-        return cancel(self._address)
 
 #test
 TEST_CGI = False
@@ -53,11 +38,80 @@ MR_ERROR_DB = -4
 MR_ERROR_CHECK = -5
 MR_ERROR_CANCEL = -6
 
-# request statuses
-MR_STATUS_UNKNOWN = 0
-MR_STATUS_NOT_PENDING = 1
-MR_STATUS_PENDING = 2
-MR_STATUS_REQUEST_CANCELED = 3
+
+class StatusCode(SC):
+    NOT_PENDING = 1, f'request {id} is not pending'
+    PENDING = 2, f'request {id} is pending'
+    REQUEST_CANCELED = 3, f'pending request {id} was canceled'
+
+class ErrorCode(SC):
+    PARAMETERS = 1, 'failure locating DRMS parameters'
+    ARGUMENTS = 2, 'bad arguments'
+    DB = 3, 'failure executing database command'
+    DB_CONNECTION = 4, 'failure connecting to database'
+    CHECK = 5, f'unable to check export request for export user {address}'
+    CANCEL = 6, f'unable to cancel export request for export user {address}'
+
+
+# exceptions
+class ParametersError(ExportError):
+    _status_code = StatusCode(ErrorCode.PARAMETERS)
+    # _header = f'if present, then `[cls.header]` will appear at the beginning of the error message'
+
+    def __init__(self, *, msg=None):
+        super().__init__(msg=msg)
+
+class ArgumentsError(ExportError):
+    _status_code = StatusCode(ErrorCode.ARGUMENTS)
+
+    def __init__(self, *, msg=None):
+        super().__init__(msg=msg)
+
+class DBError(ExportError):
+    _status_code = StatusCode(ErrorCode.DB)
+
+    def __init__(self, *, msg=None):
+        super().__init__(msg=msg)
+
+class DBConnectionError(ExportError):
+    _status_code = StatusCode(ErrorCode.DB_CONNECTION)
+
+    def __init__(self, *, msg=None):
+        super().__init__(msg=msg)
+
+class CheckError(ExportError):
+    _status_code = StatusCode(ErrorCode.CHCECK)
+
+    def __init__(self, *, address, msg=None):
+        error_msg = self._status_code.fullname
+        if msg is not None and len(msg) > 0:
+            error_msg = f'{error_msg}: {msg}'
+        super().__init__(msg=error_msg)
+
+class CancelError(ExportError):
+    _status_code = StatusCode(ErrorCode.CANCEL)
+
+    def __init__(self, *, address, request_id, start_time, msg=None):
+        # not_pending == True ==> cannot find a pending request for `address`
+        error_msg = self._status_code.fullname
+        if msg is not None and len(msg) > 0:
+            error_msg = f'{error_msg}: {msg}'
+        self._msg = error_msg
+
+    def __init__(self, not_pending=False, address='UNKNOWN_EXPORT_USER', request_id='UNKNOWN_REQUEST_ID', start_time='UNKNOWN_START_TIME', msg=None):
+        self._address = address
+        self._request_id = request_id
+        self._start_time = start_time
+
+        if not_pending:
+            # no error looking up address (the user has a pending request), but there was a problem deleting pending request
+            super().__init__(msg=f'unable to cancel export request for user {self._address}')
+        else:
+            # error looking up address (it is NOT the case that a look-up succeeded, but the address was not found)
+            super().__init__(msg=f'unable to check export request for user {self._address}')
+
+        if msg is not None:
+            self._msg += '(' + msg + ')'
 
 
 # classes
@@ -132,76 +186,6 @@ class Arguments(object):
 
         return arguments
 
-
-# exceptions
-class ManageRequestError(Exception):
-    _error_code = MR_ERROR_UNKNOWN
-
-    def __init__(self, msg='generic error'):
-        self._msg = msg
-        self._header = None
-        self._response = None
-
-    def __str__(self):
-        return self._msg
-
-    def _generate_response(self):
-        self._response = ErrorResponse(error_code=self._error_code, msg=self._header + ' ' + self._msg)
-
-    @property
-    def response(self):
-        if self._response is None:
-            self._generate_response()
-
-        return self._response
-
-class ParameterError(ManageRequestError):
-    _error_code = MR_ERROR_PARAMETER
-
-    def __init__(self, msg=None):
-        super().__init__(msg=msg)
-
-class ArgumentError(ManageRequestError):
-    _error_code = MR_ERROR_ARGUMENT
-
-    def __init__(self, msg=None):
-        super().__init__(msg=msg)
-
-class DbError(ManageRequestError):
-    _error_code = MR_ERROR_DB
-
-    def __init__(self, msg=None):
-        super().__init__(msg=msg)
-
-class CheckError(ManageRequestError):
-    _error_code = MR_ERROR_CHECK
-
-    def __init__(self, address='UNKNOWN_EXPORT_USER', msg=None):
-        self._address = address
-
-        super().__init__(msg='unable to check export request for export user ' + self._address)
-
-        if msg is not None:
-            self._msg += '(' + msg + ')'
-
-class CancelError(ManageRequestError):
-    _error_code = MR_ERROR_CANCEL
-
-    def __init__(self, not_pending=False, address='UNKNOWN_EXPORT_USER', request_id='UNKNOWN_REQUEST_ID', start_time='UNKNOWN_START_TIME', msg=None):
-        self._address = address
-        self._request_id = request_id
-        self._start_time = start_time
-
-        if not_pending:
-            # no error looking up address (the user has a pending request), but there was a problem deleting pending request
-            super().__init__(msg='unable to cancel export request ' + self._address + ' [ request_id=' + request_id + ', start_time=' + start_time.strftime('%Y-%m-%d %T') + ' ]')
-        else:
-            # error looking up address (it is NOT the case that a look-up succeeded, but the address was not found)
-            super().__init__(msg='unable to check export request for export user ' + self._address)
-
-        if msg is not None:
-            self._msg += '(' + msg + ')'
-
 class OperationFactory(object):
     def __new__(cls, operation='UNKNOWN_OPERATION', address='UNKNOWN_EXPORT_USER', table='UNKNOWN_PENDING_REQUESTS_TABLE', timeout=timedelta(minutes=60)):
         if operation.lower() == CheckOperation._name:
@@ -232,11 +216,10 @@ class Operation(object):
             cursor.execute(cmd)
             rows = cursor.fetchall()
             if len(rows) > 1:
-                raise DbError(msg='unexpected number of rows returned: ' + cmd)
+                raise DbError(msg=f'unexpected number of rows returned: {cmd}')
         except psycopg2.Error as exc:
             # handle database-command errors
-            import traceback
-            raise DbError(msg=traceback.format_exc(8))
+            raise DbError(msg=str(exc))
 
         if len(rows) != 0:
             self._request_id = rows[0][0]
@@ -274,7 +257,8 @@ class CancelOperation(Operation):
         try:
             super().process(cursor)
         except DbError as exc:
-            raise CancelError(not_pending=True, address=self._address, msg=str(exc))
+            # cannot locate the pending request in the pending-requests db table
+            raise CancelError(address=self._address, msg=f'cannot locate pending request in database ({str(exc)})')
 
         # then run the code to delete the pending request
         if not self._request_id:
@@ -285,8 +269,9 @@ class CancelOperation(Operation):
             try:
                 cursor.execute(cmd)
             except psycopg2.Error as exc:
-                import traceback
-                raise CancelError(not_pending=False, address=self._address, request_id=self._request_id, start_time=self._start_time, msg=traceback.format_exc(8))
+                # cannot delete the pending request from the pending-requests db table
+                error_msg = f'cannot delete pending request with id={self._request_id} and start_time={self._start_time.strftime("%Y-%m-%d %T")} ({str(exc)})'
+                raise CancelError(address=self._address, msg=error_msg)
 
             self._response = CancelResponse(address=self._address, request_id=self._request_id, start_time=self._start_time)
 
@@ -308,22 +293,39 @@ class CancelResponse(Response):
     def __init__(self, address='UNKNOWN_EXPORT_USER', request_id='UNKNOWN_REQUEST_ID', start_time='UNKNOWN_START_TIME'):
         super().__init__(error_code=MR_STATUS_REQUEST_CANCELED, msg='existing export request for export user ' + address + ' [ request_id=' + request_id + ', start_time=' + start_time.strftime('%Y-%m-%d %T') + ' ] ' + 'was canceled')
 
-# wrapper functions for use in a flask app
-def check(address):
-    resp = check_or_cancel(address=address, operation='check')
-    return resp.generate_dict()
+# for use in export web app
+from action import Action
+class PendingRequestAction(Action):
+    actions = [ 'check_pending_request', 'cancel_pending_request' ]
+    def __init__(self, *, method, address, dbhost=None, dbport=None, dbname=None, dbuser=None):
+        self._method = getattr(self, method)
+        self._address = address
+        self._options = {}
+        self._options['dbhost'] = dbhost
+        self._options['dbport'] = dbport
+        self._options['dbname'] = dbname
+        self._options['dbuser'] = dbuser
 
-def cancel(address):
-    resp = check_or_cancel(address=address, operation='cancel')
-    return resp.generate_dict()
+    def check_pending_request(self):
+        # returns dict
+        response = perform_action(operation='check', address=self._address, options=self._options)
+        return response.generate_dict()
 
-def check_or_cancel(**kwargs):
-    args = None
+    def cancel_pending_request(self):
+        # returns dict
+        response = perform_action(operation='register', address=self._address, options=self._options)
+        return response.generate_dict()
 
-    if len(kwargs) > 0:
-        args = []
-        for key, val in kwargs.items():
-            args.append(key + '=' + val)
+def perform_action(**kwargs):
+    args = []
+
+    for key, val in kwargs.items():
+        if val is not None:
+            if key == 'options':
+                for option, option_val in val.items():
+                    args.append(f'--{option}={option_val}')
+            else:
+                args.append(f'{key}={val}')
 
     try:
         drms_params = DRMSParams()
@@ -335,32 +337,30 @@ def check_or_cancel(**kwargs):
 
         try:
             operation = OperationFactory(operation=arguments.op, address=arguments.address, table=drms_params.EXPORT_PENDING_REQUESTS_TABLE, timeout=drms_params.EXPORT_PENDING_REQUESTS_TIME_OUT)
-            resp = None
+            response = None
 
             try:
                 with psycopg2.connect(host=arguments.dbhost, port=arguments.dbport, database=arguments.dbname, user=arguments.dbuser) as conn:
                     with conn.cursor() as cursor:
                         operation.process(cursor)
-                        resp = operation.response
-            except psycopg2.DatabaseError as exc:
-                # Closes the cursor and connection
-                import traceback
-                raise DbError(msg='unable to connect to the database: ' + traceback.format_exc(8))
+                        response = operation.response
+            except psycopg2.OperationalError as exc:
+                # closes the cursor and connection
+                raise DBConnectionError(f'unable to connect to the database: {str(exc)}')
         except AttributeError as exc:
             raise ArgumentError(msg=str(exc))
-    except ManageRequestError as exc:
-        resp = exc.response
+    except ExportError as exc:
+        response = exc.response
 
-    return resp
+    return response
 
 
 if __name__ == "__main__":
-    resp = check_or_cancel()
+    response = perform_action()
+    json_response = response.generate_json()
 
-    json_response = resp.generate_json()
-
-    # Do not print application/json here. This script may be called outside of a CGI context.
-    print(json.dumps(json_response))
+    # do not print application/json here; this script may be called outside of a web abb context
+    print(json_response)
 
     # Always return 0. If there was an error, an error code (the 'status' property) and message (the 'statusMsg' property) goes in the returned HTML.
     sys.exit(0)
