@@ -92,13 +92,20 @@
  *  Revision history is at the end of the file.
  *
  */
+/******************************************************************************/
+
+/******************** defines, includes, and global declarations **************/
+#define MODULE_VERSION_NUMBER	("0.9.3")
+#define KEYSTUFF_VERSION "keystuff_v11.c"
+#define EARTH_EPHEM_VERSION "earth_ephem_v12.c"
 
 #include <jsoc_main.h>
-#include "keystuff.c"
-#include "earth_ephem.c"
+
+#include KEYSTUFF_VERSION
+#include EARTH_EPHEM_VERSION
 						      /*   module identifier  */
 char *module_name = "travel_times_loop_wGB";
-char *version_id = "0.9.2";
+char *version_id = MODULE_VERSION_NUMBER;
 
 ModuleArgs_t module_args[] = {
   {ARG_STRING, "in",
@@ -583,4 +590,8 @@ int DoIt (void) {
  *	with pixel locator file (supposedly); added MapProj and MapPA to the
  *	default list of propagated keywords; added modified propagation of
  *	WCSNAME value
+ *  v 0.92 frozen 2013.03.12
+ *  21.07.27	added versioning of included .c files, using site localization
+ *	in earth_ephem.c
+ *	
  */
