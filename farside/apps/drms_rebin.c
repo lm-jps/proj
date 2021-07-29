@@ -66,15 +66,15 @@
  *  Revision history is at end of file.
  */
 
-#define MODULE_VERSION_NUMBER	("1.1")
-#define KEYSTUFF_VERSION "keystuff_v10.c"
+#define MODULE_VERSION_NUMBER	("1.2")
+#define KEYSTUFF_VERSION "keystuff_v11.c"
 
 #include <jsoc_main.h>
 #include <fftw3.h>
 #include KEYSTUFF_VERSION
 
 char *module_name = "drms_rebin";
-char *version_id = "1.1";
+char *version_id = MODULE_VERSION_NUMBER;
 char *module_desc = "rectangular region binning";
 
 ModuleArgs_t module_args[] = {
@@ -138,8 +138,8 @@ int set_stats_keys (DRMS_Record_t *rec, DRMS_Array_t *v, long long ntot) {
   int valmin = ntot, valmax = 0;
   int kstat = 0;
 
-  vmin = HUGE;
-  vmax = -HUGE;
+  vmin = 1.0 / 0.0;
+  vmax = -vmin;
   sumv1 = 0.0;
   sumv0 = 0;
   for (n = 0; n < ntot; n++) {
@@ -329,7 +329,7 @@ static int check_input_series (char *inds, int *segnum) {
 }
 
 static int check_output_series (char *series, char *segname, int *segnum,
-    int *check) {
+    int *check_segments, int *log_scaling_okay, int no_save) {
 /*
  *  Check output data series structure for the existence of segments of
  *    appropriate protocol for array segment writes, if the segment is not
@@ -339,18 +339,23 @@ static int check_output_series (char *series, char *segname, int *segnum,
  */
   DRMS_Record_t *orec;
   DRMS_Segment_t *oseg;
+  DRMS_Keyword_t *keywd;
   int oseg_ct, seg_n;
   int status;
 
-  orec = drms_create_record (drms_env, series, DRMS_TRANSIENT, &status);
-  if (!orec) {
-    fprintf (stderr, "Error: unable to create records in series %s\n", series);
-    fprintf (stderr, "       drms_create_record() returned status %d\n",
-	status); 
-    return 1;
+  orec = drms_template_record (drms_env, series, &status);
+  if (status || !orec) {
+    if (no_save) {
+      fprintf (stderr, "Warning: output series %s does not exist\n", series);
+      fprintf (stderr, "         run would fail unless called with -n flag\n");
+      return 0;
+    } else {
+      fprintf (stderr, "Error: requested output series %s does not exist\n",
+	  series);
+      return 1;
+    }
   }
-
-  *check = 0;
+  *check_segments = 0;
   if (strcmp (segname, "Not Specified")) {
 	  /*  make sure the named output segment is writeable from an array  */
     oseg = drms_segment_lookup (orec, segname);
@@ -379,7 +384,7 @@ static int check_output_series (char *series, char *segname, int *segnum,
       if (!valid_ct) *segnum = seg_n;
       valid_ct++;
     }
-    if (valid_ct > 1) *check = 1;
+    if (valid_ct > 1) *check_segments = 1;
     if (valid_ct < 1) {
       fprintf (stderr, "Error: output data series %s\n", series);
       fprintf (stderr, "       contains no segments of appropriate protocol\n");
@@ -387,11 +392,30 @@ static int check_output_series (char *series, char *segname, int *segnum,
       return 1;
     }
   }
+  *log_scaling_okay = (drms_keyword_lookup (orec, "LOG_BASE", 1)) ? 1 : 0;
+/*					a template record should not be freed!
   drms_free_record (orec);
+*/
   return 0;
 }
 
-static int check_output_segment (DRMS_Segment_t *seg, int rank, int *axes) {
+static int check_output_segment (DRMS_Segment_t *seg, int rank, int *axes,
+    int *fixed_point) {
+  int n;
+  if (seg->info->protocol == DRMS_PROTOCOL_INVALID ||
+      seg->info->protocol == DRMS_GENERIC) return 1;
+  if (seg->info->naxis != rank) return 1;
+  if (seg->info->scope != DRMS_VARDIM) {
+    for (n = 0; n < rank; n++) {
+		  /*  the output segment has fixed axis sizes, so check them  */
+      if (axes[n] != seg->axis[n]) return 1;
+    }
+  }
+  *fixed_point = seg->info->type == DRMS_TYPE_CHAR ||
+      seg->info->type == DRMS_TYPE_SHORT ||seg->info->type == DRMS_TYPE_INT ||
+      seg->info->type == DRMS_TYPE_LONGLONG;
+fprintf (stderr, "type = %s\n", drms_type_names[seg->info->type]);
+fprintf (stderr, "fixed_point = %d\n", *fixed_point);
   return 0;
 }
 
@@ -400,49 +424,49 @@ static int find_output_segment (char *series, int rank, int *axes) {
  *  Find the unique (or first) output data segment matching the requirements
  *    for appropriate protocol for array segment writes
  */
-  DRMS_Record_t *orec;
-  DRMS_Segment_t *oseg;
-  int oseg_ct, seg_n, n;
+  DRMS_Record_t *tmprec;
+  DRMS_Segment_t *seg;
+  int seg_ct, seg_n, n;
   int status;
   int valid_ct = 0, segnum = -1;
 
-  orec = drms_create_record (drms_env, series, DRMS_TRANSIENT, &status);
-  oseg_ct = drms_record_numsegments (orec);
-  for (seg_n = 0; seg_n < oseg_ct; seg_n++) {
-    oseg = drms_segment_lookupnum (orec, seg_n);
-    if (oseg->info->protocol == DRMS_PROTOCOL_INVALID ||
-	oseg->info->protocol == DRMS_GENERIC) continue;
-    if (oseg->info->naxis != rank) continue;
-    if (oseg->info->scope != DRMS_VARDIM) {
+  tmprec = drms_template_record (drms_env, series, &status);
+  seg_ct = drms_record_numsegments (tmprec);
+  for (seg_n = 0; seg_n < seg_ct; seg_n++) {
+    seg = drms_segment_lookupnum (tmprec, seg_n);
+    if (seg->info->protocol == DRMS_PROTOCOL_INVALID ||
+	seg->info->protocol == DRMS_GENERIC) continue;
+    if (seg->info->naxis != rank) continue;
+    if (seg->info->scope != DRMS_VARDIM) {
       for (n = 0; n < rank; n++) {
 		  /*  the output segment has fixed axis sizes, so check them  */
-	if (axes[n] != oseg->axis[n]) continue;
+	if (axes[n] != seg->axis[n]) continue;
       }
     }
     if (!valid_ct) segnum = seg_n;
     valid_ct++;
   }
 
-  drms_free_record (orec);
   if (valid_ct > 1) {
-    oseg = drms_segment_lookupnum (orec, segnum);
+    seg = drms_segment_lookupnum (tmprec, segnum);
     fprintf (stderr, "Warning: output data series %s\n", series);
     fprintf (stderr,
 	"       contains multiple segments of appropriate protocol and dimensions;\n");
     fprintf (stderr,
-	"       using first matching segment: %s.\n", oseg->info->name);
+	"       using first matching segment: %s.\n", seg->info->name);
     fprintf (stderr,
 	"       To use another, seg must be specified\n");
   }
-  drms_free_record (orec);
   return segnum;
 }
 							/*  main module body  */
 int DoIt (void) {
   CmdParams_t *params = &cmdparams;
+  DB_Text_Result_t *qres;
+
   int propct;
   char **copykeylist;
-  char module_ident[128];
+
   DRMS_RecordSet_t *drs = NULL;
   DRMS_Record_t *irec, *orec;
   DRMS_Segment_t *iseg, *oseg;
@@ -450,6 +474,7 @@ int DoIt (void) {
   double *vdat, *vbin;
   double crpix, cdelt;
   double scale, bias, vr, vw, vn;
+  double log_base, log_scale;
   float *wmin;
   long long *nssub, *ntsub;
   long long nn, ntdat, ntbin;
@@ -461,15 +486,17 @@ int DoIt (void) {
   int axis, npmax;
   int m, n, key_n, rec_n, rec_ct;
   int isegnum, osegnum, rank, crank, mrank, axis_check;
-  int bias_mult, bias_sign, scale_mult, scale_sign, scaling_warned;
+  int bias_mult, bias_sign, scale_mult, scale_sign, scaling_warned, fixed_point;
+  int log_scale_values, log_scaling_okay;
   int prefilter;
-  int kstat, status = 0;
+  int kstat, log_status, status = 0;
   int keyct = sizeof (propagate) / sizeof (char *);
   char *key_scale, *key_bias;
-  char source[DRMS_MAXQUERYLEN];
-  char key[256], valuestr[256];
+  char cmd[DRMS_MAXQUERYLEN], source[DRMS_MAXQUERYLEN];
+  char key[256], valuestr[256], module_ident[128];
 
   double missing_val = 0.0 / 0.0;
+  int scaling_required = 0;
 
   char *inds = strdup (params_get_str (params, "in"));
   char *outser = strdup (params_get_str (params, "out"));
@@ -496,6 +523,19 @@ int DoIt (void) {
   snprintf (module_ident, 128, "%s v %s", module_name, version_id);
   if (verbose) printf ("%s:\n", module_ident);
 
+				      /*  check for permission to append row  */
+  sprintf (cmd, "SELECT has_table_privilege(\'%s\', \'INSERT\')", outser);
+  if ((qres = drms_query_txt (drms_env->session, cmd)) == NULL) {
+    fprintf (stderr, "Error: can\'t connect to DRMS database\n");
+    return 1;
+  }
+  if (strcmp (qres->field[0][0], "t")) {
+    fprintf (stderr, "Warning: You do not have insert permission on series %s\n",
+	outser);
+    if (!no_save) fprintf (stderr,
+	"         module function will be checked, but no records saved\n");
+    no_save = 1;
+  }
  				      /*  check input data series structure  */
   if (check_input_series (inds, &isegnum)) return 1;
 
@@ -507,10 +547,8 @@ int DoIt (void) {
     }
   }
  				     /*  check output data series structure  */
-  if (check_output_series (outser, out_segname, &osegnum, &axis_check)) {
-    drms_close_records (drs, DRMS_FREE_RECORD);
-    return 1;
-  }
+  if (check_output_series (outser, out_segname, &osegnum, &axis_check,
+      &log_scaling_okay, no_save)) return 1;
 						    /*  open input data set  */
   drs = drms_open_records (drms_env, inds, &status);
   rec_ct = drs->n;
@@ -633,8 +671,31 @@ int DoIt (void) {
   }
  				      /*  create sample output series record  */
   orec = drms_create_record (drms_env, outser, DRMS_PERMANENT, &status);
+  if (status || !orec) {
+    fprintf (stderr, "Error: unable to create records in series %s\n", outser);
+    fprintf (stderr, "       drms_create_record() returned status %d\n",
+	status); 
+    return 1;
+  }
   oseg = drms_segment_lookupnum (orec, osegnum);
   axis_check = (oseg->info->scope != DRMS_VARDIM);
+  if (check_output_segment (oseg, crank, out_axes, &fixed_point)) {
+    if (no_save) {
+      fprintf (stderr, "Warning: output segment %s", oseg->info->name);
+      fprintf (stderr, " has inappropriate structure;\n");
+      fprintf (stderr, "         diagnostics only will be reported\n");
+    } else {
+      fprintf (stderr, "Error: output segment %s", oseg->info->name);
+      fprintf (stderr, " has inappropriate structure\n"); 
+      drms_free_record (orec);
+      drms_close_records (drs, DRMS_FREE_RECORD);
+      return 1;
+    }
+  }
+  if (fixed_point) {
+    if (iseg->info->type == DRMS_TYPE_FLOAT ||
+	iseg->info->type == DRMS_TYPE_DOUBLE) scaling_required = 1;
+  }
  				        /*  check input data series keywords  */
   if (scale_values) {
     char *endptr;
@@ -648,6 +709,9 @@ int DoIt (void) {
 	scale_values = 0;
       }
     } else scale_mult = scale_sign = 0;
+  } else if (scaling_required) {
+    fprintf (stderr,
+	"Warning: data scaling from floating-point to fixed-point likely required\n");
   }
   if (bias_values) {
     char *endptr;
@@ -661,6 +725,9 @@ int DoIt (void) {
 	bias_values = 0;
       }
     } else bias_mult = bias_sign = 0;
+  } else if (scaling_required) {
+    fprintf (stderr,
+	"Warning: data bias from floating-point to fixed-point may be required\n");
   }
 
   if (add_orbital_vr || add_orbital_full) {
@@ -990,6 +1057,12 @@ int DoIt (void) {
       continue;
     }
     qual_out = 0x00000000;
+    log_base = drms_getkey_double (irec, "LOG_BASE", &status);
+    if (!status && isfinite (log_base)) {
+      log_base = log (log_base);
+      log_scale = 1.0 / log_base;
+      log_status = 1;
+    } else log_status = 0;
     iseg = drms_segment_lookupnum (irec, isegnum);
     if (!iseg) {
       fprintf (stderr, "Warning: could not find segment # %d\n", isegnum);
@@ -1049,7 +1122,7 @@ int DoIt (void) {
 	  }
 	}
 	if (axis_check) {
-				/*  the output has fixed sizes, so check it  */
+				 /*  the output has fixed sizes, so check it  */
 	  for (n = 0; n < rank; n++) {
 	    if (out_axes[n] != oseg->axis[n]) {
 	      fprintf (stderr,
@@ -1093,7 +1166,7 @@ int DoIt (void) {
 	}
       }
     }
-			      /*  for now, match scaling of output to input  */
+			       /*  for now, match scaling of output to input  */
     binned_array->bscale = orig_array->bscale;
     binned_array->bzero = orig_array->bzero;
     if (verbose && !scaling_warned) {
@@ -1108,21 +1181,26 @@ int DoIt (void) {
 	scaling_warned = 1;
       }
     }
-    if (bias_values) {
-      if (bias_mult) {
-        bias = drms_getkey_double (irec, key_bias, &status);
-	if (bias_mult < 0) bias = 1.0 / bias;
-	bias *= bias_sign;
+    if (log_status) {
+      for (nn = 0; nn < ntdat; nn++) vdat[nn] = exp (log_base * vdat[nn]);
+    } else {
+	       /*  don't scale and adjust input values yet if they were logs  */
+      if (bias_values) {
+	if (bias_mult) {
+	  bias = drms_getkey_double (irec, key_bias, &status);
+	  if (bias_mult < 0) bias = 1.0 / bias;
+	  bias *= bias_sign;
+	}
+	for (nn = 0; nn < ntdat; nn++) if (isfinite (bias)) vdat[nn] += bias;
       }
-      for (nn = 0; nn < ntdat; nn++) if (isfinite (bias)) vdat[nn] += bias;
-    }
-    if (scale_values) {
-      if (scale_mult) {
-        scale = drms_getkey_double (irec, key_scale, &status);
-	if (scale_mult < 0) scale = 1.0 / scale;
-	scale *= scale_sign;
+      if (scale_values) {
+	if (scale_mult) {
+	  scale = drms_getkey_double (irec, key_scale, &status);
+	  if (scale_mult < 0) scale = 1.0 / scale;
+	  scale *= scale_sign;
+	}
+	for (nn = 0; nn < ntdat; nn++) if (isfinite (scale)) vdat[nn] *= scale;
       }
-      for (nn = 0; nn < ntdat; nn++) if (isfinite (scale)) vdat[nn] *= scale;
     }
     if (add_orbital_vr) {
       vr = drms_getkey_double (irec, "OBS_VR", &status);
@@ -1138,14 +1216,51 @@ int DoIt (void) {
       for (m = 0; m < np[nn]; m++) {
         vbin[nn] += vdat[loc[nn][m]];
       }
-					 /*  adjust scaling of binned array  */
       if (np[nn]) vbin[nn] /= np[nn];
       else vbin[nn] = missing_val;
     }
     drms_free_array (orig_array);
-    
-		/*  why does this code have to replicate that at line 604?  */
-			/*  because out_axes was re-mallocd (without free)  */
+    if (log_status) {
+      if (log_scaling_okay) {
+	for (nn = 0; nn < ntbin; nn++)
+	  if (isfinite (vbin[nn])) vbin[nn] = log_scale * log (vbin[nn]);
+      }
+    }
+    if (scaling_required) {
+	       /*  determine data statistics and appropriate scaling factors  */
+      double vmin = 1.0 / 0.0;
+      double vmax = -vmin;
+      double maxscale;
+      for (nn = 0; nn < ntbin; nn++) {
+	if (isnan (vbin[nn])) continue;
+	if (vbin[nn] > vmax) vmax = vbin[nn];
+	if (vbin[nn] < vmin) vmin = vbin[nn];
+      }
+      maxscale = (vmax - vmin) / 256.0;
+      if (oseg->info->type == DRMS_TYPE_SHORT) maxscale /= 256.0;
+      if (oseg->info->type == DRMS_TYPE_INT) maxscale /= 65536.0 / 256.0;
+fprintf (stderr, "scaling range: %10.3e, midpoint %10.3e\n", maxscale,
+0.5 * (vmax + vmin));
+    }
+					  /*  adjust scaling of binned array  */
+    if (bias_values) {
+      if (bias_mult) {
+	bias = drms_getkey_double (irec, key_bias, &status);
+	if (bias_mult < 0) bias = 1.0 / bias;
+	bias *= bias_sign;
+      }
+      for (nn = 0; nn < ntbin; nn++) if (isfinite (bias)) vbin[nn] += bias;
+    }
+    if (scale_values) {
+      if (scale_mult) {
+	scale = drms_getkey_double (irec, key_scale, &status);
+	if (scale_mult < 0) scale = 1.0 / scale;
+	scale *= scale_sign;
+      }
+      for (nn = 0; nn < ntbin; nn++) if (isfinite (scale)) vbin[nn] *= scale;
+    }
+		  /*  why does this code have to replicate that at line 604?  */
+			  /*  because out_axes was re-mallocd (without free)  */
     if (collapse) {
       DRMS_Array_t *coll_array;
       int *new_axes = (int *)malloc (rank * sizeof (int));
@@ -1154,7 +1269,7 @@ int DoIt (void) {
         if (out_axes[n] == 1) ccrank--;
 	else new_axes[m++] = out_axes[n];
       }
-					   /*  do not collapse to zero rank  */
+					    /*  do not collapse to zero rank  */
       if (ccrank < 1) {
 	ccrank = 1;
 	new_axes[0] = 1;
@@ -1223,6 +1338,9 @@ int DoIt (void) {
 	printf ("%g\n", bias);
       }
     }
+    if (log_status && log_scaling_okay) {
+      kstat += check_and_set_key_double (orec, "LOG_BASE", exp (log_base));
+    }
     if (scale_values) {
       if (scale_mult) {
 	if (scale_mult < 0) {
@@ -1290,4 +1408,7 @@ int DoIt (void) {
  *		Fixed check for existence of input records
  *		Added version control for included local source files
  *  v 1.1 frozen 2018.08.20
+ *  v 1.2	Added handling and propagation of logarithmic-scaled data
+ *		Added check for table insert permission
+ *		Modified set_stats_keys to eliminate no longer supported macro
  */
