@@ -29,8 +29,6 @@ from drms_export import Error as ExportError, ErrorCode as ExportErrorCode, Resp
 from drms_parameters import DRMSParams, DPMissingParameterError
 from drms_utils import Arguments as Args, CmdlParser, StatusCode as ExportStatusCode
 
-
-
 class StatusCode(ExportStatusCode):
     REGISTRATION_INITIATED = 1, 'registration of {address} initiated'
     REGISTRATION_PENDING = 2, 'registration of {address} is pending'
@@ -85,7 +83,7 @@ class CheckAddressResponse(Response):
     _status_code = None
 
     def __init__(self, *, address, **kwargs):
-        super().__init__(msg=self._status_code.fullname, **kwargs)
+        super().__init__(**kwargs)
 
 class RegistrationInitiatedResponse(CheckAddressResponse):
     _status_code = StatusCode(StatusCode.REGISTRATION_INITIATED)
@@ -111,10 +109,10 @@ class Arguments(Args):
     def get_arguments(cls, *, program_args, drms_params):
         if cls._arguments is None:
             try:
-                dbhost = drms_params.get_required('SERVER')
-                dbport = int(drms_params.get_required('DRMSPGPORT'))
-                dbname = drms_params.get_required('DBNAME')
-                dbuser = drms_params.get_required('WEB_DBUSER')
+                db_host = drms_params.get_required('SERVER')
+                db_port = int(drms_params.get_required('DRMSPGPORT'))
+                db_name = drms_params.get_required('DBNAME')
+                db_user = drms_params.get_required('WEB_DBUSER')
                 address_info_fn = drms_params.get_required('EXPORT_ADDRESS_INFO_FN')
                 address_info_insert_fn = drms_params.get_required('EXPORT_ADDRESS_INFO_INSERT_FN')
                 user_info_fn = drms_params.get_required('EXPORT_USER_INFO_FN')
@@ -136,17 +134,17 @@ class Arguments(Args):
 
             parser.add_argument('-n', '--name', help='the user name to register', metavar='<export user\'s name>', dest='name', action=UnquoteAction, default='NULL')
             parser.add_argument('-s', '--snail', help='the user snail-mail address to register', metavar='<export user\'s snail mail>', dest='snail', action=UnquoteAction, default='NULL')
-            parser.add_argument('-H', '--dbhost', help='the host machine of the database that is used to manage pending export requests', metavar='<db host>', dest='dbhost', default=dbhost)
-            parser.add_argument('-P', '--dbport', help='The port on the host machine that is accepting connections for the database', metavar='<db host port>', dest='dbport', type=int, default=int(dbport))
-            parser.add_argument('-N', '--dbname', help='the name of the database used to manage pending export requests', metavar='<db name>', dest='dbname', default=dbname)
-            parser.add_argument('-U', '--dbuser', help='the name of the database user account', metavar='<db user>', dest='dbuser', default=dbuser)
+            parser.add_argument('-H', '--dbhost', help='the host machine of the database that is used to manage pending export requests', metavar='<db host>', dest='db_host', default=db_host)
+            parser.add_argument('-P', '--dbport', help='The port on the host machine that is accepting connections for the database', metavar='<db host port>', dest='db_port', type=int, default=db_port)
+            parser.add_argument('-N', '--dbname', help='the name of the database used to manage pending export requests', metavar='<db name>', dest='db_name', default=db_name)
+            parser.add_argument('-U', '--dbuser', help='the name of the database user account', metavar='<db user>', dest='db_user', default=db_user)
 
             arguments = Arguments(parser=parser, args=args)
-            arguments.set_arg('address_info_fn', address_info_fn)
-            arguments.set_arg('address_info_insert_fn', address_info_insert_fn)
-            arguments.set_arg('user_info_fn', user_info_fn)
-            arguments.set_arg('user_info_insert_fn', user_info_insert_fn)
-            arguments.set_arg('regemail_timeout', regemail_timeout)
+            arguments.address_info_fn = address_info_fn
+            arguments.address_info_insert_fn = address_info_insert_fn
+            arguments.user_info_fn = user_info_fn
+            arguments.user_info_insert_fn = user_info_insert_fn
+            arguments.regemail_timeout = regemail_timeout
 
             # Do a quick validation on the email address.
             reg_exp = re.compile(r'\s*[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,6}')
@@ -174,19 +172,7 @@ def SendMail(address, timeout, confirmation):
         # If any exception happened, then the email message was not received.
         raise MailError(f'unable to send email message to {",".join(toAddrs)} to confirm address')
 
-def get_arguments(**kwargs):
-    args = []
-    for key, val in kwargs.items():
-        args.append(f'{key} = {val}')
-
-    drms_params = DRMSParams()
-
-    if drms_params is None:
-        raise ParametersError(msg=f'unable to locate DRMS parameters file')
-
-    return Arguments.get_arguments(program_args=args, drms_params=drms_params)
-
-def generate_registered_or_pending_response(arguments, confirmation):
+def generate_registered_or_pending_response(cursor, arguments, confirmation):
     response = None
 
     # get requestor ID also
@@ -202,10 +188,10 @@ def generate_registered_or_pending_response(arguments, confirmation):
 
     if confirmation is None or len(confirmation) == 0:
         # if confirmation == None ==> registered
-        response = RegisteredResponse(address=arguments.address, user_id=user_id)
+        response = RegisteredResponse.generate_response(address=arguments.address, user_id=user_id)
     else:
         # if confirmation != None ==> pending registration
-        response = RegistrationPendingResponse(address=arguments.address, user_id=user_id)
+        response = RegistrationPendingResponse.generate_response(address=arguments.address, user_id=user_id)
 
     return response
 
@@ -213,14 +199,14 @@ def generate_registered_or_pending_response(arguments, confirmation):
 from action import Action
 class CheckAddressAction(Action):
     actions = [ 'check_address', 'register_address' ]
-    def __init__(self, *, method, address, dbhost=None, dbport=None, dbname=None, dbuser=None):
+    def __init__(self, *, method, address, db_host=None, db_port=None, db_name=None, db_user=None):
         self._method = getattr(self, method)
         self._address = address
         self._options = {}
-        self._options['dbhost'] = dbhost
-        self._options['dbport'] = dbport
-        self._options['dbname'] = dbname
-        self._options['dbuser'] = dbuser
+        self._options['db_host'] = db_host
+        self._options['db_port'] = db_port
+        self._options['db_name'] = db_name
+        self._options['db_user'] = db_user
 
     def check_address(self):
         # returns dict
@@ -232,7 +218,7 @@ class CheckAddressAction(Action):
         response = perform_action(operation='register', address=self._address, options=self._options)
         return response.generate_dict()
 
-def initiate_registration(arguments, cursor):
+def initiate_registration(cursor, arguments):
     # the address is not in the db, and the user did request registration ==> registration initiated
     confirmation = uuid.uuid4()
 
@@ -274,18 +260,33 @@ def initiate_registration(arguments, cursor):
 
     msg = f'Your email address is being registered for use with the export system. You will receive an email message from user jsoc. Please reply to this email message within {arguments.regemail_timeout} minutes without modifying the body.'
 
-    response = RegistrationInitiatedResponse(msg=msg, user_id=user_id)
+    response = RegistrationInitiatedResponse.generate_response(address=arguments.address, msg=msg, user_id=user_id)
 
     return response
 
 def perform_action(**kwargs):
     response = None
 
+    args = []
+
+    for key, val in kwargs.items():
+        if val is not None:
+            if key == 'options':
+                for option, option_val in val.items():
+                    args.append(f'--{option}={option_val}')
+            else:
+                args.append(f'{key}={val}')
+
     try:
-        arguments = get_arguments(kwargs)
+        drms_params = DRMSParams()
+
+        if drms_params is None:
+            raise ParameterError(msg='unable to locate DRMS parameters file (drmsparams.py)')
+
+        arguments = Arguments.get_arguments(program_args=args, drms_params=drms_params)
 
         try:
-            with psycopg2.connect(database=arguments.dbname, user=arguments.dbuser, host=arguments.dbhost, port=str(arguments.dbport)) as conn:
+            with psycopg2.connect(database=arguments.db_name, user=arguments.db_user, host=arguments.db_host, port=str(arguments.db_port)) as conn:
                 with conn.cursor() as cursor:
                     cmd = f'SELECT confirmation FROM {arguments.address_info_fn}(\'{arguments.address}\')'
 
@@ -297,14 +298,14 @@ def perform_action(**kwargs):
                             # action depends on operation
                             if arguments.operation == 'check':
                                 # the address is not in the db, and the user did not request registration ==> not registered
-                                response = UnregisteredResponse(address=arguments.address, user_id=-1)
+                                response = UnregisteredResponse.generate_response(address=arguments.address, user_id=-1)
                             else:
-                                response = initiate_registration(arguments, cursor)
+                                response = initiate_registration(cursor, arguments)
 
                         elif len(rows) == 1:
                             # the address is in the db
                             confirmation = rows[0][0]
-                            response = generate_registered_or_pending_response(arguments, confirmation)
+                            response = generate_registered_or_pending_response(cursor, arguments, confirmation)
                         else:
                             raise DBError(f'unexpected number of rows returned: {cmd}')
                     except psycopg2.Error as exc:
