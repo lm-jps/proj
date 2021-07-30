@@ -17,12 +17,10 @@
 #   { "server" : "hmidb2", "series" : [{ "hmi.M_45s" : { "server" : "hmidb2" } }, { "hmi.not_on_white_list" : { "server" : None }}], "status" : 0 }
 #   { "server" : "hmidb2", "series" : [{ "hmi.M_45s" : { "server" : "hmidb2" } }, { "hmi.does_not_exist" : { "server" : None }}], "status" : 0 }
 
-import sys
-import os
-import pwd
-from subprocess import check_output, check_call, CalledProcessError, STDOUT
-import json
 from argparse import Action as ArgsAction
+from json import loads as json_loads
+from sys import exit as sys_exit
+
 from drms_parameters import DRMSParams
 from drms_utils import Arguments as Args, CmdlParser as ArgsParser, StatusCode as ExportStatusCode
 from drms_export import Response, Error as ExportError, ErrorCode as ExportErrorCode
@@ -81,7 +79,7 @@ class ValidateArgumentAction(ArgsAction):
 
 class SeriesAction(ArgsAction):
     def __call__(self, parser, namespace, value, option_string=None):
-        series_dict = json.loads(value)
+        series_dict = json_loads(value)
         setattr(namespace, self.dest, series_dict)
 
 class Arguments(Args):
@@ -267,6 +265,6 @@ if __name__ == "__main__":
     print(response.generate_json())
 
     # Always return 0. If there was an error, an error code (the 'status' property) and message (the 'statusMsg' property) goes in the returned HTML.
-    sys.exit(0)
+    sys_exit(0)
 else:
     pass
