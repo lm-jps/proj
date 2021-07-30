@@ -15,19 +15,19 @@
 #   checkonly (optional) - If set to 1, then no attept is made to register an unregistered email. In this case, if no error occurs then the possible return status codes are StatusCode.REGISTERED_ADDRESS, StatusCode.REGISTRATION_PENDING, or StatusCode.UNREGISTERED_ADDRESS. The default is False (unknown addresses are registered).
 
 from argparse import Action as ArgsAction
-import json
-import os
-import pwd
+from os.path import join as path_join
+import psycopg2
 import re
 import uuid
 from urllib.parse import unquote
 import smtplib
-import sys
-import psycopg2
+from sys import exit as sys_exit
 
 from drms_export import Error as ExportError, ErrorCode as ExportErrorCode, Response
 from drms_parameters import DRMSParams, DPMissingParameterError
-from drms_utils import Arguments as Args, CmdlParser, StatusCode as ExportStatusCode
+from drms_utils import Arguments as Args, CmdlParser, Formatter as DrmsLogFormatter, Log as DrmsLog, LogLevel as DrmsLogLevel, LogLevelAction as DrmsLogLevelAction, StatusCode as ExportStatusCode
+
+DEFAULT_LOG_FILE = 'ca_log.txt'
 
 class StatusCode(ExportStatusCode):
     REGISTRATION_INITIATED = 1, 'registration of {address} initiated'
@@ -38,10 +38,11 @@ class StatusCode(ExportStatusCode):
 class ErrorCode(ExportErrorCode):
     PARAMETERS = 1, 'failure locating DRMS parameters'
     ARGUMENTS = 2, 'bad arguments'
-    MAIL = 3, 'failure sending mail'
-    DB = 4, 'failure executing database command'
-    DB_CONNECTION = 5, 'failure connecting to database'
-    DUPLICATION = 6, 'address is already registered'
+    LOGGING = 3, 'failure logging messages'
+    MAIL = 4, 'failure sending mail'
+    DB = 5, 'failure executing database command'
+    DB_CONNECTION = 6, 'failure connecting to database'
+    DUPLICATION = 7, 'address is already registered'
 
 class ParametersError(ExportError):
     _error_code = ErrorCode(ErrorCode.PARAMETERS)
@@ -51,6 +52,12 @@ class ParametersError(ExportError):
 
 class ArgumentsError(ExportError):
     _error_code = ErrorCode(ErrorCode.ARGUMENTS)
+
+    def __init__(self, *, msg=None):
+        super().__init__(msg=msg)
+
+class LoggingError(ExportError):
+    _error_code = ErrorCode(ErrorCode.LOGGING)
 
     def __init__(self, *, msg=None):
         super().__init__(msg=msg)
@@ -118,6 +125,7 @@ class Arguments(Args):
                 user_info_fn = drms_params.get_required('EXPORT_USER_INFO_FN')
                 user_info_insert_fn = drms_params.get_required('EXPORT_USER_INFO_INSERT_FN')
                 regemail_timeout = drms_params.get_required('REGEMAIL_TIMEOUT')
+                log_file = path_join(drms_params.get_required('EXPORT_LOG_DIR'), DEFAULT_LOG_FILE)
             except DPMissingParameterError as exc:
                 raise ParametersError(msg=str(exc))
 
@@ -132,6 +140,9 @@ class Arguments(Args):
             parser.add_argument('a', 'address', help='the email address to register or check', metavar='<email address>', dest='address', action=UnquoteAction, required=True)
             parser.add_argument('o', 'operation', help='the operation: register or check', metavar='<operation>', choices=[ 'check', 'register' ], dest='operation', required=True)
 
+            # optional
+            parser.add_argument('-l', '--log_file', help='the path to the log file', metavar='<log file>', dest='log_file', default=log_file)
+            parser.add_argument('-L', '--logging_level', help='the amount of logging to perform; in order of increasing verbosity: critical, error, warning, info, debug', metavar='<logging level>', dest='logging_level', action=DrmsLogLevelAction, default=DrmsLogLevel.ERROR)
             parser.add_argument('-n', '--name', help='the user name to register', metavar='<export user\'s name>', dest='name', action=UnquoteAction, default='NULL')
             parser.add_argument('-s', '--snail', help='the user snail-mail address to register', metavar='<export user\'s snail mail>', dest='snail', action=UnquoteAction, default='NULL')
             parser.add_argument('-H', '--dbhost', help='the host machine of the database that is used to manage pending export requests', metavar='<db host>', dest='db_host', default=db_host)
@@ -218,7 +229,7 @@ class CheckAddressAction(Action):
         response = perform_action(operation='register', address=self._address, options=self._options)
         return response.generate_dict()
 
-def initiate_registration(cursor, arguments):
+def initiate_registration(cursor, arguments, log):
     # the address is not in the db, and the user did request registration ==> registration initiated
     confirmation = uuid.uuid4()
 
@@ -226,6 +237,7 @@ def initiate_registration(cursor, arguments):
     cmd = f'SELECT confirmation FROM {arguments.address_info_fn}() WHERE confirmation = \'{str(confirmation)}\''
 
     try:
+        log.write_debug([ f'[ initiate_registration ] executing SQL `{cmd}`' ])
         cursor.execute(cmd)
         rows = cursor.fetchall()
         if len(rows) > 0:
@@ -235,8 +247,10 @@ def initiate_registration(cursor, arguments):
         raise DBError(f'{str(exc)}')
 
     # insert into the addresses table (and domains table if need be)
-    cmd = f'SELECT * FROM {arguments.address_info_insert_fn}(\'{arguments.address}\', \'{str(confirmation)}\')'
+    log.write_debug([ f'[ initiate_registration ] inserting address `{arguments.address}`, confirmation `{str(confirmation)}` into database' ])
+    cmd = f"SELECT * FROM {arguments.address_info_insert_fn}('{arguments.address}', '{str(confirmation)}')"
     try:
+        log.write_debug([ f'[ initiate_registration ] executing SQL `{cmd}`' ])
         cursor.execute(cmd)
     except psycopg2.Error as exc:
         # Handle database-command errors.
@@ -244,9 +258,11 @@ def initiate_registration(cursor, arguments):
 
     # we have to also insert into the export user table since we have that information now, not after the user has replied to the registration email
     # (which is processed by registerAddress.py); if a failure happens anywhere along the way, we need to delete the entry from the export user table
-    cmd = f'SELECT id FROM {arguments.user_info_insert_fn}(\'{arguments.address}\', \'{arguments.name}\', \'{arguments.snail}\')'
+    log.write_debug([ f'[ initiate_registration ] inserting user information `{arguments.address}`, name `{arguments.name}`, snail `{arguments.snail}` into database' ])
+    cmd = f"SELECT id FROM {arguments.user_info_insert_fn}('{arguments.address}', '{arguments.name}', '{arguments.snail}')"
 
     try:
+        log.write_debug([ f'[ initiate_registration ] executing SQL `{cmd}`' ])
         cursor.execute(cmd)
         rows = cursor.fetchall()
     except psycopg2.Error as exc:
@@ -256,6 +272,7 @@ def initiate_registration(cursor, arguments):
     user_id = rows[0][0]
 
     # send an email message out with a new confirmation code
+    log.write_debug([ f'[ initiate_registration ] sending confirmation `{str(confirmation)}` to `{arguments.address}`' ])
     SendMail(arguments.address, arguments.regemail_timeout, confirmation)
 
     msg = f'Your email address is being registered for use with the export system. You will receive an email message from user jsoc. Please reply to this email message within {arguments.regemail_timeout} minutes without modifying the body.'
@@ -286,21 +303,30 @@ def perform_action(**kwargs):
         arguments = Arguments.get_arguments(program_args=args, drms_params=drms_params)
 
         try:
+            formatter = DrmsLogFormatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+            log = DrmsLog(arguments.log_file, arguments.logging_level, formatter)
+        except Exception as exc:
+            raise LoggingError(msg=f'{str(exc)}')
+
+        try:
             with psycopg2.connect(database=arguments.db_name, user=arguments.db_user, host=arguments.db_host, port=str(arguments.db_port)) as conn:
                 with conn.cursor() as cursor:
                     cmd = f'SELECT confirmation FROM {arguments.address_info_fn}(\'{arguments.address}\')'
 
                     try:
+                        log.write_debug([ f'executing SQL `{cmd}`' ])
                         cursor.execute(cmd)
                         rows = cursor.fetchall()
 
                         if len(rows) == 0:
                             # action depends on operation
+                            log.write_debug([ f'address `{arguments.address}` not in database' ])
                             if arguments.operation == 'check':
                                 # the address is not in the db, and the user did not request registration ==> not registered
                                 response = UnregisteredResponse.generate_response(address=arguments.address, user_id=-1)
                             else:
-                                response = initiate_registration(cursor, arguments)
+                                log.write_debug([ f'initating registration of `{arguments.address}`' ])
+                                response = initiate_registration(cursor, arguments, log)
 
                         elif len(rows) == 1:
                             # the address is in the db
@@ -328,6 +354,6 @@ if __name__ == "__main__":
     print(response.generate_json())
 
     # Always return 0. If there was an error, an error code (the 'status' property) and message (the 'statusMsg' property) goes in the returned HTML.
-    sys.exit(0)
+    sys_exit(0)
 else:
     pass
