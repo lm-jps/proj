@@ -254,9 +254,32 @@ def jsonify(data_frame):
     # ]
     return data_frame.to_json(orient='records')
 
-def get_response_dict(request, status_or_error_code):
-    fetch_status = request.status # 2/12 ==> asynchronous processing, 0 ==> synchronous processing
-    error = request.error # None, unless an error occurred
+def get_response_dict(request):
+    error_code = None
+
+    fetch_status = int(request.status) # 2/12 ==> asynchronous processing, 0 ==> synchronous processing
+
+    try:
+        error_code = ErrorCode(fetch_status)
+    except KeyError:
+        pass
+
+    if error_code is not None:
+        # a fetch error occurred (`fetch_error` has the error message returned by fetch, `status_description` has the IR error message)
+        fetch_error = request.error # None, unless an error occurred
+        status_code = error_code
+        data = None
+    else:
+        # no fetch error occurred
+        fetch_error = None
+        try:
+            status_code = StatusCode(fetch_status)
+        except KeyError:
+            raise DRMSClientError(exc_info=sys_exc_info(), msg=f'unexpected fetch status returned {str(fetch_status)}')
+
+        if status_code == StatusCode.REQUEST_COMPLETE:
+            data = json_dumps(list(zip(request.urls.record.to_list(), request.urls.url.to_list()))) # None, unless synchronous processing
+
     requestid = request.request_id # None, unless asynchronous processing
     count = request.file_count # None, unless synchronous processing
     rcount = request.record_count
@@ -264,34 +287,19 @@ def get_response_dict(request, status_or_error_code):
     method = request.method
     protocol = request.file_format
 
-    if status_or_error_code == StatusCode.REQUEST_COMPLETE:
-        data = json_dumps(list(zip(request.urls.record.to_list(), request.urls.url.to_list()))) # None, unless synchronous processing
-    else:
-        data = None
+    response_dict = { 'status_code' : status_code, 'fetch_status' : fetch_status, 'fetch_error' : fetch_error, 'requestid' : requestid, 'count' : count, 'rcount' : rcount, 'size' : size, 'method' : method, 'protocol' : protocol, 'data' : data }
 
-    response_dict = { 'status_code' : status_or_error_code, 'message' : status_or_error_code.description(), 'fetch_status' : fetch_status, 'fetch_error' : error, 'requestid' : requestid, 'count' : count, 'rcount' : rcount, 'size' : size, 'method' : method, 'protocol' : protocol, 'data' : data }
-
-    return response_dict
+    return (error_code is not None, response_dict)
 
 def get_response(request):
     # was there an error?
     error_code = None
 
-    try:
-        error_code = ErrorCode(int(request.status))
-    except KeyError:
-        pass
+    error_occurred, response_dict = get_response_dict(request)
 
-    if error_code is not None:
-        response_dict = get_response_dict(request, error_code)
+    if error_occurred:
         response = ErrorResponse.generate_response(**response_dict)
     else:
-        try:
-            status_code = StatusCode(int(request.status))
-        except ValueError:
-            raise DRMSClientError(exc_info=sys_exc_info(), msg=f'unexpected fetch status returned {str(request.status)}')
-
-        response_dict = get_response_dict(request, status_code)
         response = Response.generate_response(**response_dict)
 
     return response
@@ -529,9 +537,7 @@ def perform_action(is_program, program_name=None, **kwargs):
             action = Action.action(action_type=action_type, args={ 'specification' : arguments.export_arguments['specification'] })
             response = action() # __call__ returns dict
 
-            print(f'response is {str(response)}')
             if response['status_code'] != PsStatusCode.SUCCESS:
-                print(f'here OK')
                 raise ExportActionError(msg=f'failure calling `{action_type}` action; status: `{response.status.description()}`')
 
             # `subsets` exists if status == PsStatusCode.SUCCESS
@@ -636,12 +642,9 @@ def perform_action(is_program, program_name=None, **kwargs):
                 response = export_streamed(drms_client=drms_client, address=arguments.address, requestor=arguments.requestor, log=log, **export_arguments)
         except ExportError as exc:
             if not hasattr(exc, 'exc_info'):
-                print('MMM')
                 exc.exc_info = sys_exc_info()
-            print('UUU')
             raise exc
         except Exception as exc:
-            print('VVV')
             raise ExportActionError(exc_info=sys_exc_info(), msg=f'{str(exc)}')
     except ExportError as exc:
         response = exc.response
@@ -693,9 +696,7 @@ class InitiateRequestAction(Action):
           number_records : <maximum number of records exported>
         }
         '''
-        print('calling mini')
         response = perform_action(is_program=False, export_type='mini', webserver=self._webserver, address=self._address, export_arguments=self._export_arguments, options=self._options)
-        print('mini returned')
         return response
 
     def start_streamed_export(self):
