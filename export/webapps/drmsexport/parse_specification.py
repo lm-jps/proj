@@ -7,7 +7,6 @@ import inspect
 from json import loads as json_loads, decoder as json_decoder
 from os import environ
 from os.path import join as path_join
-from subprocess import check_output, CalledProcessError
 from sys import exc_info as sys_exc_info, exit as sys_exit
 
 DEFAULT_LOG_FILE = 'ps_log.txt'
@@ -20,7 +19,7 @@ class ErrorCode(ExportErrorCode):
     PARAMETERS = 1, 'failure locating DRMS parameters'
     ARGUMENTS = 2, 'bad arguments'
     LOGGING = 3, 'failure logging messages'
-    SUBPROCESS = 4, 'subprocess error'
+    DRMS_CLIENT = 4, 'drms client error'
 
 class PsBaseError(ExportError):
     def __init__(self, *, exc_info=None, error_message=None):
@@ -51,11 +50,11 @@ class LoggingError(PsBaseError):
     def __init__(self, *, exc_info=None, error_message=None):
         super().__init__(exc_info=exc_info, error_message=error_message)
 
-class SubprocessError(PsBaseError):
-    _error_code = ErrorCode(ErrorCode.SUBPROCESS)
+class DRMSClientError(PsBaseError):
+    _error_code = ErrorCode(ErrorCode.DRMS_CLIENT)
 
-    def __init__(self, *, error_message=None):
-        super().__init__(error_message=error_message)
+    def __init__(self, *, exc_info=None, error_message=None):
+        super().__init__(exc_info=exc_info, error_message=error_message)
 
 class Arguments(Args):
     _arguments = None
@@ -73,28 +72,51 @@ class Arguments(Args):
             except DPMissingParameterError as exc:
                 raise ParametersError(error_message=str(exc))
 
-            args = None
+            if is_program:
+                args = None
 
-            if program_args is not None and len(program_args) > 0:
-                args = program_args
+                if program_args is not None and len(program_args) > 0:
+                    args = program_args
 
-            if program_name is not None and len(program_name) > 0:
-                parser = CmdlParser(prog=program_name, usage=f'%(prog)s spec=<specification> [ --dbhost=<db host> ] [ --dbport=<db port> ] [ --dbname=<db name> ] [ --dbuser=<db user>]')
+                if program_name is not None and len(program_name) > 0:
+                    parser = CmdlParser(prog=program_name, usage=f'%(prog)s spec=<specification> [ --dbhost=<db host> ] [ --dbport=<db port> ] [ --dbname=<db name> ] [ --dbuser=<db user>]')
+                else:
+                    parser = CmdlParser(usage=f'%(prog)s spec=<specification> [ --dbhost=<db host> ] [ --dbport=<db port> ] [ --dbname=<db name> ] [ --dbuser=<db user>]')
+
+                # required
+                parser.add_argument('spec', help='the DRMS record-set specification', metavar='<specification>', dest='specification', required=True)
+                parser.add_argument('address', help='the email addressed registered for export', metavar='<email address>', dest='address', required=True)
+
+                # optional
+                parser.add_argument('-c', '--drms-client-type', help='securedrms client type (ssh, http)', choices=[ 'ssh', 'http' ], dest='drms_client_type', default='ssh')
+                parser.add_argument('-l', '--log_file', help='the path to the log file', metavar='<log file>', dest='log_file', default=log_file)
+                parser.add_argument('-L', '--logging_level', help='the amount of logging to perform; in order of increasing verbosity: critical, error, warning, info, debug', metavar='<logging level>', dest='logging_level', action=DrmsLogLevelAction, default=DrmsLogLevel.ERROR)
+                parser.add_argument('-H', '--db_host', help='the machine hosting the database that contains export requests from this site', metavar='<db host>', dest='db_host', default=private_db_host)
+                parser.add_argument('-P', '--db_port', help='the port on the host machine that is accepting connections for the database', metavar='<db host port>', dest='db_port', type=int, default=db_port)
+                parser.add_argument('-N', '--db_name', help='the name of the database that contains export requests', metavar='<db name>', dest='db_name', default=db_name)
+                parser.add_argument('-U', '--db_user', help='the name of the database user account', metavar='<db user>', dest='db_user', default=db_user)
+
+                arguments = Arguments(parser=parser, args=args)
+                arguments.drms_client = None
             else:
-                parser = CmdlParser(usage=f'%(prog)s spec=<specification> [ --dbhost=<db host> ] [ --dbport=<db port> ] [ --dbname=<db name> ] [ --dbuser=<db user>]')
+                def extract_module_args(*, spec, address, drms_client=None, drms_client_type='ssh', log_file=log_file, logging_level=logging_level, db_host=db_host, db_port=db_port, db_name=db_name, db_user=db_user):
+                    arguments = {}
 
-            # optional
-            parser.add_argument('-l', '--log_file', help='the path to the log file', metavar='<log file>', dest='log_file', default=log_file)
-            parser.add_argument('-L', '--logging_level', help='the amount of logging to perform; in order of increasing verbosity: critical, error, warning, info, debug', metavar='<logging level>', dest='logging_level', action=DrmsLogLevelAction, default=DrmsLogLevel.ERROR)
-            parser.add_argument('-H', '--db_host', help='the machine hosting the database that contains export requests from this site', metavar='<db host>', dest='db_host', default=private_db_host)
-            parser.add_argument('-P', '--db_port', help='the port on the host machine that is accepting connections for the database', metavar='<db host port>', dest='db_port', type=int, default=db_port)
-            parser.add_argument('-N', '--db_name', help='the name of the database that contains export requests', metavar='<db name>', dest='db_name', default=db_name)
-            parser.add_argument('-U', '--db_user', help='the name of the database user account', metavar='<db user>', dest='dbuser', default=db_user)
+                    arguments['address'] = address
+                    arguments['drms_client'] = drms_client
+                    arguments['drms_client_type'] = drms_client_type
+                    arguments['log_file'] = log_file
+                    arguments['logging_level'] = logging_level
+                    arguments['db_host'] = db_host
+                    arguments['db_port'] = db_port
+                    arguments['db_name'] = db_name
+                    arguments['db_user'] = db_user
 
-            # required
-            parser.add_argument('spec', help='the DRMS record-set specification', metavar='<specification>', dest='specification', required=True)
+                    return arguments
 
-            arguments = Arguments(parser=parser, args=args)
+                # dict
+                module_args_dict = extract_module_args(**module_args)
+                arguments = Arguments(parser=None, args=module_args_dict)
 
             arguments.private_db_host = private_db_host
             arguments.arch_dir = environ['JSOC_MACHINE']
@@ -137,7 +159,10 @@ def perform_action(*, is_program, program_name=None, **kwargs):
     log = None
 
     try:
-        try:
+        args = None
+        module_args = None
+
+        if is_program:
             args = []
             for key, val in kwargs.items():
                 if val is not None:
@@ -146,7 +171,18 @@ def perform_action(*, is_program, program_name=None, **kwargs):
                             args.append(f'--{option}={option_val}')
                     else:
                         args.append(f'{key}={val}')
+        else:
+            # a loaded module
+            module_args = {}
+            for key, val in kwargs.items():
+                if val is not None:
+                    if key == 'options':
+                        for option, option_val in val.items():
+                            module_args[option] = option_val
+                    else:
+                        module_args[key] = val
 
+        try:
             drms_params = DRMSParams()
 
             if drms_params is None:
@@ -159,23 +195,37 @@ def perform_action(*, is_program, program_name=None, **kwargs):
         except Exception as exc:
             raise ArgumentsError(exc_info=sys_exc_info())
 
+        try:
+            formatter = DrmsLogFormatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+            log = DrmsLog(arguments.log_file, arguments.logging_level, formatter)
+        except Exception as exc:
+            raise LoggingError(error_message=f'{str(exc)}')
+
         # run PARSE_SPEC_BIN
         try:
-            cmd_list = [ path_join(arguments.export_bin, arguments.arch_dir, PARSE_SPEC_BIN), f'spec={arguments.specification}' ]
-            output = check_output(cmd_list)
-            response_json = output.decode('utf-8')
-            response_dict = json_loads(response_json) # test for valid json
+            if arguments.drms_client is None:
+                # make a public client, since either public or private can parse record-set specifications
+                debug = True if arguments.logging_level == DrmsLogLevel.DEBUG else False
+                factory = securedrms.SecureClientFactory(debug=debug, email=arguments.address)
+                use_ssh = True if arguments.drms_client_type == 'ssh' else False
+                connection_info = { 'dbhost' : arguments.db_host, 'dbport' : arguments.db_port, 'dbname' : arguments.db_name, 'dbuser' : arguments.db_user }
+
+                log.write_debug([ f'[ perform_action ] creating public securedrms client' ])
+                public_drms_client = factory.create_client(server='jsoc_external', use_ssh=use_ssh, use_internal=False, connection_info=connection_info)
+                drms_client = public_drms_client
+            else:
+                # could be either public or private client
+                drms_client = arguments.drms_client
+
+            response_dict = drms_client.parse_spec(arguments.specification)
+
             if response_dict['errMsg'] is not None:
-                raise SubprocessError(error_message=f'failure running {PARSE_SPEC_BIN}; error `{response_dict["errMsg"]}`')
-        except CalledProcessError as exc:
-            raise SubprocessError(exc_info=sys_exc_info(), error_message=f'failure running {PARSE_SPEC_BIN}')
-        except json_decoder.JSONDecodeError:
-            raise SubprocessError(exc_info=sys_exc_info(), error_message=f'invalid response from {PARSE_SPEC_BIN}; not valid json')
+                raise DRMSClientError(error_message=f'failure parsing record-set specification {arguments.export_arguments["specification"]}: {response_dict["errMsg"]}')
         except ExportError as exc:
             exc.exc_info = sys_exc_info()
             raise exc
         except Exception as exc:
-            raise SubprocessError(exc_info=sys_exc_info())
+            raise DRMSClientError(exc_info=sys_exc_info())
 
         response = Response.generate_response(status_code=StatusCode.SUCCESS, **response_dict)
 
