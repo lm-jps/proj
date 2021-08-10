@@ -282,8 +282,6 @@ def get_response(request):
     except KeyError:
         pass
 
-    print(f'error code is {str(error_code)}')
-
     if error_code is not None:
         response_dict = get_response_dict(request, error_code)
         response = ErrorResponse.generate_response(**response_dict)
@@ -631,9 +629,7 @@ def perform_action(is_program, program_name=None, **kwargs):
             elif arguments.export_type == 'mini':
                 # supports no processing, no tar, http access, native file format attributes; use securedrms.SecureClient.export(method='url_quick')
                 log.write_info([ f'[ perform_action ] servicing mini request for user `{arguments.address}`: {str(export_arguments)}' ])
-                print('MMM')
                 response = export_mini(drms_client=drms_client, address=arguments.address, requestor=arguments.requestor, log=log, **export_arguments)
-                print('GGG')
             elif arguments.export_type == 'streamed':
                 # supports no-processing, no-tar, stream-access, native file format attributes; exports a single file only, all SUs must be online; use securedrms.SecureClient.export_package()
                 log.write_info([ f'[ perform_action ] servicing streamed request for user `{arguments.address}`: {str(export_arguments)}' ])
@@ -711,7 +707,6 @@ class InitiateRequestAction(Action):
 if __name__ == "__main__":
     try:
         response = perform_action(is_program=True)
-        print('at the end')
         print(response.generate_json())
     except ExportError as exc:
         response = exc.response
