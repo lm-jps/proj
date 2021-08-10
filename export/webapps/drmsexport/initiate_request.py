@@ -24,18 +24,6 @@ class StatusCode(SC):
     # this should go away - if in jsoc.export_new, but not in jsoc.export, then this is the same as REQUEST_QUEUED
     REQUEST_NOT_QUEUED = 6, 'request has not been queued yet'
 
-    @classmethod
-    def get_status_code(cls, request_status):
-        if request_status == 6:
-
-            return StatusCode.REQUEST_NOT_FOUND
-        if request_status == 2  or request_status == 12:
-            return StatusCode.REQUEST_QUEUED
-        if request_status == 1:
-            return StatusCode.REQUEST_PROCESSING
-        if request_status == 0:
-            return StatusCode.REQUEST_COMPLETE
-
 class ErrorCode(ExportErrorCode):
     # fetch error codes
     REQUEST_TOO_LARGE = 3, 'requested payload is too large'
@@ -51,65 +39,54 @@ class ErrorCode(ExportErrorCode):
     STREAM_FORMAT = 105, 'format error in downloaded payload'
     EXPORT_ACTION = 106, 'failure calling export action'
 
-    @classmethod
-    def get_error_code(cls, request_error):
-        if request_status == 7:
-            return ErrorCode.REQUEST_REJECTED
-        if request_status == 5:
-            return ErrorCode.REQUEST_NOT_ONLINE
-        if request_status == 4:
-            return ErrorCode.REQUEST_FATAL
-        if request_status == 3:
-            return ErrorCode.REQUEST_TOO_LARGE
-
 class IrBaseError(ExportError):
-    def __init__(self, *, exc_info=None, msg=None):
+    def __init__(self, *, exc_info=None, error_message=None):
         if exc_info is not None:
             self.exc_info = exc_info
             e_type, e_obj, e_tb = exc_info
 
-            if msg is None:
-                msg = f'{e_type.__name__}: {str(e_obj)}'
+            if error_message is None:
+                error_message = f'{e_type.__name__}: {str(e_obj)}'
             else:
-                msg = f'{msg} [ {e_type.__name__}: {str(e_obj)} ]'
+                error_message = f'{error_message} [ {e_type.__name__}: {str(e_obj)} ]'
 
-        super().__init__(msg=msg)
+        super().__init__(error_message=error_message)
 
 class ParametersError(IrBaseError):
     _error_code = ErrorCode(ErrorCode.PARAMETERS)
 
-    def __init__(self, *, exc_info=None, msg=None):
-        super().__init__(exc_info=exc_info, msg=msg)
+    def __init__(self, *, exc_info=None, error_message=None):
+        super().__init__(exc_info=exc_info, error_message=error_message)
 
 class ArgumentsError(IrBaseError):
     _error_code = ErrorCode(ErrorCode.ARGUMENTS)
 
-    def __init__(self, *, exc_info=None, msg=None):
-        super().__init__(exc_info=exc_info, msg=msg)
+    def __init__(self, *, exc_info=None, error_message=None):
+        super().__init__(exc_info=exc_info, error_message=error_message)
 
 class LoggingError(IrBaseError):
     _error_code = ErrorCode(ErrorCode.LOGGING)
 
-    def __init__(self, *, exc_info=None, msg=None):
-        super().__init__(exc_info=exc_info, msg=msg)
+    def __init__(self, *, exc_info=None, error_message=None):
+        super().__init__(exc_info=exc_info, error_message=error_message)
 
 class DRMSClientError(IrBaseError):
     _error_code = ErrorCode(ErrorCode.DRMS_CLIENT)
 
-    def __init__(self, *, exc_info=None, msg=None):
-        super().__init__(exc_info=exc_info, msg=msg)
+    def __init__(self, *, exc_info=None, error_message=None):
+        super().__init__(exc_info=exc_info, error_message=error_message)
 
 class StreamFormatError(IrBaseError):
     _error_code = ErrorCode(ErrorCode.STREAM_FORMAT)
 
-    def __init__(self, *, exc_info=None, msg=None):
-        super().__init__(exc_info=exc_info, msg=msg)
+    def __init__(self, *, exc_info=None, error_message=None):
+        super().__init__(exc_info=exc_info, error_message=error_message)
 
 class ExportActionError(IrBaseError):
     _error_code = ErrorCode(ErrorCode.EXPORT_ACTION)
 
-    def __init__(self, *, exc_info=None, msg=None):
-        super().__init__(exc_info=exc_info, msg=msg)
+    def __init__(self, *, exc_info=None, error_message=None):
+        super().__init__(exc_info=exc_info, error_message=error_message)
 
 class ExportTypeAction(ArgsAction):
     def __call__(self, parser, namespace, value, option_string=None):
@@ -165,7 +142,7 @@ class Arguments(Args):
                 db_name = drms_params.get_required('DBNAME')
                 db_user = drms_params.get_required('WEB_DBUSER')
             except DPMissingParameterError as exc:
-                raise ParametersError(msg=str(exc))
+                raise ParametersError(error_message=str(exc))
 
             if is_program:
                 args = None
@@ -221,7 +198,7 @@ class Arguments(Args):
 
             # if the caller has specified a public webserver, make sure that the db specified is not the private one
             if arguments.webserver.public and arguments.db_host == private_db_host:
-                raise ArgumentsError(msg=f'cannot specify private db server to handle public webserver requests')
+                raise ArgumentsError(error_message=f'cannot specify private db server to handle public webserver requests')
 
             arguments.private_db_host = private_db_host
             arguments.drms_client = None
@@ -275,7 +252,7 @@ def get_response_dict(request):
         try:
             status_code = StatusCode(fetch_status)
         except KeyError:
-            raise DRMSClientError(exc_info=sys_exc_info(), msg=f'unexpected fetch status returned {str(fetch_status)}')
+            raise DRMSClientError(exc_info=sys_exc_info(), error_message=f'unexpected fetch status returned {str(fetch_status)}')
 
         if status_code == StatusCode.REQUEST_COMPLETE:
             data = json_dumps(list(zip(request.urls.record.to_list(), request.urls.url.to_list()))) # None, unless synchronous processing
@@ -351,7 +328,7 @@ def export_premium(*, drms_client, address, requestor=None, log, **export_argume
                 if status_code != StatusCode.REQUEST_NOT_FOUND:
                     break
         else:
-            raise DRMSClientError(msg=f'unexpected `export_premium` response; missing request ID')
+            raise DRMSClientError(error_message=f'unexpected `export_premium` response; missing request ID')
     except securedrms.SecureDRMSError as exc:
         raise DRMSClientError(exc_info=sys_exc_info())
 
@@ -513,43 +490,59 @@ def perform_action(is_program, program_name=None, **kwargs):
             drms_params = DRMSParams()
 
             if drms_params is None:
-                raise ParametersError(msg='unable to locate DRMS parameters package')
+                raise ParametersError(error_message='unable to locate DRMS parameters package')
 
             arguments = Arguments.get_arguments(is_program=is_program, program_name=program_name, program_args=args, module_args=module_args, drms_params=drms_params)
         except ArgsError as exc:
-            raise ArgumentsError(exc_info=sys_exc_info(), msg=f'{str(exc)}')
+            raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
         except ExportError as exc:
             exc.exc_info = sys_exc_info()
             raise exc
         except Exception as exc:
-            raise ArgumentsError(exc_info=sys_exc_info(), msg=f'{str(exc)}')
+            raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
 
         try:
             formatter = DrmsLogFormatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
             log = DrmsLog(arguments.log_file, arguments.logging_level, formatter)
         except Exception as exc:
-            raise LoggingError(msg=f'{str(exc)}')
+            raise LoggingError(error_message=f'{str(exc)}')
 
-        # parse specification to obtain series
-        try:
-            log.write_debug([ f'[ perform_action ] parsing record-set specification' ])
-            action_type = 'parse_specification'
-            action = Action.action(action_type=action_type, args={ 'specification' : arguments.export_arguments['specification'] })
-            response = action() # __call__ returns dict
+        # parse specification to obtain series so we can check for pass-through series (relevant only if the user is on a public webserver);
+        # parsing checks syntax, it does not check for the existence of series in the specification, so either a public or private drms client can be used
+        factory = None
+        public_drms_client = None
+        private_drms_client = None
+        if arguments.webserver.public:
+            # arguments.db_host is a public db server; use external drms client
+            try:
+                log.write_debug([ f'[ perform_action ] parsing record-set specification' ])
 
-            if response['status_code'] != PsStatusCode.SUCCESS:
-                raise ExportActionError(msg=f'failure calling `{action_type}` action; status: `{response.status.description()}`')
+                if arguments.drms_client is None:
+                    debug = True if arguments.logging_level == DrmsLogLevel.DEBUG else False
+                    factory = securedrms.SecureClientFactory(debug=debug, email=arguments.address)
+                    use_ssh = True if arguments.drms_client_type == 'ssh' else False
+                    connection_info = { 'dbhost' : arguments.db_host, 'dbport' : arguments.db_port, 'dbname' : arguments.db_name, 'dbuser' : arguments.db_user }
 
-            # `subsets` exists if status == PsStatusCode.SUCCESS
-            subsets = response['subsets']
-        except ExportError as exc:
-            exc.exc_info = sys_exc_info()
-            raise exc
-        except Exception as exc:
-            raise ExportActionError(exc_info=sys_exc_info(), msg=f'unable to parse record-set specification')
+                    log.write_debug([ f'[ perform_action ] creating public securedrms client' ])
+                    public_drms_client = factory.create_client(server='jsoc_external', use_ssh=use_ssh, use_internal=False, connection_info=connection_info)
+                else:
+                    # public client (since the webserver is public)
+                    public_drms_client = arguments.drms_client
 
-        try:
-            if arguments.webserver.public:
+                response_dict = public_drms_client.parse_spec(arguments.export_arguments['specification'])
+
+                if response_dict['errMsg'] is not None:
+                    raise DRMSClientError(error_message=f'failure parsing record-set specification {arguments.export_arguments["specification"]}: {response_dict["errMsg"]}')
+
+                # `subsets` exists if status == PsStatusCode.SUCCESS
+                subsets = response_dict['subsets']
+            except ExportError as exc:
+                exc.exc_info = sys_exc_info()
+                raise exc
+            except Exception as exc:
+                raise ExportActionError(exc_info=sys_exc_info(), error_message=f'unable to parse record-set specification')
+
+            try:
                 log.write_debug([ f'[ perform_action ] determining DB server' ])
                 # need to determine if pass-through series have been specified; if so, use securedrms client that uses private db
                 series_dict = { 'series' : [] }
@@ -558,37 +551,48 @@ def perform_action(is_program, program_name=None, **kwargs):
                     series_dict['series'].append(subset['seriesname'])
 
                 action_type = 'determine_db_server'
-                action = Action.action(action_type=action_type, args={ 'public_dbhost' : arguments.db_host, 'series' : series_dict })
+                action_args = { 'public_dbhost' : arguments.db_host, 'series' : series_dict, 'drms_client' : public_drms_client }
+                action = Action.action(action_type=action_type, args=action_args)
                 response = action()
                 if response['status_code'] != CdbStatusCode.SUCCESS:
-                    raise ExportActionError(msg=f'failure calling `{action_type}` action; status: `{response.status.description()}`')
+                    raise ExportActionError(error_message=f'failure calling `{action_type}` action; status: `{response.status.description()}`')
                 if response['server'] is None:
-                    raise ArgumentsError(msg=f'cannot service any series in `{", ".join(arguments.series)}`')
+                    raise ArgumentsError(error_message=f'cannot service any series in `{", ".join(arguments.series)}`')
                 db_host = response['server']
-        except ExportError as exc:
-            exc.exc_info = sys_exc_info()
-            raise exc
-        except Exception as exc:
-            raise ExportActionError(exc_info=sys_exc_info(), msg=f'unable to determine supporting db server')
-
-        if arguments.drms_client is None:
-            try:
-                use_public_db_host = True if db_host != arguments.private_db_host else False
-                debug = True if arguments.logging_level == DrmsLogLevel.DEBUG else False
-                factory = securedrms.SecureClientFactory(debug=debug, email=arguments.address)
-
-                drms_server = 'jsoc_external' if use_public_db_host else 'jsoc_internal'
-                use_ssh = True if arguments.drms_client_type == 'ssh' else False
-                use_internal = False if use_public_db_host else True
-                connection_info = { 'dbhost' : db_host, 'dbport' : arguments.db_port, 'dbname' : arguments.db_name, 'dbuser' : arguments.db_user }
-                log.write_debug([ f'[ perform_action ] creating securedrms client' ])
-                drms_client = factory.create_client(server=drms_server, use_ssh=use_ssh, use_internal=use_internal, connection_info=connection_info)
-            except securedrms.SecureDRMSError as exc:
-                raise DRMSClientError(exc_info=sys_exc_info())
+            except ExportError as exc:
+                exc.exc_info = sys_exc_info()
+                raise exc
             except Exception as exc:
-                raise DRMSClientError(exc_info=sys_exc_info())
+                raise ExportActionError(exc_info=sys_exc_info(), error_message=f'unable to determine supporting db server')
         else:
-            drms_client = arguments.drms_client
+            private_drms_client = arguments.drms_client # could be None
+
+        # now we know whether we should be using a public or private drms client
+        use_public_db_host = True if arguments.webserver.public and db_host != arguments.private_db_host else False
+        if use_public_db_host:
+            if public_drms_client is not None:
+                drms_client = public_drms_client
+            else:
+                # we must have had a public client - we used it to parse the record-set specification
+                raise DRMSClientError(error_message=f'missing public drms client')
+        else:
+            # private drms client needed; if a public one was passed in, then private_drms_client is None
+            if private_drms_client is not None:
+                drms_client = private_drms_client
+            else:
+                try:
+                    debug = True if arguments.logging_level == DrmsLogLevel.DEBUG else False
+                    if factory is None:
+                        factory = securedrms.SecureClientFactory(debug=debug, email=arguments.address)
+                    use_ssh = True if arguments.drms_client_type == 'ssh' else False
+                    connection_info = { 'dbhost' : arguments.private_db_host, 'dbport' : arguments.db_port, 'dbname' : arguments.db_name, 'dbuser' : arguments.db_user }
+                    log.write_debug([ f'[ perform_action ] creating private securedrms client' ])
+                    private_drms_client = factory.create_client(server='jsoc_internal', use_ssh=use_ssh, use_internal=False, connection_info=connection_info)
+                    drms_client = private_drms_client
+                except securedrms.SecureDRMSError as exc:
+                    raise DRMSClientError(exc_info=sys_exc_info())
+                except Exception as exc:
+                    raise DRMSClientError(exc_info=sys_exc_info())
 
         # there are four potential attributes an export request can have:
         #   processing (processed ==> original image is modified); NA for keyword-only exports
@@ -645,7 +649,7 @@ def perform_action(is_program, program_name=None, **kwargs):
                 exc.exc_info = sys_exc_info()
             raise exc
         except Exception as exc:
-            raise ExportActionError(exc_info=sys_exc_info(), msg=f'{str(exc)}')
+            raise ExportActionError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
     except ExportError as exc:
         response = exc.response
         if log:
