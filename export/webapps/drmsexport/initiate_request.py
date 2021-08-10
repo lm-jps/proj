@@ -172,9 +172,10 @@ class Arguments(Args):
                 parser.add_argument('arguments', help='export arguments', action=ExportArgumentsAction, dest='export_arguments', required=True)
 
                 arguments = Arguments(parser=parser, args=args)
+                arguments.drms_client = None
             else:
                 # `program_args` has all `arguments` values, in final form; validate them
-                def extract_module_args(*, db_host, export_type, webserver, address, export_arguments, drms_client_type='ssh', requestor=None, log_file=log_file, logging_level=logging_level, db_port=db_port, db_name=db_name, db_user=db_user):
+                def extract_module_args(*, db_host, export_type, webserver, address, export_arguments, drms_client=None, drms_client_type='ssh', requestor=None, log_file=log_file, logging_level=logging_level, db_port=db_port, db_name=db_name, db_user=db_user):
                     arguments = {}
 
                     arguments['db_host'] = db_host
@@ -182,6 +183,7 @@ class Arguments(Args):
                     arguments['webserver'] = webserver
                     arguments['address'] = address
                     arguments['export_arguments'] = export_arguments
+                    arguments['drms_client'] = drms_client
                     arguments['drms_client_type'] = drms_client_type
                     arguments['requestor'] = requestor
                     arguments['log_file'] = log_file
@@ -201,7 +203,6 @@ class Arguments(Args):
                 raise ArgumentsError(error_message=f'cannot specify private db server to handle public webserver requests')
 
             arguments.private_db_host = private_db_host
-            arguments.drms_client = None
 
             cls._arguments = arguments
 
