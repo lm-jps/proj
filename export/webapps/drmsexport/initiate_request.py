@@ -17,19 +17,17 @@ DEFAULT_LOG_FILE = 'ir_log.txt'
 FILE_NAME_SIZE = 256
 
 class StatusCode(SC):
-    SUCCESS = 0, 'success'
-    REQUEST_NOT_FOUND = 1, 'request not found'
-    REQUEST_QUEUED = 2, 'request is in queue'
-    REQUEST_PROCESSING = 3, 'request is being processed by manager'
-    REQUEST_COMPLETE = 4, 'request has been serviced'
+    # fetch success status codes
+    REQUEST_COMPLETE = 0, 'request has been completely processed'
+    REQUEST_PROCESSING = 1, 'processing request'
+    REQUEST_QUEUED = 2, 'request has been queued for processing'
+    # this should go away - if in jsoc.export_new, but not in jsoc.export, then this is the same as REQUEST_QUEUED
+    REQUEST_NOT_QUEUED = 6, 'request has not been queued yet'
 
     @classmethod
     def get_status_code(cls, request_status):
-        if request_status == 7:
-            # no more requests allow for this user/ip address
-            pass
         if request_status == 6:
-            # this should go away - if in jsoc.export_new, but not in jsoc.export, then this is the same as REQUEST_QUEUED
+
             return StatusCode.REQUEST_NOT_FOUND
         if request_status == 2  or request_status == 12:
             return StatusCode.REQUEST_QUEUED
@@ -39,16 +37,19 @@ class StatusCode(SC):
             return StatusCode.REQUEST_COMPLETE
 
 class ErrorCode(ExportErrorCode):
-    PARAMETERS = 1, 'failure locating DRMS parameters'
-    ARGUMENTS = 2, 'bad arguments'
-    LOGGING = 3, 'failure logging messages'
-    DRMS_CLIENT = 4, 'drms client error'
-    STREAM_FORMAT = 5, 'format error in downloaded payload'
-    EXPORT_ACTION = 6, 'failure calling export action'
-    REQUEST_REJECTED = 7, 'too many requests'
-    REQUEST_NOT_ONLINE = 8, 'request no longer online'
-    REQUEST_FATAL = 9, 'fatal error'
-    REQUEST_TOO_LARGE = 10, 'request too large'
+    # fetch error codes
+    REQUEST_TOO_LARGE = 3, 'requested payload is too large'
+    REQUEST_FATAL_ERROR = 4, 'a fatal error occurred during processing'
+    REQUEST_NOT_ONLINE = 5, 'exported files are no longer online'
+    REQUEST_TOO_MANY = 7, 'too many simulatneous exports'
+
+    # other IR errors
+    PARAMETERS = 101, 'failure locating DRMS parameters'
+    ARGUMENTS = 102, 'bad arguments'
+    LOGGING = 103, 'failure logging messages'
+    DRMS_CLIENT = 104, 'drms client error'
+    STREAM_FORMAT = 105, 'format error in downloaded payload'
+    EXPORT_ACTION = 106, 'failure calling export action'
 
     @classmethod
     def get_error_code(cls, request_error):
@@ -253,8 +254,8 @@ def jsonify(data_frame):
     # ]
     return data_frame.to_json(orient='records')
 
-def get_response_dict(request, status_code):
-    status = status_code # 2/12 ==> asynchronous processing, 0 ==> synchronous processing
+def get_response_dict(request, status_or_error_code):
+    fetch_status = request.status # 2/12 ==> asynchronous processing, 0 ==> synchronous processing
     error = request.error # None, unless an error occurred
     requestid = request.request_id # None, unless asynchronous processing
     count = request.file_count # None, unless synchronous processing
@@ -263,27 +264,39 @@ def get_response_dict(request, status_code):
     method = request.method
     protocol = request.file_format
 
-    if status_code == StatusCode.REQUEST_COMPLETE:
+    if status_or_error_code == StatusCode.REQUEST_COMPLETE:
         data = json_dumps(list(zip(request.urls.record.to_list(), request.urls.url.to_list()))) # None, unless synchronous processing
     else:
         data = None
 
-    response_dict = { 'status' : status, 'error' : error, 'requestid' : requestid, 'count' : count, 'rcount' : rcount, 'size' : size, 'method' : method, 'protocol' : protocol, 'data' : data }
+    response_dict = { 'status_code' : status_or_error_code, 'message' : status_or_error_code.description(), 'fetch_status' : fetch_status, 'fetch_error' : error, 'requestid' : requestid, 'count' : count, 'rcount' : rcount, 'size' : size, 'method' : method, 'protocol' : protocol, 'data' : data }
 
     return response_dict
 
-    def get_response(request):
-        status_code = StatusCode.get_status_code(request.status)
+def get_response(request):
+    # was there an error?
+    error_code = None
 
-        if status_code == StatusCode.REQUEST_QUEUED or status_code == StatusCode.REQUEST_PROCESSING:
-            # request is being processed synchronously
-            response_dict = get_response_dict(request, status_code)
-            response = Response.generate_response(status_code=StatusCode.SUCCESS, **response_dict)
-        else:
-            # an error occurred (or a timeout event happened - it took too long for the request to be copied from jsoc.export_new to jsoc.export)
-            response = ErrorResponse.generate_response(status_code=status_code, status=request.status, error=request.error)
+    try:
+        error_code = ErrorCode(int(request.status))
+    except KeyError:
+        pass
 
-        return response
+    print(f'error code is {str(error_code)}')
+
+    if error_code is not None:
+        response_dict = get_response_dict(request, error_code)
+        response = ErrorResponse.generate_response(**response_dict)
+    else:
+        try:
+            status_code = StatusCode(int(request.status))
+        except ValueError:
+            raise DRMSClientError(exc_info=sys_exc_info(), msg=f'unexpected fetch status returned {str(request.status)}')
+
+        response_dict = get_response_dict(request, status_code)
+        response = Response.generate_response(**response_dict)
+
+    return response
 
 def stop_loop(do_loop):
     do_loop = False
@@ -391,8 +404,8 @@ def export_mini(*, drms_client, address, requestor=None, log, **export_arguments
             timer = Timer(8, stop_loop, args=(do_loop,))
             while do_loop:
                 request = drms_cccccclient.export_from_id(request.id) # updates status with jsoc_fetch exp_status call
-                status_code = StatusCode.get_status_code(request.status)
-                if status_code != StatusCode.REQUEST_NOT_FOUND:
+                export_status_code = StatusCode.get_status_code(request.status)
+                if export_status_code != StatusCode.REQUEST_NOT_FOUND:
                     break
         else:
             # jsoc_fetch processed the request synchronously; export files exist in a temporary SU now
@@ -402,15 +415,7 @@ def export_mini(*, drms_client, address, requestor=None, log, **export_arguments
     except Exception as exc:
         raise DRMSClientError(exc_info=sys_exc_info())
 
-    status_code = StatusCode.get_status_code(request.status)
-
-    if status_code == StatusCode.REQUEST_COMPLETE or status_code == StatusCode.REQUEST_QUEUED or status_code == StatusCode.REQUEST_PROCESSING:
-        # request was processed/completed synchronously, or it is beinng processed asynchronously
-        response_dict = get_response_dict(request, status_code)
-        response = Response.generate_response(status_code=StatusCode.SUCCESS, **response_dict)
-    else:
-        # an error occurred (or a timeout event happened - it took too long for the request to be copied from jsoc.export_new to jsoc.export)
-        response = ErrorResponse.generate_response(status_code=status_code, requestid=request.id, status=request.status, method=request.method, dir=request.dir, data=None, count=len(data), size=request.size, error=request.error_msg, contact=request.contact)
+    response = get_response(request)
 
     return response
 
@@ -526,8 +531,10 @@ def perform_action(is_program, program_name=None, **kwargs):
             action = Action.action(action_type=action_type, args={ 'specification' : arguments.export_arguments['specification'] })
             response = action() # __call__ returns dict
 
-            if response['status'] != PsStatusCode.SUCCESS:
-                raise ExportActionError(msg=f'failure calling `{action_type}` action; status: `{response.status.fullname()}`')
+            print(f'response is {str(response)}')
+            if response['status_code'] != PsStatusCode.SUCCESS:
+                print(f'here OK')
+                raise ExportActionError(msg=f'failure calling `{action_type}` action; status: `{response.status.description()}`')
 
             # `subsets` exists if status == PsStatusCode.SUCCESS
             subsets = response['subsets']
@@ -549,8 +556,8 @@ def perform_action(is_program, program_name=None, **kwargs):
                 action_type = 'determine_db_server'
                 action = Action.action(action_type=action_type, args={ 'public_dbhost' : arguments.db_host, 'series' : series_dict })
                 response = action()
-                if response['status'] != CdbStatusCode.SUCCESS:
-                    raise ExportActionError(msg=f'failure calling `{action_type}` action; status: `{response.status.fullname()}`')
+                if response['status_code'] != CdbStatusCode.SUCCESS:
+                    raise ExportActionError(msg=f'failure calling `{action_type}` action; status: `{response.status.description()}`')
                 if response['server'] is None:
                     raise ArgumentsError(msg=f'cannot service any series in `{", ".join(arguments.series)}`')
                 db_host = response['server']
