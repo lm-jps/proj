@@ -23,45 +23,45 @@ class ErrorCode(ExportErrorCode):
     SUBPROCESS = 4, 'subprocess error'
 
 class PsBaseError(ExportError):
-    def __init__(self, *, exc_info=None, msg=None):
+    def __init__(self, *, exc_info=None, error_message=None):
         if exc_info is not None:
             self.exc_info = exc_info
             e_type, e_obj, e_tb = exc_info
 
-            if msg is None:
-                msg = f'{e_type.__name__}: {str(e_obj)}'
+            if error_message is None:
+                error_message = f'{e_type.__name__}: {str(e_obj)}'
 
-        super().__init__(msg=msg)
+        super().__init__(error_message=error_message)
 
 class ParametersError(PsBaseError):
     _error_code = ErrorCode(ErrorCode.PARAMETERS)
 
-    def __init__(self, *, exc_info=None, msg=None):
-        super().__init__(exc_info=exc_info, msg=msg)
+    def __init__(self, *, exc_info=None, error_message=None):
+        super().__init__(exc_info=exc_info, error_message=error_message)
 
 class ArgumentsError(PsBaseError):
     _error_code = ErrorCode(ErrorCode.ARGUMENTS)
 
-    def __init__(self, *, exc_info=None, msg=None):
-        super().__init__(exc_info=exc_info, msg=msg)
+    def __init__(self, *, exc_info=None, error_message=None):
+        super().__init__(exc_info=exc_info, error_message=error_message)
 
 class LoggingError(PsBaseError):
     _error_code = ErrorCode(ErrorCode.LOGGING)
 
-    def __init__(self, *, exc_info=None, msg=None):
-        super().__init__(exc_info=exc_info, msg=msg)
+    def __init__(self, *, exc_info=None, error_message=None):
+        super().__init__(exc_info=exc_info, error_message=error_message)
 
 class SubprocessError(PsBaseError):
     _error_code = ErrorCode(ErrorCode.SUBPROCESS)
 
-    def __init__(self, *, msg=None):
-        super().__init__(msg=msg)
+    def __init__(self, *, error_message=None):
+        super().__init__(error_message=error_message)
 
 class Arguments(Args):
     _arguments = None
 
     @classmethod
-    def get_arguments(cls, *, program_name=None, program_args, drms_params):
+    def get_arguments(cls, *, is_program, program_name=None, program_args, drms_params):
         if cls._arguments is None:
             try:
                 log_file = path_join(drms_params.get_required('EXPORT_LOG_DIR'), DEFAULT_LOG_FILE)
@@ -71,7 +71,7 @@ class Arguments(Args):
                 db_name = drms_params.get_required('DBNAME')
                 db_user = drms_params.get_required('WEB_DBUSER')
             except DPMissingParameterError as exc:
-                raise ParametersError(msg=str(exc))
+                raise ParametersError(error_message=str(exc))
 
             args = None
 
@@ -128,10 +128,10 @@ class ParseSpecificationAction(Action):
     def parse_specification(self):
         # returns dict
         prog_name = inspect.currentframe().f_code.co_name
-        response = perform_action(program_name=prog_name, spec=self._specification, options=self._options)
-        return response.generate_json_obj()
+        response = perform_action(is_program=False, program_name=prog_name, spec=self._specification, options=self._options)
+        return response.generate_dict()
 
-def perform_action(*, program_name=None, **kwargs):
+def perform_action(*, is_program, program_name=None, **kwargs):
     # catch all expections so we can always generate a response
     response = None
     log = None
@@ -150,9 +150,9 @@ def perform_action(*, program_name=None, **kwargs):
             drms_params = DRMSParams()
 
             if drms_params is None:
-                raise ParametersError(msg=f'unable to locate DRMS parameters package')
+                raise ParametersError(error_message=f'unable to locate DRMS parameters package')
 
-            arguments = Arguments.get_arguments(program_name=program_name, program_args=args, drms_params=drms_params)
+            arguments = Arguments.get_arguments(is_program=is_program, program_name=program_name, program_args=args, drms_params=drms_params)
         except ExportError as exc:
             exc.exc_info = sys_exc_info()
             raise exc
@@ -166,11 +166,11 @@ def perform_action(*, program_name=None, **kwargs):
             response_json = output.decode('utf-8')
             response_dict = json_loads(response_json) # test for valid json
             if response_dict['errMsg'] is not None:
-                raise SubprocessError(msg=f'failure running {PARSE_SPEC_BIN}; error `{response_dict["errMsg"]}`')
+                raise SubprocessError(error_message=f'failure running {PARSE_SPEC_BIN}; error `{response_dict["errMsg"]}`')
         except CalledProcessError as exc:
-            raise SubprocessError(exc_info=sys_exc_info(), msg=f'failure running {PARSE_SPEC_BIN}')
+            raise SubprocessError(exc_info=sys_exc_info(), error_message=f'failure running {PARSE_SPEC_BIN}')
         except json_decoder.JSONDecodeError:
-            raise SubprocessError(exc_info=sys_exc_info(), msg=f'invalid response from {PARSE_SPEC_BIN}; not valid json')
+            raise SubprocessError(exc_info=sys_exc_info(), error_message=f'invalid response from {PARSE_SPEC_BIN}; not valid json')
         except ExportError as exc:
             exc.exc_info = sys_exc_info()
             raise exc
@@ -189,7 +189,7 @@ def perform_action(*, program_name=None, **kwargs):
 
 if __name__ == '__main__':
     try:
-        response = perform_action()
+        response = perform_action(is_program=True)
     except ExportError as exc:
         response = exc.response
 
