@@ -18,26 +18,27 @@ FILE_NAME_SIZE = 256
 
 class StatusCode(SC):
     # fetch success status codes
-    REQUEST_COMPLETE = 0, 'request has been completely processed'
-    REQUEST_PROCESSING = 1, 'processing request'
-    REQUEST_QUEUED = 2, 'request has been queued for processing'
+    REQUEST_COMPLETE = (0, 'request has been completely processed')
+    REQUEST_PROCESSING = (1, 'processing request')
+    REQUEST_QUEUED = (2, 'request has been queued for processing')
     # this should go away - if in jsoc.export_new, but not in jsoc.export, then this is the same as REQUEST_QUEUED
-    REQUEST_NOT_QUEUED = 6, 'request has not been queued yet'
+    REQUEST_NOT_QUEUED = (6, 'request has not been queued yet')
+    REQUEST_QUEUED_DEBUG = (12, 'request has been queued for processing')
 
 class ErrorCode(ExportErrorCode):
     # fetch error codes
-    REQUEST_TOO_LARGE = 3, 'requested payload is too large'
-    REQUEST_FATAL_ERROR = 4, 'a fatal error occurred during processing'
-    REQUEST_NOT_ONLINE = 5, 'exported files are no longer online'
-    REQUEST_TOO_MANY = 7, 'too many simulatneous exports'
+    REQUEST_TOO_LARGE = (3, 'requested payload is too large')
+    REQUEST_FATAL_ERROR = (4, 'a fatal error occurred during processing')
+    REQUEST_NOT_ONLINE = (5, 'exported files are no longer online')
+    REQUEST_TOO_MANY = (7, 'too many simulatneous exports')
 
     # other IR errors
-    PARAMETERS = 101, 'failure locating DRMS parameters'
-    ARGUMENTS = 102, 'bad arguments'
-    LOGGING = 103, 'failure logging messages'
-    DRMS_CLIENT = 104, 'drms client error'
-    STREAM_FORMAT = 105, 'format error in downloaded payload'
-    EXPORT_ACTION = 106, 'failure calling export action'
+    PARAMETERS = (101, 'failure locating DRMS parameters')
+    ARGUMENTS = (102, 'bad arguments')
+    LOGGING = (103, 'failure logging messages')
+    DRMS_CLIENT = (104, 'drms client error')
+    STREAM_FORMAT = (105, 'format error in downloaded payload')
+    EXPORT_ACTION = (106, 'failure calling export action')
 
 class IrBaseError(ExportError):
     def __init__(self, *, exc_info=None, error_message=None):
@@ -87,20 +88,6 @@ class ExportActionError(IrBaseError):
 
     def __init__(self, *, exc_info=None, error_message=None):
         super().__init__(exc_info=exc_info, error_message=error_message)
-
-class ExportTypeAction(ArgsAction):
-    def __call__(self, parser, namespace, value, option_string=None):
-        if value == 'premium':
-            setattr(namespace, 'package', None)
-        elif value == 'mini':
-            setattr(namespace, 'processing', None)
-            setattr(namespace, 'package', None)
-            setattr(namespace, 'access', 'http')
-            setattr(namespace, 'file_format', 'native')
-        else:
-            setattr(namespace, 'access', 'streamed')
-
-        setattr(namespace, self.dest, value)
 
 class ExportArgumentsAction(ArgsAction):
     def __call__(self, parser, namespace, value, option_string=None):
@@ -166,7 +153,7 @@ class Arguments(Args):
 
                 # required
                 parser.add_argument('db_host', help='the machine hosting the database that contains export requests from this site', metavar='<db host>', dest='db_host', required=True)
-                parser.add_argument('export_type', help='the export type: premium, mini, or streamed', metavar='<webserver>', choices=Choices(['premium', 'mini', 'streamed']), action=ExportTypeAction, dest='export_type', required=True)
+                parser.add_argument('export_type', help='the export type: premium, mini, or streamed', metavar='<webserver>', choices=Choices(['premium', 'mini', 'streamed']), dest='export_type', required=True)
                 parser.add_argument('webserver', help='the webserver invoking this script', metavar='<webserver>', action=create_webserver_action(drms_params), dest='webserver', required=True)
                 parser.add_argument('address', help='the email addressed registered for export', metavar='<email address>', dest='address', required=True)
                 parser.add_argument('arguments', help='export arguments', action=ExportArgumentsAction, dest='export_arguments', required=True)
@@ -204,9 +191,51 @@ class Arguments(Args):
 
             arguments.private_db_host = private_db_host
 
-            cls._arguments = arguments
+            cls.validate_export_arguments(arguments=arguments)
+            cls._arguments = cls.make_objects(arguments=arguments)
 
         return cls._arguments
+
+    @classmethod
+    def validate_export_arguments(cls, *, arguments):
+        if arguments.export_type == 'premium':
+            required_args = ('access', 'package', 'specification')
+            optional_args = ('file_format', 'file_format_args', 'file_name_format', 'number_records', 'processing')
+        elif arguments.export_type == 'mini':
+            required_args = ('specification')
+            optional_args = ('file_name_format', 'number_records')
+        elif arguments.export_type == 'streamed':
+            required_args = ('specification')
+            optional_args = ('file_name_format')
+
+        all_args = []
+        all_args.extend(required_args)
+        all_args.extend(optional_args)
+
+        for required in required_args:
+            if not arguments.export_arguments.get(required, False):
+                raise ArgumentsError(error_message=f'missing required export argument `{required}`')
+
+        for optional in optional_args:
+            # set all missing optional argument values to None
+            if not arguments.export_arguments.get(optional, False):
+                arguments.export_arguments[optional] = None
+
+        for arg in arguments.export_arguments.keys():
+            if arg not in all_args:
+                raise ArgumentsError(error_message=f'unexpected export argument `{arg}`')
+
+    @classmethod
+    def make_objects(cls, *, arguments):
+        if 'package' in arguments.export_arguments:
+            data = arguments.export_arguments['package']
+            if not isinstance(data, dict):
+                raise ArgumentsError(error_message=f'the `package` export arugment must be a `dict`')
+            if 'type' not in data:
+                raise ArgumentsError(error_message=f'`package` dict argument must have a `type` property')
+            arguments.export_arguments['package'] = MakeObject(name='package', data=data)()
+
+        return arguments
 
 def jsonify(data_frame):
     # input:
@@ -282,6 +311,40 @@ def get_response(request):
 
     return response
 
+def request_is_complete(request):
+    error_code = None
+    status_code = None
+
+    try:
+        error_code = ErrorCode(request.status)
+    except KeyError:
+        pass
+
+    if error_code is None:
+        try:
+            status_code = StatusCode(request.status)
+        except KeyError:
+            raise DRMSClientError(exc_info=sys_exc_info(), error_message=f'unexpected fetch status returned {str(request.status)}')
+
+    return status_code == StatusCode.REQUEST_COMPLETE
+
+def request_is_pending(request):
+    error_code = None
+    status_code = None
+
+    try:
+        error_code = ErrorCode(request.status)
+    except KeyError:
+        pass
+
+    if error_code is None:
+        try:
+            status_code = StatusCode(request.status)
+        except KeyError:
+            raise DRMSClientError(exc_info=sys_exc_info(), error_message=f'unexpected fetch status returned {str(request.status)}')
+
+    return status_code == StatusCode.REQUEST_PROCESSING or status_code == StatusCode.REQUEST_QUEUED or status_code == StatusCode.REQUEST_NOT_QUEUED or status_code == REQUEST_QUEUED_DEBUG
+
 def stop_loop(do_loop):
     do_loop = False
 
@@ -289,14 +352,14 @@ def export_premium(*, drms_client, address, requestor=None, log, **export_argume
     '''
     export_arguments:
     {
-      specification : <DRMS record-set specification>, # required
-      processing : <dict of processing argument>, # optional
-      package : <type and file name>, # required
-      access : <http, ftp>, # required
-      file_format <exported file type>, # optional
-      file_format_args <exported file-type arguments>, # optional
-      file_name_format : <format string for name of exported file>, # optional
-      number_records : <maximum number of records exported> # optional
+        access : <http, ftp>, # required
+        file_format <exported file type>, # optional
+        file_format_args <exported file-type arguments>, # optional
+        file_name_format : <format string for name of exported file>, # optional
+        number_records : <maximum number of records exported>, # optional
+        processing : <dict of processing argument>, # optional
+        package : <type, package_file_name>, # required
+        specification : <DRMS record-set specification> # required
     }
     '''
     response = None
@@ -313,24 +376,28 @@ def export_premium(*, drms_client, address, requestor=None, log, **export_argume
             else:
                 method = 'url'
 
-        request = drms_client.export(email=address, requestor=requestor, ds=export_arguments['specification'], processing=export_arguments['processing'], method=method, protocol=export_arguments['file_format'], protocol_args=export_arguments['file_format_args'] if 'file_format_args' in export_arguments else None, filename_fmt=export_arguments['file_name_format'] if 'file_name_format' in export_arguments else None, n=export_arguments['number_records'] if 'number_records' in export_arguments else None, synchronous_export=False)
+        request = drms_client.export(email=address, requestor=requestor, ds=export_arguments['specification'], process=export_arguments['processing'], method=method, protocol=export_arguments['file_format'], protocol_args=export_arguments['file_format_args'], filename_fmt=export_arguments['file_name_format'], n=export_arguments['number_records'], synchronous_export=False)
 
         # if jsoc_fetch processed the request synchronously, then it will have returned status == 0 to `drms_client` - there is no request id created, so `request` will not have an `id` property; if jsoc_fetch processed the request asynchronously (because data were offline), then `request` will have an `id` property that contains the request ID needed by exportdata.html so it can poll for export-processing completion
-        if 'id' in request:
+        if request_is_complete(request):
+            log.write_info([ f'[ export_premium ] request {str(request.request_id)} was processed synchronously and is complete' ])
+        elif request_is_pending(request):
             # jsoc_fetch executed the `url` branch of code, so the request is now asynchronous
-            log.write_info(f'[ export_premium ] request {str(request.id)} is being processed asynchronously')
+            log.write_info([ f'[ export_premium ] request {str(request.request_id)} is being processed asynchronously' ])
 
-            # we want to wait for the request to appear in the request db table (jsoc.export); this should happen relatively quickly, so have a small timeout and if the timeout event occurs, return an error to the caller; otherwise, examine the retured status code - if it is QUEUED or PROCESSING, then make a 'pending' response; if it is COMPLETE, then make a 'complete' response; otherwise make an 'error' response
+            # we want to wait for the request to appear in the request db table (jsoc.export) - this should no longer happen since jsoc_fetch now will return status == 2 if the request is in jsoc.export_new, but not yet in jsoc.export
             do_loop = True
             timer = Timer(8, stop_loop, args=(do_loop,))
             while do_loop:
-                request = drms_client.export_from_id(request.id) # updates status with jsoc_fetch exp_status call
-                status_code = StatusCode.get_status_code(request.status)
-                if status_code != StatusCode.REQUEST_NOT_FOUND:
+                request = drms_client.export_from_id(request.request_id) # updates status with jsoc_fetch exp_status call
+                if StatusCode(request.status) != StatusCode.REQUEST_NOT_QUEUED:
                     break
         else:
-            raise DRMSClientError(error_message=f'unexpected `export_premium` response; missing request ID')
+            # must be an error
+            raise DRMSClientError(error_message=f'failure processing premium export ({StatusCode(request.status).description()})')
     except securedrms.SecureDRMSError as exc:
+        raise DRMSClientError(exc_info=sys_exc_info())
+    except Exception as exc:
         raise DRMSClientError(exc_info=sys_exc_info())
 
     response = get_response(request)
@@ -377,9 +444,11 @@ def export_mini(*, drms_client, address, requestor=None, log, **export_arguments
         request = drms_client.export(email=address, requestor=requestor, ds=export_arguments['specification'], method='url_quick', protocol='as-is', protocol_args=None, filename_fmt=export_arguments['file_name_format'] if 'file_name_format' in export_arguments else None, n=export_arguments['number_records'] if 'number_records' in export_arguments else None, synchronous_export=False)
 
         # if jsoc_fetch processed the request synchronously, then it will have returned status == 0 to `drms_client` - there is no request id created, so `request` will not have an `id` property; if jsoc_fetch processed the request asynchronously (because data were offline), then `request` will have an `id` property that contains the request ID needed by exportdata.html so it can poll for export-processing completion
-        if request.request_id is not None:
+        if request_is_complete(request):
+            log.write_info([ f'[ export_mini ] request for `{export_arguments["specification"]}` was processed synchronously and is now complete' ])
+        elif request_is_pending(request):
             # jsoc_fetch executed the `url` branch of code, so the request is now asynchronous
-            log.write_info(f'[ export_mini ] request {str(request.id)} is being processed asynchronously')
+            log.write_info([ f'[ export_mini ] request {str(request.id)} is being processed asynchronously' ])
 
             # we want to wait for the request to appear in the request db table (jsoc.export); this should happen relatively quickly, so have a small timeout and if the timeout event occurs, return an error to the caller; otherwise, examine the retured status code - if it is QUEUED or PROCESSING, then make a 'pending' response; if it is COMPLETE, then make a 'complete' response; otherwise make an 'error' response
 
@@ -387,13 +456,12 @@ def export_mini(*, drms_client, address, requestor=None, log, **export_arguments
             do_loop = True
             timer = Timer(8, stop_loop, args=(do_loop,))
             while do_loop:
-                request = drms_cccccclient.export_from_id(request.id) # updates status with jsoc_fetch exp_status call
-                export_status_code = StatusCode.get_status_code(request.status)
-                if export_status_code != StatusCode.REQUEST_NOT_FOUND:
+                request = drms_client.export_from_id(request.request_id) # updates status with jsoc_fetch exp_status call
+                if StatusCode(request.status) != StatusCode.REQUEST_NOT_QUEUED:
                     break
         else:
-            # jsoc_fetch processed the request synchronously; export files exist in a temporary SU now
-            log.write_info([ f'[ export_mini ] request for `{export_arguments["specification"]}` was processed synchronously and is now complete' ])
+            # must be an error
+            raise DRMSClientError(error_message=f'failure processing mini export ({StatusCode(request.status).description()})')
     except securedrms.SecureDRMSError as exc:
         raise DRMSClientError(exc_info=sys_exc_info())
     except Exception as exc:
