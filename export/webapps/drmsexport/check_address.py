@@ -90,7 +90,7 @@ class CheckAddressResponse(Response):
     _status_code = None
 
     def __init__(self, *, address, **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(address=address, **kwargs)
 
 class RegistrationInitiatedResponse(CheckAddressResponse):
     _status_code = StatusCode(StatusCode.REGISTRATION_INITIATED)
