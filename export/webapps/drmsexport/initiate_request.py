@@ -97,7 +97,7 @@ class ExportArgumentsAction(ArgsAction):
         # convert json arguments to dict
         export_arguments = json_loads(value)
         if 'specification' not in export_arguments:
-            raise ArgumentsError(f'missing required export argument `specification`')
+            raise ArgumentsError(error_message=f'missing required export argument `specification`')
         setattr(namespace, self.dest, export_arguments)
 
 def webserver_action_constructor(self, drms_params):
@@ -165,7 +165,7 @@ class Arguments(Args):
                 arguments.drms_client = None
             else:
                 # `program_args` has all `arguments` values, in final form; validate them
-                def extract_module_args(*, db_host, export_type, webserver, address, export_arguments, drms_client=None, drms_client_type='ssh', requestor=None, log_file=log_file, logging_level=logging_level, db_port=db_port, db_name=db_name, db_user=db_user):
+                def extract_module_args(*, db_host, export_type, webserver, address, export_arguments, drms_client=None, drms_client_type='ssh', requestor=None, log_file=log_file, logging_level=DrmsLogLevel.ERROR, db_port=db_port, db_name=db_name, db_user=db_user):
                     arguments = {}
 
                     arguments['db_host'] = db_host
@@ -789,12 +789,13 @@ class InitiateRequestAction(Action):
 if __name__ == "__main__":
     try:
         response = perform_action(is_program=True)
-        print(response.generate_json())
     except ExportError as exc:
         response = exc.response
     except Exception as exc:
-        error = DRMSClientError(exc_info=sys_exc_info())
+        error = ExportActionError(exc_info=sys_exc_info())
         response = error.response
+
+    print(response.generate_json())
 
     # Always return 0. If there was an error, an error code (the 'status' property) and message (the 'statusMsg' property) goes in the returned HTML.
     sys_exit(0)
