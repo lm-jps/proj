@@ -2,6 +2,7 @@
 
 
 from argparse import Action as ArgsAction
+import asyncio
 from check_dbserver import StatusCode as CdbStatusCode
 from parse_specification import StatusCode as PsStatusCode
 from drms_export import Error as ExportError, ErrorCode as ExportErrorCode, Response, securedrms
@@ -9,12 +10,14 @@ from drms_parameters import DRMSParams, DPMissingParameterError
 from drms_utils import Arguments as Args, ArgumentsError as ArgsError, Choices, CmdlParser, Formatter as DrmsLogFormatter, Log as DrmsLog, LogLevel as DrmsLogLevel, LogLevelAction as DrmsLogLevelAction, MakeObject, StatusCode as SC
 from json import dumps as json_dumps, loads as json_loads
 from os.path import join as path_join
-from sys import exc_info as sys_exc_info, exit as sys_exit
+import re
+from sys import exc_info as sys_exc_info, exit as sys_exit, stdout as sys_stdout
 from threading import Event, Timer
 
 DEFAULT_LOG_FILE = 'ir_log.txt'
 
 FILE_NAME_SIZE = 256
+DUMMY_FITS_FILE_NAME = 'data.FITS'
 
 class StatusCode(SC):
     # fetch success status codes
@@ -199,14 +202,14 @@ class Arguments(Args):
     @classmethod
     def validate_export_arguments(cls, *, arguments):
         if arguments.export_type == 'premium':
-            required_args = ('access', 'package', 'specification')
-            optional_args = ('file_format', 'file_format_args', 'file_name_format', 'number_records', 'processing')
+            required_args = ('access', 'package', 'specification',)
+            optional_args = ('file_format', 'file_format_args', 'file_name_format', 'number_records', 'processing',)
         elif arguments.export_type == 'mini':
-            required_args = ('specification')
-            optional_args = ('file_name_format', 'number_records')
+            required_args = ('specification',)
+            optional_args = ('file_name_format', 'number_records',)
         elif arguments.export_type == 'streamed':
-            required_args = ('specification')
-            optional_args = ('file_name_format')
+            required_args = ('specification',)
+            optional_args = ('file_name_format',)
 
         all_args = []
         all_args.extend(required_args)
@@ -441,7 +444,7 @@ def export_mini(*, drms_client, address, requestor=None, log, **export_arguments
         # }
         method='url-quick'
 
-        request = drms_client.export(email=address, requestor=requestor, ds=export_arguments['specification'], method='url_quick', protocol='as-is', protocol_args=None, filename_fmt=export_arguments['file_name_format'] if 'file_name_format' in export_arguments else None, n=export_arguments['number_records'] if 'number_records' in export_arguments else None, synchronous_export=False)
+        request = drms_client.export(email=address, requestor=requestor, ds=export_arguments['specification'], method='url_quick', protocol='as-is', protocol_args=None, filename_fmt=export_arguments['file_name_format'], n=export_arguments['number_records'], synchronous_export=False)
 
         # if jsoc_fetch processed the request synchronously, then it will have returned status == 0 to `drms_client` - there is no request id created, so `request` will not have an `id` property; if jsoc_fetch processed the request asynchronously (because data were offline), then `request` will have an `id` property that contains the request ID needed by exportdata.html so it can poll for export-processing completion
         if request_is_complete(request):
@@ -471,6 +474,34 @@ def export_mini(*, drms_client, address, requestor=None, log, **export_arguments
 
     return response
 
+async def read_from_proc(destination, proc):
+    if not destination.file_name_read:
+        # a FITS file prepended with filename; read the filename first
+        bytes_read = await proc.stdout.read(FILE_NAME_SIZE)
+
+        # truncate padding (0 bytes)
+        file_name = bytes_read.rstrip(b'\x00').decode()
+
+        # force alphanumeric (plus '_'), preserving the file extension
+        matches = re.search(r'(^.+)[.]([^.]+$)', file_name)
+        if matches is not None:
+            base = matches.group(1)
+            extension = matches.group(2)
+            file_name = f'{re.sub(r"[^a-zA-Z0-9_]", "_", base)}.{extension}'
+
+        disposition = f'Content-Disposition: attachment; filename={file_name}\n'
+
+        # return data back to securedrms to write it to stdout
+        data = b'Content-type: application/octet-stream\n' + disposition.encode() + b'Content-transfer-encoding: binary\n\n'
+
+        destination.file_name_read = True
+    else:
+        # dump the remainder of the FITS file
+        bytes_read = await proc.stdout.read(4096)
+        data = bytes_read
+
+    return data
+
 def export_streamed(*, drms_client, address, requestor=None, log, **export_arguments):
     '''
     export_arguments:
@@ -479,47 +510,21 @@ def export_streamed(*, drms_client, address, requestor=None, log, **export_argum
       file_name_format : <format string for name of exported file> # optional
     }
     '''
+    response = None
+
     try:
         method = 'url_direct'
 
-        download_stream = io.BytesIO()
-
         # spawn a thread to download and write to `download_stream`; will return while streaming is occurring;
         # drms-export-to-stdout will verify email address
-        drms_client.export_package(spec=export_arguments['specification'], download_directory=None, filename_fmt=export_arguments['file_name_format'] if 'file_name_format' in export_arguments else None)
+        request = drms_client.export_and_stream_file(spec=export_arguments['specification'], filename_fmt=export_arguments['file_name_format'])
 
-        file_name = ''
+        # asyncio.run(stream_file_data(request, download_stream))
 
-        # a FITS file prepended with filename; read the filename first
-        while len(file_name) < FILE_NAME_SIZE:
-            pipe_bytes = download_stream.read(FILE_NAME_SIZE - len(file_name))
-
-            if len(pipe_bytes) == 0:
-                raise StreamFormatError('improper formatting for FITS-file-name header')
-            file_name = file_name + pipe_bytes.decode('UTF8')
-
-        # truncate padding (0 bytes)
-        file_name = file_name.rstrip('\x00')
-
-        if len(file_name) == 0:
-            # FITS file, which may have a filename, or it may not
-            file_name = DUMMY_FITS_FILE_NAME
-
-        # force alphanumeric (plus '_'), preserving the file extension
-        matches = re.search(r'(^.+)[.]([^.]+$)', file_name)
-        if matches is not None:
-            base = matches.group(1)
-            extension = matches.group(2)
-            file_name = re.sub(r'[^a-zA-Z0-9_]', '_', base) + '.' + extension
-
-        # we are streaming either a single FITS file; write HTTP header
-        sys.stdout.buffer.write(b'Content-type: application/octet-stream\n')
-        sys.stdout.buffer.write(b'Content-Disposition: attachment; filename="' + file_name.encode() + b'"\n')
-        sys.stdout.buffer.write(b'Content-transfer-encoding: binary\n\n')
-
-        # dump the remainder of the FITS file
-        sys.stdout.buffer.write(download_stream.read())
-        sys.stdout.buffer.flush()
+        destination = securedrms.OnTheFlyDownloader.StreamDestination(sys_stdout.buffer)
+        destination.file_name_read = False
+        destination.stream_reader = read_from_proc
+        request.download(destination=destination)
     except securedrms.SecureDRMSError as exc:
         raise DRMSClientError(exc_info=sys_exc_info())
 
@@ -724,6 +729,9 @@ def perform_action(is_program, program_name=None, **kwargs):
         if log:
             e_type, e_obj, e_tb = exc.exc_info
             log.write_error([ f'ERROR LINE {str(e_tb.tb_lineno)}: {exc.message}' ])
+            import traceback
+
+            print(traceback.format_exc(8))
 
     return response
 
