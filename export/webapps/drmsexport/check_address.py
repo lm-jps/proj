@@ -21,11 +21,11 @@ import re
 import uuid
 from urllib.parse import unquote
 import smtplib
-from sys import exit as sys_exit
+from sys import exc_info as sys_exc_info, exit as sys_exit
 
 from drms_export import Error as ExportError, ErrorCode as ExportErrorCode, Response
 from drms_parameters import DRMSParams, DPMissingParameterError
-from drms_utils import Arguments as Args, CmdlParser, Formatter as DrmsLogFormatter, Log as DrmsLog, LogLevel as DrmsLogLevel, LogLevelAction as DrmsLogLevelAction, StatusCode as ExportStatusCode
+from drms_utils import Arguments as Args, ArgumentsError as ArgsError, CmdlParser, Formatter as DrmsLogFormatter, Log as DrmsLog, LogLevel as DrmsLogLevel, LogLevelAction as DrmsLogLevelAction, StatusCode as ExportStatusCode
 
 DEFAULT_LOG_FILE = 'ca_log.txt'
 
@@ -44,47 +44,61 @@ class ErrorCode(ExportErrorCode):
     DB_CONNECTION = 6, 'failure connecting to database'
     DUPLICATION = 7, 'address is already registered'
 
-class ParametersError(ExportError):
+class CaBaseError(ExportError):
+    def __init__(self, *, exc_info=None, error_message=None):
+        if exc_info is not None:
+            self.exc_info = exc_info
+            e_type, e_obj, e_tb = exc_info
+
+            if error_message is None:
+                error_message = f'{e_type.__name__}: {str(e_obj)}'
+            else:
+                error_message = f'{error_message} [ {e_type.__name__}: {str(e_obj)} ]'
+
+        super().__init__(error_message=error_message)
+
+
+class ParametersError(CaBaseError):
     _error_code = ErrorCode(ErrorCode.PARAMETERS)
 
-    def __init__(self, *, msg=None):
-        super().__init__(msg=msg)
+    def __init__(self, *, exc_info=None, error_message=None):
+        super().__init__(exc_info=exc_info, error_message=error_message)
 
-class ArgumentsError(ExportError):
+class ArgumentsError(CaBaseError):
     _error_code = ErrorCode(ErrorCode.ARGUMENTS)
 
-    def __init__(self, *, msg=None):
-        super().__init__(msg=msg)
+    def __init__(self, *, exc_info=None, error_message=None):
+        super().__init__(exc_info=exc_info, error_message=error_message)
 
-class LoggingError(ExportError):
+class LoggingError(CaBaseError):
     _error_code = ErrorCode(ErrorCode.LOGGING)
 
-    def __init__(self, *, msg=None):
-        super().__init__(msg=msg)
+    def __init__(self, *, exc_info=None, error_message=None):
+        super().__init__(exc_info=exc_info, error_message=error_message)
 
-class MailError(ExportError):
+class MailError(CaBaseError):
     _error_code = ErrorCode(ErrorCode.MAIL)
 
-    def __init__(self, *, msg=None):
-        super().__init__(msg=msg)
+    def __init__(self, *, exc_info=None, error_message=None):
+        super().__init__(exc_info=exc_info, error_message=error_message)
 
-class DBError(ExportError):
+class DBError(CaBaseError):
     _error_code = ErrorCode(ErrorCode.DB)
 
-    def __init__(self, *, msg=None):
-        super().__init__(msg=msg)
+    def __init__(self, *, exc_info=None, error_message=None):
+        super().__init__(exc_info=exc_info, error_message=error_message)
 
-class DBConnectionError(ExportError):
+class DBConnectionError(CaBaseError):
     _error_code = ErrorCode(ErrorCode.DB_CONNECTION)
 
-    def __init__(self, *, msg=None):
-        super().__init__(msg=msg)
+    def __init__(self, *, exc_info=None, error_message=None):
+        super().__init__(exc_info=exc_info, error_message=error_message)
 
-class DuplicationError(ExportError):
+class DuplicationError(CaBaseError):
     _error_code = ErrorCode(ErrorCode.DUPLICATION)
 
-    def __init__(self, *, msg=None):
-        super().__init__(msg=msg)
+    def __init__(self, *, exc_info=None, error_message=None):
+        super().__init__(exc_info=exc_info, error_message=error_message)
 
 class CheckAddressResponse(Response):
     _status_code = None
@@ -113,7 +127,7 @@ class Arguments(Args):
     _arguments = None
 
     @classmethod
-    def get_arguments(cls, *, program_args, drms_params):
+    def get_arguments(cls, *, is_program, program_name=None, program_args=None, module_args=None, drms_params):
         if cls._arguments is None:
             try:
                 db_host = drms_params.get_required('SERVER')
@@ -127,30 +141,54 @@ class Arguments(Args):
                 regemail_timeout = drms_params.get_required('REGEMAIL_TIMEOUT')
                 log_file = path_join(drms_params.get_required('EXPORT_LOG_DIR'), DEFAULT_LOG_FILE)
             except DPMissingParameterError as exc:
-                raise ParametersError(msg=str(exc))
+                raise ParametersError(error_message=f'{str(exc)}')
 
-            args = None
+            if is_program:
+                args = None
 
-            if program_args is not None and len(program_args) > 0:
-                args = program_args
+                if program_args is not None and len(program_args) > 0:
+                    args = program_args
 
-            parser = CmdlParser(usage='%(prog)s address=<email address to register/check> operation=<register/check> [ --name=<user\'s name> ] [ --snail=<user snail mail address> ] [ --dbhost=<db host> ] [ --dbport=<db port> ] [ --dbname=<db name> ] [ --dbuser=<db user>] ')
-            # all arguments are considered optional in argparse (see `prefix_chars`); we can therefore do this:
-            # parser.add_argument('-H', 'H', '--dbhost', ...)
-            parser.add_argument('a', 'address', help='the email address to register or check', metavar='<email address>', dest='address', action=UnquoteAction, required=True)
-            parser.add_argument('o', 'operation', help='the operation: register or check', metavar='<operation>', choices=[ 'check', 'register' ], dest='operation', required=True)
+                parser_args = { 'usage' : '%(prog)s address=<email address to register/check> operation=<register/check> [ --log_file=<path to log file> ] [ --logging_level=<logging verbosity level> ] [ --name=<user\'s name> ] [ --snail=<user snail mail address> ] [ --dbhost=<db host> ] [ --dbport=<db port> ] [ --dbname=<db name> ] [ --dbuser=<db user>] ' }
+                if program_name is not None and len(program_name) > 0:
+                    parser_args['prog'] = program_name
 
-            # optional
-            parser.add_argument('-l', '--log_file', help='the path to the log file', metavar='<log file>', dest='log_file', default=log_file)
-            parser.add_argument('-L', '--logging_level', help='the amount of logging to perform; in order of increasing verbosity: critical, error, warning, info, debug', metavar='<logging level>', dest='logging_level', action=DrmsLogLevelAction, default=DrmsLogLevel.ERROR)
-            parser.add_argument('-n', '--name', help='the user name to register', metavar='<export user\'s name>', dest='name', action=UnquoteAction, default='NULL')
-            parser.add_argument('-s', '--snail', help='the user snail-mail address to register', metavar='<export user\'s snail mail>', dest='snail', action=UnquoteAction, default='NULL')
-            parser.add_argument('-H', '--dbhost', help='the host machine of the database that is used to manage pending export requests', metavar='<db host>', dest='db_host', default=db_host)
-            parser.add_argument('-P', '--dbport', help='The port on the host machine that is accepting connections for the database', metavar='<db host port>', dest='db_port', type=int, default=db_port)
-            parser.add_argument('-N', '--dbname', help='the name of the database used to manage pending export requests', metavar='<db name>', dest='db_name', default=db_name)
-            parser.add_argument('-U', '--dbuser', help='the name of the database user account', metavar='<db user>', dest='db_user', default=db_user)
+                parser = CmdlParser(**parser_args)
 
-            arguments = Arguments(parser=parser, args=args)
+                # all arguments are considered optional in argparse (see `prefix_chars`); we can therefore do this:
+                # parser.add_argument('-H', 'H', '--dbhost', ...)
+                parser.add_argument('a', 'address', help='the email address to register or check', metavar='<email address>', dest='address', action=UnquoteAction, required=True)
+                parser.add_argument('o', 'operation', help='the operation: register or check', metavar='<operation>', choices=[ 'check', 'register' ], dest='operation', required=True)
+
+                # optional
+                parser.add_argument('-l', '--log_file', help='the path to the log file', metavar='<log file>', dest='log_file', default=log_file)
+                parser.add_argument('-L', '--logging_level', help='the amount of logging to perform; in order of increasing verbosity: critical, error, warning, info, debug', metavar='<logging level>', dest='logging_level', action=DrmsLogLevelAction, default=DrmsLogLevel.ERROR)
+                parser.add_argument('-n', '--name', help='the user name to register', metavar='<export user\'s name>', dest='name', action=UnquoteAction, default='NULL')
+                parser.add_argument('-s', '--snail', help='the user snail-mail address to register', metavar='<export user\'s snail mail>', dest='snail', action=UnquoteAction, default='NULL')
+                parser.add_argument('-H', '--dbhost', help='the host machine of the database that is used to manage pending export requests', metavar='<db host>', dest='db_host', default=db_host)
+                parser.add_argument('-P', '--dbport', help='The port on the host machine that is accepting connections for the database', metavar='<db host port>', dest='db_port', type=int, default=db_port)
+                parser.add_argument('-N', '--dbname', help='the name of the database used to manage pending export requests', metavar='<db name>', dest='db_name', default=db_name)
+                parser.add_argument('-U', '--dbuser', help='the name of the database user account', metavar='<db user>', dest='db_user', default=db_user)
+
+                arguments = Arguments(parser=parser, args=args)
+
+            else:
+                def extract_module_args(*, address, operation, log_file=log_file, logging_level=DrmsLogLevel.ERROR, name='NULL', snail=None, db_host=db_host, db_port=db_port, db_name=db_name, db_user=db_user):
+                    arguments = {}
+
+                    arguments['address'] = address
+                    arguments['operation'] = operation
+                    arguments['log_file'] = log_file
+                    arguments['logging_level'] = logging_level
+                    arguments['name'] = name
+                    arguments['snail'] = snail
+                    arguments['db_host'] = db_host
+                    arguments['db_port'] = db_port
+                    arguments['db_name'] = db_name
+                    arguments['db_user'] = db_user
+
+                    return arguments
+
             arguments.address_info_fn = address_info_fn
             arguments.address_info_insert_fn = address_info_insert_fn
             arguments.user_info_fn = user_info_fn
@@ -161,7 +199,7 @@ class Arguments(Args):
             reg_exp = re.compile(r'\s*[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,6}')
             match_obj = reg_exp.match(arguments.address)
             if match_obj is None:
-                raise ArgumentsError(f'{arguments.address} is not a valid email address')
+                raise ArgumentsError(error_message=f'{arguments.address} is not a valid email address')
 
             cls._arguments = arguments
 
@@ -181,7 +219,7 @@ def SendMail(address, timeout, confirmation):
         server.quit()
     except Exception as exc:
         # If any exception happened, then the email message was not received.
-        raise MailError(f'unable to send email message to {",".join(toAddrs)} to confirm address')
+        raise MailError(error_message=f'unable to send email message to {",".join(toAddrs)} to confirm address')
 
 def generate_registered_or_pending_response(cursor, arguments, confirmation):
     response = None
@@ -193,7 +231,7 @@ def generate_registered_or_pending_response(cursor, arguments, confirmation):
         rows = cursor.fetchall()
     except psycopg2.Error as exc:
         # handle database-command errors
-        raise DBError(f'{str(exc)}')
+        raise DBError(error_message=f'{str(exc)}')
 
     user_id = rows[0][0]
 
@@ -221,12 +259,12 @@ class CheckAddressAction(Action):
 
     def check_address(self):
         # returns dict
-        response = perform_action(operation='check', address=self._address, options=self._options)
+        response = perform_action(is_program=False, operation='check', address=self._address, options=self._options)
         return response.generate_dict()
 
     def register_address(self):
         # returns dict
-        response = perform_action(operation='register', address=self._address, options=self._options)
+        response = perform_action(is_program=False, operation='register', address=self._address, options=self._options)
         return response.generate_dict()
 
 def initiate_registration(cursor, arguments, log):
@@ -241,10 +279,10 @@ def initiate_registration(cursor, arguments, log):
         cursor.execute(cmd)
         rows = cursor.fetchall()
         if len(rows) > 0:
-            raise DuplicationError(f'cannot insert row into address table; confirmation {str(confirmation)} already exists')
+            raise DuplicationError(error_message=f'cannot insert row into address table; confirmation {str(confirmation)} already exists')
     except psycopg2.Error as exc:
         # Handle database-command errors.
-        raise DBError(f'{str(exc)}')
+        raise DBError(error_message=f'{str(exc)}')
 
     # insert into the addresses table (and domains table if need be)
     log.write_debug([ f'[ initiate_registration ] inserting address `{arguments.address}`, confirmation `{str(confirmation)}` into database' ])
@@ -254,7 +292,7 @@ def initiate_registration(cursor, arguments, log):
         cursor.execute(cmd)
     except psycopg2.Error as exc:
         # Handle database-command errors.
-        raise DBError(f'{str(exc)}')
+        raise DBError(error_message=f'{str(exc)}')
 
     # we have to also insert into the export user table since we have that information now, not after the user has replied to the registration email
     # (which is processed by registerAddress.py); if a failure happens anywhere along the way, we need to delete the entry from the export user table
@@ -267,7 +305,7 @@ def initiate_registration(cursor, arguments, log):
         rows = cursor.fetchall()
     except psycopg2.Error as exc:
         # Handle database-command errors.
-        raise DBError(f'{str(exc)}')
+        raise DBError(error_message=f'{str(exc)}')
 
     user_id = rows[0][0]
 
@@ -281,32 +319,54 @@ def initiate_registration(cursor, arguments, log):
 
     return response
 
-def perform_action(**kwargs):
+def perform_action(is_program, program_name=None, **kwargs):
     response = None
-
-    args = []
-
-    for key, val in kwargs.items():
-        if val is not None:
-            if key == 'options':
-                for option, option_val in val.items():
-                    args.append(f'--{option}={option_val}')
-            else:
-                args.append(f'{key}={val}')
+    log = None
 
     try:
-        drms_params = DRMSParams()
+        args = None
+        module_args = None
 
-        if drms_params is None:
-            raise ParameterError(msg='unable to locate DRMS parameters file (drmsparams.py)')
+        if is_program:
+            args = []
+            for key, val in kwargs.items():
+                if val is not None:
+                    if key == 'options':
+                        for option, option_val in val.items():
+                            args.append(f'--{option}={option_val}')
+                    else:
+                        args.append(f'{key}={val}')
+        else:
+            # a loaded module
+            module_args = {}
+            for key, val in kwargs.items():
+                if val is not None:
+                    if key == 'options':
+                        for option, option_val in val.items():
+                            module_args[option] = option_val
+                    else:
+                        module_args[key] = val
 
-        arguments = Arguments.get_arguments(program_args=args, drms_params=drms_params)
+        try:
+            drms_params = DRMSParams()
+
+            if drms_params is None:
+                raise ParametersError(error_message='unable to locate DRMS parameters package')
+
+            arguments = Arguments.get_arguments(is_program=is_program, program_name=program_name, program_args=args, module_args=module_args, drms_params=drms_params)
+        except ArgsError as exc:
+            raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+        except ExportError as exc:
+            exc.exc_info = sys_exc_info()
+            raise exc
+        except Exception as exc:
+            raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
 
         try:
             formatter = DrmsLogFormatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
             log = DrmsLog(arguments.log_file, arguments.logging_level, formatter)
         except Exception as exc:
-            raise LoggingError(msg=f'{str(exc)}')
+            raise LoggingError(error_message=f'{str(exc)}')
 
         try:
             with psycopg2.connect(database=arguments.db_name, user=arguments.db_user, host=arguments.db_host, port=str(arguments.db_port)) as conn:
@@ -333,13 +393,13 @@ def perform_action(**kwargs):
                             confirmation = rows[0][0]
                             response = generate_registered_or_pending_response(cursor, arguments, confirmation)
                         else:
-                            raise DBError(f'unexpected number of rows returned: {cmd}')
+                            raise DBError(error_message=f'unexpected number of rows returned: {cmd}')
                     except psycopg2.Error as exc:
                         # handle database-command errors
-                        raise DBError(f'{str(exc)}')
+                        raise DBError(error_message=f'{str(exc)}')
         except psycopg2.OperationalError as exc:
             # closes the cursor and connection
-            raise DBConnectionError(f'unable to connect to the database: {str(exc)}')
+            raise DBConnectionError(error_message=f'unable to connect to the database: {str(exc)}')
     except ExportError as exc:
         response = exc.response
 
@@ -347,7 +407,7 @@ def perform_action(**kwargs):
 
 if __name__ == "__main__":
     try:
-        response = perform_action()
+        response = perform_action(is_program=True)
     except ExportError as exc:
         response = exc.response
 
