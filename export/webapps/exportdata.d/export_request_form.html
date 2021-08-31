@@ -88,9 +88,19 @@
       <td><span id="HmiB2ptrHelp" class="tip">?</span></td>
       <td colspan="2">
         <table style="border-style:solid" >
-        <tr>
-        <td>reproject HMI B to spherical coordinates, a valid processing option only for hmi.B_720s</b></td>
-        </tr>
+          <tr>
+            <td>Reproject HMI B to spherical coordinates; available for hmi.B_720s only</b></td>
+          </tr>
+          <tr>
+            <td>
+              <select id="HmiB2ptrDisambigMethod" size=1 name="HmiB2ptrDisambigMethod" style="width:12em;background-color:#FFFFFF"
+                onChange="ExportProcessingOptions[HmiB2ptrOption].Set('method')">
+                 <option value="HmiB2ptrOptionMethodPotential">potential-acute</option>
+                 <option value="HmiB2ptrOptionMethodRandom">random</option>
+                 <option value="HmiB2ptrOptionMethodRadial">radial-acute</option>
+              </select>disambiguation method
+            </td>
+          </tr>
         </table>
       </td>
     </tr>
