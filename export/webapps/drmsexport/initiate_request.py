@@ -11,6 +11,7 @@ from json import dumps as json_dumps, loads as json_loads
 from os.path import join as path_join
 import re
 from sys import exc_info as sys_exc_info, exit as sys_exit, stdout as sys_stdout
+from time import sleep
 from threading import Event, Timer
 
 DEFAULT_LOG_FILE = 'ir_log.txt'
@@ -41,6 +42,7 @@ class ErrorCode(ExportErrorCode):
     DRMS_CLIENT = (104, 'drms client error')
     STREAM_FORMAT = (105, 'format error in downloaded payload')
     EXPORT_ACTION = (106, 'failure calling export action')
+    RESPONSE = (107, 'unable to generate valid response')
 
 class IrBaseError(ExportError):
     def __init__(self, *, exc_info=None, error_message=None):
@@ -80,6 +82,9 @@ class ExportArgumentsAction(ArgsAction):
         if 'specification' not in export_arguments:
             raise ArgumentsError(error_message=f'missing required export argument `specification`')
         setattr(namespace, self.dest, export_arguments)
+
+class ResponseError(IrBaseError):
+    _error_code = ErrorCode(ErrorCode.RESPONSE)
 
 def webserver_action_constructor(self, drms_params):
     self._drms_params = drms_params
@@ -245,48 +250,43 @@ def jsonify(data_frame):
     # ]
     return data_frame.to_json(orient='records')
 
-def get_response_dict(request):
-    error_code = None
+def get_response_dict(request, log):
+    error_code, status_code = get_request_status(request) # 2/12 ==> asynchronous processing, 0 ==> synchronous processing
+    data = None
+    fetch_error = None
 
-    fetch_status = int(request.status) # 2/12 ==> asynchronous processing, 0 ==> synchronous processing
-
-    try:
-        error_code = ErrorCode(fetch_status)
-    except KeyError:
-        pass
+    requestid = request.request_id # None, unless asynchronous processing
 
     if error_code is not None:
+        log.write_debug([ f'[ get_response_dict ] error calling fetch `{error_code.description()}` for request `{requestid}`'])
         # a fetch error occurred (`fetch_error` has the error message returned by fetch, `status_description` has the IR error message)
         fetch_error = request.error # None, unless an error occurred
         status_code = error_code
-        data = None
     else:
         # no fetch error occurred
-        fetch_error = None
-        try:
-            status_code = StatusCode(fetch_status)
-        except KeyError:
-            raise DRMSClientError(exc_info=sys_exc_info(), error_message=f'unexpected fetch status returned {str(fetch_status)}')
+        log.write_debug([ f'[ get_response_dict ] NO error calling fetch, status `{status_code.description()}` for request `{requestid}`'])
 
         if status_code == StatusCode.REQUEST_COMPLETE:
+            log.write_debug([ f'[ get_response_dict ] exported data were generated for request `{requestid}`'])
             data = json_dumps(list(zip(request.urls.record.to_list(), request.urls.url.to_list()))) # None, unless synchronous processing
 
-    requestid = request.request_id # None, unless asynchronous processing
     count = request.file_count # None, unless synchronous processing
     rcount = request.record_count
     size = request.size
     method = request.method
     protocol = request.file_format
 
-    response_dict = { 'status_code' : status_code, 'fetch_status' : fetch_status, 'fetch_error' : fetch_error, 'requestid' : requestid, 'count' : count, 'rcount' : rcount, 'size' : size, 'method' : method, 'protocol' : protocol, 'data' : data }
+    response_dict = { 'status_code' : status_code, 'fetch_status' : int(request.status), 'fetch_error' : fetch_error, 'requestid' : requestid, 'count' : count, 'rcount' : rcount, 'size' : size, 'method' : method, 'protocol' : protocol, 'data' : data }
+
+    log.write_debug([ f'[ get_response_dict] response dictionary `{str(response_dict)}`'])
 
     return (error_code is not None, response_dict)
 
-def get_response(request):
+def get_response(request, log):
     # was there an error?
     error_code = None
 
-    error_occurred, response_dict = get_response_dict(request)
+    error_occurred, response_dict = get_response_dict(request, log)
 
     if error_occurred:
         response = ErrorResponse.generate_response(**response_dict)
@@ -295,38 +295,35 @@ def get_response(request):
 
     return response
 
-def request_is_complete(request):
+def get_request_status(request):
     error_code = None
     status_code = None
 
     try:
-        error_code = ErrorCode(request.status)
+        error_code = ErrorCode(int(request.status))
     except KeyError:
         pass
 
     if error_code is None:
         try:
-            status_code = StatusCode(request.status)
+            status_code = StatusCode(int(request.status))
         except KeyError:
             raise DRMSClientError(exc_info=sys_exc_info(), error_message=f'unexpected fetch status returned {str(request.status)}')
 
+    return (error_code, status_code)
+
+def get_request_status_code(request):
+    error_code, status_code = get_request_status(request)
+    code = error_code if error_code is not None else status_code
+
+    return code
+
+def request_is_complete(request):
+    error_code, status_code = get_request_status(request)
     return status_code == StatusCode.REQUEST_COMPLETE
 
 def request_is_pending(request):
-    error_code = None
-    status_code = None
-
-    try:
-        error_code = ErrorCode(request.status)
-    except KeyError:
-        pass
-
-    if error_code is None:
-        try:
-            status_code = StatusCode(request.status)
-        except KeyError:
-            raise DRMSClientError(exc_info=sys_exc_info(), error_message=f'unexpected fetch status returned {str(request.status)}')
-
+    error_code, status_code = get_request_status(request)
     return status_code == StatusCode.REQUEST_PROCESSING or status_code == StatusCode.REQUEST_QUEUED or status_code == StatusCode.REQUEST_NOT_QUEUED or status_code == REQUEST_QUEUED_DEBUG
 
 def stop_loop(do_loop):
@@ -362,6 +359,8 @@ def export_premium(*, drms_client, address, requestor=None, log, **export_argume
 
         request = drms_client.export(email=address, requestor=requestor, ds=export_arguments['specification'], process=export_arguments['processing'], method=method, protocol=export_arguments['file_format'], protocol_args=export_arguments['file_format_args'], filename_fmt=export_arguments['file_name_format'], n=export_arguments['number_records'], synchronous_export=False)
 
+        log.write_debug([ f'[ export_premium ] request {str(request.request_id)} status is `{get_request_status_code(request).description()}`' ])
+
         # if jsoc_fetch processed the request synchronously, then it will have returned status == 0 to `drms_client` - there is no request id created, so `request` will not have an `id` property; if jsoc_fetch processed the request asynchronously (because data were offline), then `request` will have an `id` property that contains the request ID needed by exportdata.html so it can poll for export-processing completion
         if request_is_complete(request):
             log.write_info([ f'[ export_premium ] request {str(request.request_id)} was processed synchronously and is complete' ])
@@ -372,19 +371,27 @@ def export_premium(*, drms_client, address, requestor=None, log, **export_argume
             # we want to wait for the request to appear in the request db table (jsoc.export) - this should no longer happen since jsoc_fetch now will return status == 2 if the request is in jsoc.export_new, but not yet in jsoc.export
             do_loop = True
             timer = Timer(8, stop_loop, args=(do_loop,))
+            timer.start()
             while do_loop:
                 request = drms_client.export_from_id(request.request_id) # updates status with jsoc_fetch exp_status call
+                log.write_debug([ f'[ export_premium ] request {str(request.request_id)} status is `{get_request_status_code(request).description()}`' ])
                 if StatusCode(request.status) != StatusCode.REQUEST_NOT_QUEUED:
+                    timer.cancel()
                     break
+
+                sleep(1)
         else:
             # must be an error
-            raise DRMSClientError(error_message=f'failure processing premium export ({StatusCode(request.status).description()})')
+            raise DRMSClientError(error_message=f'failure processing premium export ({get_request_status_code(request).description()})')
     except securedrms.SecureDRMSError as exc:
         raise DRMSClientError(exc_info=sys_exc_info())
     except Exception as exc:
         raise DRMSClientError(exc_info=sys_exc_info())
 
-    response = get_response(request)
+    try:
+        response = get_response(request, log)
+    except Exception as exc:
+        raise ResponseError(exc_info=sys_exc_info())
 
     return response
 
@@ -423,35 +430,45 @@ def export_mini(*, drms_client, address, requestor=None, log, **export_arguments
         #      "1" : "http:\\/\\/jsoc.stanford.edu\\/SUM91\\/D980961841\\/S00004\\/magnetogram.fits"
         #    }
         # }
-        method='url-quick'
+        method = 'url-quick'
 
         request = drms_client.export(email=address, requestor=requestor, ds=export_arguments['specification'], method='url_quick', protocol='as-is', protocol_args=None, filename_fmt=export_arguments['file_name_format'], n=export_arguments['number_records'], synchronous_export=False)
+
+        log.write_debug([ f'[ export_mini ] request `{str(request.request_id)}` status is `{get_request_status_code(request).description()}`' ])
 
         # if jsoc_fetch processed the request synchronously, then it will have returned status == 0 to `drms_client` - there is no request id created, so `request` will not have an `id` property; if jsoc_fetch processed the request asynchronously (because data were offline), then `request` will have an `id` property that contains the request ID needed by exportdata.html so it can poll for export-processing completion
         if request_is_complete(request):
             log.write_info([ f'[ export_mini ] request for `{export_arguments["specification"]}` was processed synchronously and is now complete' ])
         elif request_is_pending(request):
             # jsoc_fetch executed the `url` branch of code, so the request is now asynchronous
-            log.write_info([ f'[ export_mini ] request {str(request.id)} is being processed asynchronously' ])
+            log.write_info([ f'[ export_mini ] data offline for request `{str(request.id)}`; must perform premium export - export request is being processed asynchronously' ])
 
             # we want to wait for the request to appear in the request db table (jsoc.export); this should happen relatively quickly, so have a small timeout and if the timeout event occurs, return an error to the caller; otherwise, examine the retured status code - if it is QUEUED or PROCESSING, then make a 'pending' response; if it is COMPLETE, then make a 'complete' response; otherwise make an 'error' response
 
             # set timeout timer for 8 seconds
             do_loop = True
             timer = Timer(8, stop_loop, args=(do_loop,))
+            timer.start()
             while do_loop:
                 request = drms_client.export_from_id(request.request_id) # updates status with jsoc_fetch exp_status call
+                log.write_debug([ f'[ export_mini ] request `{str(request.request_id)}` status is `{get_request_status_code(request).description()}`' ])
                 if StatusCode(request.status) != StatusCode.REQUEST_NOT_QUEUED:
+                    timer.cancel()
                     break
+
+                sleep(1)
         else:
             # must be an error
-            raise DRMSClientError(error_message=f'failure processing mini export ({StatusCode(request.status).description()})')
+            raise DRMSClientError(error_message=f'failure processing mini export ({get_request_status_code(request).description()})')
     except securedrms.SecureDRMSError as exc:
         raise DRMSClientError(exc_info=sys_exc_info())
     except Exception as exc:
         raise DRMSClientError(exc_info=sys_exc_info())
 
-    response = get_response(request)
+    try:
+        response = get_response(request, log)
+    except Exception as exc:
+        raise ResponseError(exc_info=sys_exc_info())
 
     return response
 
