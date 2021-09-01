@@ -171,7 +171,6 @@ class Arguments(Args):
                 parser.add_argument('-U', '--dbuser', help='the name of the database user account', metavar='<db user>', dest='db_user', default=db_user)
 
                 arguments = Arguments(parser=parser, args=args)
-
             else:
                 def extract_module_args(*, address, operation, log_file=log_file, logging_level=DrmsLogLevel.ERROR, name='NULL', snail=None, db_host=db_host, db_port=db_port, db_name=db_name, db_user=db_user):
                     arguments = {}
@@ -188,6 +187,9 @@ class Arguments(Args):
                     arguments['db_user'] = db_user
 
                     return arguments
+
+                module_args_dict = extract_module_args(**module_args)
+                arguments = Arguments(parser=None, args=module_args_dict)
 
             arguments.address_info_fn = address_info_fn
             arguments.address_info_insert_fn = address_info_insert_fn
