@@ -280,7 +280,8 @@ int DoIt(void)
         char *amb = (char *) (inArray_amb->data);
         for (int ipix = 0; ipix < npix; ipix++) {
             inc[ipix] *= RADSINDEG;
-            if (amb[ipix] >> ambweak) azi[ipix] += 180.;     // bitwise operator
+            // Bug fixed Sep 2 2021 XS
+            if ((amb[ipix] >> ambweak) % 2) azi[ipix] += 180.;     // bitwise operator
             azi[ipix] *= RADSINDEG;
         }
         
