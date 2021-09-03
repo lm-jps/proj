@@ -18,156 +18,225 @@
 #   to test providing CGI arguments, set `TEST_CGI` to True, and then provide a single QUERY_STRING-like argument, like:
 #   manage-request.py 'address=person@domain&operation=check'
 
-import sys
-import os
+from argparse import Action as ArgsAction
 from datetime import timedelta
-import json
+from json import dumps as json_dumps, loads as json_loads
+from os.path import join as path_join
 import psycopg2
-from drms_export import Error as ExportError, ErrorCode as ExportErrorCode, Response
+from re import compile as re_compile
+from sys import exc_info as sys_exc_info, exit as sys_exit, stdout as sys_stdout
+
+from drms_export import Error as ExportError, ErrorCode as ExportErrorCode, ErrorResponse, Response, securedrms
 from drms_parameters import DRMSParams, DPMissingParameterError
-from drms_utils import Arguments as Args, CmdlParser, StatusCode as SC
+from drms_utils import Arguments as Args, ArgumentsError as ArgsError, CmdlParser, Formatter as DrmsLogFormatter, Log as DrmsLog, LogLevel as DrmsLogLevel, LogLevelAction as DrmsLogLevelAction, MakeObject, StatusCode as SC
 
+DEFAULT_LOG_FILE = 'mr_log.txt'
 
-#test
-TEST_CGI = False
-
-# error codes
-MR_ERROR_UNKNOWN = -1
-MR_ERROR_PARAMETER = -2
-MR_ERROR_ARGUMENT = -3
-MR_ERROR_DB = -4
-MR_ERROR_CHECK = -5
-MR_ERROR_CANCEL = -6
-
+REQUEST_ID_PATTERN = r'^JSOC_\d\d\d\d\d\d\d\d_((000)|(00\d)|(0\d\d)|(\d\d\d+))((_X)?_IN)?$'
 
 class StatusCode(SC):
-    NOT_PENDING = 1, 'request {id} is not pending'
-    PENDING = 2, 'request {id} is pending'
-    REQUEST_CANCELED = 3, 'pending request {id} was canceled'
+    # fetch success status codes
+    REQUEST_COMPLETE = (0, 'request has been completely processed')
+    REQUEST_PROCESSING = (1, 'processing request')
+    REQUEST_QUEUED = (2, 'request has been queued for processing') # status == 2 exists only in jsoc.export_new; jsoc_fetch op=exp_request creates a record in this table and sets the status value to 2 (or 12)
+    # this should go away - if in jsoc.export_new, but not in jsoc.export, then this is the same as REQUEST_QUEUED
+    REQUEST_NOT_QUEUED = (6, 'request has not been queued yet') # can no longer happen with jsoc_fetch op=exp_status call
+    REQUEST_QUEUED_DEBUG = (12, 'request has been queued for processing')
+
+    # mr status codes
+    NOT_PENDING = (101, 'no request pending')
+    PENDING = (102, 'request {request_id} is pending')
+    REQUEST_CANCELED = (103, 'pending request {request_id} was canceled')
 
 class ErrorCode(ExportErrorCode):
-    PARAMETERS = 1, 'failure locating DRMS parameters'
-    ARGUMENTS = 2, 'bad arguments'
-    DB = 3, 'failure executing database command'
-    DB_CONNECTION = 4, 'failure connecting to database'
-    CHECK = 5, 'unable to check export request for export user {address}'
-    CANCEL = 6, 'unable to cancel export request for export user {address}'
+    # fetch error codes
+    REQUEST_FATAL_ERROR = (4, 'a fatal error occurred during processing')
 
+    # other mr error codes
+    PARAMETERS = (201, 'failure locating DRMS parameters')
+    ARGUMENTS = (202, 'bad arguments')
+    LOGGING = (203, 'failure logging messages')
+    DRMS_CLIENT = (204, 'drms client error')
+    DB = (205, 'failure executing database command')
+    DB_CONNECTION = (206, 'failure connecting to database')
+    EXPORT_ACTION = (207, 'failure calling export action')
+    CHECK = (208, 'unable to check export request for export user {address}')
+    CANCEL = (209, 'unable to cancel export request for export user {address}')
+    STATUS = (210, 'unable to check export-request for export user {address}')
 
 # exceptions
-class ParametersError(ExportError):
-    _error_code = ErrorCode(ErrorCode.PARAMETERS)
+class MrBaseError(ExportError):
+    def __init__(self, *, exc_info=None, error_message=None):
+        if exc_info is not None:
+            self.exc_info = exc_info
+            e_type, e_obj, e_tb = exc_info
+
+            if error_message is None:
+                error_message = f'{e_type.__name__}: {str(e_obj)}'
+            else:
+                error_message = f'{error_message} [ {e_type.__name__}: {str(e_obj)} ]'
+
+        super().__init__(error_message=error_message)
+
+class ParametersError(MrBaseError):
+    _error_code = ErrorCode.PARAMETERS
     # _header = f'if present, then `[cls.header]` will appear at the beginning of the error message'
 
-    def __init__(self, *, msg=None):
-        super().__init__(msg=msg)
+class ArgumentsError(MrBaseError):
+    _error_code = ErrorCode.ARGUMENTS
 
-class ArgumentsError(ExportError):
-    _error_code = ErrorCode(ErrorCode.ARGUMENTS)
+class LoggingError(MrBaseError):
+    _error_code = ErrorCode.LOGGING
 
-    def __init__(self, *, msg=None):
-        super().__init__(msg=msg)
+class DRMSClientError(MrBaseError):
+    _error_code = ErrorCode.DRMS_CLIENT
 
-class DBError(ExportError):
-    _error_code = ErrorCode(ErrorCode.DB)
+class DBError(MrBaseError):
+    _error_code = ErrorCode.DB
 
-    def __init__(self, *, msg=None):
-        super().__init__(msg=msg)
+class DBConnectionError(MrBaseError):
+    _error_code = ErrorCode.DB_CONNECTION
 
-class DBConnectionError(ExportError):
-    _error_code = ErrorCode(ErrorCode.DB_CONNECTION)
+class ExportActionError(MrBaseError):
+    _error_code = ErrorCode.EXPORT_ACTION
 
-    def __init__(self, *, msg=None):
-        super().__init__(msg=msg)
+class CheckError(MrBaseError):
+    _error_code = ErrorCode.CHECK
 
-class CheckError(ExportError):
-    _error_code = ErrorCode(ErrorCode.CHECK)
+class CancelError(MrBaseError):
+    _error_code = ErrorCode.CANCEL
 
-    def __init__(self, *, address, msg=None):
-        error_msg = self._error_code.fullname(address=address)
-        if msg is not None and len(msg) > 0:
-            error_msg = f'{error_msg}: {msg}'
-        super().__init__(msg=error_msg)
+class StatusError(MrBaseError):
+    _error_code = ErrorCode.STATUS
 
-class CancelError(ExportError):
-    _error_code = ErrorCode(ErrorCode.CANCEL)
+def webserver_action_constructor(self, drms_params):
+    self._drms_params = drms_params
 
-    def __init__(self, *, address, request_id, start_time, msg=None):
-        # not_pending == True ==> cannot find a pending request for `address`
-        error_msg = self._error_code.fullname(address=address)
-        if msg is not None and len(msg) > 0:
-            error_msg = f'{error_msg}: {msg}'
-        self._msg = error_msg
+def webserver_action(self, parser, namespace, value, option_string=None):
+    webserver_dict = {}
+    webserver_dict['host'] = value
+    webserver_dict['public'] = True if value.lower() != self._drms_params.get_required('WEB_DOMAIN_PRIVATE') else False
+    webserver_obj = MakeObject(name='webserver', data=webserver_dict)()
+    setattr(namespace, self.dest, webserver_obj)
 
-    def __init__(self, not_pending=False, address='UNKNOWN_EXPORT_USER', request_id='UNKNOWN_REQUEST_ID', start_time='UNKNOWN_START_TIME', msg=None):
-        self._address = address
-        self._request_id = request_id
-        self._start_time = start_time
+def create_webserver_action(drms_params):
+    cls = type('WebserverAction', (ArgsAction,),
+    {
+        '_drms_params' : drms_params,
+        '__call__' : webserver_action,
+    })
 
-        if not_pending:
-            # no error looking up address (the user has a pending request), but there was a problem deleting pending request
-            super().__init__(msg=f'unable to cancel export request for user {self._address}')
-        else:
-            # error looking up address (it is NOT the case that a look-up succeeded, but the address was not found)
-            super().__init__(msg=f'unable to check export request for user {self._address}')
-
-        if msg is not None:
-            self._msg += f'({msg})'
-
+    return cls
 
 # classes
 class Arguments(Args):
     _arguments = None
 
     @classmethod
-    def get_arguments(cls, program_args, drms_params):
+    def get_arguments(cls, *, is_program, program_name=None, program_args=None, module_args=None, drms_params):
         if cls._arguments is None:
             try:
-                dbhost = drms_params.get_required('SERVER')
-                dbport = drms_params.get_required('DRMSPGPORT')
-                dbname = drms_params.get_required('DBNAME')
-                dbuser = drms_params.get_required('WEB_DBUSER')
+                log_file = path_join(drms_params.get_required('EXPORT_LOG_DIR'), DEFAULT_LOG_FILE)
+                private_db_host = drms_params.get_required('SERVER')
+                db_port = drms_params.get_required('DRMSPGPORT')
+                db_name = drms_params.get_required('DBNAME')
+                db_user = drms_params.get_required('WEB_DBUSER')
+                pending_requests_table = drms_params.get_required('EXPORT_PENDING_REQUESTS_TABLE')
+                timeout = drms_params.get_required('EXPORT_PENDING_REQUESTS_TIME_OUT')
             except DPMissingParameterError as exc:
-                raise ParameterError(str(exc))
+                raise ParametersError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
 
-            # check for arguments from cgi form
-            args = None
+            if is_program:
+                args = None
 
-            if program_args is not None and len(program_args) > 0:
-                args = program_args
+                if program_args is not None and len(program_args) > 0:
+                    args = program_args
 
-            parser = CmdlParser(usage='%(prog)s address=<registered email address> operation=<check, cancel> [ --dbhost=<db host> ] [ --dbport=<db port> ] [ --dbname=<db name> ] [ --dbuser=<db user>] ')
-            # all arguments are considered optional in argparse (see `prefix_chars`); we can therefore do this:
-            # parser.add_argument('-H', 'H', '--dbhost', ...)
-            parser.add_argument('A', 'address', help='the export-registered email address', metavar='<email address>', dest='address', required=True)
-            parser.add_argument('O', 'operation', help='the export-request operation to perform (check, cancel)', metavar='<operation>', dest='op', default='check', required=True)
-            parser.add_argument('-H', 'H', '--dbhost', help='the host machine of the database that is used to manage pending export requests', metavar='<db host>', dest='dbhost', default=dbhost)
-            parser.add_argument('-P', 'P', '--dbport', help='The port on the host machine that is accepting connections for the database', metavar='<db host port>', dest='dbport', default=dbport)
-            parser.add_argument('-N', 'N', '--dbname', help='the name of the database used to manage pending export requests', metavar='<db name>', dest='dbname', default=dbname)
-            parser.add_argument('-U', 'U', '--dbuser', help='the name of the database user account', metavar='<db user>', dest='dbuser', default=dbuser)
+                parser_args = { 'usage' : '%(prog)s address=<registered email address> operation=<check, cancel, status> [ --dbhost=<db host> ] [ --dbport=<db port> ] [ --dbname=<db name> ] [ --dbuser=<db user>]' }
+                if program_name is not None and len(program_name) > 0:
+                    parser_args['prog'] = program_name
 
-            arguments = Arguments(parser, args)
+                parser = CmdlParser(**parser_args)
+
+                # all arguments are considered optional in argparse (see `prefix_chars`); we can therefore do this:
+                # parser.add_argument('-H', 'H', '--dbhost', ...)
+
+                # required
+                parser.add_argument('A', 'address', help='the export-registered email address', metavar='<email address>', dest='address', required=True)
+                parser.add_argument('O', 'operation', help='the export-request operation to perform (check, cancel, status)', choices=['check', 'cancel', 'status'], metavar='<operation>', dest='operation', default='check', required=True)
+                parser.add_argument('db_host', help='the machine hosting the database that contains export requests from this site', metavar='<db host>', dest='db_host', required=True)
+                parser.add_argument('webserver', help='the webserver invoking this script', metavar='<webserver>', action=create_webserver_action(drms_params), dest='webserver', required=True)
+
+                # optional
+                parser.add_argument('-c', '--drms-client-type', help='securedrms client type (ssh, http)', choices=[ 'ssh', 'http' ], dest='drms_client_type', default='ssh')
+                parser.add_argument('-i', '--id', help='request ID; required if operation == status', metavar='<export request ID>', dest='request_id', default=None)
+                parser.add_argument('-l', '--log_file', help='the path to the log file', metavar='<log file>', dest='log_file', default=log_file)
+                parser.add_argument('-L', '--logging_level', help='the amount of logging to perform; in order of increasing verbosity: critical, error, warning, info, debug', metavar='<logging level>', dest='logging_level', action=DrmsLogLevelAction, default=DrmsLogLevel.ERROR)
+                parser.add_argument('-P', 'P', '--dbport', help='The port on the host machine that is accepting connections for the database', metavar='<db host port>', dest='db_port', default=db_port)
+                parser.add_argument('-p', 'p', '--pending_reqs_table', help='the db table of pending requests', metavar='<pending requests table>', dest='pending_requests_table', default=pending_requests_table)
+                parser.add_argument('-N', 'N', '--dbname', help='the name of the database used to manage pending export requests', metavar='<db name>', dest='db_name', default=db_name)
+                parser.add_argument('-U', 'U', '--dbuser', help='the name of the database user account', metavar='<db user>', dest='db_user', default=db_user)
+                parser.add_argument('-t', 't', '--timeout', help='after this number of minutes have elapsed, requests are no longer considered pending', metavar='<timeout>', dest='timeout', default=timeout)
+
+                arguments = Arguments(parser=parser, args=args)
+                arguments.drms_client = None
+            else:
+                # module invocation
+                def extract_module_args(*, address, operation, db_host, webserver, drms_client_type='ssh', drms_client=None, id=None, db_port=db_port, db_name=db_name, db_user=db_user, pending_requests_table=pending_requests_table, timeout=timeout):
+                    arguments = {}
+
+                    arguments['address'] = address
+                    arguments['operation'] = operation
+                    arguments['db_host'] = db_host
+                    arguments['webserver'] = webserver
+                    arguments['drms_client_type'] = drms_client_type
+                    arguments['drms_client'] = drms_client
+                    arguments['request_id'] = id
+                    arguments['db_port'] = db_port
+                    arguments['db_name'] = db_name
+                    arguments['db_user'] = db_user
+                    arguments['pending_requests_table'] = pending_requests_table
+                    arguemnts['timeout'] = timeout
+
+                    return arguments
+
+                module_args_dict = extract_module_args(**module_args)
+                arguments = Arguments(parser=None, args=module_args_dict)
+
+            # if the caller has specified a public webserver, make sure that the db specified is not the private one
+            if arguments.webserver.public and arguments.db_host == private_db_host:
+                raise ArgumentsError(error_message=f'cannot specify private db server to handle public webserver requests')
+
+            # if operation == status, then id is required
+            if arguments.operation == 'status' and arguments.request_id is None:
+                raise ArgumentsError(error_message=f'must specify `id` argument if operation is `status`')
+
+            arguments.private_db_host = private_db_host
 
             cls._arguments = arguments
 
         return cls._arguments
 
-class OperationFactory(object):
-    def __new__(cls, operation='UNKNOWN_OPERATION', address='UNKNOWN_EXPORT_USER', table='UNKNOWN_PENDING_REQUESTS_TABLE', timeout=timedelta(minutes=60)):
-        if operation.lower() == CheckOperation._name:
-            return CheckOperation(address, table, timeout)
-        elif operation.lower() == CancelOperation._name:
-            return CancelOperation(address, table, timeout)
+class OperationFactory():
+    def __new__(cls, *, operation_name, address, log=None):
+        operation = None
+        if operation_name.lower() == CheckOperation._name:
+            operation = CheckOperation(address, log)
+        elif operation_name.lower() == CancelOperation._name:
+            operation = CancelOperation(address, log)
+        elif operation_name.lower() == StatusOperation._name:
+            operation = StatusOperation(address, log)
         else:
-            raise ArgumentError(msg='invalid operation type ' + operation)
+            raise ArgumentsError(error_message=f'invalid operation type {operation}')
 
+        log.write_debug([ f'[ OperationFactory ] created `{operation._name}` operation' ])
+        return operation
 
 # operations
-class Operation(object):
-    def __init__(self, address='UNKNOWN_EXPORT_USER', table='UNKNOWN_PENDING_REQUESTS_TABLE', timeout=timedelta(minutes=60)):
+class Operation():
+    def __init__(self, address, log):
         self._address = address
-        self._pending_requests_table = table
-        self._timeout = timeout
+        self._log = log
         self._request_id = None
         self._start_time = None
         self._response = None
@@ -175,21 +244,31 @@ class Operation(object):
     def __str__(self):
         return self._name
 
-    def process(self, cursor):
-        cmd = 'SELECT request_id, start_time FROM ' + self._pending_requests_table + " WHERE address = '" + self._address + "' AND CURRENT_TIMESTAMP - start_time < interval '" + self._timeout + " minutes'"
+    def __call__(self, cursor, pending_requests_table, timeout):
+        cmd = f"SELECT request_id, start_time FROM {pending_requests_table} WHERE lower(address) = lower('{self._address}') AND CURRENT_TIMESTAMP - start_time < interval '{str(timeout)} minutes'"
+        self._log.write_debug([ f'[ Operation.__call__ ] executing SQL `{cmd}`'])
 
         try:
             cursor.execute(cmd)
             rows = cursor.fetchall()
             if len(rows) > 1:
-                raise DbError(msg=f'unexpected number of rows returned: {cmd}')
+                # only one request per address allowed currently
+                raise self._generate_exception(exc=DbError, error_message=f'unexpected number of rows returned ({cmd})')
         except psycopg2.Error as exc:
             # handle database-command errors
-            raise DbError(msg=str(exc))
+            raise self._generate_exception(exc=DbError, exc_info=sys_exc_info(), error_message=str(exc))
 
         if len(rows) != 0:
             self._request_id = rows[0][0]
             self._start_time = rows[0][1]
+            self._log.write_debug([ f'[ Operation.__call__ ] PG returned one row {(str(self._request_id), self._start_time.strftime("%Y-%m-%d %T"))}'])
+        else:
+            self._log.write_debug([ f'[ Operation.__call__ ] no export requests for user {self._address}' ])
+
+    def _generate_exception(self, exc, exc_info=None, error_message=None):
+        description = self._exception._error_code.description(address=self._address)
+        message = f'{description}: {error_message}' if error_message is not None and len(error_message) > 0 else description
+        return exc(error_message=message)
 
     @property
     def response(self):
@@ -197,148 +276,425 @@ class Operation(object):
 
 class CheckOperation(Operation):
     _name = 'check'
+    _exception = CheckError
 
-    def __init__(self, address='UNKNOWN_EXPORT_USER', table='UNKNOWN_PENDING_REQUESTS_TABLE', timeout=timedelta(minutes=60)):
-        super().__init__(address, table, timeout)
-
-    def process(self, cursor):
-        try:
-            super().process(cursor)
-        except DbError as exc:
-            raise CheckError(address=self._address, msg=str(exc))
+    def __call__(self, *, cursor, pending_requests_table, timeout=timedelta(minutes=60)):
+        super().__call__(cursor, pending_requests_table, timeout)
 
         if not self._request_id:
-            self._response = NotPendingResponse(address=self._address)
+            self._response = NotPendingResponse.generate_response(address=self._address)
         else:
-            self._response = PendingResponse(address=self._address, request_id=self._request_id, start_time=self._start_time)
+            self._response = PendingResponse.generate_response(address=self._address, request_id=self._request_id, start_time=self._start_time.strftime('%Y-%m-%d %T'))
 
 class CancelOperation(Operation):
     _name = 'cancel'
+    _exception = CancelError
 
-    def __init__(self, address='UNKNOWN_EXPORT_USER', table='UNKNOWN_PENDING_REQUESTS_TABLE', timeout=timedelta(minutes=60)):
-        super().__init__(address, table, timeout)
-
-    def process(self, cursor):
+    def __call__(self, *, cursor, pending_requests_table, timeout=timedelta(minutes=60)):
         # first run the Operation.process() code to obtain the request_id
-        try:
-            super().process(cursor)
-        except DbError as exc:
-            # cannot locate the pending request in the pending-requests db table
-            raise CancelError(address=self._address, msg=f'cannot locate pending request in database ({str(exc)})')
+        super().__call__(cursor, pending_requests_table, timeout)
 
         # then run the code to delete the pending request
         if not self._request_id:
-            self._response = NotPendingResponse(address=self._address)
+            self._response = NotPendingResponse.generate_response(address=self._address)
         else:
-            cmd = 'DELETE FROM ' + self._pending_requests_table + " WHERE request_id = '" + self._request_id + "'"
+            cmd = f"DELETE FROM {pending_requests_table} WHERE lower(address) = lower('{self._address}') AND lower(request_id) = lower('{self._request_id}')"
+            self._log.write_debug([ f'[ CancelOperation.__call__ ] executing SQL `{cmd}`'])
 
             try:
                 cursor.execute(cmd)
             except psycopg2.Error as exc:
                 # cannot delete the pending request from the pending-requests db table
                 error_msg = f'cannot delete pending request with id={self._request_id} and start_time={self._start_time.strftime("%Y-%m-%d %T")} ({str(exc)})'
-                raise CancelError(address=self._address, msg=error_msg)
+                raise self._generate_exception(exc=self._exception, exc_info=sys_exc_info(), error_message=error_msg)
 
-            self._response = CancelResponse(address=self._address, request_id=self._request_id, start_time=self._start_time)
+            self._response = CancelResponse.generate_response(address=self._address, request_id=self._request_id, start_time=self._start_time.strftime('%Y-%m-%d %T'))
 
+class StatusOperation(Operation):
+    _name = 'status'
+    _exception = StatusError
+
+    def __call__(self, *, cursor, pending_requests_table, timeout=timedelta(minutes=60), drms_client, request_id):
+        delete_request = None
+        export_request = drms_client.export_from_id(request_id) # updates status with jsoc_fetch exp_status call
+
+        status_code = self.get_request_status_code(export_request)
+
+        self._log.write_debug([ f'[ StatusOperation.__call__ ] export request {request_id} status is `{status_code.description(address=self._address)}`' ])
+
+        if not isinstance(status_code, ErrorCode):
+            if status_code == StatusCode.REQUEST_COMPLETE:
+                # request should NOT be in pending requests table
+                delete_request = True
+            else:
+                # request should be in pending requests table
+                delete_request = False
+        else:
+            # GRRRRR! if an error occurred, then export_request contains almost no info, not even the request ID; add
+            # property that does contain the request id value
+            export_request.REQUEST_ID = request_id
+
+            # request should NOT be in pending requests table
+            delete_request = True
+
+        super().__call__(cursor, pending_requests_table, timeout)
+        if self._request_id is not None and self._request_id == request_id:
+            # request IS in pending requests table
+            if delete_request:
+                # request should NOT have been in the pending-requests table; log as a warning
+                self._log.write_warning([ f'[ StatusOperation.__call__ ] export request `{self._request_id}` has completed, but it was not removed from the pending-requests table; removing orphaned request now'])
+
+                # and then call CancelOperation code to remove it from the pending-requests table
+                try:
+                    operation = OperationFactory(operation_name=CancelOperation._name, address=self._address, log=self._log)
+                    operation(cursor=cursor, pending_requests_table=pending_requests_table, timeout=timeout)
+                except ExportError as exc:
+                    error_msg = f'unable to cancel orphaned pending request `{self._request_id}` for user `{self._address}`'
+                    raise self._generate_exception(exc=self._exception, exc_info=sys_exc_info(), error_message=error_msg)
+        else:
+            # cannot locate the pending request in the pending-requests db table
+            if not delete_request:
+                # request should have been in the pending-requests table; log as a warning
+                self._log.write_warning([ f'[ StatusOperation.__call__ ] export system is processing request {self._request_id}, but that request is not in the pending-requests table'])
+
+        self._response = self.get_response(export_request)
+
+    def get_response_dict(self, export_request):
+        self._log.write_debug([ f'[ StatusOperation.get_response_dict ]' ])
+        error_code, status_code = self.get_request_status(export_request) # 2/12 ==> asynchronous processing, 0 ==> synchronous processing
+        data = None
+        export_directory = None
+        keywords_file= None
+        tar_file = None
+        request_url = None
+        fetch_error = None
+
+        request_id = export_request.request_id if export_request.request_id is not None else export_request.REQUEST_ID
+
+        if error_code is not None:
+            self._log.write_debug([ f'[ StatusOperation.get_response_dict ] error calling fetch `{error_code.description()}` for request `{request_id}`'])
+            # a fetch error occurred (`fetch_error` has the error message returned by fetch, `status_description` has the IR error message)
+            fetch_error = export_request.error # None, unless an error occurred
+            status_code = error_code
+        else:
+            # no fetch error occurred
+            self._log.write_debug([ f'[ StatusOperation.get_response_dict ] NO error calling fetch, status `{status_code.description()}` for request `{request_id}`'])
+
+            if status_code == StatusCode.REQUEST_COMPLETE:
+                self._log.write_debug([ f'[ StatusOperation.get_response_dict ] exported data were generated for request `{request_id}`'])
+                data = json_dumps(list(zip(export_request.urls.record.to_list(), export_request.urls.url.to_list()))) # None, unless synchronous processing
+                export_directory = export_request.dir
+                keywords_file = export_request.keywords
+                tar_file = export_request.tarfile
+                request_url = export_request.request_url
+
+        count = export_request.file_count # None, unless synchronous processing
+        rcount = export_request.record_count
+        size = export_request.size
+        method = export_request.method
+        protocol = export_request.file_format
+
+        if isinstance(status_code, ErrorCode):
+            response_dict = { 'error_code' : error_code, 'error_message' : fetch_error }
+        else:
+            response_dict = { 'status_code' : status_code, 'fetch_status' : int(export_request.status), 'fetch_error' : fetch_error, 'request_id' : request_id, 'count' : count, 'rcount' : rcount, 'size' : size, 'method' : method, 'protocol' : protocol, 'data' : data, 'export_directory' : export_directory, 'keywords_file' : keywords_file, 'tar_file' : tar_file, 'request_url' : request_url }
+
+        self._log.write_debug([ f'[ StatusOperation.get_response_dict] response dictionary `{str(response_dict)}`'])
+
+        return (error_code is not None, response_dict)
+
+    def get_response(self, export_request):
+        self._log.write_debug([ f'[ StatusOperation.get_response ]' ])
+        # was there an error?
+        error_code = None
+
+        error_occurred, response_dict = self.get_response_dict(export_request)
+
+        if error_occurred:
+            # an error occurred in jsoc_fetch; this is not the same thing as an error happening in MR so we have to manually
+            # create an error response (the status_code will not be a MR error code, but the fetch_status will be a fetch error code)
+            response = ErrorResponse.generate_response(**response_dict)
+        else:
+            response = StatusResponse.generate_response(**response_dict)
+
+        return response
+
+    def get_request_status(self, export_request):
+        self._log.write_debug([ f'[ StatusOperation.get_status ]' ])
+        error_code = None
+        status_code = None
+
+        try:
+            error_code = ErrorCode(int(export_request.status))
+        except KeyError:
+            pass
+
+        if error_code is None:
+            try:
+                status_code = StatusCode(int(export_request.status))
+            except KeyError:
+                raise DRMSClientError(exc_info=sys_exc_info(), error_message=f'unexpected fetch status returned {str(export_request.status)}')
+
+        return (error_code, status_code)
+
+    def get_request_status_code(self, export_request):
+        error_code, status_code = self.get_request_status(export_request)
+        code = error_code if error_code is not None else status_code
+
+        return code
 
 # responses
-class ErrorResponse(Response):
-    def __init__(self, error_code=None, msg=None):
-        super().__init__(error_code=error_code, msg=msg)
+class ManageRequestResponse(Response):
+    _status_code = None
+    _comment = None
 
-class NotPendingResponse(Response):
-    def __init__(self, address='UNKNOWN_EXPORT_USER'):
-        super().__init__(error_code=MR_STATUS_NOT_PENDING, msg='no existing export request for export user ' + address)
+class NotPendingResponse(ManageRequestResponse):
+    _status_code = StatusCode.NOT_PENDING
+    _comment = 'no existing export request for export user {address}'
 
-class PendingResponse(Response):
-    def __init__(self, address='UNKNOWN_EXPORT_USER', request_id='UNKNOWN_REQUEST_ID', start_time='UNKNOWN_START_TIME'):
-        super().__init__(error_code=MR_STATUS_PENDING, msg='existing export request for export user ' + address + ' [ request_id=' + request_id + ', start_time=' + start_time.strftime('%Y-%m-%d %T') + ' ]')
+    @classmethod
+    def generate_response(cls, *, status_code=None, address, **response_dict):
+        response_dict['comment'] = cls._comment.format(address=address)
+        return super().generate_response(status_code=status_code, address=address, **response_dict)
 
-class CancelResponse(Response):
-    def __init__(self, address='UNKNOWN_EXPORT_USER', request_id='UNKNOWN_REQUEST_ID', start_time='UNKNOWN_START_TIME'):
-        super().__init__(error_code=MR_STATUS_REQUEST_CANCELED, msg='existing export request for export user ' + address + ' [ request_id=' + request_id + ', start_time=' + start_time.strftime('%Y-%m-%d %T') + ' ] ' + 'was canceled')
+class PendingResponse(ManageRequestResponse):
+    _status_code = StatusCode.PENDING
+    _comment = 'existing export request for export user {address} [ request_id={request_id}, start_time={start_time} ]'
+
+    @classmethod
+    def generate_response(cls, *, status_code=None, address, request_id, start_time, **response_dict):
+        response_dict['comment'] = cls._comment.format(address=address, request_id=request_id, start_time=start_time)
+        return super().generate_response(status_code=status_code, address=address, request_id=request_id, start_time=start_time, **response_dict)
+
+class CancelResponse(ManageRequestResponse):
+    _status_code = StatusCode.REQUEST_CANCELED
+    _comment = 'existing export request for export user {address} [ request_id={request_id}, start_time={start_time} ] was canceled'
+
+    @classmethod
+    def generate_response(cls, *, status_code=None, address, request_id, start_time, **response_dict):
+        response_dict['comment'] = cls._comment.format(address=address, request_id=request_id, start_time=start_time)
+        return super().generate_response(status_code=status_code, address=address, request_id=request_id, start_time=start_time, **response_dict)
+
+class StatusResponse(ManageRequestResponse):
+    _status_code = None
+    _comment = f'`status_description` describes fetch status'
+
+    @classmethod
+    def generate_response(cls, *, status_code=None, **response_dict):
+        response_dict['comment'] = cls._comment
+        return super().generate_response(status_code=status_code, **response_dict)
+
 
 # for use in export web app
 from action import Action
 class PendingRequestAction(Action):
-    actions = [ 'check_pending_request', 'cancel_pending_request' ]
-    def __init__(self, *, method, address, dbhost=None, dbport=None, dbname=None, dbuser=None):
+    actions = [ 'check_pending_request', 'cancel_pending_request', 'get_export_status' ]
+
+    _reg_ex = None
+
+    def __init__(self, *, method, address, db_host, webserver, drms_client_type=None, drms_client=None, request_id=None, db_port=None, db_name=None, db_user=None, pending_requests_table=None, timeout=None):
         self._method = getattr(self, method)
         self._address = address
+        self._db_host = db_host
+        self._webserver = webserver
         self._options = {}
-        self._options['dbhost'] = dbhost
-        self._options['dbport'] = dbport
-        self._options['dbname'] = dbname
-        self._options['dbuser'] = dbuser
+        self._options['drms_client_type'] = drms_client_type
+        self._options['drms_client'] = drms_client
+        self._options['request_id'] = request_id
+        self._options['db_port'] = db_port
+        self._options['db_name'] = db_name
+        self._options['db_user'] = db_user
+        self._options['pending_requests_table'] = pending_requests_table
+        self._options['timeout'] = timeout
 
     def check_pending_request(self):
-        # returns dict
-        response = perform_action(operation='check', address=self._address, options=self._options)
-        return response.generate_dict()
+        response = perform_action(operation='check', address=self._address, db_host=self._db_host, webserver=self._webserver, options=self._options)
+        return response
 
     def cancel_pending_request(self):
-        # returns dict
-        response = perform_action(operation='register', address=self._address, options=self._options)
-        return response.generate_dict()
+        response = perform_action(operation='register', address=self._address, db_host=self._db_host, webserver=self._webserver, options=self._options)
+        return response
 
-def perform_action(**kwargs):
-    args = []
+    def get_export_status(self):
+        response = perform_action(operation='status', address=self._address, db_host=self._db_host, webserver=self._webserver, options=self._options)
+        return response
 
-    for key, val in kwargs.items():
-        if val is not None:
-            if key == 'options':
-                for option, option_val in val.items():
-                    args.append(f'--{option}={option_val}')
-            else:
-                args.append(f'{key}={val}')
+    @classmethod
+    def get_reg_ex(cls):
+        if cls._reg_ex is None:
+            cls._reg_ex = re_compile(REQUEST_ID_PATTERN)
+
+        return cls._reg_ex
+
+def requires_private_db(request_id):
+    reg_ex = PendingRequestAction.get_reg_ex()
+    match = reg_ex.match(request_id)
+
+    if match is None:
+        raise ArgumentsError(error_message=f'invalid request ID {request_id}')
+
+    # private if ends in '_' ['X' '_'] 'I' 'N'
+    return True if match.group(6) is not None else False
+
+def perform_action(is_program, program_name=None, **kwargs):
+    response = None
+    log = None
 
     try:
-        drms_params = DRMSParams()
+        args = None
+        module_args = None
 
-        if drms_params is None:
-            raise ParameterError(msg='unable to locate DRMS parameters file (drmsparams.py)')
-
-        arguments = Arguments.get_arguments(args, drms_params)
+        if is_program:
+            args = []
+            for key, val in kwargs.items():
+                if val is not None:
+                    if key == 'options':
+                        for option, option_val in val.items():
+                            args.append(f'--{option}={option_val}')
+                    else:
+                        args.append(f'{key}={val}')
+        else:
+            # a loaded module
+            module_args = {}
+            for key, val in kwargs.items():
+                if val is not None:
+                    if key == 'options':
+                        for option, option_val in val.items():
+                            module_args[option] = option_val
+                    else:
+                        module_args[key] = val
 
         try:
-            operation = OperationFactory(operation=arguments.op, address=arguments.address, table=drms_params.EXPORT_PENDING_REQUESTS_TABLE, timeout=drms_params.EXPORT_PENDING_REQUESTS_TIME_OUT)
+            drms_params = DRMSParams()
+
+            if drms_params is None:
+                raise ParametersError(error_message='unable to locate DRMS parameters package')
+
+            arguments = Arguments.get_arguments(is_program=is_program, program_name=program_name, program_args=args, module_args=module_args, drms_params=drms_params)
+        except ArgsError as exc:
+            raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+        except Exception as exc:
+            raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+
+        try:
+            formatter = DrmsLogFormatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+            log = DrmsLog(arguments.log_file, arguments.logging_level, formatter)
+        except Exception as exc:
+            raise LoggingError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+
+        if is_program:
+            log.write_debug([ f'[ perform_action ] program invocation' ])
+        else:
+            log.write_debug([ f'[ perform_action ] module invocation' ])
+
+        log.write_debug([ f'[ perform_action ] action arguments: {str(arguments)}' ])
+
+        # there are two types of request IDs that the public webserver supports:
+        #   JSOC_20210821_050 - external DB handled the request
+        #   JSOC_20210821_051_X_IN - internal DB handled the request
+        #
+        # since a securedrms client, if provided, is a public client, a status operation will require
+        # the creation of a private securedrms client if the request ID has the second form
+        #
+        # there is one type of request ID that the private webserver supports:
+        #   JSOC_20210821_052_IN - internal DB handled the request
+        #
+        # if a securedrms client is provided, it is a private one, so we can use it directly
+        factory = None
+        public_drms_client = arguments.drms_client if arguments.webserver.public and arguments.drms_client is not None else None
+        private_drms_client = arguments.drms_client if not arguments.webserver.public and arguments.drms_client is not None else None
+
+        try:
+            private_client_needed = requires_private_db(arguments.request_id)
+        except Exception as exc:
+            raise ExportActionError(exc_info=sys_exc_info(), error_message=str(exc))
+
+        if private_client_needed:
+            log.write_debug([ f'[ perform_action ] private securedrms client required' ])
+        else:
+            log.write_debug([ f'[ perform_action ] public securedrms client OK' ])
+
+        if private_client_needed and private_drms_client is None:
+            # create private drms client
+            try:
+                if factory is None:
+                    factory = securedrms.SecureClientFactory(debug=(arguments.logging_level == DrmsLogLevel.DEBUG), email=arguments.address)
+
+                use_ssh = True if arguments.drms_client_type == 'ssh' else False
+                connection_info = { 'dbhost' : arguments.private_db_host, 'dbport' : arguments.db_port, 'dbname' : arguments.db_name, 'dbuser' : arguments.db_user }
+
+                log.write_debug([ f'[ perform_action ] creating private securedrms client' ])
+                private_drms_client = factory.create_client(server='jsoc_internal', use_ssh=use_ssh, use_internal=False, connection_info=connection_info)
+            except securedrms.SecureDRMSError as exc:
+                raise DRMSClientError(exc_info=sys_exc_info())
+            except Exception as exc:
+                raise DRMSClientError(exc_info=sys_exc_info())
+        elif not private_client_needed and public_drms_client is None:
+            # create public drms client
+            try:
+                if factory is None:
+                    factory = securedrms.SecureClientFactory(debug=(arguments.logging_level == DrmsLogLevel.DEBUG), email=arguments.address)
+
+                use_ssh = True if arguments.drms_client_type == 'ssh' else False
+                connection_info = { 'dbhost' : arguments.db_host, 'dbport' : arguments.db_port, 'dbname' : arguments.db_name, 'dbuser' : arguments.db_user }
+
+                log.write_debug([ f'[ perform_action ] creating public securedrms client' ])
+                public_drms_client = factory.create_client(server='jsoc_external', use_ssh=use_ssh, use_internal=False, connection_info=connection_info)
+            except securedrms.SecureDRMSError as exc:
+                raise DRMSClientError(exc_info=sys_exc_info())
+            except Exception as exc:
+                raise DRMSClientError(exc_info=sys_exc_info())
+
+        drms_client = private_drms_client if private_client_needed else public_drms_client
+
+        try:
+            operation = OperationFactory(operation_name=arguments.operation, address=arguments.address, log=log)
             response = None
 
             try:
-                with psycopg2.connect(host=arguments.dbhost, port=arguments.dbport, database=arguments.dbname, user=arguments.dbuser) as conn:
+                with psycopg2.connect(host=arguments.db_host, port=str(arguments.db_port), database=arguments.db_name, user=arguments.db_user) as conn:
                     with conn.cursor() as cursor:
-                        operation.process(cursor)
+                        if isinstance(operation, StatusOperation):
+                            operation(cursor=cursor, pending_requests_table=arguments.pending_requests_table, timeout=arguments.timeout, drms_client=drms_client, request_id=arguments.request_id)
+                        else:
+                            operation(cursor=cursor, pending_requests_table=arguments.pending_requests_table, timeout=arguments.timeout)
+
                         response = operation.response
             except psycopg2.OperationalError as exc:
                 # closes the cursor and connection
-                raise DBConnectionError(f'unable to connect to the database: {str(exc)}')
-        except AttributeError as exc:
-            raise ArgumentError(msg=str(exc))
+                raise DBConnectionError(exc_info=sys_exc_info(), error_message=f'unable to connect to the database: {str(exc)}')
+        except Exception as exc:
+            raise ExportActionError(exc_info=sys_exc_info(), error_message=str(exc))
     except ExportError as exc:
         response = exc.response
+        e_type, e_obj, e_tb = exc.exc_info
+
+        if log:
+            log.write_error([ f'[ perform_action ] ERROR LINE {str(e_tb.tb_lineno)}: {exc.message}' ])
+        else:
+            print(f'[ perform_action ] ERROR LINE {str(e_tb.tb_lineno)}: {exc.message}')
+
+    if log:
+        log.write_info([f'[ perform_action ] request complete; status {str(response)}'])
 
     return response
 
 
 if __name__ == "__main__":
-    response = perform_action()
-    json_response = response.generate_json()
+    try:
+        response = perform_action(is_program=True)
+    except ExportError as exc:
+        response = exc.response
+    except Exception as exc:
+        error = ExportActionError(exc_info=sys_exc_info())
+        response = error.response
 
-    # do not print application/json here; this script may be called outside of a web abb context
-    print(json_response)
+    print(response.generate_json())
 
     # Always return 0. If there was an error, an error code (the 'status' property) and message (the 'statusMsg' property) goes in the returned HTML.
-    sys.exit(0)
+    sys_exit(0)
 else:
-    # stuff run when this module is loaded into another module; export things needed to call check() and cancel()
-    # return json and let the wrapper layer convert that to whatever is needed by the API
     pass
-
-
-
-
-
 
 # add py: base/export/scripts/checkexpdbserver, base/export/scripts/jsocextfetch, base/export/scripts/jsocextinfo, base/export/scripts/showextinfo, base/export/scripts/showextseries, base/export/scripts/seriesinfo, base/export/scripts/checkAddress
 # add C programs (in drms/base): drms-export-as-fits, jsoc_info, show_info, drms_parserecset; AAAH! use securedrms.py
