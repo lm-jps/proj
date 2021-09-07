@@ -4,7 +4,7 @@ from argparse import Action as ArgsAction
 import asyncio
 from check_dbserver import StatusCode as CdbStatusCode
 from parse_specification import StatusCode as PsStatusCode
-from drms_export import Error as ExportError, ErrorCode as ExportErrorCode, Response, securedrms
+from drms_export import Error as ExportError, ErrorCode as ExportErrorCode, ErrorResponse, Response, securedrms
 from drms_parameters import DRMSParams, DPMissingParameterError
 from drms_utils import Arguments as Args, ArgumentsError as ArgsError, Choices, CmdlParser, Formatter as DrmsLogFormatter, Log as DrmsLog, LogLevel as DrmsLogLevel, LogLevelAction as DrmsLogLevelAction, MakeObject, StatusCode as SC
 from json import dumps as json_dumps, loads as json_loads
@@ -58,22 +58,22 @@ class IrBaseError(ExportError):
         super().__init__(error_message=error_message)
 
 class ParametersError(IrBaseError):
-    _error_code = ErrorCode(ErrorCode.PARAMETERS)
+    _error_code = ErrorCode.PARAMETERS
 
 class ArgumentsError(IrBaseError):
-    _error_code = ErrorCode(ErrorCode.ARGUMENTS)
+    _error_code = ErrorCode.ARGUMENTS
 
 class LoggingError(IrBaseError):
-    _error_code = ErrorCode(ErrorCode.LOGGING)
+    _error_code = ErrorCode.LOGGING
 
 class DRMSClientError(IrBaseError):
-    _error_code = ErrorCode(ErrorCode.DRMS_CLIENT)
+    _error_code = ErrorCode.DRMS_CLIENT
 
 class StreamFormatError(IrBaseError):
-    _error_code = ErrorCode(ErrorCode.STREAM_FORMAT)
+    _error_code = ErrorCode.STREAM_FORMAT
 
 class ExportActionError(IrBaseError):
-    _error_code = ErrorCode(ErrorCode.EXPORT_ACTION)
+    _error_code = ErrorCode.EXPORT_ACTION
 
 class ExportArgumentsAction(ArgsAction):
     def __call__(self, parser, namespace, value, option_string=None):
@@ -141,26 +141,26 @@ class Arguments(Args):
                 parser.add_argument('-U', '--dbuser', help='the name of the database user account', metavar='<db user>', dest='db_user', default=db_user)
 
                 # required
-                parser.add_argument('db_host', help='the machine hosting the database that contains export requests from this site', metavar='<db host>', dest='db_host', required=True)
-                parser.add_argument('export_type', help='the export type: premium, mini, or streamed', metavar='<webserver>', choices=Choices(['premium', 'mini', 'streamed']), dest='export_type', required=True)
-                parser.add_argument('webserver', help='the webserver invoking this script', metavar='<webserver>', action=create_webserver_action(drms_params), dest='webserver', required=True)
                 parser.add_argument('address', help='the email addressed registered for export', metavar='<email address>', dest='address', required=True)
+                parser.add_argument('export_type', help='the export type: premium, mini, or streamed', metavar='<webserver>', choices=Choices(['premium', 'mini', 'streamed']), dest='export_type', required=True)
+                parser.add_argument('db_host', help='the machine hosting the database that contains export requests from this site', metavar='<db host>', dest='db_host', required=True)
+                parser.add_argument('webserver', help='the webserver invoking this script', metavar='<webserver>', action=create_webserver_action(drms_params), dest='webserver', required=True)
                 parser.add_argument('arguments', help='export arguments', action=ExportArgumentsAction, dest='export_arguments', required=True)
 
                 arguments = Arguments(parser=parser, args=args)
                 arguments.drms_client = None
             else:
                 # `program_args` has all `arguments` values, in final form; validate them
-                def extract_module_args(*, db_host, export_type, webserver, address, export_arguments, drms_client=None, drms_client_type='ssh', requestor=None, log_file=log_file, logging_level=DrmsLogLevel.ERROR, db_port=db_port, db_name=db_name, db_user=db_user):
+                def extract_module_args(*, address, export_type, db_host, webserver, export_arguments, drms_client_type='ssh', drms_client=None, requestor=None, log_file=log_file, logging_level=DrmsLogLevel.ERROR, db_port=db_port, db_name=db_name, db_user=db_user):
                     arguments = {}
 
-                    arguments['db_host'] = db_host
-                    arguments['export_type'] = export_type
-                    arguments['webserver'] = webserver
                     arguments['address'] = address
+                    arguments['export_type'] = export_type
+                    arguments['db_host'] = db_host
+                    arguments['webserver'] = webserver
                     arguments['export_arguments'] = export_arguments
-                    arguments['drms_client'] = drms_client
                     arguments['drms_client_type'] = drms_client_type
+                    arguments['drms_client'] = drms_client
                     arguments['requestor'] = requestor
                     arguments['log_file'] = log_file
                     arguments['logging_level'] = logging_level
@@ -250,80 +250,97 @@ def jsonify(data_frame):
     # ]
     return data_frame.to_json(orient='records')
 
-def get_response_dict(request, log):
-    error_code, status_code = get_request_status(request) # 2/12 ==> asynchronous processing, 0 ==> synchronous processing
+def get_response_dict(export_request, log):
+    log.write_debug([ f'[ get_response_dict ]' ])
+    error_code, status_code = get_request_status(export_request) # 2/12 ==> asynchronous processing, 0 ==> synchronous processing
     data = None
+    export_directory = None
+    keywords_file= None
+    tar_file = None
+    request_url = None
+
     fetch_error = None
 
-    requestid = request.request_id # None, unless asynchronous processing
+    # None, unless asynchronous processing (but None if error)
+    request_id = export_request.request_id if export_request.request_id is not None else export_request.REQUEST_ID
 
     if error_code is not None:
-        log.write_debug([ f'[ get_response_dict ] error calling fetch `{error_code.description()}` for request `{requestid}`'])
+        log.write_debug([ f'[ get_response_dict ] error calling fetch `{error_code.description()}` for request `{request_id}`'])
         # a fetch error occurred (`fetch_error` has the error message returned by fetch, `status_description` has the IR error message)
-        fetch_error = request.error # None, unless an error occurred
+        fetch_error = export_request.error # None, unless an error occurred
         status_code = error_code
     else:
         # no fetch error occurred
-        log.write_debug([ f'[ get_response_dict ] NO error calling fetch, status `{status_code.description()}` for request `{requestid}`'])
+        log.write_debug([ f'[ get_response_dict ] NO error calling fetch, status `{status_code.description()}` for request `{request_id}`'])
 
         if status_code == StatusCode.REQUEST_COMPLETE:
-            log.write_debug([ f'[ get_response_dict ] exported data were generated for request `{requestid}`'])
-            data = json_dumps(list(zip(request.urls.record.to_list(), request.urls.url.to_list()))) # None, unless synchronous processing
+            log.write_debug([ f'[ get_response_dict ] exported data were generated for request `{request_id}`'])
+            data = json_dumps(list(zip(export_request.urls.record.to_list(), export_request.urls.url.to_list()))) # None, unless synchronous processing
+            export_directory = export_request.dir
+            keywords_file = export_request.keywords
+            tar_file = export_request.tarfile
+            request_url = export_request.request_url
 
-    count = request.file_count # None, unless synchronous processing
-    rcount = request.record_count
-    size = request.size
-    method = request.method
-    protocol = request.file_format
 
-    response_dict = { 'status_code' : status_code, 'fetch_status' : int(request.status), 'fetch_error' : fetch_error, 'requestid' : requestid, 'count' : count, 'rcount' : rcount, 'size' : size, 'method' : method, 'protocol' : protocol, 'data' : data }
+    count = export_request.file_count # None, unless synchronous processing
+    rcount = export_request.record_count
+    size = export_request.size
+    method = export_request.method
+    protocol = export_request.file_format
+
+    if isinstance(status_code, ErrorCode):
+        response_dict = { 'error_code' : error_code, 'error_message' : fetch_error }
+    else:
+        response_dict = { 'status_code' : status_code, 'fetch_status' : int(export_request.status), 'fetch_error' : fetch_error, 'request_id' : request_id, 'count' : count, 'rcount' : rcount, 'size' : size, 'method' : method, 'protocol' : protocol, 'data' : data, 'export_directory' : export_directory, 'keywords_file' : keywords_file, 'tar_file' : tar_file, 'request_url' : request_url }
 
     log.write_debug([ f'[ get_response_dict] response dictionary `{str(response_dict)}`'])
 
     return (error_code is not None, response_dict)
 
-def get_response(request, log):
+def get_response(export_request, log):
     # was there an error?
     error_code = None
 
-    error_occurred, response_dict = get_response_dict(request, log)
+    error_occurred, response_dict = get_response_dict(export_request, log)
 
     if error_occurred:
+        # an error occurred in jsoc_fetch; this is not the same thing as an error happening in MR so we have to manually
+        # create an error response (the status_code will not be a MR error code, but the fetch_status will be a fetch error code)
         response = ErrorResponse.generate_response(**response_dict)
     else:
         response = Response.generate_response(**response_dict)
 
     return response
 
-def get_request_status(request):
+def get_request_status(export_request):
     error_code = None
     status_code = None
 
     try:
-        error_code = ErrorCode(int(request.status))
+        error_code = ErrorCode(int(export_request.status))
     except KeyError:
         pass
 
     if error_code is None:
         try:
-            status_code = StatusCode(int(request.status))
+            status_code = StatusCode(int(export_request.status))
         except KeyError:
-            raise DRMSClientError(exc_info=sys_exc_info(), error_message=f'unexpected fetch status returned {str(request.status)}')
+            raise DRMSClientError(exc_info=sys_exc_info(), error_message=f'unexpected fetch status returned {str(export_request.status)}')
 
     return (error_code, status_code)
 
-def get_request_status_code(request):
-    error_code, status_code = get_request_status(request)
+def get_request_status_code(export_request):
+    error_code, status_code = get_request_status(export_request)
     code = error_code if error_code is not None else status_code
 
     return code
 
-def request_is_complete(request):
-    error_code, status_code = get_request_status(request)
+def request_is_complete(export_request):
+    error_code, status_code = get_request_status(export_request)
     return status_code == StatusCode.REQUEST_COMPLETE
 
-def request_is_pending(request):
-    error_code, status_code = get_request_status(request)
+def request_is_pending(export_request):
+    error_code, status_code = get_request_status(export_request)
     return status_code == StatusCode.REQUEST_PROCESSING or status_code == StatusCode.REQUEST_QUEUED or status_code == StatusCode.REQUEST_NOT_QUEUED or status_code == REQUEST_QUEUED_DEBUG
 
 def stop_loop(do_loop):
@@ -357,39 +374,52 @@ def export_premium(*, drms_client, address, requestor=None, log, **export_argume
             else:
                 method = 'url'
 
-        request = drms_client.export(email=address, requestor=requestor, ds=export_arguments['specification'], process=export_arguments['processing'], method=method, protocol=export_arguments['file_format'], protocol_args=export_arguments['file_format_args'], filename_fmt=export_arguments['file_name_format'], n=export_arguments['number_records'], synchronous_export=False)
+        export_request = drms_client.export(email=address, requestor=requestor, ds=export_arguments['specification'], process=export_arguments['processing'], method=method, protocol=export_arguments['file_format'], protocol_args=export_arguments['file_format_args'], filename_fmt=export_arguments['file_name_format'], n=export_arguments['number_records'], synchronous_export=False)
+        status_code = get_request_status_code(export_request)
 
-        log.write_debug([ f'[ export_premium ] request {str(request.request_id)} status is `{get_request_status_code(request).description()}`' ])
+        if isinstance(status_code, ErrorCode):
+            # GRRRRR! if an error occurred, then export_request contains almost no info, not even the request ID; add
+            # property that does contain the request id value
+            export_request.REQUEST_ID = request_id
+
+        log.write_debug([ f'[ export_premium ] request {str(export_request.request_id)} status is `{status_code.description()}`' ])
 
         # if jsoc_fetch processed the request synchronously, then it will have returned status == 0 to `drms_client` - there is no request id created, so `request` will not have an `id` property; if jsoc_fetch processed the request asynchronously (because data were offline), then `request` will have an `id` property that contains the request ID needed by exportdata.html so it can poll for export-processing completion
-        if request_is_complete(request):
-            log.write_info([ f'[ export_premium ] request {str(request.request_id)} was processed synchronously and is complete' ])
-        elif request_is_pending(request):
+        if request_is_complete(export_request):
+            log.write_info([ f'[ export_premium ] request {str(export_request.request_id)} was processed synchronously and is complete' ])
+        elif request_is_pending(export_request):
             # jsoc_fetch executed the `url` branch of code, so the request is now asynchronous
-            log.write_info([ f'[ export_premium ] request {str(request.request_id)} is being processed asynchronously' ])
+            log.write_info([ f'[ export_premium ] request {str(export_request.request_id)} is being processed asynchronously' ])
 
             # we want to wait for the request to appear in the request db table (jsoc.export) - this should no longer happen since jsoc_fetch now will return status == 2 if the request is in jsoc.export_new, but not yet in jsoc.export
             do_loop = True
             timer = Timer(8, stop_loop, args=(do_loop,))
             timer.start()
             while do_loop:
-                request = drms_client.export_from_id(request.request_id) # updates status with jsoc_fetch exp_status call
-                log.write_debug([ f'[ export_premium ] request {str(request.request_id)} status is `{get_request_status_code(request).description()}`' ])
-                if StatusCode(request.status) != StatusCode.REQUEST_NOT_QUEUED:
+                export_request = drms_client.export_from_id(export_request.request_id) # updates status with jsoc_fetch exp_status call
+                status_code = get_request_status_code(export_request)
+
+                if isinstance(status_code, ErrorCode):
+                    # GRRRRR! if an error occurred, then export_request contains almost no info, not even the request ID; add
+                    # property that does contain the request id value
+                    export_request.REQUEST_ID = request_id
+
+                log.write_debug([ f'[ export_premium ] request {str(export_request.request_id)} status is `{status_code.description()}`' ])
+                if status_code != StatusCode.REQUEST_NOT_QUEUED:
                     timer.cancel()
                     break
 
                 sleep(1)
         else:
             # must be an error
-            raise DRMSClientError(error_message=f'failure processing premium export ({get_request_status_code(request).description()})')
+            raise DRMSClientError(error_message=f'failure processing premium export ({status_code.description()})')
     except securedrms.SecureDRMSError as exc:
         raise DRMSClientError(exc_info=sys_exc_info())
     except Exception as exc:
         raise DRMSClientError(exc_info=sys_exc_info())
 
     try:
-        response = get_response(request, log)
+        response = get_response(export_request, log)
     except Exception as exc:
         raise ResponseError(exc_info=sys_exc_info())
 
@@ -432,16 +462,20 @@ def export_mini(*, drms_client, address, requestor=None, log, **export_arguments
         # }
         method = 'url-quick'
 
-        request = drms_client.export(email=address, requestor=requestor, ds=export_arguments['specification'], method='url_quick', protocol='as-is', protocol_args=None, filename_fmt=export_arguments['file_name_format'], n=export_arguments['number_records'], synchronous_export=False)
+        export_request = drms_client.export(email=address, requestor=requestor, ds=export_arguments['specification'], method='url_quick', protocol='as-is', protocol_args=None, filename_fmt=export_arguments['file_name_format'], n=export_arguments['number_records'], synchronous_export=False)
+        status_code = get_request_status_code(export_request)
 
-        log.write_debug([ f'[ export_mini ] request `{str(request.request_id)}` status is `{get_request_status_code(request).description()}`' ])
+        if isinstance(status_code, ErrorCode):
+            export_request.REQUEST_ID = None
+
+        log.write_debug([ f'[ export_mini ] request export status for user {address} is `{status_code.description()}`' ])
 
         # if jsoc_fetch processed the request synchronously, then it will have returned status == 0 to `drms_client` - there is no request id created, so `request` will not have an `id` property; if jsoc_fetch processed the request asynchronously (because data were offline), then `request` will have an `id` property that contains the request ID needed by exportdata.html so it can poll for export-processing completion
-        if request_is_complete(request):
+        if request_is_complete(export_request):
             log.write_info([ f'[ export_mini ] request for `{export_arguments["specification"]}` was processed synchronously and is now complete' ])
-        elif request_is_pending(request):
-            # jsoc_fetch executed the `url` branch of code, so the request is now asynchronous
-            log.write_info([ f'[ export_mini ] data offline for request `{str(request.id)}`; must perform premium export - export request is being processed asynchronously' ])
+        elif request_is_pending(export_request):
+            # jsoc_fetch executed the `url` branch of code without error, so the request is now asynchronous, and request_id property exists
+            log.write_info([ f'[ export_mini ] data offline for request `{str(export_request.request_id)}`; must perform premium export - export request is being processed asynchronously' ])
 
             # we want to wait for the request to appear in the request db table (jsoc.export); this should happen relatively quickly, so have a small timeout and if the timeout event occurs, return an error to the caller; otherwise, examine the retured status code - if it is QUEUED or PROCESSING, then make a 'pending' response; if it is COMPLETE, then make a 'complete' response; otherwise make an 'error' response
 
@@ -450,23 +484,25 @@ def export_mini(*, drms_client, address, requestor=None, log, **export_arguments
             timer = Timer(8, stop_loop, args=(do_loop,))
             timer.start()
             while do_loop:
-                request = drms_client.export_from_id(request.request_id) # updates status with jsoc_fetch exp_status call
-                log.write_debug([ f'[ export_mini ] request `{str(request.request_id)}` status is `{get_request_status_code(request).description()}`' ])
-                if StatusCode(request.status) != StatusCode.REQUEST_NOT_QUEUED:
+                export_request = drms_client.export_from_id(export_request.request_id) # updates status with jsoc_fetch exp_status call
+                status_code = get_request_status_code(export_request)
+
+                log.write_debug([ f'[ export_mini ] request `{str(export_request.request_id)}` status is `{status_code.description()}`' ])
+                if status_code != StatusCode.REQUEST_NOT_QUEUED:
                     timer.cancel()
                     break
 
                 sleep(1)
         else:
             # must be an error
-            raise DRMSClientError(error_message=f'failure processing mini export ({get_request_status_code(request).description()})')
+            raise DRMSClientError(error_message=f'failure processing mini export ({status_code.description()})')
     except securedrms.SecureDRMSError as exc:
         raise DRMSClientError(exc_info=sys_exc_info())
     except Exception as exc:
         raise DRMSClientError(exc_info=sys_exc_info())
 
     try:
-        response = get_response(request, log)
+        response = get_response(export_request, log)
     except Exception as exc:
         raise ResponseError(exc_info=sys_exc_info())
 
@@ -515,14 +551,14 @@ def export_streamed(*, drms_client, address, requestor=None, log, **export_argum
 
         # spawn a thread to download and write to `download_stream`; will return while streaming is occurring;
         # drms-export-to-stdout will verify email address
-        request = drms_client.export_and_stream_file(spec=export_arguments['specification'], filename_fmt=export_arguments['file_name_format'])
+        export_request = drms_client.export_and_stream_file(spec=export_arguments['specification'], filename_fmt=export_arguments['file_name_format'])
 
         # asyncio.run(stream_file_data(request, download_stream))
 
         destination = securedrms.OnTheFlyDownloader.StreamDestination(sys_stdout.buffer)
         destination.file_name_read = False
         destination.stream_reader = read_from_proc
-        request.download(destination=destination)
+        export_request.download(destination=destination)
     except securedrms.SecureDRMSError as exc:
         raise DRMSClientError(exc_info=sys_exc_info())
 
@@ -735,17 +771,19 @@ def perform_action(is_program, program_name=None, **kwargs):
 from action import Action
 class InitiateRequestAction(Action):
     actions = [ 'start_premium_export', 'start_mini_export', 'start_streamed_export' ]
-    def __init__(self, *, method, webserver, dbhost=None, dbport=None, dbname=None, dbuser=None, address, requestor=None, export_arguments):
+    def __init__(self, *, method, address, db_host, webserver, export_arguments, drms_client_type=None, drms_client=None, requestor=None, db_port=None, db_name=None, db_user=None):
         self._method = getattr(self, method)
+        self._address = address
+        self._db_host = db_host
         self._webserver = webserver # dict
-        self._address = adderss
         self._export_arguments = export_arguments
         self._options = {}
+        self._options['drms_client_type'] = drms_client_type
+        self._options['drms_client'] = drms_client
         self._options['requestor'] = requestor
-        self._options['dbhost'] = dbhost
-        self._options['dbport'] = dbport
-        self._options['dbname'] = dbname
-        self._options['dbuser'] = dbuser
+        self._options['db_port'] = db_port
+        self._options['db_name'] = db_name
+        self._options['db_user'] = db_user
 
     def start_premium_export(self):
         '''
@@ -761,7 +799,7 @@ class InitiateRequestAction(Action):
           number_records : <maximum number of records exported>
         }
         '''
-        response = perform_action(is_program=False, export_type='premium', webserver=self._webserver, address=self._address, export_arguments=self._export_arguments, options=self._options)
+        response = perform_action(is_program=False, export_type='premium', address=self._address, db_host=self._db_host, webserver=self._webserver, export_arguments=self._export_arguments, options=self._options)
         return response
 
     def start_mini_export(self):
@@ -773,12 +811,12 @@ class InitiateRequestAction(Action):
           number_records : <maximum number of records exported>
         }
         '''
-        response = perform_action(is_program=False, export_type='mini', webserver=self._webserver, address=self._address, export_arguments=self._export_arguments, options=self._options)
+        response = perform_action(is_program=False, export_type='mini', address=self._address, db_host=self._db_host, webserver=self._webserver, export_arguments=self._export_arguments, options=self._options)
         return response
 
     def start_streamed_export(self):
         # returns dict
-        response = perform_action(is_program=False, export_type='streamed', webserver=self._webserver, address=self._address, export_arguments=self._export_arguments, options=self._options)
+        response = perform_action(is_program=False, export_type='streamed', address=self._address, db_host=self._db_host, webserver=self._webserver, export_arguments=self._export_arguments, options=self._options)
         return response
 
 
