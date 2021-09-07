@@ -589,63 +589,6 @@ def perform_action(is_program, program_name=None, **kwargs):
 
         log.write_debug([ f'[ perform_action ] action arguments: {str(arguments)}' ])
 
-        # there are two types of request IDs that the public webserver supports:
-        #   JSOC_20210821_050 - external DB handled the request
-        #   JSOC_20210821_051_X_IN - internal DB handled the request
-        #
-        # since a securedrms client, if provided, is a public client, a status operation will require
-        # the creation of a private securedrms client if the request ID has the second form
-        #
-        # there is one type of request ID that the private webserver supports:
-        #   JSOC_20210821_052_IN - internal DB handled the request
-        #
-        # if a securedrms client is provided, it is a private one, so we can use it directly
-        factory = None
-        public_drms_client = arguments.drms_client if arguments.webserver.public and arguments.drms_client is not None else None
-        private_drms_client = arguments.drms_client if not arguments.webserver.public and arguments.drms_client is not None else None
-
-        try:
-            private_client_needed = requires_private_db(arguments.request_id)
-        except Exception as exc:
-            raise ExportActionError(exc_info=sys_exc_info(), error_message=str(exc))
-
-        if private_client_needed:
-            log.write_debug([ f'[ perform_action ] private securedrms client required' ])
-        else:
-            log.write_debug([ f'[ perform_action ] public securedrms client OK' ])
-
-        if private_client_needed and private_drms_client is None:
-            # create private drms client
-            try:
-                if factory is None:
-                    factory = securedrms.SecureClientFactory(debug=(arguments.logging_level == DrmsLogLevel.DEBUG), email=arguments.address)
-
-                use_ssh = True if arguments.drms_client_type == 'ssh' else False
-                connection_info = { 'dbhost' : arguments.private_db_host, 'dbport' : arguments.db_port, 'dbname' : arguments.db_name, 'dbuser' : arguments.db_user }
-
-                log.write_debug([ f'[ perform_action ] creating private securedrms client' ])
-                private_drms_client = factory.create_client(server='jsoc_internal', use_ssh=use_ssh, use_internal=False, connection_info=connection_info)
-            except securedrms.SecureDRMSError as exc:
-                raise DRMSClientError(exc_info=sys_exc_info())
-            except Exception as exc:
-                raise DRMSClientError(exc_info=sys_exc_info())
-        elif not private_client_needed and public_drms_client is None:
-            # create public drms client
-            try:
-                if factory is None:
-                    factory = securedrms.SecureClientFactory(debug=(arguments.logging_level == DrmsLogLevel.DEBUG), email=arguments.address)
-
-                use_ssh = True if arguments.drms_client_type == 'ssh' else False
-                connection_info = { 'dbhost' : arguments.db_host, 'dbport' : arguments.db_port, 'dbname' : arguments.db_name, 'dbuser' : arguments.db_user }
-
-                log.write_debug([ f'[ perform_action ] creating public securedrms client' ])
-                public_drms_client = factory.create_client(server='jsoc_external', use_ssh=use_ssh, use_internal=False, connection_info=connection_info)
-            except securedrms.SecureDRMSError as exc:
-                raise DRMSClientError(exc_info=sys_exc_info())
-            except Exception as exc:
-                raise DRMSClientError(exc_info=sys_exc_info())
-
-        drms_client = private_drms_client if private_client_needed else public_drms_client
 
         try:
             operation = OperationFactory(operation_name=arguments.operation, address=arguments.address, log=log)
@@ -655,6 +598,63 @@ def perform_action(is_program, program_name=None, **kwargs):
                 with psycopg2.connect(host=arguments.db_host, port=str(arguments.db_port), database=arguments.db_name, user=arguments.db_user) as conn:
                     with conn.cursor() as cursor:
                         if isinstance(operation, StatusOperation):
+                            # there are two types of request IDs that the public webserver supports:
+                            #   JSOC_20210821_050 - external DB handled the request
+                            #   JSOC_20210821_051_X_IN - internal DB handled the request
+                            #
+                            # since a securedrms client, if provided, is a public client, a status operation will require
+                            # the creation of a private securedrms client if the request ID has the second form
+                            #
+                            # there is one type of request ID that the private webserver supports:
+                            #   JSOC_20210821_052_IN - internal DB handled the request
+                            #
+                            # if a securedrms client is provided, it is a private one, so we can use it directly
+                            factory = None
+                            public_drms_client = arguments.drms_client if arguments.webserver.public and arguments.drms_client is not None else None
+                            private_drms_client = arguments.drms_client if not arguments.webserver.public and arguments.drms_client is not None else None
+
+                            try:
+                                private_client_needed = requires_private_db(arguments.request_id)
+                            except Exception as exc:
+                                raise ExportActionError(exc_info=sys_exc_info(), error_message=str(exc))
+
+                            if private_client_needed:
+                                log.write_debug([ f'[ perform_action ] private securedrms client required' ])
+                            else:
+                                log.write_debug([ f'[ perform_action ] public securedrms client OK' ])
+
+                            if private_client_needed and private_drms_client is None:
+                                # create private drms client
+                                try:
+                                    if factory is None:
+                                        factory = securedrms.SecureClientFactory(debug=(arguments.logging_level == DrmsLogLevel.DEBUG), email=arguments.address)
+
+                                    use_ssh = True if arguments.drms_client_type == 'ssh' else False
+                                    connection_info = { 'dbhost' : arguments.private_db_host, 'dbport' : arguments.db_port, 'dbname' : arguments.db_name, 'dbuser' : arguments.db_user }
+
+                                    log.write_debug([ f'[ perform_action ] creating private securedrms client' ])
+                                    private_drms_client = factory.create_client(server='jsoc_internal', use_ssh=use_ssh, use_internal=False, connection_info=connection_info)
+                                except securedrms.SecureDRMSError as exc:
+                                    raise DRMSClientError(exc_info=sys_exc_info())
+                                except Exception as exc:
+                                    raise DRMSClientError(exc_info=sys_exc_info())
+                            elif not private_client_needed and public_drms_client is None:
+                                # create public drms client
+                                try:
+                                    if factory is None:
+                                        factory = securedrms.SecureClientFactory(debug=(arguments.logging_level == DrmsLogLevel.DEBUG), email=arguments.address)
+
+                                    use_ssh = True if arguments.drms_client_type == 'ssh' else False
+                                    connection_info = { 'dbhost' : arguments.db_host, 'dbport' : arguments.db_port, 'dbname' : arguments.db_name, 'dbuser' : arguments.db_user }
+
+                                    log.write_debug([ f'[ perform_action ] creating public securedrms client' ])
+                                    public_drms_client = factory.create_client(server='jsoc_external', use_ssh=use_ssh, use_internal=False, connection_info=connection_info)
+                                except securedrms.SecureDRMSError as exc:
+                                    raise DRMSClientError(exc_info=sys_exc_info())
+                                except Exception as exc:
+                                    raise DRMSClientError(exc_info=sys_exc_info())
+
+                            drms_client = private_drms_client if private_client_needed else public_drms_client
                             operation(cursor=cursor, pending_requests_table=arguments.pending_requests_table, timeout=arguments.timeout, drms_client=drms_client, request_id=arguments.request_id)
                         else:
                             operation(cursor=cursor, pending_requests_table=arguments.pending_requests_table, timeout=arguments.timeout)
