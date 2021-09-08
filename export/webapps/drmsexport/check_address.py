@@ -27,6 +27,8 @@ from drms_export import Error as ExportError, ErrorCode as ExportErrorCode, Resp
 from drms_parameters import DRMSParams, DPMissingParameterError
 from drms_utils import Arguments as Args, ArgumentsError as ArgsError, CmdlParser, Formatter as DrmsLogFormatter, Log as DrmsLog, LogLevel as DrmsLogLevel, LogLevelAction as DrmsLogLevelAction, StatusCode as ExportStatusCode
 
+from utils import extract_program_and_module_args, create_drms_client
+
 DEFAULT_LOG_FILE = 'ca_log.txt'
 
 class StatusCode(ExportStatusCode):
@@ -326,28 +328,7 @@ def perform_action(is_program, program_name=None, **kwargs):
     log = None
 
     try:
-        args = None
-        module_args = None
-
-        if is_program:
-            args = []
-            for key, val in kwargs.items():
-                if val is not None:
-                    if key == 'options':
-                        for option, option_val in val.items():
-                            args.append(f'--{option}={option_val}')
-                    else:
-                        args.append(f'{key}={val}')
-        else:
-            # a loaded module
-            module_args = {}
-            for key, val in kwargs.items():
-                if val is not None:
-                    if key == 'options':
-                        for option, option_val in val.items():
-                            module_args[option] = option_val
-                    else:
-                        module_args[key] = val
+        program_args, module_args = extract_program_and_module_args(is_program=is_program, **kwargs)
 
         try:
             drms_params = DRMSParams()
@@ -355,7 +336,7 @@ def perform_action(is_program, program_name=None, **kwargs):
             if drms_params is None:
                 raise ParametersError(error_message='unable to locate DRMS parameters package')
 
-            arguments = Arguments.get_arguments(is_program=is_program, program_name=program_name, program_args=args, module_args=module_args, drms_params=drms_params)
+            arguments = Arguments.get_arguments(is_program=is_program, program_name=program_name, program_args=program_args, module_args=module_args, drms_params=drms_params)
         except ArgsError as exc:
             raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
         except ExportError as exc:
