@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 from action import Action
-from check_dbserver import StatusCode as CdbStatusCode
 from drms_export import securedrms
 
 __all__ = [ 'extract_program_and_module_args', 'create_drms_client' ]
@@ -33,7 +32,12 @@ def extract_program_and_module_args(*, is_program, **kwargs):
     return (program_args, module_args)
 
 
+# determines which type of drms client - a private one, or a public one - is needed to serve drms client requests, and returns the
+# needed client; the determination is based upon the provided webserver (which has a `public` property), drms_client, series, and
+# specification arguments
 def create_drms_client(*, webserver, address=None, series, specification, drms_client_type, drms_client=None, drms_client_server, private_db_host, db_host, db_port, db_name, db_user, debug=False, log):
+    from check_dbserver import StatusCode as CdbStatusCode
+
     # parse specification to obtain series so we can check for pass-through series (relevant only if the user is on a public webserver);
     # parsing checks syntax, it does not check for the existence of series in the specification, so either a public or private drms client can be used
     drms_client = None
