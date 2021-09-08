@@ -19,52 +19,52 @@
 
 from argparse import Action as ArgsAction
 from json import loads as json_loads
-from sys import exit as sys_exit
+from sys import exc_info as sys_exc_info, exit as sys_exit
 
 from drms_parameters import DRMSParams
 from drms_utils import Arguments as Args, ArgumentsError as ArgsError, CmdlParser as ArgsParser, MakeObject, StatusCode as ExportStatusCode
 from drms_export import Response, Error as ExportError, ErrorCode as ExportErrorCode
 from drms_export import securedrms
 
+from utils import extract_program_and_module_args
+
 class StatusCode(ExportStatusCode):
-    SUCCESS = 0, 'success'
+    SUCCESS = (0, 'success')
 
 class ErrorCode(ExportErrorCode):
-    PARAMETERS = 1, 'failure locating DRMS parameters'
-    ARGUMENTS = 2, 'bad arguments'
-    WHITELIST = 3, 'whitelists are unsupported'
-    SERIES_INFO = 4, 'unable to obtain series information'
-    SECURE_DRMS = 5, 'failure with securedrms interface'
+    PARAMETERS = (1, 'failure locating DRMS parameters')
+    ARGUMENTS = (2, 'bad arguments')
+    WHITELIST = (3, 'whitelists are unsupported')
+    SERIES_INFO = (4, 'unable to obtain series information')
+    SECURE_DRMS = (5, 'failure with securedrms interface')
 
-class ParametersError(ExportError):
-    _error_code = ErrorCode(ErrorCode.PARAMETERS)
+class CdbBaseError(ExportError):
+    def __init__(self, *, exc_info=None, error_message=None):
+        if exc_info is not None:
+            self.exc_info = exc_info
+            e_type, e_obj, e_tb = exc_info
 
-    def __init__(self, *, error_message=None):
+            if error_message is None:
+                error_message = f'{e_type.__name__}: {str(e_obj)}'
+            else:
+                error_message = f'{error_message} [ {e_type.__name__}: {str(e_obj)} ]'
+
         super().__init__(error_message=error_message)
 
-class ArgumentsError(ExportError):
-    _error_code = ErrorCode(ErrorCode.ARGUMENTS)
+class ParametersError(CdbBaseError):
+    _error_code = ErrorCode.PARAMETERS
 
-    def __init__(self, *, error_message=None):
-        super().__init__(error_message=error_message)
+class ArgumentsError(CdbBaseError):
+    _error_code = ErrorCode.ARGUMENTS
 
-class WhitelistError(ExportError):
-    _error_code = ErrorCode(ErrorCode.WHITELIST)
+class WhitelistError(CdbBaseError):
+    _error_code = ErrorCode.WHITELIST
 
-    def __init__(self, *, error_message=None):
-        super().__init__(error_message=error_message)
+class SeriesInfoError(CdbBaseError):
+    _error_code = ErrorCode.SERIES_INFO
 
-class SeriesInfoError(ExportError):
-    _error_code = ErrorCode(ErrorCode.SERIES_INFO)
-
-    def __init__(self, *, error_message=None):
-        super().__init__(error_message=error_message)
-
-class SecureDRMSError(ExportError):
-    _error_code = ErrorCode(ErrorCode.SECURE_DRMS)
-
-    def __init__(self, *, error_message=None):
-        super().__init__(error_message=error_message)
+class SecureDRMSError(CdbBaseError):
+    _error_code = ErrorCode.SECURE_DRMS
 
 class ValidateArgumentAction(ArgsAction):
     def __call__(self, parser, namespace, value, option_string=None):
@@ -194,39 +194,22 @@ def get_whitelist(wl_file):
     return white_list
 
 def perform_action(is_program, program_name=None, **kwargs):
-    args = None
-    module_args = None
-
-    if is_program:
-        args = []
-        for key, val in kwargs.items():
-            if val is not None:
-                if key == 'options':
-                    for option, option_val in val.items():
-                        args.append(f'--{option}={option_val}')
-                else:
-                    args.append(f'{key}={val}')
-    else:
-        # a loaded module
-        module_args = {}
-        for key, val in kwargs.items():
-            if val is not None:
-                if key == 'options':
-                    for option, option_val in val.items():
-                        module_args[option] = option_val
-                else:
-                    module_args[key] = val
+    response = None
 
     try:
-        drms_params = DRMSParams()
-
-        if drms_params is None:
-            raise ParameterError(error_message='unable to locate DRMS parameters file (drmsparams.py)')
+        program_args, module_args = extract_program_and_module_args(is_program=is_program, **kwargs)
 
         try:
-            arguments = Arguments.get_arguments(is_program=is_program, program_name=program_name, program_args=args, module_args=module_args, drms_params=drms_params)
+            drms_params = DRMSParams()
+
+            if drms_params is None:
+                raise ParameterError(error_message='unable to locate DRMS parameters file (drmsparams.py)')
+
+            arguments = Arguments.get_arguments(is_program=is_program, program_name=program_name, program_args=program_args, module_args=module_args, drms_params=drms_params)
         except ArgsError as exc:
-            raise ArgumentsError(error_message=f'str(exc)')
+            raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+        except Exception as exc:
+            raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
 
         try:
             factory = None
@@ -312,6 +295,10 @@ def perform_action(is_program, program_name=None, **kwargs):
             response = SecureDRMSError(error_message=str(exc)).response
     except ExportError as exc:
         response = exc.response
+        e_type, e_obj, e_tb = exc.exc_info
+        error_msg = f'ERROR LINE {str(e_tb.tb_lineno)}: {exc.message}'
+
+        print(f'{error_msg}')
 
     return response
 
