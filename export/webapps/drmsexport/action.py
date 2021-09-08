@@ -5,8 +5,8 @@ from enum import Enum
 __all__ = [ 'ErrorCode', 'ActionError', 'ActionApiError', 'Action' ]
 
 class ErrorCode(Enum):
-    UNKNOWN = 1, 'unknown error'
-    API_ERROR = 2, 'API error'
+    UNKNOWN = (1, 'unknown error')
+    API_ERROR = (2, 'API error')
 
     def __new__(cls, value, name):
         member = object.__new__(cls)
@@ -18,7 +18,7 @@ class ErrorCode(Enum):
         return self.value
 
 class ActionError(Exception):
-    _error_code = ErrorCode(ErrorCode.UNKNOWN)
+    _error_code = ErrorCode.UNKNOWN
 
     def __init__(self, *, msg='generic error'):
         self._msg = msg
@@ -27,7 +27,7 @@ class ActionError(Exception):
         return self._msg
 
 class ActionApiError(ActionError):
-    _error_code = ErrorCode(ErrorCode.API_ERROR)
+    _error_code = ErrorCode.API_ERROR
 
     def __init__(self, *, msg=None):
         super().__init__(msg=msg)
