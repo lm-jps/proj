@@ -205,7 +205,7 @@ def perform_action(is_program, program_name=None, **kwargs):
         log.write_debug([ f'[ perform_action ] action arguments: {str(arguments)}' ])
 
         debug = True if arguments.logging_level == DrmsLogLevel.DEBUG else False
-        drms_client = create_drms_client(webserver=arguments.webserver, series=[ arguments.series ], drms_client_type=arguments.drms_client_type, drms_client_server='jsoc_external', private_db_host=arguments.private_db_host, db_host=arguments.db_host, db_port=arguments.db_port, db_name=arguments.db_name, db_user=arguments.db_user, debug=debug, log=log)
+        drms_client = create_drms_client(webserver=arguments.webserver, series=[ arguments.series ], specification=None, drms_client_type=arguments.drms_client_type, drms_client_server='jsoc_external', private_db_host=arguments.private_db_host, db_host=arguments.db_host, db_port=arguments.db_port, db_name=arguments.db_name, db_user=arguments.db_user, debug=debug, log=log)
 
         if drms_client is None:
             raise DRMSClientError(error_message=f'unable to obtain securedrms client')

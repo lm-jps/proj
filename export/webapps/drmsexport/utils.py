@@ -33,13 +33,14 @@ def extract_program_and_module_args(*, is_program, **kwargs):
     return (program_args, module_args)
 
 
-def create_drms_client(*, webserver, address=None, series, drms_client_type, drms_client=None, drms_client_server, private_db_host, db_host, db_port, db_name, db_user, debug=False, log):
+def create_drms_client(*, webserver, address=None, series, specification, drms_client_type, drms_client=None, drms_client_server, private_db_host, db_host, db_port, db_name, db_user, debug=False, log):
     # parse specification to obtain series so we can check for pass-through series (relevant only if the user is on a public webserver);
     # parsing checks syntax, it does not check for the existence of series in the specification, so either a public or private drms client can be used
     drms_client = None
     factory = None
     public_drms_client = None
     private_drms_client = None
+    series_dict = None
 
     if webserver.public:
         # db_host must be a public db server; use external drms client
@@ -57,21 +58,35 @@ def create_drms_client(*, webserver, address=None, series, drms_client_type, drm
             public_drms_client = drms_client
 
         # need to determine if pass-through series have been specified; if so, use securedrms client that uses private db
-        series_dict = { 'series' : series }
+        if series is not None:
+            series_dict = { 'series' : series }
+        elif specification is not None:
+            log.write_debug([ f'[ create_drms_client ] parsing record-set specification `{specification}`' ])
+            response_dict = public_drms_client.parse_spec(specification)
 
-        log.write_debug([ f'[ create_drms_client ] determining DB server suitable for requested data from series `{", ".join(series)}`' ])
+            if response_dict['errMsg'] is None:
+                series_dict = { 'series' : [] }
 
-        action_type = 'determine_db_server'
-        action_args = { 'public_dbhost' : db_host, 'series' : series_dict, 'drms_client' : public_drms_client }
-        action = Action.action(action_type=action_type, args=action_args)
-        response = action()
+                # `subsets` exists if status == PsStatusCode.SUCCESS
+                subsets = response_dict['subsets']
 
-        if response['status_code'] != CdbStatusCode.SUCCESS:
-            log.write_error([ f'[ create_drms_client ] failure calling `{action_type}` action; status: `{response.status.description()}`' ])
-        elif response['server'] is None:
-            log.write_error([ f'[ create_drms_client cannot service any series in `{", ".join(series)}`' ])
-        else:
-            db_host = response['server']
+                for subset in subsets:
+                    series_dict['series'].append(subset['seriesname'])
+
+        if series_dict is not None:
+            log.write_debug([ f'[ create_drms_client ] determining DB server suitable for requested data from series `{", ".join(series_dict["series"])}`' ])
+
+            action_type = 'determine_db_server'
+            action_args = { 'public_dbhost' : db_host, 'series' : series_dict, 'drms_client' : public_drms_client }
+            action = Action.action(action_type=action_type, args=action_args)
+            response = action()
+
+            if response['status_code'] != CdbStatusCode.SUCCESS:
+                log.write_error([ f'[ create_drms_client ] failure calling `{action_type}` action; status: `{response.status.description()}`' ])
+            elif response['server'] is None:
+                log.write_error([ f'[ create_drms_client cannot service any series in `{", ".join(series)}`' ])
+            else:
+                db_host = response['server']
     else:
         log.write_debug([ f'[ create_drms_client ] private webserver `{webserver.host}` initiating series-information request' ])
         private_drms_client = drms_client # could be None
@@ -96,8 +111,8 @@ def create_drms_client(*, webserver, address=None, series, drms_client_type, drm
                 try:
                     if factory is None:
                         factory = securedrms.SecureClientFactory(debug=debug, email=arguments.address)
-                    use_ssh = True if arguments.drms_client_type == 'ssh' else False
-                    connection_info = { 'dbhost' : private_db_host, 'dbport' : arguments.db_port, 'dbname' : arguments.db_name, 'dbuser' : arguments.db_user }
+                    use_ssh = True if drms_client_type == 'ssh' else False
+                    connection_info = { 'dbhost' : private_db_host, 'dbport' : db_port, 'dbname' : db_name, 'dbuser' : db_user }
                     log.write_debug([ f'[ create_drms_client ] creating private securedrms client' ])
                     private_drms_client = factory.create_client(server='jsoc_internal', use_ssh=use_ssh, use_internal=False, connection_info=connection_info)
                     drms_client = private_drms_client
