@@ -19,8 +19,8 @@
 #   manage-request.py 'address=person@domain&operation=check'
 
 from argparse import Action as ArgsAction
+from copy import deepcopy
 from datetime import timedelta
-from json import dumps as json_dumps, loads as json_loads
 from os.path import join as path_join
 import psycopg2
 from re import compile as re_compile
@@ -29,6 +29,7 @@ from sys import exc_info as sys_exc_info, exit as sys_exit, stdout as sys_stdout
 from drms_export import Error as ExportError, ErrorCode as ExportErrorCode, ErrorResponse, Response, securedrms
 from drms_parameters import DRMSParams, DPMissingParameterError
 from drms_utils import Arguments as Args, ArgumentsError as ArgsError, CmdlParser, Formatter as DrmsLogFormatter, Log as DrmsLog, LogLevel as DrmsLogLevel, LogLevelAction as DrmsLogLevelAction, MakeObject, StatusCode as SC
+from utils import extract_program_and_module_args
 
 DEFAULT_LOG_FILE = 'mr_log.txt'
 
@@ -382,22 +383,17 @@ class StatusOperation(Operation):
 
             if status_code == StatusCode.REQUEST_COMPLETE:
                 self._log.write_debug([ f'[ StatusOperation.get_response_dict ] exported data were generated for request `{request_id}`'])
-                data = json_dumps(list(zip(export_request.urls.record.to_list(), export_request.urls.url.to_list()))) # None, unless synchronous processing
+                data = list(zip(export_request.urls.record.to_list(), export_request.urls.url.to_list())) # None, unless synchronous processing
                 export_directory = export_request.dir
                 keywords_file = export_request.keywords
                 tar_file = export_request.tarfile
                 request_url = export_request.request_url
 
-        count = export_request.file_count # None, unless synchronous processing
-        rcount = export_request.record_count
-        size = export_request.size
-        method = export_request.method
-        protocol = export_request.file_format
-
         if isinstance(status_code, ErrorCode):
             response_dict = { 'error_code' : error_code, 'error_message' : fetch_error }
         else:
-            response_dict = { 'status_code' : status_code, 'fetch_status' : int(export_request.status), 'fetch_error' : fetch_error, 'request_id' : request_id, 'count' : count, 'rcount' : rcount, 'size' : size, 'method' : method, 'protocol' : protocol, 'data' : data, 'export_directory' : export_directory, 'keywords_file' : keywords_file, 'tar_file' : tar_file, 'request_url' : request_url }
+            response_dict = deepcopy(export_request.raw_response)
+            response_dict.update({ 'status_code' : status_code, 'fetch_error' : fetch_error, 'request_id' : request_id, 'number_records' : export_request.record_count, 'number_files' : export_request.file_count, 'mb_exported' : export_request.size, 'sums_directory' : export_directory, 'keywords_file' : keywords_file, 'tar_file' : tar_file, 'request_url' : request_url, 'export_data' : data })
 
         self._log.write_debug([ f'[ StatusOperation.get_response_dict] response dictionary `{str(response_dict)}`'])
 
@@ -492,7 +488,7 @@ class PendingRequestAction(Action):
 
     _reg_ex = None
 
-    def __init__(self, *, method, address, db_host, webserver, drms_client_type=None, drms_client=None, request_id=None, db_port=None, db_name=None, db_user=None, pending_requests_table=None, timeout=None):
+    def __init__(self, *, method, address, db_host, webserver, drms_client_type=None, drms_client=None, request_id=None, db_name=None, db_port=None,  db_user=None, pending_requests_table=None, timeout=None):
         self._method = getattr(self, method)
         self._address = address
         self._db_host = db_host
@@ -501,8 +497,8 @@ class PendingRequestAction(Action):
         self._options['drms_client_type'] = drms_client_type
         self._options['drms_client'] = drms_client
         self._options['request_id'] = request_id
-        self._options['db_port'] = db_port
         self._options['db_name'] = db_name
+        self._options['db_port'] = db_port
         self._options['db_user'] = db_user
         self._options['pending_requests_table'] = pending_requests_table
         self._options['timeout'] = timeout
@@ -541,28 +537,7 @@ def perform_action(is_program, program_name=None, **kwargs):
     log = None
 
     try:
-        args = None
-        module_args = None
-
-        if is_program:
-            args = []
-            for key, val in kwargs.items():
-                if val is not None:
-                    if key == 'options':
-                        for option, option_val in val.items():
-                            args.append(f'--{option}={option_val}')
-                    else:
-                        args.append(f'{key}={val}')
-        else:
-            # a loaded module
-            module_args = {}
-            for key, val in kwargs.items():
-                if val is not None:
-                    if key == 'options':
-                        for option, option_val in val.items():
-                            module_args[option] = option_val
-                    else:
-                        module_args[key] = val
+        program_args, module_args = extract_program_and_module_args(is_program=is_program, **kwargs)
 
         try:
             drms_params = DRMSParams()
@@ -570,7 +545,7 @@ def perform_action(is_program, program_name=None, **kwargs):
             if drms_params is None:
                 raise ParametersError(error_message='unable to locate DRMS parameters package')
 
-            arguments = Arguments.get_arguments(is_program=is_program, program_name=program_name, program_args=args, module_args=module_args, drms_params=drms_params)
+            arguments = Arguments.get_arguments(is_program=is_program, program_name=program_name, program_args=program_args, module_args=module_args, drms_params=drms_params)
         except ArgsError as exc:
             raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
         except Exception as exc:
@@ -588,7 +563,6 @@ def perform_action(is_program, program_name=None, **kwargs):
             log.write_debug([ f'[ perform_action ] module invocation' ])
 
         log.write_debug([ f'[ perform_action ] action arguments: {str(arguments)}' ])
-
 
         try:
             operation = OperationFactory(operation_name=arguments.operation, address=arguments.address, log=log)
@@ -675,7 +649,7 @@ def perform_action(is_program, program_name=None, **kwargs):
             print(f'[ perform_action ] ERROR LINE {str(e_tb.tb_lineno)}: {exc.message}')
 
     if log:
-        log.write_info([f'[ perform_action ] request complete; status {str(response)}'])
+        log.write_info([f'[ perform_action ] request complete; status {response.status_code.description()}'])
 
     return response
 
