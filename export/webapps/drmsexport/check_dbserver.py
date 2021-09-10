@@ -25,7 +25,6 @@ from drms_parameters import DRMSParams
 from drms_utils import Arguments as Args, ArgumentsError as ArgsError, CmdlParser as ArgsParser, MakeObject, StatusCode as ExportStatusCode
 from drms_export import Response, Error as ExportError, ErrorCode as ExportErrorCode
 from drms_export import securedrms
-
 from utils import extract_program_and_module_args
 
 class StatusCode(ExportStatusCode):
@@ -180,7 +179,7 @@ class DetermineDbServerAction(Action):
     def determine_db_server(self):
         # returns dict
         response = perform_action(is_program=False, public_dbhost=self._public_dbhost, series=self._series, options=self._options)
-        return response.generate_dict()
+        return response
 
 def get_whitelist(wl_file):
     white_list = set()
