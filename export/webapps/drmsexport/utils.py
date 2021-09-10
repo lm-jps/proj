@@ -35,7 +35,7 @@ def extract_program_and_module_args(*, is_program, **kwargs):
 # determines which type of drms client - a private one, or a public one - is needed to serve drms client requests, and returns the
 # needed client; the determination is based upon the provided webserver (which has a `public` property), drms_client, series, and
 # specification arguments
-def create_drms_client(*, webserver, address=None, series, specification, drms_client_type, drms_client=None, drms_client_server, private_db_host, db_host, db_port, db_name, db_user, debug=False, log):
+def create_drms_client(*, webserver, address=None, series, specification, drms_client_type, drms_client=None, public_drms_client_server, private_drms_client_server, private_db_host, db_host, db_port, db_name, db_user, debug=False, log):
     from check_dbserver import StatusCode as CdbStatusCode
 
     # parse specification to obtain series so we can check for pass-through series (relevant only if the user is on a public webserver);
@@ -55,7 +55,7 @@ def create_drms_client(*, webserver, address=None, series, specification, drms_c
             factory = securedrms.SecureClientFactory(debug=debug, email=address)
             use_ssh = True if drms_client_type == 'ssh' else False
             connection_info = { 'dbhost' : db_host, 'dbport' : db_port, 'dbname' : db_name, 'dbuser' : db_user }
-            public_drms_client = factory.create_client(server=drms_client_server, use_ssh=use_ssh, use_internal=False, connection_info=connection_info)
+            public_drms_client = factory.create_client(server=public_drms_client_server, use_ssh=use_ssh, use_internal=False, connection_info=connection_info)
         else:
             # public client (since the webserver is public)
             log.write_debug([ f'[ create_drms_client ] public securedrms client provided' ])
@@ -85,12 +85,12 @@ def create_drms_client(*, webserver, address=None, series, specification, drms_c
             action = Action.action(action_type=action_type, args=action_args)
             response = action()
 
-            if response['status_code'] != CdbStatusCode.SUCCESS:
-                log.write_error([ f'[ create_drms_client ] failure calling `{action_type}` action; status: `{response.status.description()}`' ])
-            elif response['server'] is None:
+            if response.attributes.drms_export_status_code != CdbStatusCode.SUCCESS:
+                log.write_error([ f'[ create_drms_client ] failure calling `{action_type}` action; status: `{response.status_code.description()}`' ])
+            elif response.attributes.server is None:
                 log.write_error([ f'[ create_drms_client cannot service any series in `{", ".join(series)}`' ])
             else:
-                db_host = response['server']
+                db_host = response.server
     else:
         log.write_debug([ f'[ create_drms_client ] private webserver `{webserver.host}` initiating series-information request' ])
         private_drms_client = drms_client # could be None
@@ -118,7 +118,7 @@ def create_drms_client(*, webserver, address=None, series, specification, drms_c
                     use_ssh = True if drms_client_type == 'ssh' else False
                     connection_info = { 'dbhost' : private_db_host, 'dbport' : db_port, 'dbname' : db_name, 'dbuser' : db_user }
                     log.write_debug([ f'[ create_drms_client ] creating private securedrms client' ])
-                    private_drms_client = factory.create_client(server='jsoc_internal', use_ssh=use_ssh, use_internal=False, connection_info=connection_info)
+                    private_drms_client = factory.create_client(server=private_drms_client_server, use_ssh=use_ssh, use_internal=True, connection_info=connection_info)
                     drms_client = private_drms_client
                 except Exception as exc:
                     log.write_error([ f'[ create_drms_client ] {str(exc)}'])
