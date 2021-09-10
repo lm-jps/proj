@@ -26,25 +26,24 @@ from sys import exc_info as sys_exc_info, exit as sys_exit
 from drms_export import Error as ExportError, ErrorCode as ExportErrorCode, Response
 from drms_parameters import DRMSParams, DPMissingParameterError
 from drms_utils import Arguments as Args, ArgumentsError as ArgsError, CmdlParser, Formatter as DrmsLogFormatter, Log as DrmsLog, LogLevel as DrmsLogLevel, LogLevelAction as DrmsLogLevelAction, StatusCode as ExportStatusCode
-
-from utils import extract_program_and_module_args, create_drms_client
+from utils import extract_program_and_module_args
 
 DEFAULT_LOG_FILE = 'ca_log.txt'
 
 class StatusCode(ExportStatusCode):
-    REGISTRATION_INITIATED = 1, 'registration of {address} initiated'
-    REGISTRATION_PENDING = 2, 'registration of {address} is pending'
-    REGISTERED_ADDRESS = 3, '{address} is registered'
-    UNREGISTERED_ADDRESS = 4, '{address} is not registered'
+    REGISTRATION_INITIATED = (1, 'registration of {address} initiated')
+    REGISTRATION_PENDING = (2, 'registration of {address} is pending')
+    REGISTERED_ADDRESS = (3, '{address} is registered')
+    UNREGISTERED_ADDRESS = (4, '{address} is not registered')
 
 class ErrorCode(ExportErrorCode):
-    PARAMETERS = 1, 'failure locating DRMS parameters'
-    ARGUMENTS = 2, 'bad arguments'
-    LOGGING = 3, 'failure logging messages'
-    MAIL = 4, 'failure sending mail'
-    DB = 5, 'failure executing database command'
-    DB_CONNECTION = 6, 'failure connecting to database'
-    DUPLICATION = 7, 'address is already registered'
+    PARAMETERS = (1, 'failure locating DRMS parameters')
+    ARGUMENTS = (2, 'bad arguments')
+    LOGGING = (3, 'failure logging messages')
+    MAIL = (4, 'failure sending mail')
+    DB = (5, 'failure executing database command')
+    DB_CONNECTION = (6, 'failure connecting to database')
+    DUPLICATION = (7, 'address is already registered')
 
 class CaBaseError(ExportError):
     def __init__(self, *, exc_info=None, error_message=None):
@@ -59,48 +58,26 @@ class CaBaseError(ExportError):
 
         super().__init__(error_message=error_message)
 
-
 class ParametersError(CaBaseError):
-    _error_code = ErrorCode(ErrorCode.PARAMETERS)
-
-    def __init__(self, *, exc_info=None, error_message=None):
-        super().__init__(exc_info=exc_info, error_message=error_message)
+    _error_code = ErrorCode.PARAMETERS
 
 class ArgumentsError(CaBaseError):
-    _error_code = ErrorCode(ErrorCode.ARGUMENTS)
-
-    def __init__(self, *, exc_info=None, error_message=None):
-        super().__init__(exc_info=exc_info, error_message=error_message)
+    _error_code = ErrorCode.ARGUMENTS
 
 class LoggingError(CaBaseError):
-    _error_code = ErrorCode(ErrorCode.LOGGING)
-
-    def __init__(self, *, exc_info=None, error_message=None):
-        super().__init__(exc_info=exc_info, error_message=error_message)
+    _error_code = ErrorCode.LOGGING
 
 class MailError(CaBaseError):
-    _error_code = ErrorCode(ErrorCode.MAIL)
-
-    def __init__(self, *, exc_info=None, error_message=None):
-        super().__init__(exc_info=exc_info, error_message=error_message)
+    _error_code = ErrorCode.MAIL
 
 class DBError(CaBaseError):
-    _error_code = ErrorCode(ErrorCode.DB)
-
-    def __init__(self, *, exc_info=None, error_message=None):
-        super().__init__(exc_info=exc_info, error_message=error_message)
+    _error_code = ErrorCode.DB
 
 class DBConnectionError(CaBaseError):
-    _error_code = ErrorCode(ErrorCode.DB_CONNECTION)
-
-    def __init__(self, *, exc_info=None, error_message=None):
-        super().__init__(exc_info=exc_info, error_message=error_message)
+    _error_code = ErrorCode.DB_CONNECTION
 
 class DuplicationError(CaBaseError):
-    _error_code = ErrorCode(ErrorCode.DUPLICATION)
-
-    def __init__(self, *, exc_info=None, error_message=None):
-        super().__init__(exc_info=exc_info, error_message=error_message)
+    _error_code = ErrorCode.DUPLICATION
 
 class CheckAddressResponse(Response):
     _status_code = None
@@ -132,7 +109,7 @@ class Arguments(Args):
     def get_arguments(cls, *, is_program, program_name=None, program_args=None, module_args=None, drms_params):
         if cls._arguments is None:
             try:
-                db_host = drms_params.get_required('SERVER')
+                db_host = drms_params.get_required('SERVER') # must be internal db
                 db_port = int(drms_params.get_required('DRMSPGPORT'))
                 db_name = drms_params.get_required('DBNAME')
                 db_user = drms_params.get_required('WEB_DBUSER')
@@ -165,28 +142,28 @@ class Arguments(Args):
                 # optional
                 parser.add_argument('-l', '--log_file', help='the path to the log file', metavar='<log file>', dest='log_file', default=log_file)
                 parser.add_argument('-L', '--logging_level', help='the amount of logging to perform; in order of increasing verbosity: critical, error, warning, info, debug', metavar='<logging level>', dest='logging_level', action=DrmsLogLevelAction, default=DrmsLogLevel.ERROR)
-                parser.add_argument('-n', '--name', help='the user name to register', metavar='<export user\'s name>', dest='name', action=UnquoteAction, default='NULL')
-                parser.add_argument('-s', '--snail', help='the user snail-mail address to register', metavar='<export user\'s snail mail>', dest='snail', action=UnquoteAction, default='NULL')
-                parser.add_argument('-H', '--dbhost', help='the host machine of the database that is used to manage pending export requests', metavar='<db host>', dest='db_host', default=db_host)
+                parser.add_argument('-n', '--name', help='the user name to register', metavar='<export user\'s name>', dest='user_name', action=UnquoteAction, default='NULL')
+                parser.add_argument('-s', '--snail', help='the user snail-mail address to register', metavar='<export user\'s snail mail>', dest='user_snail', action=UnquoteAction, default='NULL')
+                parser.add_argument('-H', '--dbhost', help='the host machine of the internal database that is used to manage pending export requests', metavar='<db host>', dest='db_host', default=db_host)
                 parser.add_argument('-P', '--dbport', help='The port on the host machine that is accepting connections for the database', metavar='<db host port>', dest='db_port', type=int, default=db_port)
                 parser.add_argument('-N', '--dbname', help='the name of the database used to manage pending export requests', metavar='<db name>', dest='db_name', default=db_name)
                 parser.add_argument('-U', '--dbuser', help='the name of the database user account', metavar='<db user>', dest='db_user', default=db_user)
 
                 arguments = Arguments(parser=parser, args=args)
             else:
-                def extract_module_args(*, address, operation, log_file=log_file, logging_level=DrmsLogLevel.ERROR, name='NULL', snail=None, db_host=db_host, db_port=db_port, db_name=db_name, db_user=db_user):
+                def extract_module_args(*, address, operation, log_file=log_file, logging_level=DrmsLogLevel.ERROR, db_host=db_host, db_port=db_port, db_name=db_name, db_user=db_user, user_name=None, user_snail=None):
                     arguments = {}
 
                     arguments['address'] = address
                     arguments['operation'] = operation
                     arguments['log_file'] = log_file
                     arguments['logging_level'] = logging_level
-                    arguments['name'] = name
-                    arguments['snail'] = snail
                     arguments['db_host'] = db_host
                     arguments['db_port'] = db_port
                     arguments['db_name'] = db_name
                     arguments['db_user'] = db_user
+                    arguments['user_name'] = user_name
+                    arguments['user_snail'] = user_snail
 
                     return arguments
 
@@ -252,7 +229,7 @@ def generate_registered_or_pending_response(cursor, arguments, confirmation):
 from action import Action
 class CheckAddressAction(Action):
     actions = [ 'check_address', 'register_address' ]
-    def __init__(self, *, method, address, db_host=None, db_port=None, db_name=None, db_user=None):
+    def __init__(self, *, method, address, db_host=None, db_port=None, db_name=None, db_user=None, user_name=None, user_snail=None):
         self._method = getattr(self, method)
         self._address = address
         self._options = {}
@@ -260,16 +237,18 @@ class CheckAddressAction(Action):
         self._options['db_port'] = db_port
         self._options['db_name'] = db_name
         self._options['db_user'] = db_user
+        self._options['user_name'] = user_name
+        self._options['user_snail'] = user_snail
 
     def check_address(self):
         # returns dict
         response = perform_action(is_program=False, operation='check', address=self._address, options=self._options)
-        return response.generate_dict()
+        return response
 
     def register_address(self):
         # returns dict
         response = perform_action(is_program=False, operation='register', address=self._address, options=self._options)
-        return response.generate_dict()
+        return response
 
 def initiate_registration(cursor, arguments, log):
     # the address is not in the db, and the user did request registration ==> registration initiated
@@ -300,8 +279,8 @@ def initiate_registration(cursor, arguments, log):
 
     # we have to also insert into the export user table since we have that information now, not after the user has replied to the registration email
     # (which is processed by registerAddress.py); if a failure happens anywhere along the way, we need to delete the entry from the export user table
-    log.write_debug([ f'[ initiate_registration ] inserting user information `{arguments.address}`, name `{arguments.name}`, snail `{arguments.snail}` into database' ])
-    cmd = f"SELECT id FROM {arguments.user_info_insert_fn}('{arguments.address}', '{arguments.name}', '{arguments.snail}')"
+    log.write_debug([ f'[ initiate_registration ] inserting user information `{arguments.address}`, name `{arguments.user_name}`, snail `{arguments.user_snail}` into database' ])
+    cmd = f"SELECT id FROM {arguments.user_info_insert_fn}('{arguments.address}', '{arguments.user_name}', '{arguments.user_snail}')"
 
     try:
         log.write_debug([ f'[ initiate_registration ] executing SQL `{cmd}`' ])
