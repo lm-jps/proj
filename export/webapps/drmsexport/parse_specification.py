@@ -13,13 +13,13 @@ DEFAULT_LOG_FILE = 'ps_log.txt'
 PARSE_SPEC_BIN = 'drms_parserecset'
 
 class StatusCode(SC):
-    SUCCESS = 0, 'success'
+    SUCCESS = (0, 'success')
 
 class ErrorCode(ExportErrorCode):
-    PARAMETERS = 1, 'failure locating DRMS parameters'
-    ARGUMENTS = 2, 'bad arguments'
-    LOGGING = 3, 'failure logging messages'
-    DRMS_CLIENT = 4, 'drms client error'
+    PARAMETERS = (1, 'failure locating DRMS parameters')
+    ARGUMENTS = (2, 'bad arguments')
+    LOGGING = (3, 'failure logging messages')
+    DRMS_CLIENT = (4, 'drms client error')
 
 class PsBaseError(ExportError):
     def __init__(self, *, exc_info=None, error_message=None):
@@ -33,28 +33,16 @@ class PsBaseError(ExportError):
         super().__init__(error_message=error_message)
 
 class ParametersError(PsBaseError):
-    _error_code = ErrorCode(ErrorCode.PARAMETERS)
-
-    def __init__(self, *, exc_info=None, error_message=None):
-        super().__init__(exc_info=exc_info, error_message=error_message)
+    _error_code = ErrorCode.PARAMETERS
 
 class ArgumentsError(PsBaseError):
-    _error_code = ErrorCode(ErrorCode.ARGUMENTS)
-
-    def __init__(self, *, exc_info=None, error_message=None):
-        super().__init__(exc_info=exc_info, error_message=error_message)
+    _error_code = ErrorCode.ARGUMENTS
 
 class LoggingError(PsBaseError):
-    _error_code = ErrorCode(ErrorCode.LOGGING)
-
-    def __init__(self, *, exc_info=None, error_message=None):
-        super().__init__(exc_info=exc_info, error_message=error_message)
+    _error_code = ErrorCode.LOGGING
 
 class DRMSClientError(PsBaseError):
-    _error_code = ErrorCode(ErrorCode.DRMS_CLIENT)
-
-    def __init__(self, *, exc_info=None, error_message=None):
-        super().__init__(exc_info=exc_info, error_message=error_message)
+    _error_code = ErrorCode.DRMS_CLIENT
 
 class Arguments(Args):
     _arguments = None
@@ -84,10 +72,11 @@ class Arguments(Args):
                     parser = CmdlParser(usage=f'%(prog)s spec=<specification> [ --dbhost=<db host> ] [ --dbport=<db port> ] [ --dbname=<db name> ] [ --dbuser=<db user>]')
 
                 # required
-                parser.add_argument('spec', help='the DRMS record-set specification', metavar='<specification>', dest='specification', required=True)
-                parser.add_argument('address', help='the email addressed registered for export', metavar='<email address>', dest='address', required=True)
+                parser.add_argument('specificaton', help='the DRMS record-set specification', metavar='<specification>', dest='specification', required=True)
+
 
                 # optional
+                parser.add_argument('-a', 'address', help='the email addressed registered for export', metavar='<email address>', dest='address', default=None)
                 parser.add_argument('-c', '--drms-client-type', help='securedrms client type (ssh, http)', choices=[ 'ssh', 'http' ], dest='drms_client_type', default='ssh')
                 parser.add_argument('-l', '--log_file', help='the path to the log file', metavar='<log file>', dest='log_file', default=log_file)
                 parser.add_argument('-L', '--logging_level', help='the amount of logging to perform; in order of increasing verbosity: critical, error, warning, info, debug', metavar='<logging level>', dest='logging_level', action=DrmsLogLevelAction, default=DrmsLogLevel.ERROR)
@@ -99,7 +88,7 @@ class Arguments(Args):
                 arguments = Arguments(parser=parser, args=args)
                 arguments.drms_client = None
             else:
-                def extract_module_args(*, spec, address, drms_client=None, drms_client_type='ssh', log_file=log_file, logging_level=logging_level, db_host=db_host, db_port=db_port, db_name=db_name, db_user=db_user):
+                def extract_module_args(*, spec, address=None, drms_client=None, drms_client_type='ssh', log_file=log_file, logging_level=logging_level, db_host=db_host, db_port=db_port, db_name=db_name, db_user=db_user):
                     arguments = {}
 
                     arguments['address'] = address
@@ -151,7 +140,7 @@ class ParseSpecificationAction(Action):
         # returns dict
         prog_name = inspect.currentframe().f_code.co_name
         response = perform_action(is_program=False, program_name=prog_name, spec=self._specification, options=self._options)
-        return response.generate_dict()
+        return response
 
 def perform_action(*, is_program, program_name=None, **kwargs):
     # catch all expections so we can always generate a response
@@ -228,7 +217,6 @@ def perform_action(*, is_program, program_name=None, **kwargs):
             raise DRMSClientError(exc_info=sys_exc_info())
 
         response = Response.generate_response(status_code=StatusCode.SUCCESS, **response_dict)
-
     except ExportError as exc:
         response = exc.response
         if log:
