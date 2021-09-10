@@ -2,17 +2,18 @@
 
 from argparse import Action as ArgsAction
 import asyncio
-from check_dbserver import StatusCode as CdbStatusCode
-from parse_specification import StatusCode as PsStatusCode
-from drms_export import Error as ExportError, ErrorCode as ExportErrorCode, ErrorResponse, Response, securedrms
-from drms_parameters import DRMSParams, DPMissingParameterError
-from drms_utils import Arguments as Args, ArgumentsError as ArgsError, Choices, CmdlParser, Formatter as DrmsLogFormatter, Log as DrmsLog, LogLevel as DrmsLogLevel, LogLevelAction as DrmsLogLevelAction, MakeObject, StatusCode as SC
-from json import dumps as json_dumps, loads as json_loads
+from copy import deepcopy
+from json import loads as json_loads
 from os.path import join as path_join
 import re
 from sys import exc_info as sys_exc_info, exit as sys_exit, stdout as sys_stdout
 from time import sleep
 from threading import Event, Timer
+
+from drms_export import Error as ExportError, ErrorCode as ExportErrorCode, ErrorResponse, Response, securedrms
+from drms_parameters import DRMSParams, DPMissingParameterError
+from drms_utils import Arguments as Args, ArgumentsError as ArgsError, Choices, CmdlParser, Formatter as DrmsLogFormatter, Log as DrmsLog, LogLevel as DrmsLogLevel, LogLevelAction as DrmsLogLevelAction, MakeObject, StatusCode as SC
+from utils import extract_program_and_module_args, create_drms_client
 
 DEFAULT_LOG_FILE = 'ir_log.txt'
 
@@ -263,6 +264,7 @@ def get_response_dict(export_request, log):
 
     # None, unless asynchronous processing (but None if error)
     request_id = export_request.request_id if export_request.request_id is not None else export_request.REQUEST_ID
+    request_id = request_id if len(request_id) > 0 else None
 
     if error_code is not None:
         log.write_debug([ f'[ get_response_dict ] error calling fetch `{error_code.description()}` for request `{request_id}`'])
@@ -275,23 +277,17 @@ def get_response_dict(export_request, log):
 
         if status_code == StatusCode.REQUEST_COMPLETE:
             log.write_debug([ f'[ get_response_dict ] exported data were generated for request `{request_id}`'])
-            data = json_dumps(list(zip(export_request.urls.record.to_list(), export_request.urls.url.to_list()))) # None, unless synchronous processing
+            data = list(zip(export_request.urls.record.to_list(), export_request.urls.url.to_list())) # None, unless synchronous processing
             export_directory = export_request.dir
             keywords_file = export_request.keywords
             tar_file = export_request.tarfile
             request_url = export_request.request_url
 
-
-    count = export_request.file_count # None, unless synchronous processing
-    rcount = export_request.record_count
-    size = export_request.size
-    method = export_request.method
-    protocol = export_request.file_format
-
     if isinstance(status_code, ErrorCode):
         response_dict = { 'error_code' : error_code, 'error_message' : fetch_error }
     else:
-        response_dict = { 'status_code' : status_code, 'fetch_status' : int(export_request.status), 'fetch_error' : fetch_error, 'request_id' : request_id, 'count' : count, 'rcount' : rcount, 'size' : size, 'method' : method, 'protocol' : protocol, 'data' : data, 'export_directory' : export_directory, 'keywords_file' : keywords_file, 'tar_file' : tar_file, 'request_url' : request_url }
+        response_dict = deepcopy(export_request.raw_response)
+        response_dict.update({ 'status_code' : status_code, 'fetch_error' : fetch_error, 'request_id' : request_id, 'number_records' : export_request.record_count, 'number_files' : export_request.file_count, 'mb_exported' : export_request.size, 'sums_directory' : export_directory, 'keywords_file' : keywords_file, 'tar_file' : tar_file, 'request_url' : request_url, 'export_data' : data })
 
     log.write_debug([ f'[ get_response_dict] response dictionary `{str(response_dict)}`'])
 
@@ -571,28 +567,7 @@ def perform_action(is_program, program_name=None, **kwargs):
     log = None
 
     try:
-        args = None
-        module_args = None
-
-        if is_program:
-            args = []
-            for key, val in kwargs.items():
-                if val is not None:
-                    if key == 'options':
-                        for option, option_val in val.items():
-                            args.append(f'--{option}={option_val}')
-                    else:
-                        args.append(f'{key}={val}')
-        else:
-            # a loaded module
-            module_args = {}
-            for key, val in kwargs.items():
-                if val is not None:
-                    if key == 'options':
-                        for option, option_val in val.items():
-                            module_args[option] = option_val
-                    else:
-                        module_args[key] = val
+        program_args, module_args = extract_program_and_module_args(is_program=is_program, **kwargs)
 
         try:
             drms_params = DRMSParams()
@@ -600,7 +575,7 @@ def perform_action(is_program, program_name=None, **kwargs):
             if drms_params is None:
                 raise ParametersError(error_message='unable to locate DRMS parameters package')
 
-            arguments = Arguments.get_arguments(is_program=is_program, program_name=program_name, program_args=args, module_args=module_args, drms_params=drms_params)
+            arguments = Arguments.get_arguments(is_program=is_program, program_name=program_name, program_args=program_args, module_args=module_args, drms_params=drms_params)
         except ArgsError as exc:
             raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
         except Exception as exc:
@@ -624,87 +599,15 @@ def perform_action(is_program, program_name=None, **kwargs):
         factory = None
         public_drms_client = None
         private_drms_client = None
-        if arguments.webserver.public:
-            # arguments.db_host must be a public db server; use external drms client
-            log.write_debug([ f'[ perform_action ] public webserver {arguments.webserver.host} initiating request' ])
-            try:
-                if arguments.drms_client is None:
-                    log.write_debug([ f'[ perform_action ] no securedrms client provided; creating public one' ])
-                    debug = True if arguments.logging_level == DrmsLogLevel.DEBUG else False
-                    factory = securedrms.SecureClientFactory(debug=debug, email=arguments.address)
-                    use_ssh = True if arguments.drms_client_type == 'ssh' else False
-                    connection_info = { 'dbhost' : arguments.db_host, 'dbport' : arguments.db_port, 'dbname' : arguments.db_name, 'dbuser' : arguments.db_user }
 
-                    public_drms_client = factory.create_client(server='jsoc_external', use_ssh=use_ssh, use_internal=False, connection_info=connection_info)
-                else:
-                    # public client (since the webserver is public)
-                    log.write_debug([ f'[ perform_action ] public securedrms client provided' ])
-                    public_drms_client = arguments.drms_client
+        # choosing the correct drms client (public or private) to handle pass-through series, if the specification
+        # contains them
+        debug = True if arguments.logging_level == DrmsLogLevel.DEBUG else False
 
-                log.write_debug([ f'[ perform_action ] parsing record-set specification' ])
-                response_dict = public_drms_client.parse_spec(arguments.export_arguments['specification'])
+        drms_client = create_drms_client(webserver=arguments.webserver, series=None, specification=arguments.export_arguments['specification'], drms_client_type=arguments.drms_client_type, public_drms_client_server='jsoc_external', private_drms_client_server='jsoc_internal', private_db_host=arguments.private_db_host, db_host=arguments.db_host, db_port=arguments.db_port, db_name=arguments.db_name, db_user=arguments.db_user, debug=debug, log=log)
 
-                if response_dict['errMsg'] is not None:
-                    raise DRMSClientError(error_message=f'failure parsing record-set specification {arguments.export_arguments["specification"]}: {response_dict["errMsg"]}')
-
-                # `subsets` exists if status == PsStatusCode.SUCCESS
-                subsets = response_dict['subsets']
-            except Exception as exc:
-                raise ExportActionError(exc_info=sys_exc_info(), error_message=f'unable to parse record-set specification')
-
-            try:
-                # need to determine if pass-through series have been specified; if so, use securedrms client that uses private db
-                series_dict = { 'series' : [] }
-
-                for subset in subsets:
-                    series_dict['series'].append(subset['seriesname'])
-
-                log.write_debug([ f'[ perform_action ] determining DB server suitable for requested data from series {",".join(series_dict["series"])}' ])
-
-                action_type = 'determine_db_server'
-                action_args = { 'public_dbhost' : arguments.db_host, 'series' : series_dict, 'drms_client' : public_drms_client }
-                action = Action.action(action_type=action_type, args=action_args)
-                response = action()
-                if response['status_code'] != CdbStatusCode.SUCCESS:
-                    raise ExportActionError(error_message=f'failure calling `{action_type}` action; status: `{response.status.description()}`')
-                if response['server'] is None:
-                    raise ArgumentsError(error_message=f'cannot service any series in `{", ".join(arguments.series)}`')
-                db_host = response['server']
-            except Exception as exc:
-                raise ExportActionError(exc_info=sys_exc_info(), error_message=f'unable to determine supporting db server')
-        else:
-            log.write_debug([ f'[ perform_action ] private webserver {arguments.webserver.host} initiating request' ])
-            private_drms_client = arguments.drms_client # could be None
-
-        # now we know whether we should be using a public or private drms client
-        use_public_db_host = True if arguments.webserver.public and db_host != arguments.private_db_host else False
-        if use_public_db_host:
-            log.write_debug([ f'[ perform_action ] public db host will be used to service request' ])
-            if public_drms_client is not None:
-                drms_client = public_drms_client
-            else:
-                # we must have had a public client - we used it to parse the record-set specification
-                raise DRMSClientError(error_message=f'missing public drms client')
-        else:
-            log.write_debug([ f'[ perform_action ] private db host must be used to service request' ])
-            # private drms client needed; if a public one was passed in, then private_drms_client is None
-            if private_drms_client is not None:
-                log.write_debug([ f'[ perform_action ] no securedrms client provided; creating private one' ])
-                drms_client = private_drms_client
-            else:
-                try:
-                    debug = True if arguments.logging_level == DrmsLogLevel.DEBUG else False
-                    if factory is None:
-                        factory = securedrms.SecureClientFactory(debug=debug, email=arguments.address)
-                    use_ssh = True if arguments.drms_client_type == 'ssh' else False
-                    connection_info = { 'dbhost' : arguments.private_db_host, 'dbport' : arguments.db_port, 'dbname' : arguments.db_name, 'dbuser' : arguments.db_user }
-                    log.write_debug([ f'[ perform_action ] creating private securedrms client' ])
-                    private_drms_client = factory.create_client(server='jsoc_internal', use_ssh=use_ssh, use_internal=False, connection_info=connection_info)
-                    drms_client = private_drms_client
-                except securedrms.SecureDRMSError as exc:
-                    raise DRMSClientError(exc_info=sys_exc_info())
-                except Exception as exc:
-                    raise DRMSClientError(exc_info=sys_exc_info())
+        if drms_client is None:
+            raise DRMSClientError(error_message=f'unable to obtain securedrms client')
 
         # there are four potential attributes an export request can have:
         #   processing (processed ==> original image is modified); NA for keyword-only exports
@@ -760,11 +663,13 @@ def perform_action(is_program, program_name=None, **kwargs):
             raise ExportActionError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
     except ExportError as exc:
         response = exc.response
-        if log:
+        if log is not None:
             e_type, e_obj, e_tb = exc.exc_info
             log.write_error([ f'[ perform_action ] ERROR LINE {str(e_tb.tb_lineno)}: {exc.message}' ])
 
-    log.write_info([f'[ perform_action ] request complete; status {str(response)}'])
+    if log is not None:
+        log.write_info([f'[ perform_action ] request complete; status {response.status_code.description()}'])
+
     return response
 
 # for use in export web app
@@ -815,7 +720,6 @@ class InitiateRequestAction(Action):
         return response
 
     def start_streamed_export(self):
-        # returns dict
         response = perform_action(is_program=False, export_type='streamed', address=self._address, db_host=self._db_host, webserver=self._webserver, export_arguments=self._export_arguments, options=self._options)
         return response
 
