@@ -242,7 +242,7 @@ def perform_action(is_program, program_name=None, **kwargs):
 # for use in export web app
 from action import Action
 class GetRecordInfoAction(Action):
-    actions = [ 'get_record_info' ]
+    actions = [ 'get_record_set_info' ]
     def __init__(self, *, method, specification, db_host, webserver, drms_client_type=None, drms_client=None,  keywords=None, links=None, db_port=None, db_name=None, segments=None, db_user=None):
         self._method = getattr(self, method)
         self._specification = specification
@@ -258,7 +258,7 @@ class GetRecordInfoAction(Action):
         self._options['segments'] = segments
         self._options['db_user'] = db_user
 
-    def get_record_info(self):
+    def get_record_set_info(self):
         reponse = perform_action(specification=self._series, db_host=self._db_host, webserver=self._webserver, options=self._options)
         return response
 
