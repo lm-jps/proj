@@ -86,11 +86,11 @@ def create_drms_client(*, webserver, address=None, series, specification, drms_c
             response = action()
 
             if response.attributes.drms_export_status_code != CdbStatusCode.SUCCESS:
-                log.write_error([ f'[ create_drms_client ] failure calling `{action_type}` action; status: `{response.status_code.description()}`' ])
+                log.write_error([ f'[ create_drms_client ] failure calling `{action_type}` action; status: `{response.attributes.drms_export_status_code.description()}`' ])
             elif response.attributes.server is None:
                 log.write_error([ f'[ create_drms_client cannot service any series in `{", ".join(series)}`' ])
             else:
-                db_host = response.server
+                db_host = response.attributes.server
     else:
         log.write_debug([ f'[ create_drms_client ] private webserver `{webserver.host}` initiating series-information request' ])
         private_drms_client = drms_client # could be None
