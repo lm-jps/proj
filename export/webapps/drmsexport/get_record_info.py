@@ -163,10 +163,6 @@ def get_response(client_response_dict, log):
     response_dict = deepcopy(client_response_dict)
     info_status = response_dict['status']
 
-    # move status so it does not conflict with response status value
-    del response_dict['status']
-    response_dict['info_status'] = info_status
-
     if info_status == 0:
         response_dict['status_code'] = StatusCode.SUCCESS
     elif info_status == 1:
@@ -211,7 +207,7 @@ def perform_action(is_program, program_name=None, **kwargs):
         log.write_debug([ f'[ perform_action ] action arguments: {str(arguments)}' ])
 
         debug = True if arguments.logging_level == DrmsLogLevel.DEBUG else False
-        drms_client = create_drms_client(webserver=arguments.webserver, series=None, specification=arguments.specification, drms_client_type=arguments.drms_client_type, drms_client_server='jsoc_external', private_db_host=arguments.private_db_host, db_host=arguments.db_host, db_port=arguments.db_port, db_name=arguments.db_name, db_user=arguments.db_user, debug=debug, log=log)
+        drms_client = create_drms_client(webserver=arguments.webserver, series=None, specification=arguments.specification, drms_client_type=arguments.drms_client_type, public_drms_client_server='jsoc_external', private_drms_client_server='jsoc_internal', private_db_host=arguments.private_db_host, db_host=arguments.db_host, db_port=arguments.db_port, db_name=arguments.db_name, db_user=arguments.db_user, debug=debug, log=log)
 
         if drms_client is None:
             raise DRMSClientError(error_message=f'unable to obtain securedrms client')
