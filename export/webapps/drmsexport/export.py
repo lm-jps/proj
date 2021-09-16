@@ -15,19 +15,117 @@ from webargs.flaskparser import use_args, use_kwargs, parser, abort
 from action import Action
 from drms_export import ErrorResponse
 
-# `export` is a flask app; upon receiving an HTTP or WSGI request, the uWSGI web server calls export.run() by calling the 'callable' (the object with run() defined) in the WSGI entry point (export_wsgi.export); the WSGI server is configured by specifying the flask app `export` (defined here), imported into the entry point - the entry point contains from export import export
-# to export.run(), the uWSGI web server passes a dict of environment variables, which contain the request arguments (such as an email address), and a callback method;
-# export.run() then calls the appropriate flask_restful.Resource method to handle the request to the specified web resource; for example, if an HTTP GET request is received for the URL http://solarweb2.stanford.edu:8080/export/request, then get() method of the resource's flask_restful.Resource object is invoked;
-# a flask_restful.Api object, `export_api`, is defined to establish this mapping from a URL resource to a flask_restful.Resource object
-# each flask_restful.Resource method returns a response that export.run() then converts into a flask.Response object;
-# export.run() then calls the callback method uWSGI server provided, providing the request status, and a list of tuples where each tuple is an (HTTP header, value)
-# export.run() returns an iterable formed from the flask.Response that it received from the flask_restful.Resource method
-# the uWSGI server then creates a response (in the agreed format, such as HTTP) from the iterable and sends it to the caller (curl, or an HTTP web server, for example)
-export = Flask(__name__)
+# `export` is a flask app;
 
-# `export_api` is a flask_restful.Api object that establishes API access to the wrapped flask app `export`; each web resource (i.e., a URL, like http://solarweb2.stanford.edu:8080/export/request) has an associated flask_restful.Resource object that handles all requests that resource; the calls to export_api.add_resource() define these associations, and in doing so, define the complete API;
-# the various methods of each flask_restful.Resource object handle each type of request to the associated web resource; for example, if an HTTP GET request is received for the URL http://solarweb2.stanford.edu:8080/export/request, then the get() method of the associated flask_restful.Resource is invoked
-# each flask_restful.Resource method returns to export.run() a response that can take one of several forms; a dict is acceptable, in which case export.run() will create a flask.Response object that contains JSON; a flask.Response object is also an acceptable response - the flask.jsonify() method is one way to create such an object; in particular, flask.jsonify() sets the flask.Response mimetype to `application/json`; it appears that Flask.run() can also accept list, or even HTML responses
+# the drms_export web application comprises X components:
+#   + a set of HTML web pages that contain forms to collect information from the export-system user; the web pages use JavaScript,
+#     HTML elements, and AJAX tools to create HTTP requests which are then sent by the browser to an HTTP server
+#   + a browser/network tool that sends an HTTP server HTTP requests, and receives HTTP responses from the server
+#   + an HTTP server that acts as a reverse proxy: it receives HTTP requests from browsers/network tools on the internet, forwards
+#     the requests as uwsgi requests to an upstream WSGI server, receives uwsgi responses from the WSGI server, and finally sends
+#     HTML responses back to the originating browsers/tools
+#   + a WSGI server that receives uwsgi requests from the reverse-proxy server, sends corresponding WSGI requests to the
+#     Flask web application, receives WSGI responses from the Flask web application, and sends uwsgi responses
+#     back to the originating reverse-proxy server
+#   + a Flask app that services WSGI requests it receives from the WSGI server, and sends WSGI responses back to the WSGI server
+
+#########################
+# reverse-proxy (NGINX) #
+#########################
+
+
+#########################
+#  uWSGI (WSGI server)  #
+#########################
+# the WSGI server used by drms_export is uWSGI
+#   + upon receiving a uwsgi request from the reverse-proxy server, the uWSGI calls the Flask app's entry point, a WSGI
+#     callable, which is exported from export_wsgi.py
+#   + when calling the entry point, the WSGI server passes a dict of environment variables and a callable `start_response`,
+#     encapsulated in a flask.Request instance; the Flask.Request contains the request arguments, such as an email
+#     address or export-system request ID; the callable is used by the Flask app to return the application's response to
+#     the WSGI server
+#   + the WSGI server creates a uwsgi response from the arguments provided to the `start_response` callable, and sends the
+#     response to the reverse-proxy server
+
+#########################
+#   WSGI entry point    #
+#########################
+# the WSGI entry point is a Flask app callable that accepts two arguments: `environ` and `start_response`
+#   + the Flask app is itself a callable (it has a __call__() method), so the entry point is simply a module,
+#     export_wsgi.py, that imports the Flask app `export` from this script, export.py
+#   + the WSGI server sends a request to the Flask app by calling the entry point:
+#     export_wsgi.export(environ, start_response)
+#     - export_wsgi.export(environ, start_response) calls export_wsgi.export.wsgi_app(environ, start_response)
+#     - `environ` is a dict that contains the WSGI environment (e.g., type of HTTP request)
+#     - `start_response` is a callable (a callback) that accepts a status code, a list of headers (each element
+#        is a 2-tuple (<HTTP header name>, <HTTP header value>)), and an optional exception context; the
+#        Flask app calls `start_response` to return a response to the WSGI server
+#     - Flask encapsulates the receiving of requests from the WSGI server; it will convert the `environ` dict into a Flask.Request
+#       and route the URL endpoint to the appropriate view function (the function that generates a response)
+#     - Flask encapsulates the sending of responses to the WSGI server; the view function can return data in one of
+#       many formats (iterable, dict, str, tuple, json text, html, flask.Response) and the results will be converted to a
+#       Flask.Response; if a tuple is returned, then the view function can return (response, status), (response, headers),
+#       or (response, headers, status) - status overrides the response status code, and headers is a list or dict
+
+#########################
+# Flask app (`export`)  #
+#########################
+# the Flask application is an instance of flask.Flask
+#   + this script, export.py, creates the flask.Flask instance `export`; it provides access to "view functions"
+#     (methods that generate responses to app requests) and "URL routes" (mappings from each URL endpoint)
+#     to the view functions
+#   + it creates the view functions by creating instances of flask_restful.Resource, one for each endpoint
+#     - flask_restful.Resource is a subclass of flask.views.MethodView, which is what is called a "view class";
+#       view classes offer one way to declare app view functions; flask_restful.Resource.dispatch_request() method
+#       intercepts the request and then calls the appropriate method to handle the request (e.g., it calls the
+#       `get` method to handle an HTTP GET request)
+#     - the script uses flask_restful to create a RESTful web service; each endpoint names a web resource (object, noun)
+#       that can be accessed by one or more of the HTTP protocol's request types (GET, POST, DELETE, PUT, PATCH)
+#     - this RESTful interface is encapsulated in flask_restful.Resource subclasses, one for each web resource:
+#
+#       class PendingRequestResource(Resource):
+#       '''
+#       interface to an existing export request that is currently being processed by the export system
+#       '''
+#         ...
+#        # view function to handle HTTP GET requests to the pending-request resource
+#        def get(self):
+#           ...
+#   + it establishes the URL routing, registering the view class with the app, by creating a flask_restful.Api
+#     instance and calling its add_resource() method
+#     - the flask_restful.Api wraps the app
+#     - the script calls flask_restful.Api.add_resource(), once for each flask_restful.Resource; for example, the
+#       following registers the view class `AddressRegistrationResource` to be called when the WSGI server
+#       sends a request to the Flask app:
+#
+#       export_api.add_resource(AddressRegistrationResource, '/export/address-registration')
+#
+#       flask_restful.Api.add_resource() registers the view class by calling Flask.flask.add_url_rule(); the actual
+#       request-type-specific method to be called in the view class is not determined at this time; instead, the
+#       view class's dispatch_request() will be called, and it is up to this method to call the request-type-specific
+#       method (e.g., the `get` method)
+#   + each view function returns a suitable value (iterable, dict, str, tuple, json text, html, flask.Response),
+#     which the Flask app then converts to a flask.Flask.Response; in particular flask.jsonify() makes a flask.Response
+#     from a dict and sets the flask.Reponse mimetype to `application/json`, which is necessary for the proper interpretation
+#     by the original browser/network tool
+#   + the flask.Flask.Response is then returned to the app's callable code, which then creates an iterable from
+#     this Response and passes it to the `start_response` callable passed to the callable code
+#   + the URL routing that leads to the execution of a view function works as follows:
+#     - the app receives a WSGI request from the WSGI server, creating a global flask.Request instance
+#     - the flask.Request instance contains a `method` property whose value is the type of HTTP request, like `GET`
+#     - in response to receiving this request, the app consults the list of registered URL routes and then calls
+#       the appropriate flask_restful.Resource.dispatch_request() method
+#     - flask_restful.Resource.dispatch_request() examines flask.Request.method and calls the appropriate
+#       view function - if the method is 'GET', then flask_restful.Resource.dispatch_request() calls the
+#       flask_restful.Resource.get() view function
+
+
+for the URL http://solarweb2.stanford.edu:8080/export/request, then
+#     get() method of the resource's flask_restful.Resource object is invoked
+
+
+
+export = Flask(__name__)
 export_api = Api(export)
 
 class AddressRegistrationResource(Resource):
