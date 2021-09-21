@@ -1,43 +1,198 @@
 #!/usr/bin/env python3
 
-from sys import path as sp
-from os import path as op
-
 from flask import Flask, request, jsonify, make_response
 from flask_restful import Api, Resource
 from webargs import fields, validate, flaskparser, ValidationError
 from webargs.flaskparser import use_args, use_kwargs, parser, abort
 
-# __file__ does not exist when run in an interpreter
-# sp.append('/opt/netdrms/include')
-# sp.append('/opt/netdrms/base/export/scripts')
-
 from action import Action
 from drms_export import ErrorResponse
+from drms_parameters import DRMSParams
 
-# `export` is a flask app;
 
-# the drms_export web application comprises X components:
+# the drmsexport web application comprises five components:
 #   + a set of HTML web pages that contain forms to collect information from the export-system user; the web pages use JavaScript,
-#     HTML elements, and AJAX tools to create HTTP requests which are then sent by the browser to an HTTP server
-#   + a browser/network tool that sends an HTTP server HTTP requests, and receives HTTP responses from the server
+#     HTML elements, and AJAX tools to create HTTP AJAX requests
+#   + a browsers/network tools that send the form data contained within the AJAX requests to an HTTP server; the
+#     browsers/network tools receive HTTP responses, updating the web pages displayed
 #   + an HTTP server that acts as a reverse proxy: it receives HTTP requests from browsers/network tools on the internet, forwards
-#     the requests as uwsgi requests to an upstream WSGI server, receives uwsgi responses from the WSGI server, and finally sends
-#     HTML responses back to the originating browsers/tools
+#     the contained data as uwsgi requests to an upstream WSGI server, receives uwsgi responses from the WSGI server, and finally sends
+#     HTTP responses back to the originating browsers/tools
 #   + a WSGI server that receives uwsgi requests from the reverse-proxy server, sends corresponding WSGI requests to the
-#     Flask web application, receives WSGI responses from the Flask web application, and sends uwsgi responses
+#     Flask web-application entry point, and receives WSGI responses from the Flask web-application entry point, and sends uwsgi responses
 #     back to the originating reverse-proxy server
 #   + a Flask app that services WSGI requests it receives from the WSGI server, and sends WSGI responses back to the WSGI server
 
 #########################
-# reverse-proxy (NGINX) #
+#    HTML web pages     #
 #########################
+# the drmsexport web application HTML and JavaScript files are in proj/export/webapps
+#   + the static web pages are exportdata.html and export_request_form.html; they contain in-line JavaScript, as
+#     well as references to JavaScript contained in separate files
+#     - exportdata.html: this file contains JavaScript only; it includes a JavaScript script that contains a single string variable
+#       that contains a text representation of the export_request_form.html
+#     - export_request_form.html: this file contains the definitions of the HTML elements that compose the export web page
+#   + the export JavaScript files are:
+#     - export_request_form.htmlesc: this is a version of export_request_form.html that has been converted into a single JavaScript string
+#       variable, where whitespace has been removed and characters have been percent-escaped if necessary; exportdata.html
+#       'includes' this file as a JavaScript script
+#     - export_email_verify.js: this file contains code that makes HTTP requests that access the email-registration system
+#     - no_processing.js: this file contains a single array JavaScript variable that lists all DRMS data series for which
+#       export-processing is prohibited
+#     - processing.js: this file contains code that makes HTTP requests that cause export processing to occur during the export
+#       process
+#     - protocols.js: this file contains code that makes HTTP requests that gets image-protocol (export file type) parameters
 
+#########################
+# browser/network tool  #
+#########################
+# the main export-system web page is http://solarweb2.stanford.edu:8080/export; there are several endpoints:
+#   + http://solarweb2.stanford.edu:8080/export/address-registration: this endpoint provides access to
+#     services that check the registration status of an email address, and register a new email address; arguments:
+#     - address: the email address to check on/register
+#     - [ db-host ]: the INTERNAL/PRIVATE database server that hosts the registered export-system user address information
+#     - [ db-name ]: the name of the database that contains email address and user informaton
+#     - [ db-port ]: the port on the database host machine accepting connections
+#     - [ db-user ]: the name of the database user account to use
+#     - [ user-name ]: the full name of the export-system user
+#     - [ user-snail ]: the physical address of the export-system user
+#   + http://solarweb2.stanford.edu:8080/export/series-server: this endpoint provides access to
+#     services that
+#     - public_db_host: the EXTERNAL/PUBLIC database server that hosts the DRMS data-series data
+#     - series_set: the set of DRMS data series for which information is to be obtained
+#     - webserver: the webserver of this endpoint
+#     - [ client-type ]: the securedrms client type (ssh, http)
+#     - [ db-name ]: the name of the database that contains DRMS data-series information
+#     - [ db-port ]: the port on the database host machine accepting connections
+#     - [ db-user ]: the name of the database user account to use
+#   + http://solarweb2.stanford.edu:8080/export/record-set: this endpoint provides access to
+#     services that provide keyword, segment, and link informaton about DRMS record sets; arguments:
+#     - specification: the DRMS record-set specification identifying the records for which information is to be obtained
+#     - db-host: the database server that hosts the DRMS record-set data
+#     - webserver: the webserver of this endpoint
+#     - [ parse-only ]: if True, then parse record-set string only
+#     - [ client-type ]: the securedrms client type (ssh, http)
+#     - [ keywords ]: the list of keywords for which information is to be obtained
+#     - [ segments ]: the list of segments for which information is to be obtained
+#     - [ links ]: the list of links for which information is to be obtained
+#     - [ db-name ]: the name of the database that contains DRMS record-set information
+#     - [ db-port ]: the port on the database host machine accepting connections
+#     - [ db-user ]: the name of the database user account to use
+#   + http://solarweb2.stanford.edu:8080/export/series: this endpoint provides access to
+#     services that provide informaton about DRMS data series; arguments:
+#     - series: the DRMS series for which information is to be obtained
+#     - db-host: the database server that hosts the DRMS data-series information
+#     - webserver: the webserver of this endpoint
+#     - [ client-type ]: the securedrms client type (ssh, http)
+#     - [ db-name ]: the name of the database that contains DRMS data-series information
+#     - [ db-port ]: the port on the database host machine accepting connections
+#     - [ db-user ]: the name of the database user account to use
+#   + http://solarweb2.stanford.edu:8080/export/new-premium-request: this endpoint provides access to
+#     services that export DRMS data-series data; the full suite of export options is available; arguments:
+#     - address: the email address registered for export
+#     - db-host: the database server that hosts the DRMS data series
+#     - webserver: the webserver of this endpoint
+#     - arguments: the export-request arguments
+#     - [ client-type ]: the securedrms client type (ssh, http)
+#     - [ db-name ]: the name of the database that contains DRMS data-series information
+#     - [ db-port ]: the port on the database host machine accepting connections
+#     - [ db-user ]: the name of the database user account to use
+#     - [ requestor ]: the full name of the export-system user
+#   + http://solarweb2.stanford.edu:8080/export/new-mini-request: this endpoint provides access to
+#     services that export DRMS data-series data; a reduced suite of export options is available
+#     to allow for quicker payload delivery; arguments:
+#     - address: the email address registered for export
+#     - db-host: the database server that hosts the DRMS data series
+#     - webserver: the webserver of this endpoint
+#     - arguments: the export-request arguments
+#     - [ client-type ]: the securedrms client type (ssh, http)
+#     - [ db-name ]: the name of the database that contains DRMS data-series information
+#     - [ db-port ]: the port on the database host machine accepting connections
+#     - [ db-user ]: the name of the database user account to use
+#     - [ requestor ]: the full name of the export-system user
+#   + http://solarweb2.stanford.edu:8080/export/new-streamed-request: this endpoint provides access to
+#     services that stream export DRMS data-series data; a reduced suite of export options is available
+#     to allow for quicker payload delivery; arguments:
+#     - address: the email address registered for export
+#     - db-host: the database server that hosts the DRMS data series
+#     - webserver: the webserver of this endpoint
+#     - arguments: the export-request arguments
+#     - [ client-type ]: the securedrms client type (ssh, http)
+#     - [ db-name ]: the name of the database that contains DRMS data-series information
+#     - [ db-port ]: the port on the database host machine accepting connections
+#     - [ db-user ]: the name of the database user account to use
+#     - [ requestor ]: the full name of the export-system user
+#   + http://solarweb2.stanford.edu:8080/export/pending-request: this endpoint provides access to
+#     services that check for the presence of pending requests; arguments:
+#     - address: the email address registered for export
+#     - db-host: the database server that hosts the DRMS data series
+#     - webserver: the webserver of this endpoint
+#     - [ db-name ]: the name of the database that contains pending-request information
+#     - [ db-port ]: the port on the database host machine accepting connections
+#     - [ db-user ]: the name of the database user account to use
+#     - [ pending_requests_table ]: the database table of pending requests
+#     - [ timeout ]: after this number of minutes have elapsed, requests are no longer considered pending
+#   + http://solarweb2.stanford.edu:8080/export/pending-request-status: this endpoint provides access to
+#     services that return the export status of a pending request; arguments:
+#     - address: the email address registered for export
+#     - db-host: the database server that hosts export-request information
+#     - webserver: the webserver of this endpoint
+#     - request-id: the export system request ID
+#     - [ client-type ]: the securedrms client type (ssh, http)
+#     - [ db-name ]: the name of the database that contains export-request information
+#     - [ db-port ]: the port on the database host machine accepting connections
+#     - [ db-user ]: the name of the database user account to use
+#     - [ pending_requests_table ]: the database table of pending requests
+#     - [ timeout ] after this number of minutes have elapsed, requests are no longer considered pending
+
+#########################
+# reverse-proxy (nginx) #
+#########################
+#   + to configure nginx to act as a proxy-server that sends uwsgi requests to the WSGI server, edit the default nginx
+#     configuration file, /etc/nginx/nginx.conf:
+#       - comment-out the existing `server` block; make sure the following `include` directive exists in the `html` block:
+#         include /etc/nginx/conf.d/*.conf;
+#       - create the directory /etc/nginx/conf.d if it does not already exist
+#       - create /etc/nginx/conf.d/export.conf; this will contain a new server block for the drm_export app; the include
+#         statement (above) will ensure that the drms_export server is defined; the content of export.conf should be
+#         as follows:
+#
+#         server {
+#             root /usr/share/nginx/html;
+#             listen 8080;
+#             charset utf-8;
+#             location / {
+#                 # provided by nginx installation - relative to dir containing nginx.conf
+#                 include uwsgi_params;
+#
+#                 # must match file specified in export.ini `socket` parameter; unix socket for speed
+#                 # of communication between nginx and uWSGI running on the same host
+#                 uwsgi_pass unix:///tmp/export.sock;
+#
+#                 # Redefine the header fields that NGINX sends to the upstream server
+#                 proxy_set_header Host $host;
+#                 proxy_set_header X-Real-IP $remote_addr;
+#                 proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+#
+#                 # Define the maximum file size on file uploads
+#                 client_max_body_size 5M;
+#             }
+#
+#             error_page 404 /404.html;
+#             location = /404.html {
+#             }
+#
+#             error_page 500 502 503 504 /50x.html;
+#             location = /50x.html {
+#             }
+#         }
+#   + the nginx `uwsgi_pass` directive ensures communication protocol between nginx and uWSGI is WSGI; the HTTP protocol
+#     is also an option, with `proxy_pass`, but it is slower is not preferred
 
 #########################
 #  uWSGI (WSGI server)  #
 #########################
-# the WSGI server used by drms_export is uWSGI
+# the WSGI server used by drmsexport is uWSGI
 #   + upon receiving a uwsgi request from the reverse-proxy server, the uWSGI calls the Flask app's entry point, a WSGI
 #     callable, which is exported from export_wsgi.py
 #   + when calling the entry point, the WSGI server passes a dict of environment variables and a callable `start_response`,
@@ -46,6 +201,23 @@ from drms_export import ErrorResponse
 #     the WSGI server
 #   + the WSGI server creates a uwsgi response from the arguments provided to the `start_response` callable, and sends the
 #     response to the reverse-proxy server
+#
+# to configure the WSGI server, uWSGI, create a n .ini configuration file:
+#   + each parameter of the configuration file has the format <parameter> = <value>:
+#     [uwsgi]
+#     # the location where uWSGI will search for the entry point (ensure the project directory exists)
+#     chdir = /home/netdrms_production/export
+#     module = export_wsgi:export
+#
+#     # run in master mode, spawning processes to handle requests
+#     master = true
+#     processes = 5
+#
+#     # listen for requests on a unix socket; ideal for configurations where the reverse-proxy server and uWSGI run on the
+#     # same host
+#     socket = /tmp/export.sock
+#     chmod-socket = 664
+#     vacuum = true
 
 #########################
 #   WSGI entry point    #
@@ -119,12 +291,41 @@ from drms_export import ErrorResponse
 #       view function - if the method is 'GET', then flask_restful.Resource.dispatch_request() calls the
 #       flask_restful.Resource.get() view function
 
+#############################
+# launching the web service #
+#############################
+# launching the Flask app entails creating a project directory owned by the production user, copying
+# the uWSGI configuration file and Flask-app files into place, and starting the export web service:
+#   + create the project directory:
+#     $ mkdir /home/netdrms_production/export
+#   + copy the uWSGI configuration file, the python-module file that contains the Flask app definition, and
+#     the file that contains app entry point to this project directory:
+#     $ cd /opt/netdrms/proj/export/webapps/drmsexport
+#     $ cp export.ini /home/netdrms_production/export
+#     $ cp export.py /home/netdrms_production/export
+#     $ cp export_wsgi.py /home/netdrms_production/export
+#   + start the web service
 
-for the URL http://solarweb2.stanford.edu:8080/export/request, then
-#     get() method of the resource's flask_restful.Resource object is invoked
+############################
+# starting the web service #
+############################
+# starting the export web service entails starting the WSGI service (uWSGI), and starting the reverse-proxy
+# service (nginx)
+#   + to start uWSGI, run the uwsgi executable, providing export.ini as an argument:
+#     uwsgi --ini=/home/netdrms_production/export/export.ini &
+#   + to start the nginx service:
+#     sudo service nginx start
 
+############################
+# stopping the web service #
+############################
+# stopping the export web service entails stopping the WSGI service (uWSGI), and stopping the reverse-proxy
+#   + to stop the nginx service, run the service executable:
+#     $ sudo service nginx stop
+#   + to stop the uWSGI service, run the kill command:
+#     $ kill -9 <uwsgi pid>
 
-
+# `export` is a Flask app;
 export = Flask(__name__)
 export_api = Api(export)
 
@@ -320,9 +521,6 @@ export_api.add_resource(PendingRequestStatusResource, '/export/pending-request-s
 export_api.add_resource(RootResource, '/export')
 
 if __name__ == '__main__':
-    sp.append(op.join(op.dirname(op.realpath(__file__)), '../../../include'))
-    from drmsparams import DRMSParams
-
     drms_params = DRMSParams()
     app.run(host=drms_params.EXPORT_WEB_SERVER, port=drms_parms.EXPORT_WEB_SERVER_PORT, debug=True)
 else:
