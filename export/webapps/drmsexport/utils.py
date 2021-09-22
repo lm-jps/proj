@@ -15,7 +15,8 @@ def extract_program_and_module_args(*, is_program, **kwargs):
             if val is not None:
                 if key == 'options':
                     for option, option_val in val.items():
-                        program_args.append(f'--{option}={option_val}')
+                        if option_val is not None:
+                            program_args.append(f'--{option}={option_val}')
                 else:
                     program_args.append(f'{key}={val}')
     else:
@@ -25,7 +26,8 @@ def extract_program_and_module_args(*, is_program, **kwargs):
             if val is not None:
                 if key == 'options':
                     for option, option_val in val.items():
-                        module_args[option] = option_val
+                        if option_val is not None:
+                            module_args[option] = option_val
                 else:
                     module_args[key] = val
 
