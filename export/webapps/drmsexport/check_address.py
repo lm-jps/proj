@@ -151,13 +151,13 @@ class Arguments(Args):
 
                 arguments = Arguments(parser=parser, args=args)
             else:
-                def extract_module_args(*, address, operation, log_file=log_file, logging_level=DrmsLogLevel.ERROR, db_host=db_host, db_port=db_port, db_name=db_name, db_user=db_user, user_name=None, user_snail=None):
+                def extract_module_args(*, address, operation, log_file=log_file, logging_level='error', db_host=db_host, db_port=db_port, db_name=db_name, db_user=db_user, user_name=None, user_snail=None):
                     arguments = {}
 
                     arguments['address'] = address
                     arguments['operation'] = operation
                     arguments['log_file'] = log_file
-                    arguments['logging_level'] = logging_level
+                    arguments['logging_level'] = DrmsLogLevelAction.string_to_level(logging_level)
                     arguments['db_host'] = db_host
                     arguments['db_port'] = db_port
                     arguments['db_name'] = db_name
@@ -229,10 +229,11 @@ def generate_registered_or_pending_response(cursor, arguments, confirmation):
 from action import Action
 class CheckAddressAction(Action):
     actions = [ 'check_address', 'register_address' ]
-    def __init__(self, *, method, address, db_host=None, db_port=None, db_name=None, db_user=None, user_name=None, user_snail=None):
+    def __init__(self, *, method, address, logging_level=None, db_host=None, db_port=None, db_name=None, db_user=None, user_name=None, user_snail=None):
         self._method = getattr(self, method)
         self._address = address
         self._options = {}
+        self._options['logging_level'] = logging_level
         self._options['db_host'] = db_host
         self._options['db_port'] = db_port
         self._options['db_name'] = db_name
@@ -330,7 +331,10 @@ def perform_action(is_program, program_name=None, **kwargs):
         except Exception as exc:
             raise LoggingError(error_message=f'{str(exc)}')
 
+        log.write_debug([ f'[ perform_action] program arguments: {str(program_args)}', f'[ perform_action] module arguments: {str(module_args)}' ])
+
         try:
+            log.write_debug([ f'[ perform_action ] connecting to database: host={arguments.db_host}, port={str(arguments.db_port)}, user={arguments.db_user}, db={arguments.db_name}' ])
             with psycopg2.connect(database=arguments.db_name, user=arguments.db_user, host=arguments.db_host, port=str(arguments.db_port)) as conn:
                 with conn.cursor() as cursor:
                     cmd = f'SELECT confirmation FROM {arguments.address_info_fn}(\'{arguments.address}\')'
