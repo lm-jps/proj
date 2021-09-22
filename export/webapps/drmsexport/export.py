@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from flask import Flask, request, jsonify, make_response
+from flask import Flask, request
 from flask_restful import Api, Resource
 from webargs import fields, validate, flaskparser, ValidationError
 from webargs.flaskparser import use_args, use_kwargs, parser, abort
@@ -300,10 +300,9 @@ from drms_parameters import DRMSParams
 #     $ mkdir /home/netdrms_production/export
 #   + copy the uWSGI configuration file, the python-module file that contains the Flask app definition, and
 #     the file that contains app entry point to this project directory:
-#     $ cd /opt/netdrms/proj/export/webapps/drmsexport
+#     $ cd /opt/jsoc_drms/proj/export/webapps/drmsexport
 #     $ cp export.ini /home/netdrms_production/export
-#     $ cp export.py /home/netdrms_production/export
-#     $ cp export_wsgi.py /home/netdrms_production/export
+#     $ cp *.py /home/netdrms_production/export
 #   + start the web service
 
 ############################
@@ -312,7 +311,7 @@ from drms_parameters import DRMSParams
 # starting the export web service entails starting the WSGI service (uWSGI), and starting the reverse-proxy
 # service (nginx)
 #   + to start uWSGI, run the uwsgi executable, providing export.ini as an argument:
-#     uwsgi --ini=/home/netdrms_production/export/export.ini &
+#     uwsgi --ini=/home/netdrms_production/export/export.ini
 #   + to start the nginx service:
 #     sudo service nginx start
 
@@ -333,18 +332,18 @@ class AddressRegistrationResource(Resource):
     _arguments = { 'address' : fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : fields.Str(required=False, data_key='db-host'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'db_user' : fields.Str(required=False, data_key='db-user'), 'user_name' : fields.Str(required=False, data_key='user-name'), 'user_snail' : fields.Str(required=False, data_key='user-snail') }
 
     @use_kwargs(_arguments)
-    def get(self, address, db_host, db_name, db_port, db_user, user_name, user_snail):
+    def get(self, address, db_host=None, db_name=None, db_port=None, db_user=None, user_name=None, user_snail=None):
+        from check_address import CheckAddressAction
         # HTTP GET - get address registration information (if the address is registered)
         action = Action.action(action_type='check_address', args={ 'address' : address, 'db_host' : db_host, 'db_name' : db_name, 'db_port' : db_port, 'db_user' : db_user, 'user_name' : user_name, 'user_snail' : user_snail })
-        response_dict = action().generate_dict()
-        return jsonify(**response_dict)
+        return action().generate_serializable_dict()
 
     @use_kwargs(_arguments)
     def post(self, address,  db_host, db_name, db_port, db_user, user_name, user_snail):
+        from check_address import CheckAddressAction
         # HTTP POST - register address (if it is not alrelady registered)
         action = Action.action(action_type='register_address', args={ 'address' : address, 'db_host' : db_host, 'db_name' : db_name, 'db_port' : db_port, 'db_user' : db_user, 'user_name' : user_name, 'user_snail' : user_snail })
-        response_dict = action().generate_dict()
-        return jsonify(**response_dict)
+        return action().generate_serializable_dict()
 
 # called from public website only
 class ServerResource(Resource):
@@ -353,8 +352,7 @@ class ServerResource(Resource):
     @use_kwargs(_arguments)
     def get(self, public_db_host, series_set, webserver, client_type,  db_name, db_port, db_user):
         action = Action.action(action_type='determine_db_server', args={ 'public_db_host' : public_db_host, 'series' : series_json, 'drms_client_type' : client_type, 'db_name' : db_name, 'db_port' : db_port, 'db_user' : db_user })
-        response_dict = action().generate_dict()
-        return jsonify(**response_dict)
+        return action().generate_serializable_dict()
 
     @classmethod
     def _is_valid_series_set(cls, series_set):
@@ -379,12 +377,10 @@ class RecordSetResource(Resource):
                 action = Action.action(action_type='parse_specification', args={ 'specification' : specification, 'db_host' : db_host, 'drms_client_type' : client_type, 'db_name' : db_name, 'db_port' : db_port, 'db_user' : db_user })
                 self._parse_response = action()
 
-            response_dict = self._parse_response.generate_dict()
-            return jsonify(**response_dict)
+            return self._parse_response.generate_serializable_dict()
         else:
             action = Action.action(action_type='get_record_set_info', args={ 'specification' : specification, 'db_host' : db_host, 'webserver' : webserver, 'drms_client_type' : client_type, 'keywords' : keywords, 'segments' : segments, 'links' : links, 'db_name' : db_name, 'db_port' : db_port, 'db_user' : db_user })
-            response_dict = action().generate_dict()
-            return jsonify(**response_dict)
+            return action().generate_serializable_dict()
 
     @classmethod
     def _is_valid_specification(cls, specifcation):
@@ -407,8 +403,7 @@ class SeriesResource(Resource):
     @use_kwargs(_arguments)
     def get(self, series, db_host, webserver, client_type, db_name, db_port, db_user):
         action = Action.action(action_type='get_series_info', args={ 'series' : series, 'db_host' : db_host, 'webserver' : webserver, 'drms_client_type' : client_type, 'db_name' : db_name, 'db_port' : db_port, 'db_user' : db_user })
-        response_dict = action().generate_dict()
-        return jsonify(**response_dict)
+        return action().generate_serializable_dict()
 
     @classmethod
     def _is_valid_series(cls, series):
@@ -449,8 +444,7 @@ class PremiumExportRequestResource(ExportRequestResource):
     @use_kwargs(_arguments)
     def post(self, address, db_host, webserver, arguments, client_type, db_name, db_port, requestor, db_user):
         action = Action.action(action_type='start_premium_export', args={ 'address' : address, 'db_host' : db_host, 'webserver' : webserver, 'arguments' : arguments, 'drms_client_type' : client_type, 'db_name' : db_name, 'db_port' : db_port, 'requestor' : requestor, 'db_user' : db_user })
-        response_dict = action().generate_dict()
-        return jsonify(**response_dict)
+        return action().generate_serializable_dict()
 
 class MiniExportRequestResource(ExportRequestResource):
     _arguments = { 'address' : fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : fields.Str(required=True, data_key='db-host'), 'webserver' : fields.Str(required=True), 'arguments' : fields.Str(required=True, validate=lambda a: InitiateRequestResourse._is_valid_arguments(a)), 'client_type' : fields.Str(required=False, data_key='client-type'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'requestor' : fields.Str(required=False), 'db_user' : fields.Str(required=False, data_key='db-user') }
@@ -458,8 +452,7 @@ class MiniExportRequestResource(ExportRequestResource):
     @use_kwargs(_arguments)
     def post(self, address, db_host, webserver, arguments, client_type, db_name, db_port, requestor, db_user):
         action = Action.action(action_type='start_mini_export', args={ 'address' : address, 'db_host' : db_host, 'webserver' : webserver, 'arguments' : arguments, 'drms_client_type' : client_type, 'db_name' : db_name, 'db_port' : db_port, 'requestor' : requestor, 'db_user' : db_user })
-        response_dict = action().generate_dict()
-        return jsonify(**response_dict)
+        return action().generate_serializable_dict()
 
 class StreamedExportRequestResource(ExportRequestResource):
     _arguments = { 'address' : fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : fields.Str(required=True, data_key='db-host'), 'webserver' : fields.Str(required=True), 'arguments' : fields.Str(required=True, validate=lambda a: InitiateRequestResourse._is_valid_arguments(a)), 'client_type' : fields.Str(required=False, data_key='client-type'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'requestor' : fields.Str(required=False), 'db_user' : fields.Str(required=False, data_key='db-user') }
@@ -468,8 +461,7 @@ class StreamedExportRequestResource(ExportRequestResource):
     def post(self, address, db_host, webserver, arguments, client_type, db_name, db_port, requestor, db_user):
         action = Action.action(action_type='start_streamed_export', args={ 'address' : address, 'db_host' : db_host, 'webserver' : webserver, 'arguments' : arguments, 'drms_client_type' : client_type, 'db_name' : db_name, 'db_port' : db_port, 'requestor' : requestor, 'db_user' : db_user })
         # the action will dump exported-file data to stdout
-        response_dict = action().generate_dict()
-        return jsonify(**response_dict)
+        return action().generate_serializable_dict()
 
 class PendingRequestResource(Resource):
     _arguments = { 'address' : fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : fields.Str(required=True, data_key='db-host'), 'webserver' : fields.Str(required=True), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'db_user' : fields.Str(required=False, data_key='db-user'), 'pending_requests_table' : fields.Str(required=False, data_key='pending-requests-table'), 'timeout' : fields.Int(required=False) }
@@ -478,15 +470,13 @@ class PendingRequestResource(Resource):
     def get(self, address, db_host, webserver, db_name, db_port, db_user, pending_requests_table, timeout):
         # HTTP GET - check for the existence of a pending request
         action = Action.action(action_type='check_pending_request', args={ 'address' : address, 'db_host' : db_host, 'webserver' : webserver, 'db_name' : db_name, 'db_port' : db_port, 'db_user' : db_user, 'pending_requests_table' : pending_requests_table, 'timeout' : timeout })
-        response_dict = action().generate_dict()
-        return jsonify(**response_dict)
+        return action().generate_serializable_dict()
 
     @use_kwargs(_arguments)
     def post(self, address, db_host, webserver, db_name, db_port, db_user, pending_requests_table, timeout):
         # HTTP POST - cancel an export request
         action = Action.action(action_type='cancel_pending_request', args={ 'address' : address, 'db_host' : db_host, 'webserver' : webserver, 'db_name' : db_name, 'db_port' : db_port, 'db_user' : db_user, 'pending_requests_table' : pending_requests_table, 'timeout' : timeout })
-        response_dict = action().generate_dict()
-        return jsonify(**response_dict)
+        return action().generate_serializable_dict()
 
 class PendingRequestStatusResource(Resource):
     _arguments = { 'address' : fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : fields.Str(required=True, data_key='db-host'), 'webserver' : fields.Str(required=True), 'request_id' : fields.Str(required=True, data_key='request-id', validate=lambda a: PendingRequestStatusResource.is_valid_request_id(a)), 'client_type' : fields.Str(required=False, data_key='client-type'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'db_user' : fields.Str(required=False, data_key='db-user'), 'pending_requests_table' : fields.Str(required=False, data_key='pending-requests-table'), 'timeout' : fields.Int(required=False) }
@@ -495,8 +485,7 @@ class PendingRequestStatusResource(Resource):
     def get(self, address, db_host, webserver, request_id, client_type, db_name, db_port, db_user, pending_requests_table, timeout):
         # HTTP GET - get the export status of a request
         action = Action.action(action_type='get_export_status', args={ 'address' : address, 'db_host' : db_host, 'webserver' : webserver, 'request_id' : request_id, 'drms_client_type' : client_type, 'db_name' : db_name, 'db_port' : db_port, 'db_user' : db_user, 'pending_requests_table' : pending_requests_table, 'timeout' : timeout  })
-        response_dict = action().generate_dict()
-        return jsonify(**response_dict)
+        return action().generate_serializable_dict()
 
     @classmethod
     def is_valid_request_id(self, address):
