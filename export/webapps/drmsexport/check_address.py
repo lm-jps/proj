@@ -106,8 +106,8 @@ class Arguments(Args):
     _arguments = None
 
     @classmethod
-    def get_arguments(cls, *, is_program, program_name=None, program_args=None, module_args=None, drms_params):
-        if cls._arguments is None:
+    def get_arguments(cls, *, is_program, program_name=None, program_args=None, module_args=None, drms_params, refresh=True):
+        if cls._arguments is None or refresh:
             try:
                 db_host = drms_params.get_required('SERVER') # must be internal db
                 db_port = int(drms_params.get_required('DRMSPGPORT'))
@@ -128,7 +128,7 @@ class Arguments(Args):
                 if program_args is not None and len(program_args) > 0:
                     args = program_args
 
-                parser_args = { 'usage' : '%(prog)s address=<email address to register/check> operation=<register/check> [ --log_file=<path to log file> ] [ --logging_level=<logging verbosity level> ] [ --name=<user\'s name> ] [ --snail=<user snail mail address> ] [ --dbhost=<db host> ] [ --dbport=<db port> ] [ --dbname=<db name> ] [ --dbuser=<db user>] ' }
+                parser_args = { 'usage' : '%(prog)s address=<email address to register/check> operation=<register/check> [ --log-file=<path to log file> ] [ --logging-level=<critical/error/warning/info/debug> ] [ --name=<user\'s name> ] [ --snail=<user snail mail address> ] [ --dbhost=<db host> ] [ --dbport=<db port> ] [ --dbname=<db name> ] [ --dbuser=<db user>] ' }
                 if program_name is not None and len(program_name) > 0:
                     parser_args['prog'] = program_name
 
@@ -140,8 +140,8 @@ class Arguments(Args):
                 parser.add_argument('o', 'operation', help='the operation: register or check', metavar='<operation>', choices=[ 'check', 'register' ], dest='operation', required=True)
 
                 # optional
-                parser.add_argument('-l', '--log_file', help='the path to the log file', metavar='<log file>', dest='log_file', default=log_file)
-                parser.add_argument('-L', '--logging_level', help='the amount of logging to perform; in order of increasing verbosity: critical, error, warning, info, debug', metavar='<logging level>', dest='logging_level', action=DrmsLogLevelAction, default=DrmsLogLevel.ERROR)
+                parser.add_argument('-l', '--log-file', help='the path to the log file', metavar='<log file>', dest='log_file', default=log_file)
+                parser.add_argument('-L', '--logging-level', help='the amount of logging to perform; in order of increasing verbosity: critical, error, warning, info, debug', metavar='<logging level>', dest='logging_level', action=DrmsLogLevelAction, default=DrmsLogLevel.ERROR)
                 parser.add_argument('-n', '--name', help='the user name to register', metavar='<export user\'s name>', dest='user_name', action=UnquoteAction, default='NULL')
                 parser.add_argument('-s', '--snail', help='the user snail-mail address to register', metavar='<export user\'s snail mail>', dest='user_snail', action=UnquoteAction, default='NULL')
                 parser.add_argument('-H', '--dbhost', help='the host machine of the internal database that is used to manage pending export requests', metavar='<db host>', dest='db_host', default=db_host)
