@@ -175,7 +175,7 @@ class DetermineDbServerAction(Action):
         response = perform_action(is_program=False, public_db_host=self._public_db_host, series=self._series, options=self._options)
         return response
 
-    # `series` is comma-separated list of series
+    # `series` is a py list of series
     @classmethod
     def is_valid_series_set(cls, series, db_host, webserver, logging_level=None):
         try:
