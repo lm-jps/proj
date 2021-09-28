@@ -76,15 +76,6 @@ class ValidateArgumentAction(ArgsAction):
 
         setattr(namespace, self.dest, value)
 
-class SeriesAction(ArgsAction):
-    def __call__(self, parser, namespace, value, option_string=None):
-        series_dict = self.json_to_dict(value)
-        setattr(namespace, self.dest, series_dict)
-
-    @classmethod
-    def json_to_dict(cls, series_json):
-        return json_loads(series_json)
-
 class Arguments(Args):
     _arguments = None
 
@@ -120,7 +111,7 @@ class Arguments(Args):
 
                 # Required
                 parser.add_argument('public-db-host', help='the machine hosting the EXTERNAL database that serves DRMS data series names.', metavar='<db host>', action=ValidateArgumentAction, dest='public_db_host', required=True)
-                parser.add_argument('s', 'series', help='a json string containing a list of series to be checked (`{ "series" : [ "series1", "series2", ... ] }`)', metavar='<series>', action=SeriesAction, dest='series', required=True)
+                parser.add_argument('s', 'series', help='a comma-separated ist of series to be checked', metavar='<series>', action=ListAction, dest='series', required=True)
 
                 # Optional
                 parser.add_argument('-c', '--drms-client-type', help='securedrms client type (ssh, http)', choices=[ 'ssh', 'http' ], dest='drms_client_type', default='ssh')
@@ -135,12 +126,12 @@ class Arguments(Args):
                 arguments.drms_client = None
             else:
                 # `program_args` has all `arguments` values, in final form; validate them
-                # `series` is a json string like '{ "series" : [ "hmi.m_720s" ] }''- must convert to dict with SeriesAction.json_to_dict
+                # `series` is py list of DRMS data series
                 def extract_module_args(*, public_db_host, series, drms_client_type='ssh', drms_client=None, debug=False, db_port=db_port, db_name=db_name, db_user=db_user, wl_file=wl_file):
                     arguments = {}
 
                     arguments['public_db_host'] = public_db_host
-                    arguments['series'] = SeriesAction.json_to_dict(series)
+                    arguments['series'] = series # list
                     arguments['drms_client_type'] = drms_client_type
                     arguments['drms_client'] = drms_client
                     arguments['debug'] = debug
@@ -165,12 +156,13 @@ class Arguments(Args):
 
 # for use in export web app
 from action import Action
+from get_series_info import GetSeriesInfoAction
 class DetermineDbServerAction(Action):
     actions = [ 'determine_db_server' ]
     def __init__(self, *, method, public_db_host, series, drms_client_type=None, drms_client=None, db_port=None, db_name=None, db_user=None):
         self._method = getattr(self, method)
         self._public_db_host = public_db_host
-        self._series = series # dict with "series" : [ ... ]
+        self._series = series # py list
         self._options = {}
         self._options['drms_client_type'] = drms_client_type
         self._options['drms_client'] = drms_client
@@ -183,16 +175,28 @@ class DetermineDbServerAction(Action):
         response = perform_action(is_program=False, public_db_host=self._public_db_host, series=self._series, options=self._options)
         return response
 
+    # `series` is comma-separated list of series
     @classmethod
-    def is_valid_series_set(cls, series_set):
-        is_valid = None
+    def is_valid_series_set(cls, series, db_host, webserver):
         try:
-            # the only check we can realistically perform is to check the json structure
-            is_valid = True if type(json_loads(series_set)['series']) == list else False
-        except:
-            is_valid = False
+            if db_host is None:
+                # if this method is called before URL arguments are parsed, then `db_host` is not known;
+                # use default (public) export DB (specification parser does not use DB so it does not matter)
+                try:
+                    drms_params = DRMSParams()
 
-        return is_valid
+                    if drms_params is None:
+                        raise ParametersError(error_message='unable to locate DRMS parameters package')
+
+                    db_host_resolved = drms_params.get_required('EXPORT_DB_HOST_DEFAULT')
+                except DPMissingParameterError as exc:
+                    raise ParametersError(exc_info=sys_exc_info(), error_message=str(exc))
+            else:
+                db_host_resolved = db_host
+
+            return GetSeriesInfoAction.is_valid_series_set(series, db_host_resolved, webserver)
+        except:
+            return False
 
 def get_whitelist(wl_file):
     white_list = set()
@@ -226,8 +230,7 @@ def perform_action(is_program, program_name=None, **kwargs):
         try:
             factory = None
 
-            # call show_series on the external host; if all series are on the external host, return the external server `arguments.db_host`; show_series
-            # does not provide a way to search for a list of series, so make a hash of all series, then assess each series for membsership in the list
+            # call show_series on the external host; if all series are on the external host, return the external server `arguments.db_host`; show_series does not provide a way to search for a list of series, so make a hash of all series, then assess each series for membsership in the list
             #
             # There is no JSOC_DBPORT DRMS parameter, much to my surprise. We need to append ':' + str(optD['dbport']) to optD['db_host'].
 
@@ -261,13 +264,13 @@ def perform_action(is_program, program_name=None, **kwargs):
             # securedrms configuration does not include ssh_show_series_wrapper, so the results will include only series that are implemented in the public database (i.e., no "pass-through" series)
             response_dict = {}
 
-            if len(arguments.series['series']) > 0:
+            if len(arguments.series) > 0:
                 response_dict['series'] = []
                 use_public_server = True
                 white_list = None
                 supporting_server = False
 
-                for series in arguments.series['series']:
+                for series in arguments.series:
                     series_regex = series.lower().replace('.', '[.]')
                     public_series = sshclient_external.series(regex=series_regex, full=False)
                     if len(public_series) == 0:
