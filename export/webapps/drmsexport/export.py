@@ -330,6 +330,12 @@ export = Flask(__name__)
 export_api = Api(export)
 APP_DEBUG = False
 
+@parser.error_handler
+def handle_error(error, req, schema, *, error_status_code, error_headers):
+    # raise CustomError(error.messages)
+    print(f'webarg error message: {error.messages}')
+    raise error
+
 from check_address import CheckAddressAction
 class AddressRegistrationResource(Resource):
     _arguments = { 'address' : fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : fields.Str(required=False, data_key='db-host'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'db_user' : fields.Str(required=False, data_key='db-user'), 'user_name' : fields.Str(required=False, data_key='user-name'), 'user_snail' : fields.Str(required=False, data_key='user-snail') }
@@ -371,7 +377,7 @@ class ServerResource(Resource):
 
 from get_record_info import GetRecordInfoAction
 class RecordSetResource(Resource):
-    _arguments = { 'specification' : fields.Str(required=True, validate=lambda a: GetRecordInfoAction.is_valid_specification(a, None, urlparse(request.base_url).hostname)), 'db_host' : fields.Str(required=True, data_key='db-host'), 'parse_only' : fields.Bool(required=False, data_key='parse-only'), 'client_type' : fields.Str(required=False, data_key='client-type'), 'keywords' : fields.List(fields.Str, required=False), 'segments' : fields.List(fields.Str, required=False), 'links' : fields.List(fields.Str, required=False), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'db_user' : fields.Str(required=False, data_key='db-user') }
+    _arguments = { 'specification' : fields.Str(required=True, validate=lambda a: GetRecordInfoAction.is_valid_specification(a, None, urlparse(request.base_url).hostname), 'debug' if APP_DEBUG else None), 'db_host' : fields.Str(required=True, data_key='db-host'), 'parse_only' : fields.Bool(required=False, data_key='parse-only'), 'client_type' : fields.Str(required=False, data_key='client-type'), 'keywords' : fields.List(fields.Str, required=False), 'segments' : fields.List(fields.Str, required=False), 'links' : fields.List(fields.Str, required=False), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'db_user' : fields.Str(required=False, data_key='db-user') }
 
     _parse_response = None
 
@@ -397,7 +403,7 @@ class RecordSetResource(Resource):
 
 from get_series_info import GetSeriesInfoAction
 class SeriesResource(Resource):
-    _arguments = { 'series' : fields.Str(required=True, validate=lambda a: GetSeriesInfoAction.is_valid_series_set(a, None, urlparse(request.base_url).hostname)), 'db_host' : fields.Str(required=True, data_key='db-host'), 'webserver' : fields.Str(required=True), 'client_type' : fields.Str(required=False, data_key='client-type'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'db_user' : fields.Str(required=False, data_key='db-user') }
+    _arguments = { 'series' : fields.Str(required=True, validate=lambda a: GetSeriesInfoAction.is_valid_series_set([ a ], None, urlparse(request.base_url).hostname, 'debug' if APP_DEBUG else None)), 'db_host' : fields.Str(required=True, data_key='db-host'), 'client_type' : fields.Str(required=False, data_key='client-type'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'db_user' : fields.Str(required=False, data_key='db-user') }
 
     @use_kwargs(_arguments)
     def get(self, series, db_host, client_type=None, db_name=None, db_port=None, db_user=None):
@@ -410,7 +416,7 @@ class SeriesResource(Resource):
 
 from initiate_request import InitiateRequestAction
 class PremiumExportRequestResource(Resource):
-    _arguments = { 'address' : fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : fields.Str(required=True, data_key='db-host'), 'export_arguments' : fields.Str(required=True, validate=lambda a: InitiateRequestAction.is_valid_arguments(a), data_key='export-arguments'), 'client_type' : fields.Str(required=False, data_key='client-type'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'requestor' : fields.Str(required=False), 'db_user' : fields.Str(required=False, data_key='db-user') }
+    _arguments = { 'address' : fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : fields.Str(required=True, data_key='db-host'), 'export_arguments' : fields.Str(required=True, validate=lambda a: InitiateRequestAction.is_valid_arguments(a, 'debug' if APP_DEBUG else None), data_key='export-arguments'), 'client_type' : fields.Str(required=False, data_key='client-type'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'requestor' : fields.Str(required=False), 'db_user' : fields.Str(required=False, data_key='db-user') }
 
     @use_kwargs(_arguments)
     def post(self, address, db_host, export_arguments, client_type=None, db_name=None, db_port=None, requestor=None, db_user=None):
@@ -422,7 +428,7 @@ class PremiumExportRequestResource(Resource):
         return action().generate_serializable_dict()
 
 class MiniExportRequestResource(Resource):
-    _arguments = { 'address' : fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : fields.Str(required=True, data_key='db-host'), 'arguments' : fields.Str(required=True, validate=lambda a: InitiateRequestResourse.is_valid_arguments(a)), 'client_type' : fields.Str(required=False, data_key='client-type'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'requestor' : fields.Str(required=False), 'db_user' : fields.Str(required=False, data_key='db-user') }
+    _arguments = { 'address' : fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : fields.Str(required=True, data_key='db-host'), 'export_arguments' : fields.Str(required=True, validate=lambda a: InitiateRequestAction.is_valid_arguments(a, 'debug' if APP_DEBUG else None), data_key='export-arguments'), 'client_type' : fields.Str(required=False, data_key='client-type'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'requestor' : fields.Str(required=False), 'db_user' : fields.Str(required=False, data_key='db-user') }
 
     @use_kwargs(_arguments)
     def post(self, address, db_host, export_arguments, client_type=None, db_name=None, db_port=None, requestor=None, db_user=None):
@@ -434,7 +440,7 @@ class MiniExportRequestResource(Resource):
         return action().generate_serializable_dict()
 
 class StreamedExportRequestResource(Resource):
-    _arguments = { 'address' : fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : fields.Str(required=True, data_key='db-host'), 'export_arguments' : fields.Str(required=True, validate=lambda a: InitiateRequestResourse.is_valid_arguments(a)), 'client_type' : fields.Str(required=False, data_key='client-type'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'requestor' : fields.Str(required=False), 'db_user' : fields.Str(required=False, data_key='db-user') }
+    _arguments = { 'address' : fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : fields.Str(required=True, data_key='db-host'), 'export_arguments' : fields.Str(required=True, validate=lambda a: InitiateRequestAction.is_valid_arguments(a, 'debug' if APP_DEBUG else None), data_key='export-arguments'), 'client_type' : fields.Str(required=False, data_key='client-type'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'requestor' : fields.Str(required=False), 'db_user' : fields.Str(required=False, data_key='db-user') }
 
     @use_kwargs(_arguments)
     def post(self, address, db_host, export_arguments, client_type=None, db_name=None, db_port=None, requestor=None, db_user=None):
