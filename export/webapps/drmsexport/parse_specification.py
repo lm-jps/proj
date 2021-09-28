@@ -80,7 +80,6 @@ class Arguments(Args):
         if cls._arguments is None or refresh:
             try:
                 log_file = path_join(drms_params.get_required('EXPORT_LOG_DIR'), DEFAULT_LOG_FILE)
-                export_bin = drms_params.get_required('BIN_EXPORT')
                 private_db_host = drms_params.get_required('SERVER')
                 db_port = int(drms_params.get_required('DRMSPGPORT'))
                 db_name = drms_params.get_required('DBNAME')
@@ -144,8 +143,6 @@ class Arguments(Args):
                 raise ArgumentsError(error_message=f'cannot specify private db server to handle public webserver requests')
 
             arguments.private_db_host = private_db_host
-            arguments.arch_dir = environ['JSOC_MACHINE']
-            arguments.export_bin = export_bin
 
             cls._arguments = arguments
 
@@ -191,7 +188,6 @@ def perform_action(*, is_program, program_name=None, **kwargs):
             exc.exc_info = sys_exc_info()
             raise exc
         except Exception as exc:
-            print(f'gotta be here')
             raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
 
         try:
@@ -199,6 +195,8 @@ def perform_action(*, is_program, program_name=None, **kwargs):
             log = DrmsLog(arguments.log_file, arguments.logging_level, formatter)
         except Exception as exc:
             raise LoggingError(error_message=f'{str(exc)}')
+
+        log.write_debug([ f'[ perform_action ] action arguments: {str(arguments)}' ])
 
         try:
             if arguments.drms_client is None:
