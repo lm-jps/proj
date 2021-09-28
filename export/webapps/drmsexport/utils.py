@@ -37,6 +37,8 @@ def extract_program_and_module_args(*, is_program, **kwargs):
 # determines which type of drms client - a private one, or a public one - is needed to serve drms client requests, and returns the
 # needed client; the determination is based upon the provided webserver (which has a `public` property), drms_client, series, and
 # specification arguments
+# `webserver` can be None; if so, then db_host must be public
+# `series` is a comma-separated list of DRMS data series
 def create_drms_client(*, webserver, address=None, series, specification, drms_client_type, drms_client=None, public_drms_client_server, private_drms_client_server, private_db_host, db_host, db_port, db_name, db_user, debug=False, log):
     from check_dbserver import StatusCode as CdbStatusCode
 
@@ -46,11 +48,12 @@ def create_drms_client(*, webserver, address=None, series, specification, drms_c
     factory = None
     public_drms_client = None
     private_drms_client = None
-    series_dict = None
+    series_resolved = None
 
-    if webserver.public:
+    if webserver is None or webserver.public:
         # db_host must be a public db server; use external drms client
-        log.write_debug([ f'[ create_drms_client ] public webserver {webserver.host} using DRMS client' ])
+        if webserver is not None:
+            log.write_debug([ f'[ create_drms_client ] public webserver {webserver.host} using DRMS client' ])
 
         if drms_client is None:
             log.write_debug([ f'[ create_drms_client ] no securedrms client provided; creating public one' ])
@@ -65,32 +68,32 @@ def create_drms_client(*, webserver, address=None, series, specification, drms_c
 
         # need to determine if pass-through series have been specified; if so, use securedrms client that uses private db
         if series is not None:
-            series_dict = { 'series' : series }
+            series_resolved = [ series ]
         elif specification is not None:
             log.write_debug([ f'[ create_drms_client ] parsing record-set specification `{specification}`' ])
             response_dict = public_drms_client.parse_spec(specification)
 
             if response_dict['errMsg'] is None:
-                series_dict = { 'series' : [] }
+                series_resolved = []
 
                 # `subsets` exists if status == PsStatusCode.SUCCESS
                 subsets = response_dict['subsets']
 
                 for subset in subsets:
-                    series_dict['series'].append(subset['seriesname'])
+                    series_resolved.append(subset['seriesname'])
 
-        if series_dict is not None:
-            log.write_debug([ f'[ create_drms_client ] determining DB server suitable for requested data from series `{", ".join(series_dict["series"])}`' ])
+        if series_resolved is not None:
+            log.write_debug([ f'[ create_drms_client ] determining DB server suitable for requested data from series `{", ".join(series_resolved)}`' ])
 
             action_type = 'determine_db_server'
-            action_args = { 'public_dbhost' : db_host, 'series' : series_dict, 'drms_client' : public_drms_client }
+            action_args = { 'public_db_host' : db_host, 'series' : series_resolved, 'drms_client' : public_drms_client }
             action = Action.action(action_type=action_type, args=action_args)
             response = action()
 
             if response.attributes.drms_export_status_code != CdbStatusCode.SUCCESS:
                 log.write_error([ f'[ create_drms_client ] failure calling `{action_type}` action; status: `{response.attributes.drms_export_status_code.description()}`' ])
             elif response.attributes.server is None:
-                log.write_error([ f'[ create_drms_client cannot service any series in `{", ".join(series)}`' ])
+                log.write_error([ f'[ create_drms_client cannot service any series in `{", ".join(series_resolved)}`' ])
             else:
                 db_host = response.attributes.server
     else:
@@ -99,7 +102,7 @@ def create_drms_client(*, webserver, address=None, series, specification, drms_c
 
     if db_host is not None:
         # now we know whether we should be using a public or private drms client
-        use_public_db_host = True if webserver.public and db_host != private_db_host else False
+        use_public_db_host = True if (webserver is None or webserver.public) and db_host != private_db_host else False
         if use_public_db_host:
             log.write_debug([ f'[ create_drms_client ] public db host will be used to service request' ])
             if public_drms_client is not None:
