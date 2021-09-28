@@ -740,7 +740,7 @@ class InitiateRequestAction(Action):
         return response
 
     @classmethod
-    def is_valid_arguments(cls, arguments_json):
+    def is_valid_arguments(cls, arguments_json, logging_level=None):
         is_valid = None
         try:
             json_loads(arguments_json)

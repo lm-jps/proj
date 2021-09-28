@@ -269,7 +269,7 @@ class GetRecordInfoAction(Action):
         return response
 
     @classmethod
-    def is_valid_specification(cls, specification, db_host, webserver):
+    def is_valid_specification(cls, specification, db_host, webserver, logging_level=None):
         is_valid = None
 
         try:
@@ -290,7 +290,7 @@ class GetRecordInfoAction(Action):
 
             # parse specification
             cls._parse_response = None
-            action = Action.action(action_type='parse_specification', args={ 'specification' : specification, 'db_host' : db_host_resolved, 'webserver' : webserver })
+            action = Action.action(action_type='parse_specification', args={ 'specification' : specification, 'db_host' : db_host_resolved, 'webserver' : webserver, 'logging_level' : logging_level })
             response = action()
             cls._parse_response = response
             is_valid = False if isinstance(response, ErrorResponse) else True

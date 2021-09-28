@@ -528,14 +528,14 @@ class PendingRequestAction(Action):
         return response
 
     @classmethod
-    def get_reg_ex(cls):
+    def get_reg_ex(cls, logging_level=None):
         if cls._reg_ex is None:
             cls._reg_ex = re_compile(REQUEST_ID_PATTERN)
 
         return cls._reg_ex
 
     @classmethod
-    def is_valid_request_id(cls, address):
+    def is_valid_request_id(cls, address, logging_level=None):
         reg_ex = cls.get_reg_ex()
         return reg_ex.match(address) is not None
 
