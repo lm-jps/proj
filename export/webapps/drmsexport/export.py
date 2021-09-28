@@ -357,13 +357,14 @@ class AddressRegistrationResource(Resource):
 # called from public website only
 from check_dbserver import DetermineDbServerAction
 class ServerResource(Resource):
-    _arguments = { 'public_db_host' : fields.Str(required=True, data_key='public-db-host'), 'series' : fields.List(fields.Str, required=True, validate=lambda a: DetermineDbServerAction.is_valid_series_set(a)), 'client_type' : fields.Str(required=False, data_key='client-type'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'db_user' : fields.Str(required=False, data_key='db-user') }
+    _arguments = { 'public_db_host' : fields.Str(required=True, data_key='public-db-host'), 'series' : fields.List(fields.Str, required=True, validate=lambda a: DetermineDbServerAction.is_valid_series_set(a, None, urlparse(request.base_url).hostname, 'debug' if APP_DEBUG else None)), 'client_type' : fields.Str(required=False, data_key='client-type'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'db_user' : fields.Str(required=False, data_key='db-user') }
 
     @use_kwargs(_arguments)
     def get(self, public_db_host, series, client_type=None, db_name=None, db_port=None, db_user=None):
         arguments = { 'public_db_host' : public_db_host, 'series' : series, 'drms_client_type' : client_type, 'db_name' : db_name, 'db_port' : db_port, 'db_user' : db_user }
         if APP_DEBUG:
-            arguments['logging_level'] = 'debug'
+            # no logging_level in determine_db_server action
+            pass
 
         action = Action.action(action_type='determine_db_server', args=arguments)
         return action().generate_serializable_dict()
