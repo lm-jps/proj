@@ -33,7 +33,7 @@ class ErrorCode(ExportErrorCode):
     # fetch error codes
     REQUEST_TOO_LARGE = (3, 'requested payload is too large') # can only happen with jsoc_fetch op=exp_request call
     REQUEST_FATAL_ERROR = (4, 'a fatal error occurred during processing')
-    REQUEST_NOT_ONLINE = (5, 'exported files are no longer online') # as far as I can tell, the export code never sets status to 5
+    REQUEST_NOT_ONLINE = (5, 'exported files are no longer online')
     REQUEST_TOO_MANY = (7, 'too many simulatneous exports') # can only happen with jsoc_fetch op=exp_request call
 
     # other IR errors
@@ -79,22 +79,34 @@ class ExportActionError(IrBaseError):
 class ExportArgumentsAction(ArgsAction):
     def __call__(self, parser, namespace, value, option_string=None):
         # convert json arguments to dict
-        export_arguments = json_loads(value)
+        export_arguments = self.json_to_dict(value)
         if 'specification' not in export_arguments:
             raise ArgumentsError(error_message=f'missing required export argument `specification`')
         setattr(namespace, self.dest, export_arguments)
 
+    @classmethod
+    def json_to_dict(cls, json_text):
+        return json_loads(json_text)
+
 class ResponseError(IrBaseError):
     _error_code = ErrorCode(ErrorCode.RESPONSE)
+
+def name_to_ws_obj(name, drms_params):
+    webserver_dict = {}
+    webserver_dict['host'] = name
+    if name is None or len(name) == 0 or name.strip().lower() == 'none':
+        # assume public
+        webserver_dict['public'] = True
+    else:
+        webserver_dict['public'] = True if name.lower() != drms_params.get_required('WEB_DOMAIN_PRIVATE') else False
+
+    return MakeObject(name='webserver', data=webserver_dict)()
 
 def webserver_action_constructor(self, drms_params):
     self._drms_params = drms_params
 
 def webserver_action(self, parser, namespace, value, option_string=None):
-    webserver_dict = {}
-    webserver_dict['host'] = value
-    webserver_dict['public'] = True if value.lower() != self._drms_params.get_required('WEB_DOMAIN_PRIVATE') else False
-    webserver_obj = MakeObject(name='webserver', data=webserver_dict)()
+    webserver_obj = name_to_ws_obj(value, self._drms_params)
     setattr(namespace, self.dest, webserver_obj)
 
 def create_webserver_action(drms_params):
@@ -110,8 +122,8 @@ class Arguments(Args):
     _arguments = None
 
     @classmethod
-    def get_arguments(cls, *, is_program, program_name=None, program_args=None, module_args=None, drms_params):
-        if cls._arguments is None:
+    def get_arguments(cls, *, is_program, program_name=None, program_args=None, module_args=None, drms_params, refresh=True):
+        if cls._arguments is None or refresh:
             try:
                 log_file = path_join(drms_params.get_required('EXPORT_LOG_DIR'), DEFAULT_LOG_FILE)
                 private_db_host = drms_params.get_required('SERVER')
@@ -127,47 +139,48 @@ class Arguments(Args):
                 if program_args is not None and len(program_args) > 0:
                     args = program_args
 
+                parser_args = { 'usage' : '%(prog)s address=<registered email address> export-type=<premium/mini/streamed> dbhost=<db host> arguments=<export arguments specific to export type> [ -c/--drms-client-type=<ssh/http> ] [ -l/--log-file=<path to log file> ] [ -L/--logging-level=<critical/error/warning/info/debug> ] [ -N/--dbname=<db name> ] [ -P/--dbport=<db port> ] [ -r/--requestor=<> ] [ -U/--dbuser=<db user>] [ -w/--webserver=<host> ]' }
+
                 if program_name is not None and len(program_name) > 0:
-                    parser = CmdlParser(prog=program_name, usage='%(prog)s [ --dbhost=<db host> ] [ --dbport=<db port> ] [ --dbname=<db name> ] [ --dbuser=<db user>] [ --skiptar=<boolean value> ] [ --compression=<boolean value ] [ --file_name_format=<> ] webserver=<> spec=<>')
-                else:
-                    parser = CmdlParser(usage='%(prog)s [ --dbhost=<db host> ] [ --dbport=<db port> ] [ --dbname=<db name> ] [ --dbuser=<db user>] [ --skiptar=<boolean value> ] [ --compression=<boolean value ] [ --file_name_format=<> ] webserver=<> spec=<>')
+                    parser_args['prog'] = program_name
+
+                parser = CmdlParser(**parser_args)
+
+                # required
+                parser.add_argument('address', help='the email addressed registered for export', metavar='<email address>', dest='address', required=True)
+                parser.add_argument('dbhost', help='the machine hosting the database that contains export requests from this site', metavar='<db host>', dest='db_host', required=True)
+                parser.add_argument('arguments', help='export arguments', action=ExportArgumentsAction, dest='export_arguments', required=True)
 
                 # optional
                 parser.add_argument('-c', '--drms-client-type', help='securedrms client type (ssh, http)', choices=[ 'ssh', 'http' ], dest='drms_client_type', default='ssh')
-                parser.add_argument('-l', '--log_file', help='the path to the log file', metavar='<log file>', dest='log_file', default=log_file)
-                parser.add_argument('-L', '--logging_level', help='the amount of logging to perform; in order of increasing verbosity: critical, error, warning, info, debug', metavar='<logging level>', dest='logging_level', action=DrmsLogLevelAction, default=DrmsLogLevel.ERROR)
+                parser.add_argument('-l', '--log-file', help='the path to the log file', metavar='<log file>', dest='log_file', default=log_file)
+                parser.add_argument('-L', '--logging-level', help='the amount of logging to perform; in order of increasing verbosity: critical, error, warning, info, debug', metavar='<logging level>', dest='logging_level', action=DrmsLogLevelAction, default=DrmsLogLevel.ERROR)
                 parser.add_argument('-N', '--dbname', help='the name of the database that contains export requests', metavar='<db name>', dest='db_name', default=db_name)
                 parser.add_argument('-P', '--dbport', help='the port on the host machine that is accepting connections for the database', metavar='<db host port>', dest='db_port', type=int, default=db_port)
                 parser.add_argument('-r', '--requestor', help='the name of the export user', metavar='<requestor>', dest='requestor', default=None)
                 parser.add_argument('-U', '--dbuser', help='the name of the database user account', metavar='<db user>', dest='db_user', default=db_user)
-
-                # required
-                parser.add_argument('address', help='the email addressed registered for export', metavar='<email address>', dest='address', required=True)
-                parser.add_argument('export_type', help='the export type: premium, mini, or streamed', metavar='<webserver>', choices=Choices(['premium', 'mini', 'streamed']), dest='export_type', required=True)
-                parser.add_argument('db_host', help='the machine hosting the database that contains export requests from this site', metavar='<db host>', dest='db_host', required=True)
-                parser.add_argument('webserver', help='the webserver invoking this script', metavar='<webserver>', action=create_webserver_action(drms_params), dest='webserver', required=True)
-                parser.add_argument('arguments', help='export arguments', action=ExportArgumentsAction, dest='export_arguments', required=True)
+                parser.add_argument('-w', '--webserver', help='the webserver invoking this script', metavar='<webserver>', action=create_webserver_action(drms_params), dest='webserver')
 
                 arguments = Arguments(parser=parser, args=args)
                 arguments.drms_client = None
             else:
                 # `program_args` has all `arguments` values, in final form; validate them
-                def extract_module_args(*, address, export_type, db_host, webserver, export_arguments, drms_client_type='ssh', drms_client=None, requestor=None, log_file=log_file, logging_level=DrmsLogLevel.ERROR, db_port=db_port, db_name=db_name, db_user=db_user):
+                def extract_module_args(*, address, export_type, db_host, export_arguments, drms_client_type='ssh', drms_client=None, log_file=log_file, logging_level='error', db_name=db_name, db_port=db_port, requestor=None, db_user=db_user, webserver=None):
                     arguments = {}
 
                     arguments['address'] = address
                     arguments['export_type'] = export_type
                     arguments['db_host'] = db_host
-                    arguments['webserver'] = webserver
-                    arguments['export_arguments'] = export_arguments
+                    arguments['export_arguments'] = ExportArgumentsAction.json_to_dict(export_arguments)
                     arguments['drms_client_type'] = drms_client_type
                     arguments['drms_client'] = drms_client
-                    arguments['requestor'] = requestor
                     arguments['log_file'] = log_file
-                    arguments['logging_level'] = logging_level
-                    arguments['db_port'] = db_port
+                    arguments['logging_level'] = DrmsLogLevelAction.string_to_level(logging_level)
                     arguments['db_name'] = db_name
+                    arguments['db_port'] = db_port
+                    arguments['requestor'] = requestor
                     arguments['db_user'] = db_user
+                    arguments['webserver'] = name_to_ws_obj(webserver, drms_params) # sets webserver.public = True if webserver is None
 
                     return arguments
 
@@ -577,8 +590,10 @@ def perform_action(is_program, program_name=None, **kwargs):
 
             arguments = Arguments.get_arguments(is_program=is_program, program_name=program_name, program_args=program_args, module_args=module_args, drms_params=drms_params)
         except ArgsError as exc:
+            raise
             raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
         except Exception as exc:
+            raise
             raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
 
         try:
@@ -676,19 +691,20 @@ def perform_action(is_program, program_name=None, **kwargs):
 from action import Action
 class InitiateRequestAction(Action):
     actions = [ 'start_premium_export', 'start_mini_export', 'start_streamed_export' ]
-    def __init__(self, *, method, address, db_host, webserver, export_arguments, drms_client_type=None, drms_client=None, requestor=None, db_port=None, db_name=None, db_user=None):
+    def __init__(self, *, method, address, db_host, export_arguments, drms_client_type=None, drms_client=None, logging_level=None, db_name=None, db_port=None, requestor=None, db_user=None, webserver=None):
         self._method = getattr(self, method)
         self._address = address
         self._db_host = db_host
-        self._webserver = webserver # dict
-        self._export_arguments = export_arguments
+        self._export_arguments = export_arguments # json text
         self._options = {}
         self._options['drms_client_type'] = drms_client_type
         self._options['drms_client'] = drms_client
-        self._options['requestor'] = requestor
-        self._options['db_port'] = db_port
+        self._options['logging_level'] = logging_level
         self._options['db_name'] = db_name
+        self._options['db_port'] = db_port
+        self._options['requestor'] = requestor
         self._options['db_user'] = db_user
+        self._options['webserver'] = webserver # host name - gets converted to object in `get_arguments()`
 
     def start_premium_export(self):
         '''
@@ -704,7 +720,7 @@ class InitiateRequestAction(Action):
           number_records : <maximum number of records exported>
         }
         '''
-        response = perform_action(is_program=False, export_type='premium', address=self._address, db_host=self._db_host, webserver=self._webserver, export_arguments=self._export_arguments, options=self._options)
+        response = perform_action(is_program=False, export_type='premium', address=self._address, db_host=self._db_host, export_arguments=self._export_arguments, options=self._options)
         return response
 
     def start_mini_export(self):
@@ -716,13 +732,23 @@ class InitiateRequestAction(Action):
           number_records : <maximum number of records exported>
         }
         '''
-        response = perform_action(is_program=False, export_type='mini', address=self._address, db_host=self._db_host, webserver=self._webserver, export_arguments=self._export_arguments, options=self._options)
+        response = perform_action(is_program=False, export_type='mini', address=self._address, db_host=self._db_host, export_arguments=self._export_arguments, options=self._options)
         return response
 
     def start_streamed_export(self):
-        response = perform_action(is_program=False, export_type='streamed', address=self._address, db_host=self._db_host, webserver=self._webserver, export_arguments=self._export_arguments, options=self._options)
+        response = perform_action(is_program=False, export_type='streamed', address=self._address, db_host=self._db_host, export_arguments=self._export_arguments, options=self._options)
         return response
 
+    @classmethod
+    def is_valid_arguments(cls, arguments_json):
+        is_valid = None
+        try:
+            json_loads(arguments_json)
+            is_valid = True
+        except:
+            is_valid = False
+
+        return is_valid
 
 if __name__ == "__main__":
     try:
