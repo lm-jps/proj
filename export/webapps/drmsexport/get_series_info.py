@@ -263,7 +263,7 @@ class GetSeriesInfoAction(Action):
         response = perform_action(is_program=False, series=self._series, db_host=self._db_host, options=self._options)
         return response
 
-    # `series` is a comma-separated list of series
+    # `series` is a py list of series
     @classmethod
     def is_valid_series_set(cls, series, db_host, webserver, logging_level=None):
         is_valid = None
@@ -284,7 +284,7 @@ class GetSeriesInfoAction(Action):
                 db_host_resolved = db_host
 
             # parse specification
-            action = Action.action(action_type='parse_specification', args={ 'specification' : series, 'db_host' : db_host_resolved, 'webserver' : webserver, 'logging_level' : logging_level })
+            action = Action.action(action_type='parse_specification', args={ 'specification' : ','.join(series), 'db_host' : db_host_resolved, 'webserver' : webserver, 'logging_level' : logging_level })
             response = action()
 
             if isinstance(response, ErrorResponse):
