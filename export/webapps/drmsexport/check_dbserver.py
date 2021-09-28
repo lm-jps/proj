@@ -68,7 +68,7 @@ class SecureDRMSError(CdbBaseError):
 class ValidateArgumentAction(ArgsAction):
     def __call__(self, parser, namespace, value, option_string=None):
         # the server specified must not be the internal server
-        if self.dest == 'wlfile' and not parser.drms_params.WL_HASWL:
+        if self.dest == 'wl_file' and not parser.drms_params.WL_HASWL:
             raise ArgumentsError(error_message=f'{option_string} specified a white-list file, but this DRMS does not support series whitelists')
 
         if value.lower() == parser.drms_params.SERVER.lower():
@@ -119,7 +119,7 @@ class Arguments(Args):
                 parser.add_argument('-P', '--dbport', help='the port on the machine hosting DRMS data series names', metavar='<db host port>', dest='db_port', default=db_port)
                 parser.add_argument('-N', '--dbname', help='the name of the database serving DRMS series names', metavar='<db name>', dest='db_name', default=db_name)
                 parser.add_argument('-U', '--dbuser', help='the user to log-in to the serving database as', metavar='<db user>', dest='db_user', default=db_user)
-                parser.add_argument('-w', '--wlfile', help='the text file containing the definitive list of internal series accessible via the external web site', metavar='<white-list file>', dest='wlfile', action=ValidateArgumentAction, default=wl_file)
+                parser.add_argument('-w', '--wlfile', help='the text file containing the definitive list of internal series accessible via the external web site', metavar='<white-list file>', dest='wl_file', action=ValidateArgumentAction, default=wl_file)
 
                 arguments = Arguments(parser=parser, args=args)
 
@@ -177,7 +177,7 @@ class DetermineDbServerAction(Action):
 
     # `series` is comma-separated list of series
     @classmethod
-    def is_valid_series_set(cls, series, db_host, webserver):
+    def is_valid_series_set(cls, series, db_host, webserver, logging_level=None):
         try:
             if db_host is None:
                 # if this method is called before URL arguments are parsed, then `db_host` is not known;
@@ -194,7 +194,7 @@ class DetermineDbServerAction(Action):
             else:
                 db_host_resolved = db_host
 
-            return GetSeriesInfoAction.is_valid_series_set(series, db_host_resolved, webserver)
+            return GetSeriesInfoAction.is_valid_series_set(series, db_host_resolved, webserver, logging_level)
         except:
             return False
 
@@ -279,7 +279,7 @@ def perform_action(is_program, program_name=None, **kwargs):
                             private_series = sshclient_internal.series(regex=series_regex, full=False)
 
                             if white_list is None:
-                                white_list = get_whitelist(arguments.wlfile) # if no whitelist exists, then this is the empty set
+                                white_list = get_whitelist(arguments.wl_file) # if no whitelist exists, then this is the empty set
 
                             if series.lower() in white_list and len(private_series) != 0:
                                 response_dict['series'].append({ series : { 'server' : arguments.private_db_host } })
