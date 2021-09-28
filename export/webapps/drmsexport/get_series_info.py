@@ -7,7 +7,7 @@ from sys import exc_info as sys_exc_info, exit as sys_exit
 
 from drms_export import Error as ExportError, ErrorCode as ExportErrorCode, ErrorResponse, Response, securedrms
 from drms_parameters import DRMSParams, DPMissingParameterError
-from drms_utils import Arguments as Args, ArgumentsError as ArgsError, Choices, CmdlParser, Formatter as DrmsLogFormatter, Log as DrmsLog, LogLevel as DrmsLogLevel, LogLevelAction as DrmsLogLevelAction, MakeObject, StatusCode as SC
+from drms_utils import Arguments as Args, ArgumentsError as ArgsError, Choices, CmdlParser, Formatter as DrmsLogFormatter, ListAction, Log as DrmsLog, LogLevel as DrmsLogLevel, LogLevelAction as DrmsLogLevelAction, MakeObject, StatusCode as SC
 from utils import extract_program_and_module_args, create_drms_client
 
 DEFAULT_LOG_FILE = 'gsi_log.txt'
@@ -58,14 +58,22 @@ class ExportActionError(GsiBaseError):
 class ResponseError(GsiBaseError):
     _error_code = ErrorCode(ErrorCode.RESPONSE)
 
+def name_to_ws_obj(name, drms_params):
+    webserver_dict = {}
+    webserver_dict['host'] = name
+    if name is None or len(name) == 0 or name.strip().lower() == 'none':
+        # assume public
+        webserver_dict['public'] = True
+    else:
+        webserver_dict['public'] = True if name.lower() != drms_params.get_required('WEB_DOMAIN_PRIVATE') else False
+
+    return MakeObject(name='webserver', data=webserver_dict)()
+
 def webserver_action_constructor(self, drms_params):
     self._drms_params = drms_params
 
 def webserver_action(self, parser, namespace, value, option_string=None):
-    webserver_dict = {}
-    webserver_dict['host'] = value
-    webserver_dict['public'] = True if value.lower() != self._drms_params.get_required('WEB_DOMAIN_PRIVATE') else False
-    webserver_obj = MakeObject(name='webserver', data=webserver_dict)()
+    webserver_obj = name_to_ws_obj(value, self._drms_params)
     setattr(namespace, self.dest, webserver_obj)
 
 def create_webserver_action(drms_params):
@@ -81,8 +89,8 @@ class Arguments(Args):
     _arguments = None
 
     @classmethod
-    def get_arguments(cls, *, is_program, program_name=None, program_args=None, module_args=None, drms_params):
-        if cls._arguments is None:
+    def get_arguments(cls, *, is_program, program_name=None, program_args=None, module_args=None, drms_params, refresh=True):
+        if cls._arguments is None or refresh:
             try:
                 log_file = path_join(drms_params.get_required('EXPORT_LOG_DIR'), DEFAULT_LOG_FILE)
                 private_db_host = drms_params.get_required('SERVER')
@@ -98,11 +106,15 @@ class Arguments(Args):
                 if program_args is not None and len(program_args) > 0:
                     args = program_args
 
-                parser_args = { 'usage' : '%(prog)s series=<DRMS series> db_host=<db host> webserver=<host> [ --drms-client-type=<ssh/http>] [ --log-file=<log file path> [ --logging-level=<critical/error/warning/info/debug> ] [ --dbname=<db name> ] [ --dbport=<db port> ] [ --dbuser=<db user>]' }
+                parser_args = { 'usage' : '%(prog)s series=<DRMS series> db_host=<db host> [ -c/--drms-client-type=<ssh/http> ] [ --log-file=<log file path> ] [ --logging-level=<critical/error/warning/info/debug> ] [ -N/--dbname=<db name> ] [ -P/--dbport=<db port> ] [ -U/--dbuser=<db user>] [ -w/--webserver=<host> ]' }
                 if program_name is not None and len(program_name) > 0:
                     parser_args['prog'] = program_name
 
                 parser = CmdlParser(**parser_args)
+
+                # required
+                parser.add_argument('series', help='the DRMS series for which information is to be obtained', metavar='<DRMS series>', action=ListAction, dest='series', required=True)
+                parser.add_argument('dbhost', help='the machine hosting the database that contains export requests from this site', metavar='<db host>', dest='db_host', required=True)
 
                 # optional
                 parser.add_argument('-c', '--drms-client-type', help='securedrms client type (ssh, http)', choices=[ 'ssh', 'http' ], dest='drms_client_type', default='ssh')
@@ -111,29 +123,26 @@ class Arguments(Args):
                 parser.add_argument('-N', '--dbname', help='the name of the database that contains export requests', metavar='<db name>', dest='db_name', default=db_name)
                 parser.add_argument('-P', '--dbport', help='the port on the host machine that is accepting connections for the database', metavar='<db host port>', dest='db_port', type=int, default=db_port)
                 parser.add_argument('-U', '--dbuser', help='the name of the database user account', metavar='<db user>', dest='db_user', default=db_user)
-
-                # required
-                parser.add_argument('series', help='the DRMS series for which information is to be obtained', metavar='<DRMS series>', dest='series', required=True)
-                parser.add_argument('db_host', help='the machine hosting the database that contains export requests from this site', metavar='<db host>', dest='db_host', required=True)
-                parser.add_argument('webserver', help='the webserver invoking this script', metavar='<webserver>', action=create_webserver_action(drms_params), dest='webserver', required=True)
+                parser.add_argument('-w', '--webserver', help='the webserver invoking this script', metavar='<webserver>', action=create_webserver_action(drms_params), dest='webserver')
 
                 arguments = Arguments(parser=parser, args=args)
                 arguments.drms_client = None
             else:
                 # `program_args` has all `arguments` values, in final form; validate them
-                def extract_module_args(*, series, db_host, webserver, drms_client_type='ssh', drms_client=None, log_file=log_file, logging_level=DrmsLogLevel.ERROR, db_port=db_port, db_name=db_name, db_user=db_user):
+                # `series` is a str
+                def extract_module_args(*, series, db_host, drms_client_type='ssh', drms_client=None, log_file=log_file, logging_level='error', db_name=db_name, db_port=db_port, db_user=db_user, webserver=None):
                     arguments = {}
 
                     arguments['series'] = series
                     arguments['db_host'] = db_host
-                    arguments['webserver'] = webserver
                     arguments['drms_client_type'] = drms_client_type
                     arguments['drms_client'] = drms_client
                     arguments['log_file'] = log_file
-                    arguments['logging_level'] = logging_level
-                    arguments['db_port'] = db_port
+                    arguments['logging_level'] = DrmsLogLevelAction.string_to_level(logging_level)
                     arguments['db_name'] = db_name
+                    arguments['db_port'] = db_port
                     arguments['db_user'] = db_user
+                    arguments['webserver'] = name_to_ws_obj(webserver, drms_params) # sets webserver.public = True if webserver is None
 
                     return arguments
 
@@ -205,7 +214,7 @@ def perform_action(is_program, program_name=None, **kwargs):
         log.write_debug([ f'[ perform_action ] action arguments: {str(arguments)}' ])
 
         debug = True if arguments.logging_level == DrmsLogLevel.DEBUG else False
-        drms_client = create_drms_client(webserver=arguments.webserver, series=[ arguments.series ], specification=None, drms_client_type=arguments.drms_client_type, drms_client_server='jsoc_external', private_db_host=arguments.private_db_host, db_host=arguments.db_host, db_port=arguments.db_port, db_name=arguments.db_name, db_user=arguments.db_user, debug=debug, log=log)
+        drms_client = create_drms_client(webserver=arguments.webserver, series=arguments.series, specification=None, drms_client_type=arguments.drms_client_type, public_drms_client_server='jsoc_external', private_drms_client_server='jsoc_internal', private_db_host=arguments.private_db_host, db_host=arguments.db_host, db_port=arguments.db_port, db_name=arguments.db_name, db_user=arguments.db_user, debug=debug, log=log)
 
         if drms_client is None:
             raise DRMSClientError(error_message=f'unable to obtain securedrms client')
@@ -233,23 +242,64 @@ def perform_action(is_program, program_name=None, **kwargs):
 
 # for use in export web app
 from action import Action
+from parse_specification import ParseSpecificationAction
 class GetSeriesInfoAction(Action):
     actions = [ 'get_series_info' ]
-    def __init__(self, *, method, series, db_host, webserver, drms_client_type=None, drms_client=None, db_port=None, db_name=None, db_user=None):
+    def __init__(self, *, method, series, db_host, drms_client_type=None, drms_client=None, logging_level=None, db_name=None, db_port=None, db_user=None, webserver=None):
         self._method = getattr(self, method)
-        self._series = series
+        self._series = series # a str
         self._db_host = db_host # host webserver uses (private webserver uses private db host)
         self._webserver = webserver # dict
         self._options = {}
         self._options['drms_client_type'] = drms_client_type
         self._options['drms_client'] = drms_client
-        self._options['db_port'] = db_port
+        self._options['logging_level'] = logging_level
         self._options['db_name'] = db_name
+        self._options['db_port'] = db_port
         self._options['db_user'] = db_user
+        self._options['webserver'] = webserver # host name - gets converted to object in `get_arguments()`
 
     def get_series_info(self):
-        reponse = perform_action(series=self._series, db_host=self._db_host, webserver=self._webserver, options=self._options)
+        response = perform_action(is_program=False, series=self._series, db_host=self._db_host, options=self._options)
         return response
+
+    # `series` is a comma-separated list of series
+    @classmethod
+    def is_valid_series_set(cls, series, db_host, webserver):
+        is_valid = None
+        try:
+            if db_host is None:
+                # if this method is called before URL arguments are parsed, then `db_host` is not known;
+                # use default (public) export DB (specification parser does not use DB so it does not matter)
+                try:
+                    drms_params = DRMSParams()
+
+                    if drms_params is None:
+                        raise ParametersError(error_message='unable to locate DRMS parameters package')
+
+                    db_host_resolved = drms_params.get_required('EXPORT_DB_HOST_DEFAULT')
+                except DPMissingParameterError as exc:
+                    raise ParametersError(exc_info=sys_exc_info(), error_message=str(exc))
+            else:
+                db_host_resolved = db_host
+
+            # parse specification
+            action = Action.action(action_type='parse_specification', args={ 'specification' : series, 'db_host' : db_host_resolved, 'webserver' : webserver })
+            response = action()
+
+            if isinstance(response, ErrorResponse):
+                is_valid = False
+            else:
+                is_valid = True
+                for record_set in response.attributes.subsets:
+                    if record_set.filter != None or record_set.segments != None:
+                        is_valid = False
+                        break
+        except:
+            is_valid = False
+
+        return is_valid
+
 
 if __name__ == "__main__":
     try:
