@@ -52,6 +52,7 @@ class StatusCode(SC):
 class ErrorCode(ExportErrorCode):
     # fetch error codes
     REQUEST_FATAL_ERROR = (4, 'a fatal error occurred during processing')
+    REQUEST_NOT_ONLINE = (5, 'exported files are no longer online')
 
     # other mr error codes
     PARAMETERS = (201, 'failure locating DRMS parameters')
@@ -110,14 +111,22 @@ class CancelError(MrBaseError):
 class StatusError(MrBaseError):
     _error_code = ErrorCode.STATUS
 
+def name_to_ws_obj(name, drms_params):
+    webserver_dict = {}
+    webserver_dict['host'] = name
+    if name is None or len(name) == 0 or name.strip().lower() == 'none':
+        # assume public
+        webserver_dict['public'] = True
+    else:
+        webserver_dict['public'] = True if name.lower() != drms_params.get_required('WEB_DOMAIN_PRIVATE') else False
+
+    return MakeObject(name='webserver', data=webserver_dict)()
+
 def webserver_action_constructor(self, drms_params):
     self._drms_params = drms_params
 
 def webserver_action(self, parser, namespace, value, option_string=None):
-    webserver_dict = {}
-    webserver_dict['host'] = value
-    webserver_dict['public'] = True if value.lower() != self._drms_params.get_required('WEB_DOMAIN_PRIVATE') else False
-    webserver_obj = MakeObject(name='webserver', data=webserver_dict)()
+    webserver_obj = name_to_ws_obj(value, self._drms_params)
     setattr(namespace, self.dest, webserver_obj)
 
 def create_webserver_action(drms_params):
@@ -134,8 +143,8 @@ class Arguments(Args):
     _arguments = None
 
     @classmethod
-    def get_arguments(cls, *, is_program, program_name=None, program_args=None, module_args=None, drms_params):
-        if cls._arguments is None:
+    def get_arguments(cls, *, is_program, program_name=None, program_args=None, module_args=None, drms_params, refresh=True):
+        if cls._arguments is None or refresh:
             try:
                 log_file = path_join(drms_params.get_required('EXPORT_LOG_DIR'), DEFAULT_LOG_FILE)
                 private_db_host = drms_params.get_required('SERVER')
@@ -153,7 +162,7 @@ class Arguments(Args):
                 if program_args is not None and len(program_args) > 0:
                     args = program_args
 
-                parser_args = { 'usage' : '%(prog)s address=<registered email address> operation=<check, cancel, status> [ --dbhost=<db host> ] [ --dbport=<db port> ] [ --dbname=<db name> ] [ --dbuser=<db user>]' }
+                parser_args = { 'usage' : '%(prog)s A/address=<registered email address> O/operation=<check/cancel/status> dbhost=<db host> [ -c/--drms-client-type=<ssh/http> ] [ -i/--id=<request ID> ] [ -l/--log-file=<log file path> [ -L/--logging-level=<critical/error/warning/info/debug> ] [ -N/--dbname=<db name> ] [ -P/--dbport=<db port> ] [ -p/--pending-reqs-table=<pending requests db table> ] [ -U/--dbuser=<db user>] [ -t/--timeout=<pending-request timeout> ] [ -w/--webserver=<host> ]' }
                 if program_name is not None and len(program_name) > 0:
                     parser_args['prog'] = program_name
 
@@ -165,39 +174,41 @@ class Arguments(Args):
                 # required
                 parser.add_argument('A', 'address', help='the export-registered email address', metavar='<email address>', dest='address', required=True)
                 parser.add_argument('O', 'operation', help='the export-request operation to perform (check, cancel, status)', choices=['check', 'cancel', 'status'], metavar='<operation>', dest='operation', default='check', required=True)
-                parser.add_argument('db_host', help='the machine hosting the database that contains export requests from this site', metavar='<db host>', dest='db_host', required=True)
-                parser.add_argument('webserver', help='the webserver invoking this script', metavar='<webserver>', action=create_webserver_action(drms_params), dest='webserver', required=True)
+                parser.add_argument('dbhost', help='the machine hosting the database that contains export requests from this site', metavar='<db host>', dest='db_host', required=True)
 
                 # optional
                 parser.add_argument('-c', '--drms-client-type', help='securedrms client type (ssh, http)', choices=[ 'ssh', 'http' ], dest='drms_client_type', default='ssh')
                 parser.add_argument('-i', '--id', help='request ID; required if operation == status', metavar='<export request ID>', dest='request_id', default=None)
-                parser.add_argument('-l', '--log_file', help='the path to the log file', metavar='<log file>', dest='log_file', default=log_file)
-                parser.add_argument('-L', '--logging_level', help='the amount of logging to perform; in order of increasing verbosity: critical, error, warning, info, debug', metavar='<logging level>', dest='logging_level', action=DrmsLogLevelAction, default=DrmsLogLevel.ERROR)
-                parser.add_argument('-P', 'P', '--dbport', help='The port on the host machine that is accepting connections for the database', metavar='<db host port>', dest='db_port', default=db_port)
-                parser.add_argument('-p', 'p', '--pending_reqs_table', help='the db table of pending requests', metavar='<pending requests table>', dest='pending_requests_table', default=pending_requests_table)
-                parser.add_argument('-N', 'N', '--dbname', help='the name of the database used to manage pending export requests', metavar='<db name>', dest='db_name', default=db_name)
-                parser.add_argument('-U', 'U', '--dbuser', help='the name of the database user account', metavar='<db user>', dest='db_user', default=db_user)
-                parser.add_argument('-t', 't', '--timeout', help='after this number of minutes have elapsed, requests are no longer considered pending', metavar='<timeout>', dest='timeout', default=timeout)
+                parser.add_argument('-l', '--log-file', help='the path to the log file', metavar='<log file>', dest='log_file', default=log_file)
+                parser.add_argument('-L', '--logging-level', help='the amount of logging to perform; in order of increasing verbosity: critical, error, warning, info, debug', metavar='<logging level>', dest='logging_level', action=DrmsLogLevelAction, default=DrmsLogLevel.ERROR)
+                parser.add_argument('-N', '--dbname', help='the name of the database used to manage pending export requests', metavar='<db name>', dest='db_name', default=db_name)
+                parser.add_argument('-P', '--dbport', help='The port on the host machine that is accepting connections for the database', metavar='<db host port>', dest='db_port', default=db_port)
+                parser.add_argument('-p', '--pending-reqs-table', help='the db table of pending requests', metavar='<pending requests table>', dest='pending_requests_table', default=pending_requests_table)
+                parser.add_argument('-t', '--timeout', help='after this number of minutes have elapsed, requests are no longer considered pending', metavar='<timeout>', dest='timeout', default=timeout)
+                parser.add_argument('-U', '--dbuser', help='the name of the database user account', metavar='<db user>', dest='db_user', default=db_user)
+                parser.add_argument('-w', '--webserver', help='the webserver invoking this script', metavar='<webserver>', action=create_webserver_action(drms_params), dest='webserver')
 
                 arguments = Arguments(parser=parser, args=args)
                 arguments.drms_client = None
             else:
                 # module invocation
-                def extract_module_args(*, address, operation, db_host, webserver, drms_client_type='ssh', drms_client=None, id=None, db_port=db_port, db_name=db_name, db_user=db_user, pending_requests_table=pending_requests_table, timeout=timeout):
+                def extract_module_args(*, address, operation, db_host, drms_client_type='ssh', drms_client=None, request_id=None, log_file=log_file, logging_level='error', db_name=db_name, db_port=db_port, pending_requests_table=pending_requests_table, timeout=timeout, db_user=db_user, webserver=None):
                     arguments = {}
 
                     arguments['address'] = address
                     arguments['operation'] = operation
                     arguments['db_host'] = db_host
-                    arguments['webserver'] = webserver
                     arguments['drms_client_type'] = drms_client_type
                     arguments['drms_client'] = drms_client
-                    arguments['request_id'] = id
-                    arguments['db_port'] = db_port
+                    arguments['request_id'] = request_id
+                    arguments['log_file'] = log_file
+                    arguments['logging_level'] = DrmsLogLevelAction.string_to_level(logging_level)
                     arguments['db_name'] = db_name
-                    arguments['db_user'] = db_user
+                    arguments['db_port'] = db_port
                     arguments['pending_requests_table'] = pending_requests_table
-                    arguemnts['timeout'] = timeout
+                    arguments['timeout'] = timeout
+                    arguments['db_user'] = db_user
+                    arguments['webserver'] = name_to_ws_obj(webserver, drms_params) # sets webserver.public = True if webserver is None
 
                     return arguments
 
@@ -488,31 +499,32 @@ class PendingRequestAction(Action):
 
     _reg_ex = None
 
-    def __init__(self, *, method, address, db_host, webserver, drms_client_type=None, drms_client=None, request_id=None, db_name=None, db_port=None,  db_user=None, pending_requests_table=None, timeout=None):
+    def __init__(self, *, method, address, db_host, drms_client_type=None, drms_client=None, request_id=None, logging_level=None, db_name=None, db_port=None, pending_requests_table=None, timeout=None, db_user=None, webserver=None):
         self._method = getattr(self, method)
         self._address = address
         self._db_host = db_host
-        self._webserver = webserver
         self._options = {}
         self._options['drms_client_type'] = drms_client_type
         self._options['drms_client'] = drms_client
         self._options['request_id'] = request_id
+        self._options['logging_level'] = logging_level
         self._options['db_name'] = db_name
         self._options['db_port'] = db_port
-        self._options['db_user'] = db_user
         self._options['pending_requests_table'] = pending_requests_table
         self._options['timeout'] = timeout
+        self._options['db_user'] = db_user
+        self._options['webserver'] = webserver # host name - gets converted to object in `get_arguments()`
 
     def check_pending_request(self):
-        response = perform_action(operation='check', address=self._address, db_host=self._db_host, webserver=self._webserver, options=self._options)
+        response = perform_action(is_program=False, operation='check', address=self._address, db_host=self._db_host, options=self._options)
         return response
 
     def cancel_pending_request(self):
-        response = perform_action(operation='register', address=self._address, db_host=self._db_host, webserver=self._webserver, options=self._options)
+        response = perform_action(is_program=False, operation='register', address=self._address, db_host=self._db_host, options=self._options)
         return response
 
     def get_export_status(self):
-        response = perform_action(operation='status', address=self._address, db_host=self._db_host, webserver=self._webserver, options=self._options)
+        response = perform_action(is_program=False, operation='status', address=self._address, db_host=self._db_host, options=self._options)
         return response
 
     @classmethod
@@ -521,6 +533,12 @@ class PendingRequestAction(Action):
             cls._reg_ex = re_compile(REQUEST_ID_PATTERN)
 
         return cls._reg_ex
+
+    @classmethod
+    def is_valid_request_id(cls, address):
+        reg_ex = cls.get_reg_ex()
+        return reg_ex.match(address) is not None
+
 
 def requires_private_db(request_id):
     reg_ex = PendingRequestAction.get_reg_ex()
