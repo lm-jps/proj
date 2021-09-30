@@ -520,7 +520,7 @@ class PendingRequestAction(Action):
         return response
 
     def cancel_pending_request(self):
-        response = perform_action(is_program=False, operation='register', address=self._address, db_host=self._db_host, options=self._options)
+        response = perform_action(is_program=False, operation='cancel', address=self._address, db_host=self._db_host, options=self._options)
         return response
 
     def get_export_status(self):
