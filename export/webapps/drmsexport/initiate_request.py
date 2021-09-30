@@ -8,7 +8,8 @@ from os.path import join as path_join
 import re
 from sys import exc_info as sys_exc_info, exit as sys_exit, stdout as sys_stdout
 from time import sleep
-from threading import Event, Timer
+from threading import Timer
+from werkzeug.datastructures import Headers
 
 from drms_export import Error as ExportError, ErrorCode as ExportErrorCode, ErrorResponse, Response, securedrms
 from drms_parameters import DRMSParams, DPMissingParameterError
@@ -517,8 +518,12 @@ def export_mini(*, drms_client, address, requestor=None, log, **export_arguments
 
     return response
 
+# extract name of file to be downloaded from download stream
+# returns tuple (<boolean>, <data>) where the first element indicates if there
+# are more data to download
 async def read_from_proc(destination, proc):
-    if not destination.file_name_read:
+    if not destination.header_extracted:
+        # this is the generator's first iteration
         # a FITS file prepended with filename; read the filename first
         bytes_read = await proc.stdout.read(FILE_NAME_SIZE)
 
@@ -532,20 +537,19 @@ async def read_from_proc(destination, proc):
             extension = matches.group(2)
             file_name = f'{re.sub(r"[^a-zA-Z0-9_]", "_", base)}.{extension}'
 
-        disposition = f'Content-Disposition: attachment; filename={file_name}\n'
+        destination.file_name = file_name # for use in `perform_action()` caller
+        destination.header_extracted = True
 
-        # return data back to securedrms to write it to stdout
-        data = b'Content-type: application/octet-stream\n' + disposition.encode() + b'Content-transfer-encoding: binary\n\n'
-
-        destination.file_name_read = True
+        return (True, '')
     else:
-        # dump the remainder of the FITS file
+        # dump the remainder of the FITS file (stdout is what the child process is dumping to)
         bytes_read = await proc.stdout.read(4096)
-        data = bytes_read
+        if not bytes_read:
+            return (False, '')
+        else:
+            return (True, bytes_read)
 
-    return data
-
-def export_streamed(*, drms_client, address, requestor=None, log, **export_arguments):
+async def async_export_streamed(*, request_action, drms_client, address, requestor=None, log, **export_arguments):
     '''
     export_arguments:
     {
@@ -558,23 +562,34 @@ def export_streamed(*, drms_client, address, requestor=None, log, **export_argum
     try:
         method = 'url_direct'
 
-        # spawn a thread to download and write to `download_stream`; will return while streaming is occurring;
-        # drms-export-to-stdout will verify email address
         export_request = drms_client.export_and_stream_file(spec=export_arguments['specification'], filename_fmt=export_arguments['file_name_format'])
 
-        # asyncio.run(stream_file_data(request, download_stream))
-
-        destination = securedrms.OnTheFlyDownloader.StreamDestination(sys_stdout.buffer)
-        destination.file_name_read = False
+        log.write_debug([ f'[ async_export_streamed ] creating `GeneratorDestination`' ])
+        destination = securedrms.OnTheFlyDownloader.GeneratorDestination()
+        destination.header_extracted = False # file name has not yet been extracted from stream
+        destination.file_name = None
         destination.stream_reader = read_from_proc
-        export_request.download(destination=destination)
+        destination.has_header = True # securedrms will call `read_from_proc` to extract header
+        request_action.destination = destination
+
+        # `request_action.generator` is a generator object; the first call will set
+        # destination.headers
+        log.write_debug([ f'[ async_export_streamed ] calling `export_request.generate_data()`' ])
+
+        # starts child process; extracts header; returns generator object (async_generator) for rest of
+        # data stream
+        request_action.generator = await export_request.generate_data(destination=destination)
+        log.write_debug([ f'[ async_export_streamed ] obtained file-data generator' ])
     except securedrms.SecureDRMSError as exc:
         raise DRMSClientError(exc_info=sys_exc_info())
 
+    # this never gets back to browser - browser just displays the file data
+    # streamed back to it; the browser reads the headers sent back (which
+    # should include a 200 if everything worked out)
     response = Response.generate_response(status_code=StatusCode.REQUEST_COMPLETE)
     return response
 
-def perform_action(is_program, program_name=None, **kwargs):
+def perform_action(*, is_program, program_name=None, request_action=None, **kwargs):
     # catch all expections so we can always generate a response
     response = None
     log = None
@@ -673,7 +688,7 @@ def perform_action(is_program, program_name=None, **kwargs):
             elif arguments.export_type == 'streamed':
                 # supports no-processing, no-tar, stream-access, native file format attributes; exports a single file only, all SUs must be online; use securedrms.SecureClient.export_package()
                 log.write_info([ f'[ perform_action ] servicing streamed request for user `{arguments.address}`: {str(export_arguments)}' ])
-                response = export_streamed(drms_client=drms_client, address=arguments.address, requestor=arguments.requestor, log=log, **export_arguments)
+                response = export_streamed(request_action=request_action, drms_client=drms_client, address=arguments.address, requestor=arguments.requestor, log=log, **export_arguments)
         except Exception as exc:
             raise ExportActionError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
     except ExportError as exc:
@@ -686,6 +701,114 @@ def perform_action(is_program, program_name=None, **kwargs):
         log.write_info([f'[ perform_action ] request complete; status {response.status_code.description()}'])
 
     return response
+
+async def perform_async_action(*, is_program, program_name=None, request_action=None, **kwargs):
+    # catch all expections so we can always generate a response
+    response = None
+    log = None
+
+    try:
+        program_args, module_args = extract_program_and_module_args(is_program=is_program, **kwargs)
+
+        try:
+            drms_params = DRMSParams()
+
+            if drms_params is None:
+                raise ParametersError(error_message='unable to locate DRMS parameters package')
+
+            arguments = Arguments.get_arguments(is_program=is_program, program_name=program_name, program_args=program_args, module_args=module_args, drms_params=drms_params)
+        except ArgsError as exc:
+            raise
+            raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+        except Exception as exc:
+            raise
+            raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+
+        try:
+            formatter = DrmsLogFormatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+            log = DrmsLog(arguments.log_file, arguments.logging_level, formatter)
+        except Exception as exc:
+            raise LoggingError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+
+        if is_program:
+            log.write_debug([ f'[ perform_async_action ] program invocation' ])
+        else:
+            log.write_debug([ f'[ perform_async_action ] module invocation' ])
+
+        log.write_debug([ f'[ perform_async_action ] action arguments: {str(arguments)}' ])
+
+        # parse specification to obtain series so we can check for pass-through series (relevant only if the user is on a public webserver);
+        # parsing checks syntax, it does not check for the existence of series in the specification, so either a public or private drms client can be used
+        factory = None
+        public_drms_client = None
+        private_drms_client = None
+
+        # choosing the correct drms client (public or private) to handle pass-through series, if the specification
+        # contains them
+        debug = True if arguments.logging_level == DrmsLogLevel.DEBUG else False
+
+        drms_client = create_drms_client(webserver=arguments.webserver, series=None, specification=arguments.export_arguments['specification'], drms_client_type=arguments.drms_client_type, public_drms_client_server='jsoc_external', private_drms_client_server='jsoc_internal', private_db_host=arguments.private_db_host, db_host=arguments.db_host, db_port=arguments.db_port, db_name=arguments.db_name, db_user=arguments.db_user, debug=debug, log=log)
+
+        if drms_client is None:
+            raise DRMSClientError(error_message=f'unable to obtain securedrms client')
+
+        # there are four potential attributes an export request can have:
+        #   processing (processed ==> original image is modified); NA for keyword-only exports
+        #   package (tar ==> exported files are packaged into a tar file)
+        #   access (ftp ==> exported produce is accessible from ftp server; http ==> exported produce is accessible from http server; stream ==> data are streamed back to user)
+        #   file format (NATIVE, FITS, JPEG, MPEG, MP4); NA for keyword-only exports
+        # depending on the operation selected, some of these attributes may be determined and immutable; also, some file-format conversions are not possible (for example, if an export contains metadata, but no image data, then none of the image file formats are relevant)
+
+        # possible export arguments (from webapp):
+        #   specification [RecordSet] (record-set specification)
+        #   address [Notify] (registered email address)
+        #   requestor [Requestor] export user's name, either entered in text edit, or from cookie
+        #   export_type [Method - url, url_direct, url_quick, ftp, url-tar, ftp-tar] these map to...
+        #     url ==> export_premium (no tar)
+        #     url_direct ==> export_streamed
+        #     url_quick ==> export_mini
+        #     ftp ==> export_premium (ftp-access)
+        #     url-tar ==> export_premium (tar)
+        #     ftp-tar ==> export_premium (tar, ftp access)
+        #   processing_info [Processing] (processing-program-specific arguments)
+        #   tar [from Method (name contains '-tar' string)]
+        #   access [from Method]
+        #   file_format [Protocol - as-is, FITS, JPEG, MPEG, MP4] (exported file type)
+        #   file_name_format [Filename Format]
+        #   size_ratio [not shown] determined by code in processing.js plus keyword metadata
+
+        # the response to each of these calls contains these attributes:
+        #   count : the number of files exported
+        #   rcount : the number of DRMS records in the export request
+        #   size : the size, in MB, of the file payload
+        #   method (request.method) : the export method (`url`, `url_quick`, ...)
+        #   protocol : the exported file format (`as-is`, `fits`, `jpeg`, ...)
+        #   status : export status (1, 2, 4, 6, 7)
+        #   error : a string describing a jsoc_fetch error or null
+        #   requestid : the export Request ID or null (for synchronous requests)
+
+        try:
+            export_arguments = arguments.export_arguments # dict
+
+            if arguments.export_type != 'streamed':
+                raise ArgumentsError(error_message=f'async actions do not support {arguments.export_type} export requests')
+
+            # supports no-processing, no-tar, stream-access, native file format attributes; exports a single file only, all SUs must be online; use securedrms.SecureClient.export_package()
+            log.write_info([ f'[ perform_async_action ] servicing streamed request for user `{arguments.address}`: {str(export_arguments)}' ])
+            response = await async_export_streamed(request_action=request_action, drms_client=drms_client, address=arguments.address, requestor=arguments.requestor, log=log, **export_arguments)
+        except Exception as exc:
+            raise ExportActionError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+    except ExportError as exc:
+        response = exc.response
+        if log is not None:
+            e_type, e_obj, e_tb = exc.exc_info
+            log.write_error([ f'[ perform_async_action ] ERROR LINE {str(e_tb.tb_lineno)}: {exc.message}' ])
+
+    if log is not None:
+        log.write_info([f'[ perform_async_action ] request complete; status {response.status_code.description()}'])
+
+    return response
+
 
 # for use in export web app
 from action import Action
@@ -706,6 +829,12 @@ class InitiateRequestAction(Action):
         self._options['db_user'] = db_user
         self._options['webserver'] = webserver # host name - gets converted to object in `get_arguments()`
 
+        self.destination = None
+        self.generator = None
+
+    async def async_action(self):
+        return await self._method()
+
     def start_premium_export(self):
         '''
         export_arguments:
@@ -720,7 +849,7 @@ class InitiateRequestAction(Action):
           number_records : <maximum number of records exported>
         }
         '''
-        response = perform_action(is_program=False, export_type='premium', address=self._address, db_host=self._db_host, export_arguments=self._export_arguments, options=self._options)
+        response = perform_action(is_program=False, export_type='premium', request_action=self, address=self._address, db_host=self._db_host, export_arguments=self._export_arguments, options=self._options)
         return response
 
     def start_mini_export(self):
@@ -732,12 +861,26 @@ class InitiateRequestAction(Action):
           number_records : <maximum number of records exported>
         }
         '''
-        response = perform_action(is_program=False, export_type='mini', address=self._address, db_host=self._db_host, export_arguments=self._export_arguments, options=self._options)
+        response = perform_action(is_program=False, export_type='mini', request_action=self, address=self._address, db_host=self._db_host, export_arguments=self._export_arguments, options=self._options)
         return response
 
-    def start_streamed_export(self):
-        response = perform_action(is_program=False, export_type='streamed', address=self._address, db_host=self._db_host, export_arguments=self._export_arguments, options=self._options)
+    async def start_streamed_export(self):
+        '''
+        export_arguments:
+        {
+          specification : <DRMS record-set specification>,
+          file_name_format : <format string for name of exported file>
+        }
+        '''
+        response = await perform_async_action(is_program=False, export_type='streamed', request_action=self, address=self._address, db_host=self._db_host, export_arguments=self._export_arguments, options=self._options)
         return response
+
+    def generate_headers(self):
+        if self.destination is not None and self.destination.header_extracted and self.destination.file_name is not None:
+            headers = Headers()
+            headers.add('Content-Disposition', 'attachment', filename=f'{self.destination.file_name}')
+            headers.add('Content-Transfer-Encoding', 'BINARY')
+            return headers
 
     @classmethod
     def is_valid_arguments(cls, arguments_json, logging_level=None):
@@ -752,7 +895,7 @@ class InitiateRequestAction(Action):
 
 if __name__ == "__main__":
     try:
-        response = perform_action(is_program=True)
+        response = perform_action(is_program=True, request_action=None)
     except ExportError as exc:
         response = exc.response
     except Exception as exc:
