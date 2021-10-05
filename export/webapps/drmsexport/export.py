@@ -377,7 +377,7 @@ class ServerResource(Resource):
 
 from get_record_info import GetRecordInfoAction
 class RecordSetResource(Resource):
-    _arguments = { 'specification' : fields.Str(required=True, validate=lambda a: GetRecordInfoAction.is_valid_specification(a, None, urlparse(request.base_url).hostname), 'debug' if APP_DEBUG else None), 'db_host' : fields.Str(required=True, data_key='db-host'), 'parse_only' : fields.Bool(required=False, data_key='parse-only'), 'client_type' : fields.Str(required=False, data_key='client-type'), 'keywords' : fields.List(fields.Str, required=False), 'segments' : fields.List(fields.Str, required=False), 'links' : fields.List(fields.Str, required=False), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'db_user' : fields.Str(required=False, data_key='db-user') }
+    _arguments = { 'specification' : fields.Str(required=True, validate=lambda a: GetRecordInfoAction.is_valid_specification(a, None, urlparse(request.base_url).hostname, 'debug' if APP_DEBUG else None)), 'db_host' : fields.Str(required=True, data_key='db-host'), 'parse_only' : fields.Bool(required=False, data_key='parse-only'), 'client_type' : fields.Str(required=False, data_key='client-type'), 'keywords' : fields.List(fields.Str, required=False), 'segments' : fields.List(fields.Str, required=False), 'links' : fields.List(fields.Str, required=False), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'db_user' : fields.Str(required=False, data_key='db-user') }
 
     _parse_response = None
 
@@ -414,7 +414,7 @@ class SeriesResource(Resource):
         action = Action.action(action_type='get_series_info', args=arguments)
         return action().generate_serializable_dict()
 
-from initiate_request import InitiateRequestAction
+from initiate_request import InitiateRequestAction, ErrorCode as IRErrorCode
 class PremiumExportRequestResource(Resource):
     _arguments = { 'address' : fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : fields.Str(required=True, data_key='db-host'), 'export_arguments' : fields.Str(required=True, validate=lambda a: InitiateRequestAction.is_valid_arguments(a, 'debug' if APP_DEBUG else None), data_key='export-arguments'), 'client_type' : fields.Str(required=False, data_key='client-type'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'requestor' : fields.Str(required=False), 'db_user' : fields.Str(required=False, data_key='db-user') }
 
@@ -448,9 +448,25 @@ class StreamedExportRequestResource(Resource):
         if APP_DEBUG:
             arguments['logging_level'] = 'debug'
 
+        # creates a SecureExportRequest object, but does not start the child process;
         action = Action.action(action_type='start_streamed_export', args=arguments)
-        # the action will dump exported-file data to stdout
-        return action().generate_serializable_dict()
+
+        # starts the child process and creates a generator to return data from the output content stream
+        # response, when successful, will not be sent back to browser, but it can be used here to check for errors
+        action_response = action()
+
+        if isinstance(action_response, IRErrorCode):
+            # return an error response using the `action_response` description
+            return make_response(action_response.attributes.drms_export_status_description, 500)
+
+        # call the generator's first iteration; this reads the download file name from the
+        # child process' output stream and stores it in the destination object
+        headers = action.generate_headers()
+
+        # `action.generator` is the generator object (whose first iteration has already been invoked - to
+        # get the download file name from the child process' output stream); the remaining iterations
+        # will return all the download file data, one block at a time
+        return export.response_class(action.generator, content_type='application/octet-stream', headers=headers)
 
 from manage_request import PendingRequestAction
 class PendingRequestResource(Resource):

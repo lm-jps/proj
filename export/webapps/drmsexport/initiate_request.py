@@ -521,7 +521,78 @@ def export_mini(*, drms_client, address, requestor=None, log, **export_arguments
 # extract name of file to be downloaded from download stream
 # returns tuple (<boolean>, <data>) where the first element indicates if there
 # are more data to download
-async def read_from_proc(destination, proc):
+def read_from_proc(destination, proc):
+    if not destination.header_extracted:
+        # this is the generator's first iteration
+        # a FITS file prepended with filename; read the filename first
+        bytes_read = proc.stdout.read(FILE_NAME_SIZE)
+
+        # truncate padding (0 bytes)
+        file_name = bytes_read.rstrip(b'\x00').decode()
+
+        # force alphanumeric (plus '_'), preserving the file extension
+        matches = re.search(r'(^.+)[.]([^.]+$)', file_name)
+        if matches is not None:
+            base = matches.group(1)
+            extension = matches.group(2)
+            file_name = f'{re.sub(r"[^a-zA-Z0-9_]", "_", base)}.{extension}'
+
+        destination.file_name = file_name # for use in `perform_action()` caller
+        destination.header_extracted = True
+
+        return (True, '')
+    else:
+        # dump the remainder of the FITS file (stdout is what the child process is dumping to)
+        bytes_read = proc.stdout.read(4096)
+        if not bytes_read:
+            return (False, '')
+        else:
+            return (True, bytes_read)
+
+def export_streamed(*, request_action, drms_client, address, requestor=None, log, **export_arguments):
+    '''
+    export_arguments:
+    {
+      specification : <DRMS record-set specification>, # required
+      file_name_format : <format string for name of exported file> # optional
+    }
+    '''
+    response = None
+
+    try:
+        method = 'url_direct'
+
+        export_request = drms_client.export_and_stream_file(spec=export_arguments['specification'], filename_fmt=export_arguments['file_name_format'])
+
+        log.write_debug([ f'[ export_streamed ] creating `GeneratorDestination`' ])
+        destination = securedrms.OnTheFlyDownloader.GeneratorDestination()
+        destination.header_extracted = False # file name has not yet been extracted from stream
+        destination.file_name = None
+        destination.stream_reader = read_from_proc
+        destination.has_header = True # securedrms will call `read_from_proc` to extract header
+        request_action.destination = destination
+
+        # `request_action.generator` is a generator object; the first call will set
+        # destination.headers
+        log.write_debug([ f'[ export_streamed ] calling `export_request.generate_data()`' ])
+
+        # starts child process; extracts header; returns generator object (async_generator) for rest of
+        # data stream
+        request_action.generator = export_request.generate_data(destination=destination)
+        log.write_debug([ f'[ export_streamed ] obtained file-data generator' ])
+    except securedrms.SecureDRMSError as exc:
+        raise DRMSClientError(exc_info=sys_exc_info())
+
+    # this never gets back to browser - browser just displays the file data
+    # streamed back to it; the browser reads the headers sent back (which
+    # should include a 200 if everything worked out)
+    response = Response.generate_response(status_code=StatusCode.REQUEST_COMPLETE)
+    return response
+
+# extract name of file to be downloaded from download stream
+# returns tuple (<boolean>, <data>) where the first element indicates if there
+# are more data to download
+async def async_read_from_proc(destination, proc):
     if not destination.header_extracted:
         # this is the generator's first iteration
         # a FITS file prepended with filename; read the filename first
@@ -568,8 +639,8 @@ async def async_export_streamed(*, request_action, drms_client, address, request
         destination = securedrms.OnTheFlyDownloader.GeneratorDestination()
         destination.header_extracted = False # file name has not yet been extracted from stream
         destination.file_name = None
-        destination.stream_reader = read_from_proc
-        destination.has_header = True # securedrms will call `read_from_proc` to extract header
+        destination.stream_reader = async_read_from_proc
+        destination.has_header = True # securedrms will call `async_read_from_proc` to extract header
         request_action.destination = destination
 
         # `request_action.generator` is a generator object; the first call will set
@@ -582,12 +653,6 @@ async def async_export_streamed(*, request_action, drms_client, address, request
         log.write_debug([ f'[ async_export_streamed ] obtained file-data generator' ])
     except securedrms.SecureDRMSError as exc:
         raise DRMSClientError(exc_info=sys_exc_info())
-
-    # this never gets back to browser - browser just displays the file data
-    # streamed back to it; the browser reads the headers sent back (which
-    # should include a 200 if everything worked out)
-    response = Response.generate_response(status_code=StatusCode.REQUEST_COMPLETE)
-    return response
 
 def perform_action(*, is_program, program_name=None, request_action=None, **kwargs):
     # catch all expections so we can always generate a response
@@ -813,7 +878,7 @@ async def perform_async_action(*, is_program, program_name=None, request_action=
 # for use in export web app
 from action import Action
 class InitiateRequestAction(Action):
-    actions = [ 'start_premium_export', 'start_mini_export', 'start_streamed_export' ]
+    actions = [ 'start_premium_export', 'start_mini_export', 'start_streamed_export', 'async_start_streamed_export' ]
     def __init__(self, *, method, address, db_host, export_arguments, drms_client_type=None, drms_client=None, logging_level=None, db_name=None, db_port=None, requestor=None, db_user=None, webserver=None):
         self._method = getattr(self, method)
         self._address = address
@@ -864,7 +929,18 @@ class InitiateRequestAction(Action):
         response = perform_action(is_program=False, export_type='mini', request_action=self, address=self._address, db_host=self._db_host, export_arguments=self._export_arguments, options=self._options)
         return response
 
-    async def start_streamed_export(self):
+    def start_streamed_export(self):
+        '''
+        export_arguments:
+        {
+          specification : <DRMS record-set specification>,
+          file_name_format : <format string for name of exported file>
+        }
+        '''
+        response = perform_action(is_program=False, export_type='streamed', request_action=self, address=self._address, db_host=self._db_host, export_arguments=self._export_arguments, options=self._options)
+        return response
+
+    async def async_start_streamed_export(self):
         '''
         export_arguments:
         {
