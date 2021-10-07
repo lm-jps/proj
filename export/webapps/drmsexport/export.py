@@ -2,12 +2,13 @@
 
 from flask import Flask, request
 from flask_restful import Api, Resource
+from logging import DEBUG as LOGGING_LEVEL_DEBUG, INFO as LOGGING_LEVEL_INFO
 from urllib.parse import urlparse
 from webargs import fields, validate, flaskparser, ValidationError
 from webargs.flaskparser import use_args, use_kwargs, parser, abort
 
 from action import Action
-from drms_export import ErrorResponse
+from drms_export import ErrorCode as ExportErrorCode, ErrorResponse as ExportErrorResponse
 from drms_parameters import DRMSParams
 
 
@@ -43,6 +44,13 @@ from drms_parameters import DRMSParams
 #     - processing.js: this file contains code that makes HTTP requests that cause export processing to occur during the export
 #       process
 #     - protocols.js: this file contains code that makes HTTP requests that gets image-protocol (export file type) parameters
+#     - prototype.js: this is a JavaScript framework that provides additional functionality, such as the ability to make AJAX requests;
+#       we probably are using version 1.7
+#     - prototip.js: this is a JavaScript microframework that provides "tooltip" functionality - when the user clicks on a tooltip element
+#       a text bubble appears
+#     - cookies.js: this is a JavaScript microframework that provides cookie support; it requires prototype js
+#     - prototip.css: css sheet for prototip microframework
+
 
 #########################
 # browser/network tool  #
@@ -159,10 +167,15 @@ from drms_parameters import DRMSParams
 #         as follows:
 #
 #         server {
-#             root /usr/share/nginx/html;
 #             listen 8080;
 #             charset utf-8;
+#
 #             location / {
+#                 root /usr/share/nginx/html;
+#                 try_files $uri $uri/index.html $uri.html;
+#             }
+#
+#             location /export/ {
 #                 # provided by nginx installation - relative to dir containing nginx.conf
 #                 include uwsgi_params;
 #
@@ -328,19 +341,33 @@ from drms_parameters import DRMSParams
 # `export` is a Flask app;
 export = Flask(__name__)
 export_api = Api(export)
-APP_DEBUG = False
+APP_DEBUG = True
+export.logger.setLevel(LOGGING_LEVEL_DEBUG)
+
+class ErrorCode(ExportErrorCode):
+    # fetch error codes
+    WEBARGS_PARSER = (1, 'failure parsing web arguments') # can only happen with jsoc_fetch op=exp_request call
 
 @parser.error_handler
-def handle_error(error, req, schema, *, error_status_code, error_headers):
-    # raise CustomError(error.messages)
+def handle_request_parser_error(error, req, schema, *, error_status_code, error_headers):
     print(f'webarg error message: {error.messages}')
-    raise error
+    response_dict = ExportErrorResponse.generate_response(error_code=ErrorCode.WEBARGS_PARSER, error_message=error.messages).generate_serializable_dict()
+    abort(428, **response_dict)
+
+@export.errorhandler(428)
+def generate_error_response(error):
+    print(f'here XXX')
+
+@export.before_request
+def log_request_info():
+    export.logger.debug(f'Headers: {request.headers}')
+    export.logger.debug(f'Body: {request.get_data()}')
 
 from check_address import CheckAddressAction
 class AddressRegistrationResource(Resource):
     _arguments = { 'address' : fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : fields.Str(required=False, data_key='db-host'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'db_user' : fields.Str(required=False, data_key='db-user'), 'user_name' : fields.Str(required=False, data_key='user-name'), 'user_snail' : fields.Str(required=False, data_key='user-snail') }
 
-    @use_kwargs(_arguments)
+    @use_kwargs(_arguments, location='querystring')
     def get(self, address, db_host=None, db_name=None, db_port=None, db_user=None, user_name=None, user_snail=None):
         # HTTP GET - get address registration information (if the address is registered)
         arguments = { 'address' : address, 'db_host' : db_host, 'db_name' : db_name, 'db_port' : db_port, 'db_user' : db_user, 'user_name' : user_name, 'user_snail' : user_snail }
