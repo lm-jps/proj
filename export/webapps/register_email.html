@@ -61,7 +61,6 @@ function initVars()
     $("ExportButtonMsg").store('cp_message', null);
     $("ExportNotify").store('error_msg', null);
     $("ExportRequestor").store('error_msg', null);
-    $("ExportNotify").store('registration_pending', null);
 
     update_ui();
 }
@@ -128,48 +127,36 @@ function update_ui()
 
     var addresses = element_address.retrieve('addresses', {});
     var address = element_address.value.trim();
+    var address_valid = (element_address.retrieve('valid', null) === null) ? ValidateNotificationAddress(element_address) : element_address.retrieve('valid', false);
     var requestor = element_requestor.value.trim();
+    var requestor_valid = (element_requestor.retrieve('valid', null) === null) ? ValidateExportRequestor(element_requestor) : element_requestor.retrieve('valid', false);
     var check_message = element_reg_button_description.retrieve('cp_message', null);
     var error_msg = element_address.retrieve('error_msg', null);
     var requestor_error_msg = element_requestor.retrieve('error_msg', null);
-    var registration_pending = element_address.retrieve('registration_pending', false); // true if checking only as well
     var registration_status = null;
-    var address_error = false;
-    var requestor_error = false;
+    var checking_registration = null;
+    var registration_pending = null;
 
     if (addresses !== null && address.length > 0 && Object.prototype.hasOwnProperty.call(addresses, address) && Object.prototype.hasOwnProperty.call(addresses[address], 'registration_status'))
     {
         registration_status = addresses[address].registration_status;
     }
 
-    if (error_msg !== null && error_msg.length > 0)
+    if (!address_valid)
     {
-        // override check_message
         check_message = error_msg;
-        address_error = true;
     }
-    else if (requestor_error_msg !== null && requestor_error_msg.length > 0)
+    else if (!requestor_valid)
     {
         check_message = requestor_error_msg;
-        requestor_error = true;
     }
 
-    if (address_error || requestor_error)
-    {
-        element_reg_button.style.backgroundColor = COLOR_RED;
-        element_reg_button.value = 'error';
-        element_reg_button.disabled = true;
-        element_reg_button_description.innerHTML = error_msg;
+    checking_registration = (registration_status == 'checking') ? true : false
+    registration_pending = (registration_status == 'registering' || registration_status == 'pending') ? true : false;
 
-        if (!registration_pending)
-        {
-            element_address.disabled = false;
-            element_address_description.innerHTML = "REGISTRATION FAILURE";
-        }
-    }
-    else
+    if (true)
     {
-        if (registration_pending)
+        if (checking_registration || registration_pending)
         {
             element_reg_button.value = 'wait...';
             element_reg_button.disabled = true;
@@ -177,7 +164,7 @@ function update_ui()
             element_requestor.disabled = true;
 
             element_address_description.style.color = COLOR_DARK_BLUE;
-            if (registration_status == 'registering' || registration_status == 'pending')
+            if (registration_pending)
             {
                 element_address_description.innerHTML = "registering...";
             }
@@ -187,12 +174,11 @@ function update_ui()
             }
 
             element_requestor_description.innerHTML = '';
-
             element_reg_button_description.innerHTML = check_message;
         }
         else
         {
-            // registration not pending - either hasn't happened yet (registration_pending === null), or it has completed
+            // registration not pending - either hasn't happened yet, or it has completed
             element_reg_button.style.backgroundColor = COLOR_YELLOW;
             element_reg_button.value = 'register address';
 
@@ -200,10 +186,8 @@ function update_ui()
             element_reg_button.disabled = false;
             element_requestor.disabled = false;
 
-            if (error_msg != null && error_msg.length > 0)
+            if (!address_valid && address.length > 0)
             {
-                element_address_description.innerHTML = error_msg;
-
                 // if the email address is not valid, we will be here; error message in cp_message
                 element_address_description.style.color = COLOR_REAL_RED;
                 element_address_description.innerHTML = 'Email address provided is invalid; try again';
@@ -211,28 +195,28 @@ function update_ui()
                 element_reg_button.innerHTML = check_message;
                 element_reg_button.disabled = true;
             }
-            else if (requestor_error_msg != null && requestor_error_msg.length > 0)
+            else if (!requestor_valid)
             {
-                element_requestor_description.innerHTML = error_msg;
-
                 // if the email address is not valid, we will be here; error message in cp_message
                 element_requestor_description.style.color = COLOR_REAL_RED;
                 element_requestor_description.innerHTML = 'User name provided is invalid; try again';
 
-                element_reg_button.innerHTML = checcheck_messagek_msg;
+                element_reg_button.innerHTML = check_message;
                 element_reg_button.disabled = true;
             }
             else
             {
                 // valid email address and user name (or none entered yet)
-                // registration_pending === null ==> user has not clicked button with new address yet
-                if (registration_status === null || registration_pending === null)
+                // registration_status === null ==> user has not clicked button with new address yet (it is false because it was checked)
+                if (registration_status === null)
                 {
+                    // reg button not clicked, or no reg check has happened because no address exists
+
                     element_reg_button_description.style.color = COLOR_REAL_RED;
 
-                    // reg button not clicked
                     if (address.length > 0)
                     {
+                        // address entered
                         element_address_description.style.color = COLOR_BLACK;
                         element_address_description.innerHTML = 'Email address provided is valid';
                         element_reg_button.disabled = false;
@@ -240,6 +224,7 @@ function update_ui()
                     }
                     else
                     {
+                        // no address entered yet
                         element_address_description.style.color = COLOR_REAL_RED;
                         element_address_description.innerHTML = 'Provide an email address to register; you will receive notifications at this address';
                         element_reg_button.disabled = true;
@@ -258,8 +243,9 @@ function update_ui()
                 }
                 else
                 {
-                    // reg button clicked
+                    // reg button clicked (or code called check/register), but not pending so registration completed and either failed or succeeded
                     element_reg_button.disabled = true;
+                    element_requestor.disabled = true;
 
                     if (typeof(registration_status) == 'boolean')
                     {
@@ -271,15 +257,13 @@ function update_ui()
                         }
                         else
                         {
+                            // happens only when checking registration, not registering address
+                            element_reg_button.disabled = false
+                            element_requestor.disabled = false
                             element_address_description.style.color = COLOR_DARK_RED;
                             element_address_description.innerHTML = "UNREGISTERED";
-                            element_reg_button_description.innerHTML = 'Could not register email address ' + address
+                            element_reg_button_description.innerHTML = 'Email address ' + address + ' is not registered; click to register'
                         }
-                    }
-                    else if (registration_status == 'registering' || registration_status == 'pending')
-                    {
-                        element_address_description.style.color = COLOR_DARK_BLUE;
-                        element_address_description.innerHTML = "registering...";
                     }
                     else
                     {
@@ -308,6 +292,7 @@ function validate_user()
     update_ui();
 }
 
+// called when address is changed in Notify text edit
 function validate_address()
 {
     var element_address = $("ExportNotify"); // address text-edit element
@@ -330,13 +315,81 @@ function validate_address()
 
     // reset registration pending
     element_reg_button_description.store('cp_message', null);
-    element_address.store('error_msg', null);
-    element_requestor.store('error_msg', null);
-    element_address.store('registration_pending', null);
+    if (valid)
+    {
+        element_address.store('error_msg', null);
+    }
 
     update_ui();
+
+    var check_registered_callback_fn = function()
+    {
+        var address = element_address.value.trim();
+        var addresses = null;
+        var registration_status = null;
+        var registered = null;
+        var error_msg = null;
+
+        // email address is valid, but is it registered?
+        addresses = element_address.retrieve('addresses', {});
+
+        if (addresses && addresses.hasOwnProperty(address))
+        {
+            registration_status = addresses[address].registration_status;
+            if (typeof(registration_status) === 'string')
+            {
+                if (registration_status == 'registering' || registration_status == 'pending')
+                {
+                    // since we are not registering an address, but simply checking on its registration, this is an error
+                }
+                else if (registration_status == 'timed_out_server')
+                {
+                    // registration process timeout (not timeout due to no response from AJAX call)
+                    registered = false;
+                    error_msg = element_address.retrieve('error_msg', null);
+                    element_reg_button_description.store('cp_message', error_msg);
+                }
+                else if (registration_status == 'timed_out_client')
+                {
+                    // registration process timeout (client did not respond to email in time)
+                    // since we are not registering an address, but simply checking on its registration, this is an error
+                }
+                else if (registration_status == 'error')
+                {
+                    registered = false;
+                    error_msg = element_address.retrieve('error_msg', null);
+                    element_reg_button_description.store('cp_message', error_msg);
+                }
+                else
+                {
+                    registered = false;
+                    $("ExportCheckMsg").store('cp_message', 'Invalid registration status ' + registration_status);
+                }
+            }
+            else if (typeof(registration_status) === 'boolean')
+            {
+                element_reg_button_description.store('cp_message', null);
+                element_address.store('error_msg', null);
+                registered = registration_status;
+            }
+            else
+            {
+                // error
+            }
+        }
+        else
+        {
+            // unless there is some error, eventually addresses will be set
+            registered = null;
+        }
+
+        update_ui();
+    }
+
+    check_registration(address, requestor, null, element_address, element_reg_button_description, update_ui, check_registered_callback_fn);
 }
 
+// called when user clicks on register address button
 function check_address()
 {
     var element_address = $("ExportNotify"); // address text-edit element
@@ -400,7 +453,7 @@ function check_address()
             }
             else
             {
-                registred = false;
+                registered = false;
             }
         }
         else
@@ -410,12 +463,12 @@ function check_address()
         }
 
         // reg complete
-        element_address.store('registration_pending', false);
         update_ui();
-    }
+    };
 
-    // starting reg
-    element_address.store('registration_pending', true);
+    // starting reg - reset registration status (to null); it is currently false because it was checked and found to be unregistered,
+    // but now the address is being registered, so its status is going to change
+    element_address.retrieve('addresses', {})[element_address.value.trim()].registration_status = null;
     startEmailCheck(element_address, element_requestor, element_reg_button_description, update_ui, check_registered_callback_fn)
 }
 </script>
