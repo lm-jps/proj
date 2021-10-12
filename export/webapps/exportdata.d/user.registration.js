@@ -172,7 +172,6 @@ function call_address_ajax(address, requestor, element_address, callback_update_
             {
                 // operation was `register` - registration check initiated (email not found in db, and checkOnly == false)
                 addresses[address_internal].registration_status = 'registering';
-                alert('adding ' + address_internal + ' to addresses')
 
                 element_address.store('seconds_remaining', MAX_REGISTRATION_TIME);
                 timer = setInterval(registration_callback, 1000);
@@ -472,7 +471,6 @@ function check_or_register_address(address, requestor, snail_address, element_ad
                 // to 0 and this callback will clear the registration function interval
                 function create_registration_callback(address)
                 {
-                    alert('create_registration_callback ' + address);
                     var clean_address = address.trim()
                     registration_callback = function()
                     {
