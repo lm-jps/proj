@@ -128,9 +128,12 @@ function ValidateExportRequestor(element_requestor)
     return valid;
 }
 
-function call_address_ajax(address, requestor, element_address, callback_update_ui_fn, check_only)
+function call_address_ajax(address, requestor, element_address, callback_update_ui_fn, check_only, registration_callback)
 {
     var cgiArgs = null;
+
+    addresses = element_address.retrieve('addresses', {});
+    addresses[address.trim()].registration_status = 'checking';
 
     // do AJAX
     cgiArgs = { "address" : address, "name" : requestor, "checkonly" : check_only ? 1 : 0 };
@@ -148,6 +151,9 @@ function call_address_ajax(address, requestor, element_address, callback_update_
             var addresses = null;
             var check_msg = null;
             var check_address_timer = null;
+            var registration_timer = null;
+            var stop_registration_timer = false;
+            var callback_list = null;
 
             address_internal = address.trim();
             addresses = element_address.retrieve('addresses', {});
@@ -158,14 +164,16 @@ function call_address_ajax(address, requestor, element_address, callback_update_
                 error_msg = ca_status_obj.msg;
 
                 // stop registration timer
-                element_address.store('seconds_remaining', 0);
-
+                stop_registration_timer = true;
                 element_address.store('error_msg', error_msg + '; enter new email address');
             }
             else if (status == 1)
             {
                 // registration check initiated (email not found in db, and checkOnly == false)
                 addresses[address_internal].registration_status = 'registering';
+                element_address.store('seconds_remaining', MAX_REGISTRATION_TIME);
+                timer = setInterval(registration_callback, 1000);
+                element_address.store('registration_timer', timer);
             }
             else if (status == 2)
             {
@@ -177,28 +185,26 @@ function call_address_ajax(address, requestor, element_address, callback_update_
                 Cookie.setData("notify", address);
 
                 // stop registration timer
-                element_address.store('seconds_remaining', 0);
+                stop_registration_timer = true;
             }
             else if (status == 3)
             {
                 // registration pending (email not found in db, and checkOnly == false)
                 addresses[address_internal].registration_status = 'pending';
             }
+            else if (status == 4)
+            {
+                // check_only == true
+                addresses[address_internal].registration_status = false;
+            }
             else
             {
-                // status == 4 ==> invalid address
-                addresses[address_internal].registration_status = false;
+                addresses[address_internal].registration_status = 'error';
                 check_msg = 'Notify address provided, "' + address_internal + '" is not a valid address, correct and retry.';
-
-                if (status == 4)
-                {
-                    check_msg += '<br>A prior attempt timed-out before email Reply';
-                }
-
                 element_address.store('error_msg', chk_msg);
 
                 // stop registration timer
-                element_address.store('seconds_remaining', 0);
+                stop_registration_timer = true;
             }
 
             if (callback_update_ui_fn)
@@ -213,11 +219,58 @@ function call_address_ajax(address, requestor, element_address, callback_update_
                 clearInterval(check_address_timer);
                 element_address.store('check_address_timer', null);
             }
+
+            if (stop_registration_timer)
+            {
+                registration_timer = element_address.retrieve('registration_timer', null);
+                if (registration_timer !== null)
+                {
+                    clearInterval(registration_timer);
+                    element_address.store('registration_timer', null);
+                }
+
+                // since registration is complete, successful or not, call the callbacks
+                callback_list = element_address.retrieve('callback_list', null);
+                if (callback_list)
+                {
+                    call_callback_list(callback_list);
+                    element_address.store('callback_list', null);
+                }
+            }
         },
         onFailure: function()
         {
-            alert('oops, our code is broken');
+            var ca_status_obj = response.responseJSON;
+            var error_msg = ca_status_obj.msg;
+            var check_address_timer = null;
+            var registration_timer = null;
+            var callback_list = null;
+
             element_address.store('error_msg', 'Internal failure checking for email registration');
+
+            // clear time-out that cancels check_address endpoint call
+            check_address_timer = element_address.retrieve('check_address_timer', null);
+            if (check_address_timer !== null)
+            {
+                clearInterval(check_address_timer);
+                element_address.store('check_address_timer', null);
+            }
+
+            // stop registration timer
+            registration_timer = element_address.retrieve('registration_timer', null);
+            if (registration_timer !== null)
+            {
+                clearInterval(registration_timer);
+                element_address.store('registration_timer', null);
+            }
+
+            // since registration is complete, successful or not, call the callbacks
+            callback_list = element_address.retrieve('callback_list', null);
+            if (callback_list)
+            {
+                call_callback_list(callback_list);
+                element_address.store('callback_list', null);
+            }
         }
     });
 }
@@ -242,7 +295,6 @@ function check_or_register_address(address, requestor, snail_address, element_ad
 {
     var statuses = null;
     var registration_status = null;
-    var registration_pending = null;
     var callback_list = null;
     var check_address_callback = null;
     var registration_callback = null;
@@ -251,7 +303,6 @@ function check_or_register_address(address, requestor, snail_address, element_ad
 
     addresses = element_address.retrieve('addresses', {});
     callback_list = element_address.retrieve('callback_list', null);
-    registration_pending = (callback_list !== null);
 
     // if the email registration status has already been cached, return disposition
     if (Object.prototype.hasOwnProperty.call(addresses, address))
@@ -277,6 +328,10 @@ function check_or_register_address(address, requestor, snail_address, element_ad
             callback_fn();
         }
     }
+    else if (registration_status !== null && typeof(registration_status) == 'string' && (registration_status == 'registering' || registration_status == 'pending'))
+    {
+        // do nothing, there is a pending registration - do not accept a new callback
+    }
     else
     {
         // append the new callback function (regardless if a registration is pending for this address)
@@ -292,44 +347,36 @@ function check_or_register_address(address, requestor, snail_address, element_ad
         }
 
         // if pending, then we only add the callback to the list of callbacks
-        if (!registration_pending)
+        if (true)
         {
-            registration_status = 'registering';
-            statuses.registration_status = registration_status;
-
-            check_address_callback = function()
+            function create_check_address_callback(address)
             {
-                var addresses = null;
-                var address = null;
-                var statuses = null;
-                var registration_status = null;
-                var timer = null;
-                var callback_list = null;
-
-                addresses = element_address.retrieve('addresses', {});
-                timer = element_address.retrieve('check_address_timer', null);
-                callback_list = element_address.retrieve('callback_list', null);
-
-                // email has already been checked for registration already
-                for (address in addresses)
+                check_address_callback = function()
                 {
-                    // address is a reference
+                    var addresses = null;
+                    var address = null;
+                    var statuses = null;
+                    var registration_status = null;
+                    var timer = null;
+                    var registration_timer = null;
+                    var callback_list = null;
+
+                    addresses = element_address.retrieve('addresses', {});
+                    timer = element_address.retrieve('check_address_timer', null);
+                    registration_timer = element_address.retrieve('registration_timer', null);
+                    callback_list = element_address.retrieve('callback_list', null);
+
                     if (Object.prototype.hasOwnProperty.call(addresses, address))
                     {
                         statuses = addresses[address];
-                        registration_status = statuses.registration_status;
+                        registration_status = statuses.registration_status
 
-                        if (typeof(registration_status) === 'string')
+                        if (typeof(registration_status) === 'string' && (registration_status == 'registering' || registration_status == 'pending' ))
                         {
                             statuses.registration_status = 'timed_out_server';
 
                             // timeout error message
                             element_address.store('error_msg', 'Timeout waiting for response from registration server');
-                        }
-                        else if (typeof(registration_status) === 'boolean' && (registration_status == true || registration_status == false))
-                        {
-                            // registration completed; the success function will call the callbacks if it gets called before the
-                            // timeout (for check_only == true only)
                         }
                         else
                         {
@@ -337,20 +384,20 @@ function check_or_register_address(address, requestor, snail_address, element_ad
                             element_address.store('error_msg', 'Invalid email-registration state for ' + address);
                         }
                     }
-                }
 
-                // clear interval function
-                if (timer !== null)
-                {
-                    clearInterval(timer);
-                    element_address.store('check_address_timer', null);
-                }
+                    // clear interval function
+                    if (timer !== null)
+                    {
+                        clearInterval(timer);
+                        element_address.store('check_address_timer', null);
+                    }
 
-                // must stop the registration process too
-                if (!check_only)
-                {
-                    // stop registration timer
-                    element_address.store('seconds_remaining', 0);
+                    // a registration must be pending, so stop the registration timer and error it out
+                    if (registration_timer !== null)
+                    {
+                        clearInterval(registration_timer);
+                        element_address.store('registration_timer', null);
+                    }
 
                     // call callback_list
                     if (callback_list)
@@ -358,16 +405,10 @@ function check_or_register_address(address, requestor, snail_address, element_ad
                         call_callback_list(callback_list);
                         element_address.store('callback_list', null);
                     }
-                }
-            };
+                };
+            }
 
-            // set time-out timer function, which will be called only if a time-out happens; otherwise,
-            // the success() function will run instead; if the success() runs first, it will
-            // clear the time-out function
-
-            // if called, this will orphan the check/register call
-            timer = setInterval(check_address_callback, MAX_NOTIFY_TIMER);
-            element_address.store('check_address_timer', timer);
+            check_address_callback = create_check_address_callback(address);
 
             if (!check_only)
             {
@@ -375,129 +416,127 @@ function check_or_register_address(address, requestor, snail_address, element_ad
                 // then checkAddress.py will return status == registered and it will not start the
                 // registration process; the success() function will then set seconds_remaining
                 // to 0 and this callback will clear the registration function interval
-                registration_callback = function()
+                function create_registration_callback(address)
                 {
-                    var addresses = null;
-                    var seconds_remaining = null;
-                    var statuses = null;
-                    var registration_status = null;
-                    var check_address_timer = null;
-                    var registration_timer = null;
-                    var callback_list = null;
-                    var clear_interval = false;
-
-                    //addresses = element_address.retrieve('addresses', {});
-                    addresses = element_address.retrieve('addresses', {});
-                    seconds_remaining = element_address.retrieve('seconds_remaining', MAX_REGISTRATION_TIME);
-                    check_address_timer = element_address.retrieve('check_address_timer', null)
-                    registration_timer = element_address.retrieve('registration_timer', null);
-                    callback_list = element_address.retrieve('callback_list', null);
-
-                    if (seconds_remaining === null)
+                    var clean_address = address.trim()
+                    registration_callback = function()
                     {
-                        seconds_remaining = MAX_REGISTRATION_TIME;
-                        element_address.store('seconds_remaining', seconds_remaining);
-                    }
+                        var addresses = null;
+                        var seconds_remaining = null;
+                        var registration_status = null;
+                        var check_address_timer = null;
+                        var registration_timer = null;
+                        var callback_list = null;
+                        var error = false;
 
-                    if (seconds_remaining <= 0)
-                    {
-                        // timeout OR complete (reg status is true/false)
-                        for (address in addresses)
+                        addresses = element_address.retrieve('addresses', {});
+                        seconds_remaining = element_address.retrieve('seconds_remaining', null);
+                        check_address_timer = element_address.retrieve('check_address_timer', null)
+                        registration_timer = element_address.retrieve('registration_timer', null);
+                        callback_list = element_address.retrieve('callback_list', null);
+
+                        if (seconds_remaining === null)
                         {
-                            // address is a reference
-                            if (Object.prototype.hasOwnProperty.call(addresses, address))
+                            // error - seconds_remaining initialized when registration initiated
+                            error = true;
+                        }
+                        else if (!Object.prototype.hasOwnProperty.call(addresses, clean_address))
+                        {
+                            // error - address must have been added to addresses during registration initiation
+                            error = true;
+                        }
+                        else if (!Object.prototype.hasOwnProperty.call(addresses[clean_address], 'registration_status'))
+                        {
+                            // error
+                            error = true;
+                        }
+                        else if (typeof(addresses[clean_address].registration_status) !== 'string')
+                        {
+                            // error
+                            error = true;
+                        }
+                        else if (addresses[clean_address].registration_status != 'registering' && addresses[clean_address].registration_status != 'pending')
+                        {
+                            // error
+                            error = true;
+                        }
+
+                        if (!error)
+                        {
+                            if (seconds_remaining <= 0)
                             {
-                                statuses = addresses[address];
-                                registration_status = statuses.registration_status;
+                                // timeout waiting for registration to complete
+                                // set to timed_out so that the callback check_registered_callback_fn knows how to set UI
+                                addresses[clean_address].registration_status = 'timed_out_client';
 
-                                if (typeof(registration_status) === 'string')
+                                // timeout error message
+                                element_address.store('error_msg', 'Timeout waiting for response to email message');
+
+                                // gotta call callbacks (registration timed out)
+                                if (callback_list)
                                 {
-                                    if (registration_status == 'registering' || registration_status == 'pending')
-                                    {
-                                        // set to timed_out so that the callback check_registered_callback_fn knows how
-                                        // to set UI
-                                        statuses.registration_status = 'timed_out_client';
-
-                                        // timeout error message
-                                        element_address.store('error_msg', 'Timeout waiting for response to email message');
-                                    }
-                                    else
-                                    {
-                                        // error during registration process (registration_status should be error - keep it error)
-                                    }
+                                    call_callback_list(callback_list);
+                                    element_address.store('callback_list', null);
                                 }
-                                else if (typeof(registration_status) === 'boolean' && (registration_status == true || registration_status == false))
+
+                                if (callback_update_ui_fn)
                                 {
-                                    // registration completed already, do nothing; onsuccess()
+                                    callback_update_ui_fn();
                                 }
-                                else
+
+                                if (registration_timer !== null)
                                 {
-                                    // error
+                                    clearInterval(registration_timer);
+                                    element_address.store('registration_timer', null);
                                 }
-                            }
-                        }
 
-                        // gotta call callbacks (reg is complete, success/failure/time_out)
-                        if (callback_list)
-                        {
-                            call_callback_list(callback_list);
-                            element_address.store('callback_list', null);
-                        }
-
-                        clear_interval = true;
-
-                        // reset seconds_remaining (in case the user runs the registration CGI again)
-                        element_address.store('seconds_remaining', null);
-                    }
-                    else
-                    {
-                        // the registration success function will set seconds_remaining to 0 so the interval function will be cleared
-                        element_info_msg.store('cp_message', (seconds_remaining - 1).toString() + ' seconds remaining, waiting for your email reply from ' + address);
-                        element_address.store('seconds_remaining', seconds_remaining - 1);
-
-                        if (callback_update_ui_fn)
-                        {
-                            callback_update_ui_fn();
-                        }
-
-                        if (check_address_timer === null)
-                        {
-                            if (callback_list === null)
-                            {
-                                // done with registration
-                                clear_interval = true;
+                                // reset seconds_remaining (in case the user runs the registration CGI again)
+                                element_address.store('seconds_remaining', null);
                             }
                             else
                             {
-                                // if check_address_timer is null, then the success() function ran;
-                                // if callback_list is null, then we are completely done with a registration,
-                                // otherwise registration is pending;
-                                // if registration is pending, set up a new check address timer and call check address ajax()
+                                // the registration success function will set seconds_remaining to 0 so the interval function will be cleared
+                                element_info_msg.store('cp_message', (seconds_remaining - 1).toString() + ' seconds remaining, waiting for your email reply from ' + clean_address);
+                                element_address.store('seconds_remaining', seconds_remaining - 1);
+
+                                if (callback_update_ui_fn)
+                                {
+                                    callback_update_ui_fn();
+                                }
+
+                                // the registration is pending, set up a new check address timer and call check address ajax()
+                                // if an existing check_address_timer is set, clear it first
+                                if (check_address_timer !== null)
+                                {
+                                    clearInterval(check_address_timer);
+                                    element_address.store('check_address_timer', null);
+                                }
+
                                 timer = setInterval(check_address_callback, MAX_NOTIFY_TIMER);
                                 element_address.store('check_address_timer', timer);
-                                call_address_ajax(address, requestor, element_address, callback_update_ui_fn, check_only);
+                                call_address_ajax(clean_address, requestor, element_address, callback_update_ui_fn, check_only, null);
                             }
                         }
-                    }
+                    };
 
-                    if (clear_interval)
-                    {
-                        if (registration_timer !== null)
-                        {
-                            clearInterval(registration_timer);
-                            element_address.store('registration_timer', null);
-                        }
-                    }
-                };
+                    return registration_callback;
+                }
 
-                // if called, this will update
-                element_address.store('seconds_remaining', MAX_REGISTRATION_TIME);
-                timer = setInterval(registration_callback, 1000);
-                element_address.store('registration_timer', timer);
+                registration_callback = create_registration_callback(address);
             }
 
             // callbacks all set up, now do the actual AJAX if it has not been already initiated
-            call_address_ajax(address, requestor, element_address, callback_update_ui_fn, check_only);
+            // if an existing check_address_timer is set, clear it first
+            check_address_timer = element_address.retrieve('check_address_timer', null);
+            if (check_address_timer !== null)
+            {
+                clearInterval(check_address_timer);
+                element_address.store('check_address_timer', null);
+            }
+
+            timer = setInterval(check_address_callback, MAX_NOTIFY_TIMER);
+            element_address.store('check_address_timer', timer);
+            call_address_ajax(address, requestor, element_address, callback_update_ui_fn, check_only, registration_callback);
         }
     }
 }
