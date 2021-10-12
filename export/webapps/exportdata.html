@@ -716,14 +716,16 @@ function initVars()
     $("StatusRequestID").value = "";
     SetExportMethod(1);
     }
-  email_initVars($("ExportNotify"), $("ExportRequestor"));
 
-  set_eb_state_disabled(false);
+    // removes all registration statuses
+    email_initVars($("ExportNotify"), $("ExportRequestor"));
 
-  update_export_buttons();
+    set_eb_state_disabled(false);
 
-  FileUploadCleanup();
-  }
+    update_export_buttons();
+
+    FileUploadCleanup();
+}
 
 function getargs()
 {
@@ -3072,14 +3074,13 @@ function SetExportProtocol(byWhom)
 // This function gets called when the Notify field gets modified [exportdata.html only]
 function SetExportNotify(clickedByUser)
 {
-    var address = null;
-    var requestor = null;
+    var address = $("ExportNotify").value.trim();;
+    var requestor = $("ExportRequestor").value.trim();
     var snail_address = null; // no UI yet
     var doValidation = true;
     var valid = false;
     var registration_callback = function()
     {
-        $("ExportNotify").store('registration_pending', false);
         update_export_buttons();
         check_for_cancel_enabled_shortcut();
     };
@@ -3089,14 +3090,9 @@ function SetExportNotify(clickedByUser)
 
     // invalidate address
     $("ExportNotify").store('valid', null);
-
-    address = $("ExportNotify").value.trim();
-    requestor = $("ExportRequestor").value.trim();
     $("RequestorMessage").innerHTML = "Provide an optional identifier."
-
     $("ExportCheckMsg").store('cp_message', null);
     $("ExportNotify").store('error_msg', null);
-    $("ExportNotify").store('registration_pending', null);
 
     if (doValidation)
     {
@@ -3106,13 +3102,15 @@ function SetExportNotify(clickedByUser)
             $("ExportNotify").store('valid', true);
 
             // disable the CP button since we are actively checking on the address
-            $("ExportNotify").store('registration_pending', true);
             update_export_buttons();
 
             // check_for_cancel_enabled_shortcut() - see if we can go straight to EB_STATE_CANCEL_ENABLED if
             // the user already has a request pending
             // false --> do registration
-            register_address(address.slice(0), requestor, snail_address, $("ExportNotify"), $("ExportCheckMsg"), update_export_buttons, registration_callback);
+            // ART
+            // register_address(address.slice(0), requestor, snail_address, $("ExportNotify"), $("ExportCheckMsg"), update_export_buttons, registration_callback);
+
+            check_registration(address, requestor, snail_address, $("ExportNotify"), $("ExportCheckMsg"), update_export_buttons, registration_callback);
         }
     }
 }
@@ -3292,9 +3290,14 @@ function update_export_buttons()
     var check_message = $("ExportCheckMsg").retrieve('cp_message', null);
     var addresses = $("ExportNotify").retrieve('addresses', {});
     var address = $("ExportNotify").value.trim();
+    var address_valid = null;
+    var requestor = $("ExportRequestor").value.trim();
+    var requestor_valid = null;
     var error_msg = $("ExportNotify").retrieve('error_msg', null);
-    var registration_pending = $("ExportNotify").retrieve('registration_pending', false); // true if checking only as well
     var registration_status = null;
+    var checking_registration = null;
+    var registration_pending = null;
+    var address_registered = null;
     var eb_dirty = $("ExportCheckButton").retrieve('dirty', false); // dirty == false ==> page was reset
 
     if (state == EB_STATE_DISABLED)
@@ -3304,19 +3307,42 @@ function update_export_buttons()
             registration_status = addresses[address].registration_status;
         }
 
-        if (error_msg !== null && error_msg.length > 0)
+        if (address.length > 0)
         {
-            // override check_message
+            // after ValidateNotificationAddress(), `valid` element attribute is always set
+            address_valid = ($("ExportNotify").retrieve('valid', null) === null) ? ValidateNotificationAddress($("ExportNotify")) : $("ExportNotify").retrieve('valid', false);
+        }
+
+        if (requestor.length > 0)
+        {
+            // after ValidateExportRequestor(), `valid` element attribute is always set
+            requestor_valid = ($("ExportRequestor").retrieve('valid', null) === null) ? ValidateExportRequestor($("ExportRequestor")) : $("ExportRequestor").retrieve('valid', false);
+        }
+
+        if (address.length > 0 && !address_valid)
+        {
             check_message = error_msg;
         }
+        else if (requestor.length > 0 && !requestor_valid)
+        {
+            check_message = requestor_error_msg;
+        }
+
+        checking_registration = (registration_status == 'checking') ? true : false
+        registration_pending = (registration_status == 'registering' || registration_status == 'pending') ? true : false;
+        address_registered = (registration_status !== null && (typeof(registration_status) === 'boolean') && registration_status) ? true : false;
 
         if ($("ExportCheckButton").retrieve('on_demand', null))
         {
-            // checking for pending-request to allow user to cancel it before entering a new record-set
+            // on_demand pending-request check happening
+            // auto-checking for pending-request to allow user to cancel it before entering a new record-set
             $("ExportCheckButton").style.backgroundColor = colorRed;
             $("ExportCheckButton").value = 'wait...';
             $("ExportCheckButton").disabled = true;
             $("ExportCheckMsg").style.color = colorRealRed;
+            $("ExportNotify").disabled = true;
+            $("ExportRequestor").disabled = true;
+
             if (check_message === null)
             {
                 check_message = 'Checking for pending request...';
@@ -3325,14 +3351,30 @@ function update_export_buttons()
         }
         else
         {
-            // null/false means no on_demand pending-request check happening
+            // no on-demand registration check happening; a user-requested export could be happening, or no address registration/check
+            // happening at all (could have completed already, or there never has been  one)
             $("ExportCheckButton").style.backgroundColor = colorYellow;
-            $("ExportCheckButton").value = 'check parameters';
-            if (error_msg !== null && error_msg.length > 0)
+            // ART
+            $("ExportCheckButton").value = address_registered ? 'check parameters' : 'register address';
+
+            if (!address_valid && address.length > 0)
             {
                 $("ExportCheckButton").disabled = true;
+                $("ExportNotify").disabled = false;
+            }
+            else if (!requestor_valid && requestor.length > 0)
+            {
+                $("ExportCheckButton").disabled = true;
+                $("ExportRequestor").disabled = false;
+            }
+            else if ((registration_status !== null && (typeof(registration_status) != 'boolean')) || (error_msg !== null && error_msg.length > 0))
+            {
+                // an error other than invalid address or requestor syntax
+                $("ExportCheckButton").disabled = true;
+                $("ExportNotify").disabled = true;
+                $("ExportRequestor").disabled = true;
 
-                if (!registration_pending)
+                if (!registration_pending && !checking_registration)
                 {
                     $("ExportNotify").disabled = false;
                     $("ExportNotifyMsg").innerHTML = "REGISTRATION FAILURE";
@@ -3340,11 +3382,15 @@ function update_export_buttons()
             }
             else
             {
-                if (registration_pending)
+                // no error
+                if (registration_pending || checking_registration)
                 {
                     $("ExportCheckButton").disabled = true;
+                    $("ExportNotify").disabled = true;
+                    $("ExportRequestor").disabled = true;
                     $("ExportNotifyMsg").style.color = colorDarkBlue;
-                    if (registration_status == 'registering' || registration_status == 'pending')
+
+                    if (registration_pending)
                     {
                         $("ExportNotifyMsg").innerHTML = "registering...";
                     }
@@ -3356,13 +3402,35 @@ function update_export_buttons()
                 else
                 {
                     $("ExportCheckButton").disabled = false;
+
+                    if (address_registered)
+                    {
+                        $("ExportNotify").disabled = true;
+                        $("ExportRequestor").disabled = true;
+                    }
+                    else
+                    {
+                      $("ExportNotify").disabled = false;
+                      $("ExportRequestor").disabled = false;
+                    }
                 }
             }
 
             $("ExportCheckMsg").style.color = colorRealRed;
             if (check_message === null)
             {
-                if ($("ExportRecordSet").value.length == 0)
+                if (!address_registered)
+                {
+                    if (address.length == 0)
+                    {
+                        check_message = 'Please enter an email address in the Notify text box';
+                    }
+                    else
+                    {
+                        check_message = 'Click to register email address';
+                    }
+                }
+                else if ($("ExportRecordSet").value.length == 0)
                 {
                     check_message = 'Please enter a record-set specification';
                 }
@@ -3399,21 +3467,27 @@ function update_export_buttons()
                 {
                     $("ExportNotifyMsg").style.color = colorDarkGreen;
                     $("ExportNotifyMsg").innerHTML = "REGISTERED";
+                    $("ExportNotify").disabled = true;
+                    $("ExportRequestor").disabled = true;
                 }
                 else
                 {
                     $("ExportNotifyMsg").style.color = colorDarkRed;
                     $("ExportNotifyMsg").innerHTML = "UNREGISTERED";
+                    $("ExportNotify").disabled = false;
+                    $("ExportRequestor").disabled = false;
                 }
             }
-            else if (registration_status == 'registering' || registration_status == 'pending')
+            else if (registration_pending)
             {
                 $("ExportNotifyMsg").style.color = colorDarkBlue;
+                $("ExportNotify").disabled = true;
+                $("ExportRequestor").disabled = true;
                 $("ExportNotifyMsg").innerHTML = "registering...";
             }
         }
 
-        enable_input(!eb_dirty);
+        enable_input(!eb_dirty && !address_registered);
     }
     else if (state == EB_STATE_ENABLED)
     {
@@ -3514,7 +3588,6 @@ function SetExportParams()
 
     }
 
-    $("ExportNotify").store('registration_pending', false);
     update_export_buttons();
 }
 
@@ -3625,6 +3698,7 @@ function check_for_cancel_enabled_shortcut()
         // 2. do not change EB state (the email is not registered - the user will see a message asking them to register one)
 
         // check for registered email address, then pending user request
+
         var check_registered_callback_fn = function()
         {
             var address = $("ExportNotify").value.trim();
@@ -3696,7 +3770,6 @@ function check_for_cancel_enabled_shortcut()
                 registered = null;
             }
 
-            $("ExportNotify").store('registration_pending', false);
             update_export_buttons();
 
             if (registered !== null)
@@ -3768,7 +3841,6 @@ function check_for_cancel_enabled_shortcut()
             }
         };
 
-        $("ExportNotify").store('registration_pending', true);
         update_export_buttons();
         startEmailCheck($("ExportNotify"), $("ExportRequestor"), $("ExportCheckMsg"), update_export_buttons, check_registered_callback_fn);
     }
@@ -3829,12 +3901,10 @@ function CheckExportButtonOnClickAction()
     // again
     if ($("ExportNotify").value.trim().length > 0)
     {
-        $("ExportNotify").store('registration_pending', true);
         update_export_buttons();
         startEmailCheck($("ExportNotify"), $("ExportRequestor"), $("ExportCheckMsg"), update_export_buttons, SetExportParams);
 
         // note - ExportQueryOK is missing here
-
     }
 
     // notificationAddressOK may be in the process of being updated asynchronously, in which case notificationAddressOK == false
@@ -3921,10 +3991,42 @@ function CheckExportButtonOnClickAction()
 // called when user clicks on CPE button
 function CheckExportParams()
 {
-    // Up till now, SetProcessing() gets called whenever a processing option checkbox gets clicked.
-    // But SetProcessing() does not get called when the user changes processing option values. Call it
-    // now with -1 (which means the record-set spec has not changed).
-    SetProcessing(-1, CheckExportButtonOnClickAction);  // asynchronous - can't do the rest until this asynchronous call completes.
+    var addresses = $("ExportNotify").retrieve('addresses', {});
+    var address = $("ExportNotify").value.trim();
+    var requestor = $("ExportRequestor").value.trim();
+    var snail_address = null; // no UI yet
+    var registration_status = null;
+    var address_registered = null;
+
+    if (addresses !== null && address.length > 0 && Object.prototype.hasOwnProperty.call(addresses, address) && Object.prototype.hasOwnProperty.call(addresses[address], 'registration_status'))
+    {
+        registration_status = addresses[address].registration_status;
+    }
+
+    address_registered = (registration_status !== null && (typeof(registration_status) === 'boolean') && registration_status) ? true : false;
+
+    if (address_registered)
+    {
+        // Up till now, SetProcessing() gets called whenever a processing option checkbox gets clicked.
+        // But SetProcessing() does not get called when the user changes processing option values. Call it
+        // now with -1 (which means the record-set spec has not changed).
+        SetProcessing(-1, CheckExportButtonOnClickAction);  // asynchronous - can't do the rest until this asynchronous call completes.
+    }
+    else
+    {
+        // register the email address
+        var registration_callback = function()
+        {
+            update_export_buttons();
+            check_for_cancel_enabled_shortcut();
+        };
+
+        // we have to reset the registration status for this address; we previously checked its status which sets
+        // the status to `false`; if we call register_address() without first resetting it, then we get the cached
+        // value of `false` returned and the registration code is bypassed
+        addresses[address].registration_status = null;
+        register_address(address, requestor, snail_address, $("ExportNotify"), $("ExportCheckMsg"), update_export_buttons, registration_callback);
+    }
 }
 
 function cancel_export()
