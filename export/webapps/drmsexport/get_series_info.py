@@ -144,6 +144,7 @@ class Arguments(Args):
                 parser.add_argument('-L', '--logging-level', help='the amount of logging to perform; in order of increasing verbosity: critical, error, warning, info, debug', metavar='<logging level>', dest='logging_level', action=DrmsLogLevelAction, default=DrmsLogLevel.ERROR)
                 parser.add_argument('-N', '--dbname', help='the name of the database that contains export requests', metavar='<db name>', dest='db_name', default=db_name)
                 parser.add_argument('-P', '--dbport', help='the port on the host machine that is accepting connections for the database', metavar='<db host port>', dest='db_port', type=int, default=db_port)
+                parser.add_argument('-r', '--parse-record-sets', help='if set, `series` is a list of record-set specifications', action='store_true', dest='parse_record_sets')
                 parser.add_argument('--segments', help='a list of DRMS segments for which information is to be displayed', action=AttributeListAction, dest='segments', default=True)
                 parser.add_argument('-U', '--dbuser', help='the name of the database user account', metavar='<db user>', dest='db_user', default=db_user)
                 parser.add_argument('-w', '--webserver', help='the webserver invoking this script', metavar='<webserver>', action=create_webserver_action(drms_params), dest='webserver', default=name_to_ws_obj(None, drms_params))
@@ -153,11 +154,12 @@ class Arguments(Args):
             else:
                 # `program_args` has all `arguments` values, in final form; validate them
                 # `series` is a str
-                def extract_module_args(*, series, db_host, drms_client_type='none', drms_client=None, log_file=log_file, logging_level='error', db_name=db_name, db_port=db_port, db_user=db_user, keywords=True, links=True, segments=True, webserver=None):
+                def extract_module_args(*, series, db_host, parse_record_sets=False, drms_client_type='none', drms_client=None, log_file=log_file, logging_level='error', db_name=db_name, db_port=db_port, db_user=db_user, keywords=True, links=True, segments=True, webserver=None):
                     arguments = {}
 
                     arguments['series'] = series
                     arguments['db_host'] = db_host
+                    arguments['parse_record_sets'] = parse_record_sets
                     arguments['drms_client_type'] = drms_client_type
                     arguments['drms_client'] = drms_client
                     arguments['log_file'] = log_file
@@ -395,20 +397,39 @@ def perform_action(*, is_program, program_name=None, **kwargs):
 
         log.write_debug([ f'[ perform_action ] action arguments: {str(arguments)}' ])
 
+        # if parse_record_set is True, then arguments.series is a list of record-set specifications; must extract series
+        if arguments.parse_record_sets:
+            log.write_debug([ f'[ perform_action ] parsing record sets' ])
+            # parse specifications
+            series = []
+            for one_specification in arguments.series:
+                log.write_debug([ f'[ perform_action ] specification `{one_specification}`' ])
+                action = Action.action(action_type='parse_specification', args={ 'specification' : one_specification, 'db_host' : arguments.db_host, 'webserver' : arguments.webserver.host, 'logging_level' : arguments.logging_level._fullname })
+                response = action()
+
+                log.write_debug([ f'[ perform_action ] parse action response `{str(response)}`' ])
+
+                if not isinstance(response, ErrorResponse):
+                    for subset in response.attributes.subsets:
+                        log.write_debug([ f'[ perform_action ] series extracted: `{subset.seriesname}`' ])
+                        series.append(subset.seriesname)
+        else:
+            series = arguments.series
+
         if arguments.drms_client_type == 'none':
             # connect to DB directly (fastest method)
             log.write_debug([ f'[ perform_action ] direct DB connection' ])
 
             with pg_connect(database=arguments.db_name, host=arguments.db_host, port=str(arguments.db_port), user=arguments.db_user) as conn:
                 with conn.cursor() as cursor:
-                    series = list(OrderedDict.fromkeys(arguments.series))
+                    unique_series = list(OrderedDict.fromkeys(series))
                     keywords = arguments.keywords if type(arguments.keywords) == bool else list(OrderedDict.fromkeys(arguments.keywords))
                     links = arguments.links if type(arguments.links) == bool else list(OrderedDict.fromkeys(arguments.links))
                     segments = arguments.segments if type(arguments.segments) == bool else list(OrderedDict.fromkeys(arguments.segments))
 
                     series_info = {}
 
-                    for one_series in series:
+                    for one_series in unique_series:
                         get_series_info_from_db(series=one_series, cursor=cursor, keywords=keywords, links=links, segments=segments, log=log, series_info=series_info)
 
             response_dict = series_info
@@ -450,12 +471,13 @@ from action import Action
 from parse_specification import ParseSpecificationAction
 class GetSeriesInfoAction(Action):
     actions = [ 'get_series_info' ]
-    def __init__(self, *, method, series, db_host, drms_client_type=None, drms_client=None, logging_level=None, db_name=None, db_port=None, db_user=None, keywords=None, links=None, segments=None, webserver=None):
+    def __init__(self, *, method, series, db_host, parse_record_sets=False, drms_client_type=None, drms_client=None, logging_level=None, db_name=None, db_port=None, db_user=None, keywords=None, links=None, segments=None, webserver=None):
         self._method = getattr(self, method)
-        self._series = series # a str
+        self._series = series # py list
         self._db_host = db_host # host webserver uses (private webserver uses private db host)
         self._webserver = webserver # dict
         self._options = {}
+        self._options['parse_record_sets'] = parse_record_sets
         self._options['drms_client_type'] = drms_client_type
         self._options['drms_client'] = drms_client
         self._options['logging_level'] = logging_level
@@ -471,7 +493,7 @@ class GetSeriesInfoAction(Action):
         response = perform_action(is_program=False, series=self._series, db_host=self._db_host, options=self._options)
         return response
 
-    # `series` is a py list of series
+    # `series` is a py list of series OR a list of record-set specifications
     @classmethod
     def is_valid_series_set(cls, series, db_host, webserver, logging_level=None):
         is_valid = None
@@ -495,14 +517,8 @@ class GetSeriesInfoAction(Action):
             action = Action.action(action_type='parse_specification', args={ 'specification' : ','.join(series), 'db_host' : db_host_resolved, 'webserver' : webserver, 'logging_level' : logging_level })
             response = action()
 
-            if isinstance(response, ErrorResponse):
-                is_valid = False
-            else:
-                is_valid = True
-                for record_set in response.attributes.subsets:
-                    if record_set.filter != None or record_set.segments != None:
-                        is_valid = False
-                        break
+            # record-set specifications are allowed in lieu of series names, so it is OK if filters exist
+            is_valid = False if isinstance(response, ErrorResponse) else True
         except:
             is_valid = False
 
