@@ -2,7 +2,10 @@
 
 from argparse import Action as ArgsAction
 from copy import deepcopy
+from distutils.util import strtobool
+from collections import OrderedDict
 from os.path import join as path_join
+from psycopg2 import Error as PGError, connect as pg_connect
 from sys import exc_info as sys_exc_info, exit as sys_exit
 
 from drms_export import Error as ExportError, ErrorCode as ExportErrorCode, ErrorResponse, Response, securedrms
@@ -26,6 +29,8 @@ class ErrorCode(ExportErrorCode):
     DRMS_CLIENT = (104, 'drms client error')
     EXPORT_ACTION = (105, 'failure calling export action')
     RESPONSE = (106, 'unable to generate valid response')
+    DB_CONNECTION = (107, 'failure connecting to database')
+    DB_COMMAND = (108, 'failure executing database command')
 
 class GsiBaseError(ExportError):
     def __init__(self, *, exc_info=None, error_message=None):
@@ -58,6 +63,12 @@ class ExportActionError(GsiBaseError):
 class ResponseError(GsiBaseError):
     _error_code = ErrorCode(ErrorCode.RESPONSE)
 
+class DBConnectionError(GsiBaseError):
+    _error_code = ErrorCode.DB_CONNECTION
+
+class DBCommandError(GsiBaseError):
+    _error_code = ErrorCode.DB_COMMAND
+
 def name_to_ws_obj(name, drms_params):
     webserver_dict = {}
     webserver_dict['host'] = name
@@ -84,6 +95,15 @@ def create_webserver_action(drms_params):
     })
 
     return cls
+
+class AttributeListAction(ListAction):
+    def __call__(self, parser, namespace, values, option_string=None):
+        try:
+            strtobool(values)
+            self.dest = values
+        except ValueError:
+            # not a boolean; should be a list
+            super.__call__(parser, namespace, values, option_string)
 
 class Arguments(Args):
     _arguments = None
@@ -117,20 +137,23 @@ class Arguments(Args):
                 parser.add_argument('dbhost', help='the machine hosting the database that contains export requests from this site', metavar='<db host>', dest='db_host', required=True)
 
                 # optional
-                parser.add_argument('-c', '--drms-client-type', help='securedrms client type (ssh, http)', choices=[ 'ssh', 'http' ], dest='drms_client_type', default='ssh')
+                parser.add_argument('-c', '--drms-client-type', help='securedrms client type (ssh, http, none)', choices=[ 'ssh', 'http', 'none' ], dest='drms_client_type', default='none')
+                parser.add_argument('--keywords', help='a list of DRMS keywords for which information is to be displayed', action=AttributeListAction, dest='keywords', default=True)
+                parser.add_argument('--links', help='a list of DRMS links for which information is to be displayed', action=AttributeListAction, dest='links', default=True)
                 parser.add_argument('-l', '--log-file', help='the path to the log file', metavar='<log file>', dest='log_file', default=log_file)
                 parser.add_argument('-L', '--logging-level', help='the amount of logging to perform; in order of increasing verbosity: critical, error, warning, info, debug', metavar='<logging level>', dest='logging_level', action=DrmsLogLevelAction, default=DrmsLogLevel.ERROR)
                 parser.add_argument('-N', '--dbname', help='the name of the database that contains export requests', metavar='<db name>', dest='db_name', default=db_name)
                 parser.add_argument('-P', '--dbport', help='the port on the host machine that is accepting connections for the database', metavar='<db host port>', dest='db_port', type=int, default=db_port)
+                parser.add_argument('--segments', help='a list of DRMS segments for which information is to be displayed', action=AttributeListAction, dest='segments', default=True)
                 parser.add_argument('-U', '--dbuser', help='the name of the database user account', metavar='<db user>', dest='db_user', default=db_user)
-                parser.add_argument('-w', '--webserver', help='the webserver invoking this script', metavar='<webserver>', action=create_webserver_action(drms_params), dest='webserver')
+                parser.add_argument('-w', '--webserver', help='the webserver invoking this script', metavar='<webserver>', action=create_webserver_action(drms_params), dest='webserver', default=name_to_ws_obj(None, drms_params))
 
                 arguments = Arguments(parser=parser, args=args)
                 arguments.drms_client = None
             else:
                 # `program_args` has all `arguments` values, in final form; validate them
                 # `series` is a str
-                def extract_module_args(*, series, db_host, drms_client_type='ssh', drms_client=None, log_file=log_file, logging_level='error', db_name=db_name, db_port=db_port, db_user=db_user, webserver=None):
+                def extract_module_args(*, series, db_host, drms_client_type='none', drms_client=None, log_file=log_file, logging_level='error', db_name=db_name, db_port=db_port, db_user=db_user, keywords=True, links=True, segments=True, webserver=None):
                     arguments = {}
 
                     arguments['series'] = series
@@ -142,6 +165,9 @@ class Arguments(Args):
                     arguments['db_name'] = db_name
                     arguments['db_port'] = db_port
                     arguments['db_user'] = db_user
+                    arguments['keywords'] = False if (type(keywords) == list and len(keywords) == 0) else keywords
+                    arguments['links'] = False if (type(links) == list and len(links) == 0) else links
+                    arguments['segments'] = False if (type(segments) == list and len(segments) == 0) else segments
                     arguments['webserver'] = name_to_ws_obj(webserver, drms_params) # sets webserver.public = True if webserver is None
 
                     return arguments
@@ -180,7 +206,163 @@ def get_response(series_info, log):
 
     return Response.generate_response(**response_dict)
 
-def perform_action(is_program, program_name=None, **kwargs):
+def get_series_info_from_db(*, series, cursor, keywords=None, links=None, segments=None, log, series_info):
+    # series attributes
+    # only one series
+    if series.lower() not in series_info:
+        series_info[series.lower()] = {}
+
+        # extract namespace - instead of having the server do this, which is what should happen, do it here since the
+        # format is simple; this avoids the overhead of using securedrms ssh and then executing a process remotely
+        try:
+            name_space = series[:series.index('.')]
+        except ValueError as exc:
+            raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'invalid series `{series}`: {str(exc)}')
+
+        # PG stores all timestamp with timezone column values in UTC
+        sql = f"SELECT seriesname AS series, author, owner, unitsize, archive, retention, tapegroup, primary_idx as drmsprimekey, dbidx, to_timestamp(created || ' UTC', 'YYYY-MM-DD HH24:MI:SS') AS created, description FROM {name_space}.drms_series WHERE lower(seriesname) = '{series.lower()}'"
+
+        try:
+            log.write_debug([ f'[ get_series_info_from_db ] executing sql: {sql}' ])
+            cursor.execute(sql)
+            rows = cursor.fetchall()
+            if len(rows) == 0:
+                raise DBCommandError(error_message=f'unknown DRMS data series `{series}`')
+
+            # there is only one row
+            row = rows[0]
+
+            keys = ('series', 'author', 'owner', 'unitsize', 'archive', 'retention', 'tapegroup', 'drmsprimekey', 'dbindex', 'created', 'description')
+            vals = list(row[0:7])
+            vals.append([ key.strip() for key in row[7].split(',') ])
+            vals.append([ key.strip() for key in row[8].split(',') ])
+            vals.append(row[9].strftime('%Y-%m-%d %H:%M:%S UTC'))
+            vals.append(row[10])
+
+            series_info[series.lower()]['attributes'] = dict(zip(keys, vals))
+        except PGError as exc:
+            raise DBCommandError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+
+        if keywords is not None:
+            # only one series
+            sql = ''
+            series_info[series.lower()]['keywords'] = {}
+
+            if type(keywords) == bool:
+                if keywords:
+                    # all keywords
+                    sql = f"SELECT series, keyword, datatype, keyworddefault AS constantvalue, unit, isconstant, (flags >> 16)::integer AS rank, description FROM drms_followkeywordlink('{series.lower()}', NULL)"
+            else:
+                # keywords specified in list
+                sql_elements = []
+                for keyword in keywords:
+                    sql_elements.append(f"SELECT series, keyword, datatype, keyworddefault AS constantvalue, unit, isconstant, (flags >> 16)::integer AS rank, description FROM drms_followkeywordlink('{series.lower()}', '{keyword.lower()}')")
+
+                sql = '\nUNION\n'.join(sql_elements)
+
+            if len(sql) > 0:
+                try:
+                    log.write_debug([ f'[ get_series_info_from_db ] executing sql: {sql}' ])
+                    cursor.execute(sql)
+                    keywords_with_info = set()
+                    rows = cursor.fetchall()
+
+                    for row in rows:
+                        if row[1].lower() not in keywords_with_info:
+                            series_info[series.lower()]['keywords'][row[1].lower()] = { 'data-type' : row[2], 'constant-value': row[5] if row[5] else 'na', 'physical-unit' : row[4], 'rank' : row[6], 'description' : row[7] }
+
+                            keywords_with_info.add(row[1].lower())
+
+                    # add elements for keywords in list but not in series
+                    try:
+                        iterator = iter(keywords)
+                        for keyword in iterator:
+                            if keyword.lower() not in keywords_with_info:
+                                series_info[series.lower()]['keywords'][keyword.lower()] = { 'data-type' : 'na', 'constant-value': 'na', 'physical-unit' : 'na', 'rank' : -1, 'description' : 'unknown keyword' }
+                    except:
+                        pass
+                except PGError as exc:
+                    raise DBCommandError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+
+        if links is not None:
+            # only one series
+            sql = ''
+            series_info[series.lower()]['links'] = {}
+
+            if type(links) == bool:
+                if links:
+                    # all links
+                    sql = f"SELECT seriesname AS series, linkname AS link, target_seriesname AS tail_series, type, description FROM {name_space}.drms_link WHERE lower(seriesname) = '{series.lower()}'"
+            else:
+                # links specified in list
+                links_list = ','.join([ f"'{link.lower()}'" for link in links ])
+                sql = f"SELECT seriesname AS series, linkname AS link, target_seriesname AS tail_series, type, description FROM {name_space}.drms_link WHERE lower(seriesname) = '{series.lower()}' AND lower(linkname) IN ({links_list})"
+
+            if len(sql) > 0:
+                try:
+                    log.write_debug([ f'[ get_series_info_from_db ] executing sql: {sql}' ])
+                    cursor.execute(sql)
+                    links_with_info = set()
+                    rows = cursor.fetchall()
+
+                    for row in rows:
+                        if row[1].lower() not in links_with_info:
+                            series_info[series.lower()]['links'][row[1].lower()] = { 'tail-series' : row[2], 'type': row[2], 'description' : row[3] }
+                            links_with_info.add(row[1].lower())
+
+                    # add elements for links in list but not in series
+                    try:
+                        iterator = iter(links)
+                        for link in iterator:
+                            if link.lower() not in links_with_info:
+                                series_info[series.lower()]['links'][link.lower()] = { 'tail-series' : 'na', 'type': 'na', 'description' : 'unknown link' }
+                    except:
+                        pass
+                except PGError as exc:
+                    raise DBCommandError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+
+        if segments is not None:
+            # only one series
+            sql = ''
+            series_info[series.lower()]['segments'] = {}
+
+            if type(segments) == bool:
+                if segments:
+                    # all segments
+                    sql = f"SELECT series, segment, datatype, segnum, scope, numaxes, dimensions, unit, protocol, description FROM drms_followsegmentlink('{series.lower()}', NULL)"
+            else:
+                # segments specified in list
+                sql_elements = []
+                for segment in segments:
+                    sql_elements.append(f"SELECT series, segment, datatype, segnum, scope, numaxes, dimensions, unit, protocol, description FROM drms_followsegmentlink('{series.lower()}', '{segment.lower()}')")
+
+                sql = '\nUNION\n'.join(sql_elements)
+
+            if len(sql) > 0:
+                try:
+                    log.write_debug([ f'[ get_series_info_from_db ] executing sql: {sql}' ])
+                    cursor.execute(sql)
+                    segments_with_info = set()
+                    rows = cursor.fetchall()
+
+                    for row in rows:
+                        if row[1].lower() not in segments_with_info:
+                            series_info[series.lower()]['segments'][row[1].lower()] = { 'data-type' : row[2], 'segment-number': row[3], 'scope' : row[4], 'number-axes' : row[5], 'dimensions' : row[6], 'physical-unit' : row[7], 'protocol' : row[8],'description' : row[9] }
+
+                            segments_with_info.add(row[1].lower())
+
+                    # add elements for segments in list but not in series
+                    try:
+                        iterator = iter(segments)
+                        for segment in iterator:
+                            if segment.lower() not in segments_with_info:
+                                series_info[series.lower()]['segments'][segment.lower()] = { 'data-type' : 'na', 'segment-number': -1, 'scope' : 'na', 'number-axes' : -1, 'dimensions' : 'na', 'physical-unit' : 'na', 'protocol' : 'na','description' : 'unknown segment' }
+                    except:
+                        pass
+                except PGError as exc:
+                    raise DBCommandError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+
+def perform_action(*, is_program, program_name=None, **kwargs):
     # catch all expections so we can always generate a response
     response = None
     log = None
@@ -213,19 +395,42 @@ def perform_action(is_program, program_name=None, **kwargs):
 
         log.write_debug([ f'[ perform_action ] action arguments: {str(arguments)}' ])
 
-        debug = True if arguments.logging_level == DrmsLogLevel.DEBUG else False
-        drms_client = create_drms_client(webserver=arguments.webserver, series=arguments.series, specification=None, drms_client_type=arguments.drms_client_type, public_drms_client_server='jsoc_external', private_drms_client_server='jsoc_internal', private_db_host=arguments.private_db_host, db_host=arguments.db_host, db_port=arguments.db_port, db_name=arguments.db_name, db_user=arguments.db_user, debug=debug, log=log)
+        if arguments.drms_client_type == 'none':
+            # connect to DB directly (fastest method)
+            log.write_debug([ f'[ perform_action ] direct DB connection' ])
 
-        if drms_client is None:
-            raise DRMSClientError(error_message=f'unable to obtain securedrms client')
+            with pg_connect(database=arguments.db_name, host=arguments.db_host, port=str(arguments.db_port), user=arguments.db_user) as conn:
+                with conn.cursor() as cursor:
+                    series = list(OrderedDict.fromkeys(arguments.series))
+                    keywords = arguments.keywords if type(arguments.keywords) == bool else list(OrderedDict.fromkeys(arguments.keywords))
+                    links = arguments.links if type(arguments.links) == bool else list(OrderedDict.fromkeys(arguments.links))
+                    segments = arguments.segments if type(arguments.segments) == bool else list(OrderedDict.fromkeys(arguments.segments))
 
-        try:
-            series_info = drms_client.info(series=arguments.series)
-        except Exception as exc:
-            raise ExportActionError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+                    series_info = {}
 
-        response = get_response(series_info, log)
+                    for one_series in series:
+                        get_series_info_from_db(series=one_series, cursor=cursor, keywords=keywords, links=links, segments=segments, log=log, series_info=series_info)
+
+            response_dict = series_info
+            response_dict['status_code'] = StatusCode.SUCCESS
+
+            response = Response.generate_response(**response_dict)
+        else:
+            # use securedrms
+            debug = True if arguments.logging_level == DrmsLogLevel.DEBUG else False
+            drms_client = create_drms_client(webserver=arguments.webserver, series=arguments.series, specification=None, drms_client_type=arguments.drms_client_type, public_drms_client_server='jsoc_external', private_drms_client_server='jsoc_internal', private_db_host=arguments.private_db_host, db_host=arguments.db_host, db_port=arguments.db_port, db_name=arguments.db_name, db_user=arguments.db_user, debug=debug, log=log)
+
+            if drms_client is None:
+                raise DRMSClientError(error_message=f'unable to obtain securedrms client')
+
+            try:
+                series_info = drms_client.info(series=arguments.series)
+            except Exception as exc:
+                raise ExportActionError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+
+            response = get_response(series_info, log)
     except ExportError as exc:
+        raise
         response = exc.response
         e_type, e_obj, e_tb = exc.exc_info
         error_msg = f'ERROR LINE {str(e_tb.tb_lineno)}: {exc.message}'
@@ -245,7 +450,7 @@ from action import Action
 from parse_specification import ParseSpecificationAction
 class GetSeriesInfoAction(Action):
     actions = [ 'get_series_info' ]
-    def __init__(self, *, method, series, db_host, drms_client_type=None, drms_client=None, logging_level=None, db_name=None, db_port=None, db_user=None, webserver=None):
+    def __init__(self, *, method, series, db_host, drms_client_type=None, drms_client=None, logging_level=None, db_name=None, db_port=None, db_user=None, keywords=None, links=None, segments=None, webserver=None):
         self._method = getattr(self, method)
         self._series = series # a str
         self._db_host = db_host # host webserver uses (private webserver uses private db host)
@@ -257,6 +462,9 @@ class GetSeriesInfoAction(Action):
         self._options['db_name'] = db_name
         self._options['db_port'] = db_port
         self._options['db_user'] = db_user
+        self._options['keywords'] = keywords # py list
+        self._options['links'] = links # py list
+        self._options['segments'] = segments # py list
         self._options['webserver'] = webserver # host name - gets converted to object in `get_arguments()`
 
     def get_series_info(self):
