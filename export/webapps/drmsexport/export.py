@@ -430,11 +430,11 @@ class RecordSetResource(Resource):
 
 from get_series_info import GetSeriesInfoAction
 class SeriesResource(Resource):
-    _arguments = { 'series' : fields.List(fields.Str, required=True, validate=lambda s: GetSeriesInfoAction.is_valid_series_set(s, None, urlparse(request.base_url).hostname, 'debug' if APP_DEBUG else None)), 'db_host' : fields.Str(required=True, data_key='db-host'), 'client_type' : fields.Str(required=False, data_key='client-type'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'db_user' : fields.Str(required=False, data_key='db-user'), 'keywords' : fields.List(fields.Str, required=False), 'links' : fields.List(fields.Str, required=False), 'segments' : fields.List(fields.Str, required=False)}
+    _arguments = { 'series' : fields.List(fields.Str, required=True, validate=lambda s: GetSeriesInfoAction.is_valid_series_set(s, None, urlparse(request.base_url).hostname, 'debug' if APP_DEBUG else None)), 'db_host' : fields.Str(required=True, data_key='db-host'), 'parse_record_sets' : fields.Boolean(required=False, data_key='parse-record-sets'), 'client_type' : fields.Str(required=False, data_key='client-type'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'db_user' : fields.Str(required=False, data_key='db-user'), 'keywords' : fields.List(fields.Str, required=False), 'links' : fields.List(fields.Str, required=False), 'segments' : fields.List(fields.Str, required=False)}
 
     @use_kwargs(_arguments)
-    def get(self, series, db_host, client_type=None, db_name=None, db_port=None, db_user=None, keywords=None, links=None, segments=None):
-        arguments = { 'series' : series, 'db_host' : db_host, 'drms_client_type' : client_type, 'db_name' : db_name, 'db_port' : db_port, 'db_user' : db_user, 'keywords' : keywords, 'links' : links, 'segments' : segments, 'webserver' : urlparse(request.base_url).hostname }
+    def get(self, series, db_host, parse_record_sets=False, client_type=None, db_name=None, db_port=None, db_user=None, keywords=None, links=None, segments=None):
+        arguments = { 'series' : series, 'db_host' : db_host, 'parse_record_sets' : parse_record_sets, 'drms_client_type' : client_type, 'db_name' : db_name, 'db_port' : db_port, 'db_user' : db_user, 'keywords' : keywords, 'links' : links, 'segments' : segments, 'webserver' : urlparse(request.base_url).hostname }
         if APP_DEBUG:
             arguments['logging_level'] = 'debug'
 
