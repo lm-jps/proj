@@ -412,7 +412,7 @@ class RecordSetResource(Resource):
     def get(self, specification, db_host, parse_only=False, client_type=None, keywords=None, segments=None, links=None, db_name=None, db_port=None, db_user=None):
         if parse_only:
             if self._parse_response is None:
-                arguments = { 'specification' : specification, 'db_host' : db_host, 'drms_client_type' : client_type, 'db_name' : db_name, 'db_port' : db_port, 'db_user' : db_user }
+                arguments = { 'specification' : specification, 'db_host' : db_host, 'db_name' : db_name, 'db_port' : db_port, 'db_user' : db_user, 'webserver' : urlparse(request.base_url).hostname }
                 if APP_DEBUG:
                     arguments['logging_level'] = 'debug'
 
@@ -430,11 +430,11 @@ class RecordSetResource(Resource):
 
 from get_series_info import GetSeriesInfoAction
 class SeriesResource(Resource):
-    _arguments = { 'series' : fields.Str(required=True, validate=lambda a: GetSeriesInfoAction.is_valid_series_set([ a ], None, urlparse(request.base_url).hostname, 'debug' if APP_DEBUG else None)), 'db_host' : fields.Str(required=True, data_key='db-host'), 'client_type' : fields.Str(required=False, data_key='client-type'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'db_user' : fields.Str(required=False, data_key='db-user') }
+    _arguments = { 'series' : fields.List(fields.Str, required=True, validate=lambda s: GetSeriesInfoAction.is_valid_series_set(s, None, urlparse(request.base_url).hostname, 'debug' if APP_DEBUG else None)), 'db_host' : fields.Str(required=True, data_key='db-host'), 'client_type' : fields.Str(required=False, data_key='client-type'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'db_user' : fields.Str(required=False, data_key='db-user'), 'keywords' : fields.List(fields.Str, required=False), 'links' : fields.List(fields.Str, required=False), 'segments' : fields.List(fields.Str, required=False)}
 
     @use_kwargs(_arguments)
-    def get(self, series, db_host, client_type=None, db_name=None, db_port=None, db_user=None):
-        arguments = { 'series' : series, 'db_host' : db_host, 'webserver' : urlparse(request.base_url).hostname, 'drms_client_type' : client_type, 'db_name' : db_name, 'db_port' : db_port, 'db_user' : db_user }
+    def get(self, series, db_host, client_type=None, db_name=None, db_port=None, db_user=None, keywords=None, links=None, segments=None):
+        arguments = { 'series' : series, 'db_host' : db_host, 'drms_client_type' : client_type, 'db_name' : db_name, 'db_port' : db_port, 'db_user' : db_user, 'keywords' : keywords, 'links' : links, 'segments' : segments, 'webserver' : urlparse(request.base_url).hostname }
         if APP_DEBUG:
             arguments['logging_level'] = 'debug'
 
