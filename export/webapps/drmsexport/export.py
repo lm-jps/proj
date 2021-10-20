@@ -49,6 +49,7 @@ from drms_parameters import DRMSParams
 #     - prototip.js: this is a JavaScript microframework that provides "tooltip" functionality - when the user clicks on a tooltip element
 #       a text bubble appears
 #     - cookies.js: this is a JavaScript microframework that provides cookie support; it requires prototype js
+#     - addOnTips.js:
 #     - prototip.css: css sheet for prototip microframework
 
 
@@ -392,7 +393,7 @@ from check_dbserver import DetermineDbServerAction
 class ServerResource(Resource):
     _arguments = { 'public_db_host' : fields.Str(required=True, data_key='public-db-host'), 'series' : fields.List(fields.Str, required=True, validate=lambda a: DetermineDbServerAction.is_valid_series_set(a, None, urlparse(request.base_url).hostname, 'debug' if APP_DEBUG else None)), 'client_type' : fields.Str(required=False, data_key='client-type'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'db_user' : fields.Str(required=False, data_key='db-user') }
 
-    @use_kwargs(_arguments)
+    @use_kwargs(_arguments, location='querystring')
     def get(self, public_db_host, series, client_type=None, db_name=None, db_port=None, db_user=None):
         arguments = { 'public_db_host' : public_db_host, 'series' : series, 'drms_client_type' : client_type, 'db_name' : db_name, 'db_port' : db_port, 'db_user' : db_user }
         if APP_DEBUG:
@@ -408,7 +409,7 @@ class RecordSetResource(Resource):
 
     _parse_response = None
 
-    @use_kwargs(_arguments)
+    @use_kwargs(_arguments, location='querystring')
     def get(self, specification, db_host, parse_only=False, client_type=None, keywords=None, segments=None, links=None, db_name=None, db_port=None, db_user=None):
         if parse_only:
             if self._parse_response is None:
@@ -432,7 +433,7 @@ from get_series_info import GetSeriesInfoAction
 class SeriesResource(Resource):
     _arguments = { 'series' : fields.List(fields.Str, required=True, validate=lambda s: GetSeriesInfoAction.is_valid_series_set(s, None, urlparse(request.base_url).hostname, 'debug' if APP_DEBUG else None)), 'db_host' : fields.Str(required=True, data_key='db-host'), 'parse_record_sets' : fields.Boolean(required=False, data_key='parse-record-sets'), 'client_type' : fields.Str(required=False, data_key='client-type'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'db_user' : fields.Str(required=False, data_key='db-user'), 'keywords' : fields.List(fields.Str, required=False), 'links' : fields.List(fields.Str, required=False), 'segments' : fields.List(fields.Str, required=False)}
 
-    @use_kwargs(_arguments)
+    @use_kwargs(_arguments, location='querystring')
     def get(self, series, db_host, parse_record_sets=False, client_type=None, db_name=None, db_port=None, db_user=None, keywords=None, links=None, segments=None):
         arguments = { 'series' : series, 'db_host' : db_host, 'parse_record_sets' : parse_record_sets, 'drms_client_type' : client_type, 'db_name' : db_name, 'db_port' : db_port, 'db_user' : db_user, 'keywords' : keywords, 'links' : links, 'segments' : segments, 'webserver' : urlparse(request.base_url).hostname }
         if APP_DEBUG:
@@ -443,11 +444,11 @@ class SeriesResource(Resource):
 
 from initiate_request import InitiateRequestAction, ErrorCode as IRErrorCode
 class PremiumExportRequestResource(Resource):
-    _arguments = { 'address' : fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : fields.Str(required=True, data_key='db-host'), 'export_arguments' : fields.Str(required=True, validate=lambda a: InitiateRequestAction.is_valid_arguments(a, 'debug' if APP_DEBUG else None), data_key='export-arguments'), 'client_type' : fields.Str(required=False, data_key='client-type'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'requestor' : fields.Str(required=False), 'db_user' : fields.Str(required=False, data_key='db-user') }
+    _arguments = { 'address' : fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : fields.Str(required=True, data_key='db-host'), 'export_arguments' : fields.Str(required=True, validate=lambda a: InitiateRequestAction.is_valid_arguments(a, 'debug' if APP_DEBUG else None), data_key='export-arguments'), 'drms_client_type' : fields.Str(required=False, data_key='drms-client-type'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'requestor' : fields.Str(required=False), 'db_user' : fields.Str(required=False, data_key='db-user') }
 
     @use_kwargs(_arguments)
-    def post(self, address, db_host, export_arguments, client_type=None, db_name=None, db_port=None, requestor=None, db_user=None):
-        arguments = { 'address' : address, 'db_host' : db_host, 'webserver' : urlparse(request.base_url).hostname, 'export_arguments' : export_arguments, 'drms_client_type' : client_type, 'db_name' : db_name, 'db_port' : db_port, 'requestor' : requestor, 'db_user' : db_user }
+    def post(self, address, db_host, export_arguments, drms_client_type=None, db_name=None, db_port=None, requestor=None, db_user=None):
+        arguments = { 'address' : address, 'db_host' : db_host, 'webserver' : urlparse(request.base_url).hostname, 'export_arguments' : export_arguments, 'drms_client_type' : drms_client_type, 'db_name' : db_name, 'db_port' : db_port, 'requestor' : requestor, 'db_user' : db_user }
         if APP_DEBUG:
             arguments['logging_level'] = 'debug'
 
@@ -455,11 +456,11 @@ class PremiumExportRequestResource(Resource):
         return action().generate_serializable_dict()
 
 class MiniExportRequestResource(Resource):
-    _arguments = { 'address' : fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : fields.Str(required=True, data_key='db-host'), 'export_arguments' : fields.Str(required=True, validate=lambda a: InitiateRequestAction.is_valid_arguments(a, 'debug' if APP_DEBUG else None), data_key='export-arguments'), 'client_type' : fields.Str(required=False, data_key='client-type'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'requestor' : fields.Str(required=False), 'db_user' : fields.Str(required=False, data_key='db-user') }
+    _arguments = { 'address' : fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : fields.Str(required=True, data_key='db-host'), 'export_arguments' : fields.Str(required=True, validate=lambda a: InitiateRequestAction.is_valid_arguments(a, 'debug' if APP_DEBUG else None), data_key='export-arguments'), 'drms_client_type' : fields.Str(required=False, data_key='drms-client-type'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'requestor' : fields.Str(required=False), 'db_user' : fields.Str(required=False, data_key='db-user') }
 
     @use_kwargs(_arguments)
-    def post(self, address, db_host, export_arguments, client_type=None, db_name=None, db_port=None, requestor=None, db_user=None):
-        arguments = { 'address' : address, 'db_host' : db_host, 'webserver' : urlparse(request.base_url).hostname, 'export_arguments' : export_arguments, 'drms_client_type' : client_type, 'db_name' : db_name, 'db_port' : db_port, 'requestor' : requestor, 'db_user' : db_user }
+    def post(self, address, db_host, export_arguments, drms_client_type=None, db_name=None, db_port=None, requestor=None, db_user=None):
+        arguments = { 'address' : address, 'db_host' : db_host, 'webserver' : urlparse(request.base_url).hostname, 'export_arguments' : export_arguments, 'drms_client_type' : drms_client_type, 'db_name' : db_name, 'db_port' : db_port, 'requestor' : requestor, 'db_user' : db_user }
         if APP_DEBUG:
             arguments['logging_level'] = 'debug'
 
@@ -467,11 +468,11 @@ class MiniExportRequestResource(Resource):
         return action().generate_serializable_dict()
 
 class StreamedExportRequestResource(Resource):
-    _arguments = { 'address' : fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : fields.Str(required=True, data_key='db-host'), 'export_arguments' : fields.Str(required=True, validate=lambda a: InitiateRequestAction.is_valid_arguments(a, 'debug' if APP_DEBUG else None), data_key='export-arguments'), 'client_type' : fields.Str(required=False, data_key='client-type'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'requestor' : fields.Str(required=False), 'db_user' : fields.Str(required=False, data_key='db-user') }
+    _arguments = { 'address' : fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : fields.Str(required=True, data_key='db-host'), 'export_arguments' : fields.Str(required=True, validate=lambda a: InitiateRequestAction.is_valid_arguments(a, 'debug' if APP_DEBUG else None), data_key='export-arguments'), 'drms_client_type' : fields.Str(required=False, data_key='drms-client-type'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'requestor' : fields.Str(required=False), 'db_user' : fields.Str(required=False, data_key='db-user') }
 
     @use_kwargs(_arguments)
-    def post(self, address, db_host, export_arguments, client_type=None, db_name=None, db_port=None, requestor=None, db_user=None):
-        arguments = { 'address' : address, 'db_host' : db_host, 'webserver' : urlparse(request.base_url).hostname, 'export_arguments' : export_arguments, 'drms_client_type' : client_type, 'db_name' : db_name, 'db_port' : db_port, 'requestor' : requestor, 'db_user' : db_user }
+    def post(self, address, db_host, export_arguments, drms_client_type=None, db_name=None, db_port=None, requestor=None, db_user=None):
+        arguments = { 'address' : address, 'db_host' : db_host, 'webserver' : urlparse(request.base_url).hostname, 'export_arguments' : export_arguments, 'drms_client_type' : drms_client_type, 'db_name' : db_name, 'db_port' : db_port, 'requestor' : requestor, 'db_user' : db_user }
         if APP_DEBUG:
             arguments['logging_level'] = 'debug'
 
@@ -499,7 +500,7 @@ from manage_request import PendingRequestAction
 class PendingRequestResource(Resource):
     _arguments = { 'address' : fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : fields.Str(required=True, data_key='db-host'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'db_user' : fields.Str(required=False, data_key='db-user'), 'pending_requests_table' : fields.Str(required=False, data_key='pending-requests-table'), 'timeout' : fields.Int(required=False) }
 
-    @use_kwargs(_arguments)
+    @use_kwargs(_arguments, location='querystring')
     def get(self, address, db_host, db_name=None, db_port=None, db_user=None, pending_requests_table=None, timeout=None):
         # HTTP GET - check for the existence of a pending request
         arguments = { 'address' : address, 'db_host' : db_host, 'webserver' : urlparse(request.base_url).hostname, 'db_name' : db_name, 'db_port' : db_port, 'db_user' : db_user, 'pending_requests_table' : pending_requests_table, 'timeout' : timeout }
@@ -520,12 +521,12 @@ class PendingRequestResource(Resource):
         return action().generate_serializable_dict()
 
 class PendingRequestStatusResource(Resource):
-    _arguments = { 'address' : fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : fields.Str(required=True, data_key='db-host'), 'request_id' : fields.Str(required=True, data_key='request-id', validate=lambda a: PendingRequestAction.is_valid_request_id(a)), 'client_type' : fields.Str(required=False, data_key='client-type'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'db_user' : fields.Str(required=False, data_key='db-user'), 'pending_requests_table' : fields.Str(required=False, data_key='pending-requests-table'), 'timeout' : fields.Int(required=False) }
+    _arguments = { 'address' : fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : fields.Str(required=True, data_key='db-host'), 'request_id' : fields.Str(required=True, data_key='request-id', validate=lambda a: PendingRequestAction.is_valid_request_id(a)), 'drms_client_type' : fields.Str(required=False, data_key='drms-client-type'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'db_user' : fields.Str(required=False, data_key='db-user'), 'pending_requests_table' : fields.Str(required=False, data_key='pending-requests-table'), 'timeout' : fields.Int(required=False) }
 
-    @use_kwargs(_arguments)
-    def get(self, address, db_host, request_id, client_type=None, db_name=None, db_port=None, db_user=None, pending_requests_table=None, timeout=None):
+    @use_kwargs(_arguments, location='querystring')
+    def get(self, address, db_host, request_id, drms_client_type=None, db_name=None, db_port=None, db_user=None, pending_requests_table=None, timeout=None):
         # HTTP GET - get the export status of a request
-        arguments = { 'address' : address, 'db_host' : db_host, 'webserver' : urlparse(request.base_url).hostname, 'request_id' : request_id, 'drms_client_type' : client_type, 'db_name' : db_name, 'db_port' : db_port, 'db_user' : db_user, 'pending_requests_table' : pending_requests_table, 'timeout' : timeout }
+        arguments = { 'address' : address, 'db_host' : db_host, 'webserver' : urlparse(request.base_url).hostname, 'request_id' : request_id, 'drms_client_type' : drms_client_type, 'db_name' : db_name, 'db_port' : db_port, 'db_user' : db_user, 'pending_requests_table' : pending_requests_table, 'timeout' : timeout }
         if APP_DEBUG:
             arguments['logging_level'] = 'debug'
 
