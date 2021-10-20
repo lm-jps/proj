@@ -53,7 +53,6 @@ function include_html(callback)
 
         resource = window.location.origin + "/" + file_resource;
 
-        alert('url is ' + resource);
         new Ajax.Request(resource, options);
     }
 }
@@ -135,13 +134,8 @@ var RE_EXPORT_REQUEST_PATH = [ EXPORT_PATH, RE_EXPORT_REQUEST_RESOURCE ].join('/
 var PENDING_REQUEST_STATUS_RESOURCE = 'pending-request-status';
 var PENDING_REQUEST_STATUS_PATH = [ EXPORT_PATH, PENDING_REQUEST_STATUS_RESOURCE ].join('/');
 
-var JSOCEXTINFO = 'jsocextinfo';
-var JSOC_INFO = 'jsoc_info';
-var JSOCEXTFETCH = 'jsocextfetch';
 var JSOC_FETCH = 'jsoc_fetch';
 var DRMS_EXPORT = 'drms-export.sh';
-var SERIES_INFO = 'series_info';
-var PARSE_RECSET = 'drms_parserecset';
 var LOOKDATA = "lookdata";
 
 // manage-request operations
@@ -417,12 +411,14 @@ var MANAGE_REQUEST_ON_SUCCESS_ON_DEMAND = function(callback_fn)
     var success_fn = function(response)
     {
         var mr_response_obj = response.responseJSON;
+        alert("on demand success fn");
 
         if (mr_response_obj !== null)
         {
             var status = mr_response_obj.drms_export_status;
             var state = $("ExportButton").retrieve('state', EB_STATE_DISABLED);
             var error = false;
+            alert("response obj exists");
 
             if (status.search(/errorcode/i) == 0)
             {
@@ -438,6 +434,7 @@ var MANAGE_REQUEST_ON_SUCCESS_ON_DEMAND = function(callback_fn)
             }
             else
             {
+                alert("no error");
                 // action depends on status
                 if (status == MR_STATUS_NOT_PENDING)
                 {
@@ -477,6 +474,7 @@ var MANAGE_REQUEST_ON_SUCCESS_ON_DEMAND = function(callback_fn)
 
         if (callback_fn)
         {
+            alert("callback");
             callback_fn();
         }
     }
@@ -493,6 +491,9 @@ var MANAGE_REQUEST_XHR = function(address, op, interval, callback_fn)
     var origin = null;
     var db_host = null;
     var on_success = null;
+    var method = null;
+
+    alert("calling xhr, op: " + op);
 
     origin = ExportOrigin(null, web_server);
 
@@ -526,15 +527,20 @@ var MANAGE_REQUEST_XHR = function(address, op, interval, callback_fn)
     }
     else
     {
+        alert("got on demand on success");
         on_success = MANAGE_REQUEST_ON_SUCCESS_ON_DEMAND(callback_fn);
     }
 
+    alert("must be here 0");
+
+    method = (op === MR_OPERATION_CHECK) ? 'get' : 'post';
     options =
     {
-        method: (op == MR_OPERATION_CHECK) ? 'get' : 'post',
+        method: method,
         onSuccess: on_success,
         onFailure: function(response)
         {
+            alert("failure checking registration")
             var mr_response_obj = response.responseJSON;
             var error_msg = mr_response_obj.error_message;
 
@@ -548,6 +554,7 @@ var MANAGE_REQUEST_XHR = function(address, op, interval, callback_fn)
         },
         on428: function(response)
         {
+            alert("428 checking registration");
             var mr_response_obj = response.responseJSON;
             var error_msg = mr_response_obj.error_message;
 
@@ -560,8 +567,9 @@ var MANAGE_REQUEST_XHR = function(address, op, interval, callback_fn)
             }
         }
     };
+    alert("must be here 1");
 
-    if (method == 'post')
+    if (method === 'post')
     {
         options['postBody'] = JSON.stringify(export_app_arguments);
         options['contentType'] = 'application/json';
@@ -570,8 +578,10 @@ var MANAGE_REQUEST_XHR = function(address, op, interval, callback_fn)
     {
         options['parameters'] = export_app_arguments;
     }
-
+    alert("must be here 2");
+    alert("calling pending request endpoint, options " + JSON.stringify(options));
     new Ajax.Request(window.location.origin + PENDING_REQUEST_PATH, options);
+    alert("called pending request endpoint");
 }
 
 // export button (EB) states:
@@ -752,8 +762,6 @@ function initVars()
   firstTimePrime = "";
   ProcessingAllowed = 1;
 
-  alert('here A')
-
   // Init processing
   ExportProcessingArgs = "";
   ExportProcessingOK = null;
@@ -770,13 +778,9 @@ function initVars()
     // exportdataLoaded is true as well. So, there is no need to check for a true value for exportdataLoaded.
     ProcessingInit();
 
-  alert('here b')
-  tester()
     ProcessingEnabled()
-    alert('here c')
     ProtocolOptionsInit();
 
-  alert('here d')
 
     // Enable the reset button, now that the page has completed loaded.
     $("ResetPageButton").disabled = false;
@@ -803,7 +807,6 @@ function initVars()
     $("ExportProtocolHidden").value = "FITS";
     $("ExportCompress").selectedIndex = 0;
     $("CompressRow").style.display="none";
-    alert('hiding proto');
     $("ProtocolImageOptions").style.display="none";
 
     $("ExportMethod").selectedIndex = 2;
@@ -915,7 +918,6 @@ function getargs()
 // cookie state is 0
 function on_load_init_callback()
 {
-    alert('on_load_init_callback')
     var needcount = 0;
 
     Cookie.init({ "name" : "exportdata", "expires" : 14});
@@ -1178,12 +1180,14 @@ function FileUploadCleanup()
 
 function FileUploadWanted()
 {
+    alert("file upload wanted");
     // dirty since last time the CP button was clicked
     set_eb_state_disabled(true);
 
     ExportQueryOK = 0;
     if (ExportFromFileList == 0)
     {
+        alert("effl 0");
         $("ExportRecordSet").value = "*file*";
         ExportRecordSetOK = 1;
         ExportFromFileList = 1;
@@ -1197,6 +1201,7 @@ function FileUploadWanted()
     }
     else
     {
+        alert("effl 1");
         $("FileUploadInfoRow").style.display="none";
         FileUploadCleanup();
         FinishFileUpload();
@@ -1231,9 +1236,11 @@ function insertOption(list,text,note)
 
 function MakeFileUploadRequest()
   {
+    alert("make file upload");
   if (CheckExportParams() == 0)
     return;
   uploadOndoneAction = 1;
+   alert("upload on done");
 // XXXX fix compression here
   $("FileUploadFormID").action = 'http://' + Host + '/cgi-bin/ajax/' + JSOC_FETCH;
   $("FileUploadFormID").submit();
@@ -2868,7 +2875,6 @@ function SetExportFilenameFmt()
 // use the disabledState property
 function ProcessingEnabled()
 {
-    alert('ProcessingEnabled 1');
     var option_index = 0;
     var processing_option = null;
     var disabled_state = null;
@@ -2882,7 +2888,6 @@ function ProcessingEnabled()
 
     if ($("ProcessingCheckbox").checked)
     {
-          alert('ProcessingEnabled 2');
         // The user enabled processing
         if ($("ExportRecordSet").value == "" || $("ExportRecordSet").value == "[$]")
         {
@@ -2905,7 +2910,6 @@ function ProcessingEnabled()
             $(processing_option_id).disabled = $(processing_option_id).retrieve('disabled_state', false);
         }
 
-            alert('ProcessingEnabled 3');
     }
     else
     {
@@ -2925,10 +2929,8 @@ function ProcessingEnabled()
       $("ProcessingCheckboxHide").checked = false;
       $("ProcessingShowCheckbox").style.display = "table-row";
       }
-          alert('ProcessingEnabled 4');
 
     SetProcessing(0, null); // Pretend the user clicked on the none processing option.
-        alert('ProcessingEnabled 5');
     }
   }
 
@@ -3327,7 +3329,6 @@ function SetExportProtocol(byWhom)
         var ExportCompressIndex = $("ExportCompress").selectedIndex;
         ExportCompressValue = $("ExportCompress").options[ExportCompressIndex].value;
         }
-        alert('hiding proto');
       $("ProtocolImageOptions").style.display="none";
       }
     else
@@ -3335,7 +3336,6 @@ function SetExportProtocol(byWhom)
       if (ExportProtocolValue == "MPEG")
         {
         ExportProtocolOK = 4;
-        alert('displaying proto');
         $("ProtocolImageOptions").style.display="table-row";
         $("CompressRow").style.display="none";
         $("ExportProtocolHidden").value = "mpg";
@@ -3343,7 +3343,6 @@ function SetExportProtocol(byWhom)
       else if (ExportProtocolValue == "MP4")
         {
         ExportProtocolOK = 4;
-        alert('displaying proto');
         $("ProtocolImageOptions").style.display="table-row";
         $("CompressRow").style.display="none";
         $("ExportProtocolHidden").value = "mp4";
@@ -3351,7 +3350,6 @@ function SetExportProtocol(byWhom)
       else if (ExportProtocolValue == "JPEG")
         {
         ExportProtocolOK = 3;
-        alert('displaying proto');
         $("ProtocolImageOptions").style.display="table-row";
         $("CompressRow").style.display="none";
         $("ExportProtocolHidden").value = "jpg";
@@ -3654,9 +3652,11 @@ function update_export_buttons()
                 check_message = 'Checking for pending request...';
             }
             $("ExportCheckMsg").innerHTML = check_message;
+            alert("on demand");
         }
         else
         {
+            alert("not on demand")
             // no on-demand registration check happening; a user-requested export could be happening, or no address registration/check
             // happening at all (could have completed already, or there never has been  one)
             $("ExportCheckButton").style.backgroundColor = colorYellow;
@@ -4382,14 +4382,11 @@ function cancel_export()
 // tester succeeded
 </script>
 <script type="text/javascript">
-function tester()
-{
-    alert('tester');
-}
 
 // this is the code executed when the user clicks on the ExportButton button
 function ExportButtonOnClickAction()
 {
+    alert("fetch function");
     // if the use was able to click this button, then it was OK to submit an export request
     var EB_state = $("ExportButton").retrieve('state', EB_STATE_DISABLED);
     var internal_fn = null;
@@ -5338,7 +5335,6 @@ function GetStatus()
 }
 
 
-// tester success
 </script>
 
 </head>
