@@ -449,11 +449,29 @@ class PremiumExportRequestResource(Resource):
     @use_kwargs(_arguments)
     def post(self, address, db_host, export_arguments, drms_client_type=None, db_name=None, db_port=None, requestor=None, db_user=None):
         arguments = { 'address' : address, 'db_host' : db_host, 'webserver' : urlparse(request.base_url).hostname, 'export_arguments' : export_arguments, 'drms_client_type' : drms_client_type, 'db_name' : db_name, 'db_port' : db_port, 'requestor' : requestor, 'db_user' : db_user }
+
         if APP_DEBUG:
             arguments['logging_level'] = 'debug'
 
-        action = Action.action(action_type='start_premium_export', args=arguments)
+        self._action_arguments = arguments
+
+        return self.call_action()
+
+    def call_action(self):
+        action = Action.action(action_type='start_premium_export', args=self._action_arguments)
         return action().generate_serializable_dict()
+
+class PremiumExportRequestFromFormResource(PremiumExportRequestResource):
+    @use_kwargs(PremiumExportRequestResource._arguments, location='form')
+    def post(self, address, db_host, export_arguments, drms_client_type=None, db_name=None, db_port=None, requestor=None, db_user=None):
+        arguments = { 'address' : address, 'db_host' : db_host, 'webserver' : urlparse(request.base_url).hostname, 'export_arguments' : export_arguments, 'drms_client_type' : drms_client_type, 'db_name' : db_name, 'db_port' : db_port, 'requestor' : requestor, 'db_user' : db_user }
+
+        if APP_DEBUG:
+            arguments['logging_level'] = 'debug'
+
+        self._action_arguments = arguments
+
+        return self.call_action()
 
 class MiniExportRequestResource(Resource):
     _arguments = { 'address' : fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : fields.Str(required=True, data_key='db-host'), 'export_arguments' : fields.Str(required=True, validate=lambda a: InitiateRequestAction.is_valid_arguments(a, 'debug' if APP_DEBUG else None), data_key='export-arguments'), 'drms_client_type' : fields.Str(required=False, data_key='drms-client-type'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'requestor' : fields.Str(required=False), 'db_user' : fields.Str(required=False, data_key='db-user') }
@@ -464,8 +482,24 @@ class MiniExportRequestResource(Resource):
         if APP_DEBUG:
             arguments['logging_level'] = 'debug'
 
-        action = Action.action(action_type='start_mini_export', args=arguments)
+        self._action_arguments = arguments
+
+        return self.call_action()
+
+    def call_action(self):
+        action = Action.action(action_type='start_mini_export', args=self._action_arguments)
         return action().generate_serializable_dict()
+
+class MiniExportRequestFromFormResource(MiniExportRequestResource):
+    @use_kwargs(MiniExportRequestResource._arguments, location='form')
+    def post(self, address, db_host, export_arguments, drms_client_type=None, db_name=None, db_port=None, requestor=None, db_user=None):
+        arguments = { 'address' : address, 'db_host' : db_host, 'webserver' : urlparse(request.base_url).hostname, 'export_arguments' : export_arguments, 'drms_client_type' : drms_client_type, 'db_name' : db_name, 'db_port' : db_port, 'requestor' : requestor, 'db_user' : db_user }
+        if APP_DEBUG:
+            arguments['logging_level'] = 'debug'
+
+        self._action_arguments = arguments
+
+        return self.call_action()
 
 class StreamedExportRequestResource(Resource):
     _arguments = { 'address' : fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : fields.Str(required=True, data_key='db-host'), 'export_arguments' : fields.Str(required=True, validate=lambda a: InitiateRequestAction.is_valid_arguments(a, 'debug' if APP_DEBUG else None), data_key='export-arguments'), 'drms_client_type' : fields.Str(required=False, data_key='drms-client-type'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'requestor' : fields.Str(required=False), 'db_user' : fields.Str(required=False, data_key='db-user') }
@@ -543,7 +577,9 @@ export_api.add_resource(RecordSetResource, '/export/record-set')
 export_api.add_resource(SeriesResource, '/export/series')
 
 export_api.add_resource(PremiumExportRequestResource, '/export/new-premium-request')
+export_api.add_resource(PremiumExportRequestFromFormResource, '/export/new-premium-request-from-form')
 export_api.add_resource(MiniExportRequestResource, '/export/new-mini-request')
+export_api.add_resource(MiniExportRequestFromFormResource, '/export/new-mini-request-from-form')
 export_api.add_resource(StreamedExportRequestResource, '/export/new-streamed-request')
 
 export_api.add_resource(PendingRequestResource, '/export/pending-request')
