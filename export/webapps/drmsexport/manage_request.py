@@ -51,6 +51,7 @@ class StatusCode(SC):
 
 class ErrorCode(ExportErrorCode):
     # fetch error codes
+    REQUEST_TOO_LARGE = (3, 'requested payload is too large') # can only happen with jsoc_fetch op=exp_request call, but a user can get this info from the jsoc.export table
     REQUEST_FATAL_ERROR = (4, 'a fatal error occurred during processing')
     REQUEST_NOT_ONLINE = (5, 'exported files are no longer online')
 
@@ -186,7 +187,7 @@ class Arguments(Args):
                 parser.add_argument('-p', '--pending-reqs-table', help='the db table of pending requests', metavar='<pending requests table>', dest='pending_requests_table', default=pending_requests_table)
                 parser.add_argument('-t', '--timeout', help='after this number of minutes have elapsed, requests are no longer considered pending', metavar='<timeout>', dest='timeout', default=timeout)
                 parser.add_argument('-U', '--dbuser', help='the name of the database user account', metavar='<db user>', dest='db_user', default=db_user)
-                parser.add_argument('-w', '--webserver', help='the webserver invoking this script', metavar='<webserver>', action=create_webserver_action(drms_params), dest='webserver')
+                parser.add_argument('-w', '--webserver', help='the webserver invoking this script', metavar='<webserver>', action=create_webserver_action(drms_params), dest='webserver', default=name_to_ws_obj(None, drms_params))
 
                 arguments = Arguments(parser=parser, args=args)
                 arguments.drms_client = None
@@ -379,6 +380,9 @@ class StatusOperation(Operation):
         keywords_file= None
         tar_file = None
         request_url = None
+        access = None
+        package = None
+        contact = None
         fetch_error = None
 
         request_id = export_request.request_id if export_request.request_id is not None else export_request.REQUEST_ID
@@ -400,11 +404,22 @@ class StatusOperation(Operation):
                 tar_file = export_request.tarfile
                 request_url = export_request.request_url
 
+                try:
+                    dash_index = export_request.method.index('-')
+                    access = export_request.method[dash_index:]
+                except ValueError:
+                    access = 'url'
+
+                package = { 'type' : None if tar_file is None else 'tar', 'file_name' : None if tar_file is None else tar_file }
+
+        response_dict = deepcopy(export_request.raw_response)
+
         if isinstance(status_code, ErrorCode):
-            response_dict = { 'error_code' : error_code, 'error_message' : fetch_error }
+            contact = export_request.contact
+            response_dict.update({ 'error_code' : error_code, 'error_message' : fetch_error, 'request_id' : request_id, 'contact' : contact })
         else:
             response_dict = deepcopy(export_request.raw_response)
-            response_dict.update({ 'status_code' : status_code, 'fetch_error' : fetch_error, 'request_id' : request_id, 'number_records' : export_request.record_count, 'number_files' : export_request.file_count, 'mb_exported' : export_request.size, 'sums_directory' : export_directory, 'keywords_file' : keywords_file, 'tar_file' : tar_file, 'request_url' : request_url, 'export_data' : data })
+            response_dict.update({ 'status_code' : status_code, 'fetch_error' : fetch_error, 'request_id' : request_id, 'file_format' : export_request.file_format, 'package' : package, 'access' : access, 'number_records' : export_request.record_count, 'number_files' : export_request.file_count, 'mb_exported' : export_request.size, 'sums_directory' : export_directory, 'keywords_file' : keywords_file, 'tar_file' : tar_file, 'request_url' : request_url, 'export_data' : data })
 
         self._log.write_debug([ f'[ StatusOperation.get_response_dict] response dictionary `{str(response_dict)}`'])
 
