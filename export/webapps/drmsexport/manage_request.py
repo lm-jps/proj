@@ -398,7 +398,6 @@ class StatusOperation(Operation):
 
             if status_code == StatusCode.REQUEST_COMPLETE:
                 self._log.write_debug([ f'[ StatusOperation.get_response_dict ] exported data were generated for request `{request_id}`'])
-                data = list(zip(export_request.urls.record.to_list(), export_request.urls.url.to_list())) # None, unless synchronous processing
                 export_directory = export_request.dir
                 keywords_file = export_request.keywords
                 tar_file = export_request.tarfile
@@ -411,6 +410,11 @@ class StatusOperation(Operation):
                     access = 'url'
 
                 package = { 'type' : None if tar_file is None else 'tar', 'file_name' : None if tar_file is None else tar_file }
+
+                if package['type'] == 'tar':
+                    data = [ (record['record'], record['filename']) for record in export_request.raw_response['data'] ]
+                else:
+                    data = list(zip(export_request.urls.record.to_list(), export_request.urls.url.to_list())) 
 
         response_dict = deepcopy(export_request.raw_response)
 
@@ -513,6 +517,9 @@ class PendingRequestAction(Action):
     actions = [ 'check_pending_request', 'cancel_pending_request', 'get_export_status' ]
 
     _reg_ex = None
+    _log = None
+    _public_drms_client = None
+    _private_drms_client = None
 
     def __init__(self, *, method, address, db_host, drms_client_type=None, drms_client=None, request_id=None, logging_level=None, db_name=None, db_port=None, pending_requests_table=None, timeout=None, db_user=None, webserver=None):
         self._method = getattr(self, method)
@@ -531,15 +538,15 @@ class PendingRequestAction(Action):
         self._options['webserver'] = webserver # host name - gets converted to object in `get_arguments()`
 
     def check_pending_request(self):
-        response = perform_action(is_program=False, operation='check', address=self._address, db_host=self._db_host, options=self._options)
+        response = perform_action(action_obj=self, is_program=False, operation='check', address=self._address, db_host=self._db_host, options=self._options)
         return response
 
     def cancel_pending_request(self):
-        response = perform_action(is_program=False, operation='cancel', address=self._address, db_host=self._db_host, options=self._options)
+        response = perform_action(action_obj=self, is_program=False, operation='cancel', address=self._address, db_host=self._db_host, options=self._options)
         return response
 
     def get_export_status(self):
-        response = perform_action(is_program=False, operation='status', address=self._address, db_host=self._db_host, options=self._options)
+        response = perform_action(action_obj=self, is_program=False, operation='status', address=self._address, db_host=self._db_host, options=self._options)
         return response
 
     @classmethod
@@ -554,6 +561,29 @@ class PendingRequestAction(Action):
         reg_ex = cls.get_reg_ex()
         return reg_ex.match(address) is not None
 
+    @property
+    def log(self):
+        return self.__class__._log
+
+    @log.setter
+    def log(self, log):
+        self.__class__._log = log
+
+    @property
+    def public_drms_client(self):
+        return self.__class__._public_drms_client
+
+    @public_drms_client.setter
+    def public_drms_client(self, public_drms_client):
+        self.__class__._public_drms_client = public_drms_client
+
+    @property
+    def private_drms_client(self):
+        return self.__class__._private_drms_client
+
+    @private_drms_client.setter
+    def private_drms_client(self, private_drms_client):
+        self.__class__._private_drms_client = private_drms_client
 
 def requires_private_db(request_id):
     reg_ex = PendingRequestAction.get_reg_ex()
@@ -565,7 +595,7 @@ def requires_private_db(request_id):
     # private if ends in '_' ['X' '_'] 'I' 'N'
     return True if match.group(6) is not None else False
 
-def perform_action(is_program, program_name=None, **kwargs):
+def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
     response = None
     log = None
 
@@ -584,11 +614,16 @@ def perform_action(is_program, program_name=None, **kwargs):
         except Exception as exc:
             raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
 
-        try:
-            formatter = DrmsLogFormatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
-            log = DrmsLog(arguments.log_file, arguments.logging_level, formatter)
-        except Exception as exc:
-            raise LoggingError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+        if action_obj is None or action_obj.log is None:
+            try:
+                formatter = DrmsLogFormatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+                log = DrmsLog(arguments.log_file, arguments.logging_level, formatter)
+                if action_obj is not None:
+                    action_obj.log = log
+            except Exception as exc:
+                raise LoggingError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+        else:
+            log = action_obj.log
 
         if is_program:
             log.write_debug([ f'[ perform_action ] program invocation' ])
@@ -620,6 +655,9 @@ def perform_action(is_program, program_name=None, **kwargs):
                             public_drms_client = arguments.drms_client if arguments.webserver.public and arguments.drms_client is not None else None
                             private_drms_client = arguments.drms_client if not arguments.webserver.public and arguments.drms_client is not None else None
 
+                            public_drms_client = action_obj.public_drms_client if (public_drms_client is None and action_obj is not None) else public_drms_client
+                            private_drms_client = action_obj.private_drms_client if (private_drms_client is None and action_obj is not None) else private_drms_client
+
                             try:
                                 private_client_needed = requires_private_db(arguments.request_id)
                             except Exception as exc:
@@ -641,6 +679,8 @@ def perform_action(is_program, program_name=None, **kwargs):
 
                                     log.write_debug([ f'[ perform_action ] creating private securedrms client' ])
                                     private_drms_client = factory.create_client(server='jsoc_internal', use_ssh=use_ssh, use_internal=False, connection_info=connection_info)
+                                    if action_obj is not None:
+                                        action_obj.private_drms_client = private_drms_client
                                 except securedrms.SecureDRMSError as exc:
                                     raise DRMSClientError(exc_info=sys_exc_info())
                                 except Exception as exc:
@@ -656,6 +696,8 @@ def perform_action(is_program, program_name=None, **kwargs):
 
                                     log.write_debug([ f'[ perform_action ] creating public securedrms client' ])
                                     public_drms_client = factory.create_client(server='jsoc_external', use_ssh=use_ssh, use_internal=False, connection_info=connection_info)
+                                    if action_obj is not None:
+                                        action_obj.public_drms_client = public_drms_client
                                 except securedrms.SecureDRMSError as exc:
                                     raise DRMSClientError(exc_info=sys_exc_info())
                                 except Exception as exc:
@@ -689,7 +731,7 @@ def perform_action(is_program, program_name=None, **kwargs):
 
 if __name__ == "__main__":
     try:
-        response = perform_action(is_program=True)
+        response = perform_action(action_obj=None, is_program=True)
     except ExportError as exc:
         response = exc.response
     except Exception as exc:
