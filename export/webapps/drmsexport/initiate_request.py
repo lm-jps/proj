@@ -160,19 +160,27 @@ class Arguments(Args):
                 parser.add_argument('-P', '--dbport', help='the port on the host machine that is accepting connections for the database', metavar='<db host port>', dest='db_port', type=int, default=db_port)
                 parser.add_argument('-r', '--requestor', help='the name of the export user', metavar='<requestor>', dest='requestor', default=None)
                 parser.add_argument('-U', '--dbuser', help='the name of the database user account', metavar='<db user>', dest='db_user', default=db_user)
-                parser.add_argument('-w', '--webserver', help='the webserver invoking this script', metavar='<webserver>', action=create_webserver_action(drms_params), dest='webserver')
+                parser.add_argument('-w', '--webserver', help='the webserver invoking this script', metavar='<webserver>', action=create_webserver_action(drms_params), dest='webserver', default=name_to_ws_obj(None, drms_params))
 
                 arguments = Arguments(parser=parser, args=args)
                 arguments.drms_client = None
             else:
                 # `program_args` has all `arguments` values, in final form; validate them
-                def extract_module_args(*, address, export_type, db_host, export_arguments, drms_client_type='ssh', drms_client=None, log_file=log_file, logging_level='error', db_name=db_name, db_port=db_port, requestor=None, db_user=db_user, webserver=None):
+                def extract_module_args(*, address, export_type, db_host, export_arguments, drms_client_type='ssh', drms_client=None, file_specification=None, log_file=log_file, logging_level='error', db_name=db_name, db_port=db_port, requestor=None, db_user=db_user, webserver=None):
                     arguments = {}
 
                     arguments['address'] = address
                     arguments['export_type'] = export_type
                     arguments['db_host'] = db_host
-                    arguments['export_arguments'] = ExportArgumentsAction.json_to_dict(export_arguments)
+
+                    # replace the '*file*' specification with `file_specification`, if it is provided
+                    export_arguments_dict = ExportArgumentsAction.json_to_dict(export_arguments)
+
+                    if file_specification is not None:
+                        export_arguments_dict['specification'] = file_specification
+
+                    arguments['export_arguments'] = export_arguments_dict
+
                     arguments['drms_client_type'] = drms_client_type
                     arguments['drms_client'] = drms_client
                     arguments['log_file'] = log_file
@@ -204,13 +212,13 @@ class Arguments(Args):
     def validate_export_arguments(cls, *, arguments):
         if arguments.export_type == 'premium':
             required_args = ('access', 'package', 'specification',)
-            optional_args = ('file_format', 'file_format_args', 'file_name_format', 'number_records', 'processing',)
+            optional_args = ('file-format', 'file-format-args', 'file-name-format', 'number-records', 'processing',)
         elif arguments.export_type == 'mini':
             required_args = ('specification',)
-            optional_args = ('file_name_format', 'number_records',)
+            optional_args = ('file_name-format', 'number-records',)
         elif arguments.export_type == 'streamed':
             required_args = ('specification',)
-            optional_args = ('file_name_format',)
+            optional_args = ('file-name-format',)
 
         all_args = []
         all_args.extend(required_args)
@@ -273,6 +281,10 @@ def get_response_dict(export_request, log):
     keywords_file= None
     tar_file = None
     request_url = None
+    dash_index = None
+    access = None
+    package = None
+    contact = None
 
     fetch_error = None
 
@@ -291,17 +303,33 @@ def get_response_dict(export_request, log):
 
         if status_code == StatusCode.REQUEST_COMPLETE:
             log.write_debug([ f'[ get_response_dict ] exported data were generated for request `{request_id}`'])
-            data = list(zip(export_request.urls.record.to_list(), export_request.urls.url.to_list())) # None, unless synchronous processing
+
             export_directory = export_request.dir
             keywords_file = export_request.keywords
             tar_file = export_request.tarfile
             request_url = export_request.request_url
 
+            try:
+                dash_index = export_request.method.index('-')
+                access = export_request.method[dash_index:]
+            except ValueError:
+                access = 'url'
+
+            package = { 'type' : None if tar_file is None else 'tar', 'file_name' : None if tar_file is None else tar_file }
+
+            # None, unless synchronous processing
+            if package['type'] == 'tar':
+                data = [ (record['record'], record['filename']) for record in export_request.raw_response['data'] ]
+            else:
+                data = list(zip(export_request.urls.record.to_list(), export_request.urls.url.to_list()))
+
+    response_dict = deepcopy(export_request.raw_response)
+
     if isinstance(status_code, ErrorCode):
-        response_dict = { 'error_code' : error_code, 'error_message' : fetch_error }
+        contact = export_request.contact
+        response_dict.update({ 'error_code' : error_code, 'error_message' : fetch_error, 'contact' : contact })
     else:
-        response_dict = deepcopy(export_request.raw_response)
-        response_dict.update({ 'status_code' : status_code, 'fetch_error' : fetch_error, 'request_id' : request_id, 'number_records' : export_request.record_count, 'number_files' : export_request.file_count, 'mb_exported' : export_request.size, 'sums_directory' : export_directory, 'keywords_file' : keywords_file, 'tar_file' : tar_file, 'request_url' : request_url, 'export_data' : data })
+        response_dict.update({ 'status_code' : status_code, 'fetch_error' : fetch_error, 'request_id' : request_id, 'file_format' : export_request.file_format, 'package' : package, 'access' : access, 'number_records' : export_request.record_count, 'number_files' : export_request.file_count, 'mb_exported' : export_request.size, 'sums_directory' : export_directory, 'keywords_file' : keywords_file, 'tar_file' : tar_file, 'request_url' : request_url, 'export_data' : data })
 
     log.write_debug([ f'[ get_response_dict] response dictionary `{str(response_dict)}`'])
 
@@ -356,17 +384,17 @@ def request_is_pending(export_request):
 def stop_loop(do_loop):
     do_loop = False
 
-def export_premium(*, drms_client, address, requestor=None, log, **export_arguments):
+def export_premium(*, drms_client, address, requestor=None, log, export_arguments):
     '''
     export_arguments:
     {
         access : <http, ftp>, # required
-        file_format <exported file type>, # optional
-        file_format_args <exported file-type arguments>, # optional
-        file_name_format : <format string for name of exported file>, # optional
-        number_records : <maximum number of records exported>, # optional
+        file-format <exported file type>, # optional
+        file-format-args <exported file-type arguments>, # optional
+        file-name-format : <format string for name of exported file>, # optional
+        number-records : <maximum number of records exported>, # optional
         processing : <dict of processing argument>, # optional
-        package : <type, package_file_name>, # required
+        package : <type, file_name>, # required
         specification : <DRMS record-set specification> # required
     }
     '''
@@ -384,7 +412,7 @@ def export_premium(*, drms_client, address, requestor=None, log, **export_argume
             else:
                 method = 'url'
 
-        export_request = drms_client.export(email=address, requestor=requestor, ds=export_arguments['specification'], process=export_arguments['processing'], method=method, protocol=export_arguments['file_format'], protocol_args=export_arguments['file_format_args'], filename_fmt=export_arguments['file_name_format'], n=export_arguments['number_records'], synchronous_export=False)
+        export_request = drms_client.export(email=address, requestor=requestor, ds=export_arguments['specification'], process=export_arguments['processing'], method=method, protocol=export_arguments['file-format'], protocol_args=export_arguments['file-format-args'], filename_fmt=export_arguments['file-name-format'], n=export_arguments['number-records'], synchronous_export=False)
         status_code = get_request_status_code(export_request)
 
         if isinstance(status_code, ErrorCode):
@@ -435,13 +463,13 @@ def export_premium(*, drms_client, address, requestor=None, log, **export_argume
 
     return response
 
-def export_mini(*, drms_client, address, requestor=None, log, **export_arguments):
+def export_mini(*, drms_client, address, requestor=None, log, export_arguments):
     '''
     export_arguments:
     {
       specification : <DRMS record-set specification>, # required
-      file_name_format : <format string for name of exported file>, # optional
-      number_records : <maximum number of records exported> # optional
+      file-name-format : <format string for name of exported file>, # optional
+      number-records : <maximum number of records exported> # optional
     }
     '''
     response = None
@@ -472,7 +500,7 @@ def export_mini(*, drms_client, address, requestor=None, log, **export_arguments
         # }
         method = 'url-quick'
 
-        export_request = drms_client.export(email=address, requestor=requestor, ds=export_arguments['specification'], method='url_quick', protocol='as-is', protocol_args=None, filename_fmt=export_arguments['file_name_format'], n=export_arguments['number_records'], synchronous_export=False)
+        export_request = drms_client.export(email=address, requestor=requestor, ds=export_arguments['specification'], method='url_quick', protocol='as-is', protocol_args=None, filename_fmt=export_arguments['file-name-format'], n=export_arguments['number-records'], synchronous_export=False)
         status_code = get_request_status_code(export_request)
 
         if isinstance(status_code, ErrorCode):
@@ -549,12 +577,12 @@ def read_from_proc(destination, proc):
         else:
             return (True, bytes_read)
 
-def export_streamed(*, request_action, drms_client, address, requestor=None, log, **export_arguments):
+def export_streamed(*, request_action, drms_client, address, requestor=None, log, export_arguments):
     '''
     export_arguments:
     {
       specification : <DRMS record-set specification>, # required
-      file_name_format : <format string for name of exported file> # optional
+      file-name-format : <format string for name of exported file> # optional
     }
     '''
     response = None
@@ -562,7 +590,7 @@ def export_streamed(*, request_action, drms_client, address, requestor=None, log
     try:
         method = 'url_direct'
 
-        export_request = drms_client.export_and_stream_file(spec=export_arguments['specification'], filename_fmt=export_arguments['file_name_format'])
+        export_request = drms_client.export_and_stream_file(spec=export_arguments['specification'], filename_fmt=export_arguments['file-name-format'])
 
         log.write_debug([ f'[ export_streamed ] creating `GeneratorDestination`' ])
         destination = securedrms.OnTheFlyDownloader.GeneratorDestination()
@@ -620,12 +648,12 @@ async def async_read_from_proc(destination, proc):
         else:
             return (True, bytes_read)
 
-async def async_export_streamed(*, request_action, drms_client, address, requestor=None, log, **export_arguments):
+async def async_export_streamed(*, request_action, drms_client, address, requestor=None, log, export_arguments):
     '''
     export_arguments:
     {
       specification : <DRMS record-set specification>, # required
-      file_name_format : <format string for name of exported file> # optional
+      file-name-format : <format string for name of exported file> # optional
     }
     '''
     response = None
@@ -633,7 +661,7 @@ async def async_export_streamed(*, request_action, drms_client, address, request
     try:
         method = 'url_direct'
 
-        export_request = drms_client.export_and_stream_file(spec=export_arguments['specification'], filename_fmt=export_arguments['file_name_format'])
+        export_request = drms_client.export_and_stream_file(spec=export_arguments['specification'], filename_fmt=export_arguments['file-name-format'])
 
         log.write_debug([ f'[ async_export_streamed ] creating `GeneratorDestination`' ])
         destination = securedrms.OnTheFlyDownloader.GeneratorDestination()
@@ -654,7 +682,7 @@ async def async_export_streamed(*, request_action, drms_client, address, request
     except securedrms.SecureDRMSError as exc:
         raise DRMSClientError(exc_info=sys_exc_info())
 
-def perform_action(*, is_program, program_name=None, request_action=None, **kwargs):
+def perform_action(*, action_obj, is_program, program_name=None, request_action=None, **kwargs):
     # catch all expections so we can always generate a response
     response = None
     log = None
@@ -676,11 +704,14 @@ def perform_action(*, is_program, program_name=None, request_action=None, **kwar
             raise
             raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
 
-        try:
-            formatter = DrmsLogFormatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
-            log = DrmsLog(arguments.log_file, arguments.logging_level, formatter)
-        except Exception as exc:
-            raise LoggingError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+        if action_obj is None or action_obj.log is None:
+            try:
+                formatter = DrmsLogFormatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+                log = DrmsLog(arguments.log_file, arguments.logging_level, formatter)
+            except Exception as exc:
+                raise LoggingError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+        else:
+            log = action_obj.log
 
         if is_program:
             log.write_debug([ f'[ perform_action ] program invocation' ])
@@ -694,15 +725,35 @@ def perform_action(*, is_program, program_name=None, request_action=None, **kwar
         factory = None
         public_drms_client = None
         private_drms_client = None
+        client_is_public = None
 
         # choosing the correct drms client (public or private) to handle pass-through series, if the specification
         # contains them
         debug = True if arguments.logging_level == DrmsLogLevel.DEBUG else False
 
-        drms_client = create_drms_client(webserver=arguments.webserver, series=None, specification=arguments.export_arguments['specification'], drms_client_type=arguments.drms_client_type, public_drms_client_server='jsoc_external', private_drms_client_server='jsoc_internal', private_db_host=arguments.private_db_host, db_host=arguments.db_host, db_port=arguments.db_port, db_name=arguments.db_name, db_user=arguments.db_user, debug=debug, log=log)
+        private_client_needed = not arguments.webserver.public
 
-        if drms_client is None:
-            raise DRMSClientError(error_message=f'unable to obtain securedrms client')
+        public_drms_client = arguments.drms_client if arguments.webserver.public and arguments.drms_client is not None else None
+        private_drms_client = arguments.drms_client if not arguments.webserver.public and arguments.drms_client is not None else None
+
+        public_drms_client = action_obj.public_drms_client if (public_drms_client is None and action_obj is not None) else public_drms_client
+        private_drms_client = action_obj.private_drms_client if (private_drms_client is None and action_obj is not None) else private_drms_client
+
+        if (private_client_needed and private_drms_client is None) or (not private_client_needed and public_drms_client is None):
+            # make the needed, but not existing, client
+            drms_client = create_drms_client(webserver=arguments.webserver, series=None, specification=arguments.export_arguments['specification'], drms_client_type=arguments.drms_client_type, public_drms_client_server='jsoc_external', private_drms_client_server='jsoc_internal', private_db_host=arguments.private_db_host, db_host=arguments.db_host, db_port=arguments.db_port, db_name=arguments.db_name, db_user=arguments.db_user, debug=debug, log=log)
+
+            if drms_client is None:
+                raise DRMSClientError(error_message=f'unable to obtain securedrms client')
+
+            if private_client_needed:
+                private_drms_client = drms_client
+                if action_obj is not None:
+                    action_obj.private_drms_client = private_drms_client
+            else:
+                public_drms_client = drms_client
+                if action_obj is not None:
+                    action_obj.public_drms_client = public_drms_client
 
         # there are four potential attributes an export request can have:
         #   processing (processed ==> original image is modified); NA for keyword-only exports
@@ -745,15 +796,15 @@ def perform_action(*, is_program, program_name=None, request_action=None, **kwar
             if arguments.export_type == 'premium':
                 # supports all export four export attributes; use securedrms.SecureClient.export(method='url')
                 log.write_info([ f'[ perform_action ] servicing premium request for user `{arguments.address}`: {str(export_arguments)}' ])
-                response = export_premium(drms_client=drms_client, address=arguments.address, requestor=arguments.requestor, log=log, **export_arguments)
+                response = export_premium(drms_client=drms_client, address=arguments.address, requestor=arguments.requestor, log=log, export_arguments=export_arguments)
             elif arguments.export_type == 'mini':
                 # supports no processing, no tar, http access, native file format attributes; use securedrms.SecureClient.export(method='url_quick')
                 log.write_info([ f'[ perform_action ] servicing mini request for user `{arguments.address}`: {str(export_arguments)}' ])
-                response = export_mini(drms_client=drms_client, address=arguments.address, requestor=arguments.requestor, log=log, **export_arguments)
+                response = export_mini(drms_client=drms_client, address=arguments.address, requestor=arguments.requestor, log=log, export_arguments=export_arguments)
             elif arguments.export_type == 'streamed':
                 # supports no-processing, no-tar, stream-access, native file format attributes; exports a single file only, all SUs must be online; use securedrms.SecureClient.export_package()
                 log.write_info([ f'[ perform_action ] servicing streamed request for user `{arguments.address}`: {str(export_arguments)}' ])
-                response = export_streamed(request_action=request_action, drms_client=drms_client, address=arguments.address, requestor=arguments.requestor, log=log, **export_arguments)
+                response = export_streamed(request_action=request_action, drms_client=drms_client, address=arguments.address, requestor=arguments.requestor, log=log, export_arguments=export_arguments)
         except Exception as exc:
             raise ExportActionError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
     except ExportError as exc:
@@ -860,7 +911,7 @@ async def perform_async_action(*, is_program, program_name=None, request_action=
 
             # supports no-processing, no-tar, stream-access, native file format attributes; exports a single file only, all SUs must be online; use securedrms.SecureClient.export_package()
             log.write_info([ f'[ perform_async_action ] servicing streamed request for user `{arguments.address}`: {str(export_arguments)}' ])
-            response = await async_export_streamed(request_action=request_action, drms_client=drms_client, address=arguments.address, requestor=arguments.requestor, log=log, **export_arguments)
+            response = await async_export_streamed(request_action=request_action, drms_client=drms_client, address=arguments.address, requestor=arguments.requestor, log=log, export_arguments=export_arguments)
         except Exception as exc:
             raise ExportActionError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
     except ExportError as exc:
@@ -879,7 +930,12 @@ async def perform_async_action(*, is_program, program_name=None, request_action=
 from action import Action
 class InitiateRequestAction(Action):
     actions = [ 'start_premium_export', 'start_mini_export', 'start_streamed_export', 'async_start_streamed_export' ]
-    def __init__(self, *, method, address, db_host, export_arguments, drms_client_type=None, drms_client=None, logging_level=None, db_name=None, db_port=None, requestor=None, db_user=None, webserver=None):
+
+    _log = None
+    _public_drms_client = None
+    _private_drms_client = None
+
+    def __init__(self, *, method, address, db_host, export_arguments, drms_client_type=None, drms_client=None, file_specification=None, logging_level=None, db_name=None, db_port=None, requestor=None, db_user=None, webserver=None):
         self._method = getattr(self, method)
         self._address = address
         self._db_host = db_host
@@ -887,6 +943,7 @@ class InitiateRequestAction(Action):
         self._options = {}
         self._options['drms_client_type'] = drms_client_type
         self._options['drms_client'] = drms_client
+        self._options['file_specification'] = file_specification
         self._options['logging_level'] = logging_level
         self._options['db_name'] = db_name
         self._options['db_port'] = db_port
@@ -908,13 +965,13 @@ class InitiateRequestAction(Action):
           processing : <dict of processing argument>,
           package : <type and file name>,
           access : <http, ftp>,
-          file_format <exported file type>,
-          file_name_format : <format string for name of exported file>,
-          size_ratio : <multiplier to obtain image size from original image size>,
-          number_records : <maximum number of records exported>
+          file-format <exported file type>,
+          file-name-format : <format string for name of exported file>,
+          size-ratio : <multiplier to obtain image size from original image size>,
+          number-records : <maximum number of records exported>
         }
         '''
-        response = perform_action(is_program=False, export_type='premium', request_action=self, address=self._address, db_host=self._db_host, export_arguments=self._export_arguments, options=self._options)
+        response = perform_action(action_obj=self, is_program=False, export_type='premium', request_action=self, address=self._address, db_host=self._db_host, export_arguments=self._export_arguments, options=self._options)
         return response
 
     def start_mini_export(self):
@@ -922,11 +979,11 @@ class InitiateRequestAction(Action):
         export_arguments:
         {
           specification : <DRMS record-set specification>,
-          file_name_format : <format string for name of exported file>,
-          number_records : <maximum number of records exported>
+          file-name-format : <format string for name of exported file>,
+          number-records : <maximum number of records exported>
         }
         '''
-        response = perform_action(is_program=False, export_type='mini', request_action=self, address=self._address, db_host=self._db_host, export_arguments=self._export_arguments, options=self._options)
+        response = perform_action(action_obj=self, is_program=False, export_type='mini', request_action=self, address=self._address, db_host=self._db_host, export_arguments=self._export_arguments, options=self._options)
         return response
 
     def start_streamed_export(self):
@@ -934,10 +991,10 @@ class InitiateRequestAction(Action):
         export_arguments:
         {
           specification : <DRMS record-set specification>,
-          file_name_format : <format string for name of exported file>
+          file-name-format : <format string for name of exported file>
         }
         '''
-        response = perform_action(is_program=False, export_type='streamed', request_action=self, address=self._address, db_host=self._db_host, export_arguments=self._export_arguments, options=self._options)
+        response = perform_action(action_obj=self, is_program=False, export_type='streamed', request_action=self, address=self._address, db_host=self._db_host, export_arguments=self._export_arguments, options=self._options)
         return response
 
     async def async_start_streamed_export(self):
@@ -945,7 +1002,7 @@ class InitiateRequestAction(Action):
         export_arguments:
         {
           specification : <DRMS record-set specification>,
-          file_name_format : <format string for name of exported file>
+          file-name-format : <format string for name of exported file>
         }
         '''
         response = await perform_async_action(is_program=False, export_type='streamed', request_action=self, address=self._address, db_host=self._db_host, export_arguments=self._export_arguments, options=self._options)
@@ -969,9 +1026,33 @@ class InitiateRequestAction(Action):
 
         return is_valid
 
+    @property
+    def log(self):
+        return self.__class__._log
+
+    @log.setter
+    def log(self, log):
+        self.__class__._log = log
+
+    @property
+    def public_drms_client(self):
+        return self.__class__._public_drms_client
+
+    @public_drms_client.setter
+    def public_drms_client(self, public_drms_client):
+        self.__class__._public_drms_client = public_drms_client
+
+    @property
+    def private_drms_client(self):
+        return self.__class__._private_drms_client
+
+    @private_drms_client.setter
+    def private_drms_client(self, private_drms_client):
+        self.__class__._private_drms_client = private_drms_client
+
 if __name__ == "__main__":
     try:
-        response = perform_action(is_program=True, request_action=None)
+        response = perform_action(action_obj=None, is_program=True, request_action=None)
     except ExportError as exc:
         response = exc.response
     except Exception as exc:
