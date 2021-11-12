@@ -906,6 +906,16 @@ function on_load_init_callback()
 {
     var needcount = 0;
 
+    // fix ImageSize options
+    for (index = 0; index < $('ImageSize').options.length; index += 1)
+    {
+        $('ImageSize').options[index].value = $('ImageSize').options[index].value.trim().substr(4);
+        alert('size option ' + $('ImageSize').options[index].value);
+    }
+
+
+
+
     Cookie.init({ "name" : "exportdata", "expires" : 14});
     initVars(); // This call runs code that requires RecordSet to be set. However, that is not true
               // before it is set below [ $("ExportRecordSet").value = args.ds ]
@@ -3628,6 +3638,7 @@ function ProtocolImageUserSet(opt)
 // the options UI
 function reset_image_protocol_options(record_set_series, record_set_wavelength, color_table_metadata)
 {
+    alert('reset_image_protocol_options');
     // use the specified wavelength to choose an appropriate color table, and then 
     // use the values from the color table to set the UI element values
     var series_wave = null;
@@ -3681,15 +3692,8 @@ function reset_image_protocol_options(record_set_series, record_set_wavelength, 
         $('ImageScl').selectedIndex = color_table_metadata.scale_indexes[metadata['scaling']];
     }
 
-    // fix ImageSize options
-    for (index = 0; index < $('ImageSize').options.length; index += 1)
-    {
-        $('ImageSize').options[index].value = $('ImageSize').options[index].value.trim().substr(4); 
-    }
-
     $('ImageSize').selectedIndex = 2; // 512x512 image
 
-    alert('specified!!');
     $('ImageSize').store({ "specified" : true });
 
     update_hidden_protocol(false);
@@ -3704,8 +3708,8 @@ function validate_image_protocol_options(series, wavelength, color_table_metadat
     var protocol = $('ExportProtocol').value.trim();
     var protocol_argument = null;
     var hidden_protocol = $('ExportProtocolHidden').value.trim();
-    var image_ct = $('ImageCT').value.trim(); // color table, or not specified
-    var image_scaling = $('ImageScl').value.trim(); // scaling (e.g., MINMAX, LOG, ...), or not specified
+    var image_ct = null; 
+    var image_scaling = null;
     var image_zoom = null; // 1, 4, 8, or 16
     var image_min = null; // number or not specified
     var image_max = null; // number or not specified
@@ -3714,13 +3718,41 @@ function validate_image_protocol_options(series, wavelength, color_table_metadat
     var index = null;
     var valid = null;
 
-    alert('validate_image_protocol_options');
+    if ($('ImageCT').selectedIndex != -1)
+    {
+        image_ct = $('ImageCT').options[$('ImageCT').selectedIndex].value.trim(); // color table, or not specified
+    }
+    else
+    {
+        image_ct = $('ImageCT').value.trim();
+    }
+
+    if ($('ImageScl').selectedIndex != -1)
+    {
+        image_scaling = $('ImageScl').options[$('ImageScl').selectedIndex].value.trim(); // color table, or not specified
+    }
+    else
+    {
+        image_scaling = $('ImageScl').value.trim();
+    }
+
+    if ($('ImageSize').selectedIndex != -1)
+    {
+        image_zoom = $('ImageSize').options[$('ImageSize').selectedIndex].value.trim(); // color table, or not specified
+    }
+    else
+    {
+        image_zoom = $('ImageSize').value.trim();
+    }
+
+
+
 
     valid = $('ProtocolImageOptions').retrieve('valid', null); 
 
     if (valid === null)
     {
-        image_zoom = parseInt($('ImageSize').value.trim());
+        image_zoom = parseInt(image_zoom);
 
         if ($('ImageMin').retrieve('specified', false))
         {
@@ -3734,12 +3766,11 @@ function validate_image_protocol_options(series, wavelength, color_table_metadat
 
         if (image_zoom !== 'NaN' && image_zoom > 0 && image_min !== 'NaN' && image_max !== 'NaN' && image_min < image_max)
         {
-            alert('valid');
             valid = true;
         }
         else
         {
-            alert('invalid');
+            alert('invalid  ' + JSON.stringify(image_zoom) + ' ' + JSON.stringify(image_min) + ' ' + JSON.stringify(image_max));
             valid = false;
         }
 
@@ -3770,8 +3801,6 @@ function initialize_image_protocol_options(update_options_callback)
     var wavelength_extracted = (wavelength !== null);
     var extract_wavelength_fn = null;
     var load_color_table_metadata_fn = null;
-
-    alert('initialize');
 
     extract_wavelength_fn = function(color_table_metadata, update_options_callback)
     {
@@ -4101,8 +4130,6 @@ function update_protocol_options(reset)
     var color_table_map = null;
     var metadata = null;
 
-    alert(' update_protocol_options');
-
     if (reset)
     {
         // now, we need to reset the options html elements (re-populate with defaults); and if the color tables 
@@ -4386,14 +4413,41 @@ function update_hidden_protocol(reset)
     var hidden_protocol = null;
     var image_min = parseFloat($('ImageMin').value.trim());
     var image_max = parseFloat($('ImageMax').value.trim());
-    var image_ct = $('ImageCT').value.trim();
-    var image_scaling = $('ImageScl').value.trim();
-    var image_zoom = $('ImageSize').value.trim();
+    var image_ct = null;
+    var image_scaling = null;
+    var image_zoom = null;
     var index = null;
     var series_info = null;
     var data_type = null;
     var compression_list = [];
     var image_list = [];
+
+    if ($('ImageCT').selectedIndex != -1)
+    {
+        image_ct = $('ImageCT').options[$('ImageCT').selectedIndex].value.trim(); // color table, or not specified
+    }
+    else
+    {
+        image_ct = $('ImageCT').value.trim();
+    }
+
+    if ($('ImageScl').selectedIndex != -1)
+    {
+        image_scaling = $('ImageScl').options[$('ImageScl').selectedIndex].value.trim(); // color table, or not specified
+    }
+    else
+    {
+        image_scaling = $('ImageScl').value.trim();
+    }
+
+    if ($('ImageSize').selectedIndex != -1)
+    {
+        image_zoom = $('ImageSize').options[$('ImageSize').selectedIndex].value.trim(); // color table, or not specified
+    }
+    else
+    {
+        image_zoom = $('ImageSize').value.trim();
+    }
 
     if (reset)
     {
@@ -4467,7 +4521,7 @@ function update_hidden_protocol(reset)
 
                 image_list.push('scaling=' + $('ImageScl').value.trim());
 
-                image_list.push('size=' + parseFloat($('ImageSize').value.trim()).toString());
+                image_list.push('size=' + parseFloat($('ImageSize').options[$('ImageSize').selectedIndex].value.trim()).toString());
 
                 $('ExportProtocolHidden').value = hidden_protocol;
                 
@@ -4529,6 +4583,9 @@ function validate_hidden_protocol()
     var data_type = null;
     var compression_list = null;
     var image_list = null;
+    var image_ct = null;
+    var image_scaling = null;
+    var image_zoom = null;
     var protocol_argument = null;
     var index = null;
     var valid = null;
@@ -4637,9 +4694,38 @@ function validate_hidden_protocol()
                         image_list.push('max=' + parseFloat($('ImageMax').value.trim()).toString());
                     }
 
-                    image_list.push('CT=' + $('ImageCT').value.trim());
-                    image_list.push('scaling=' + $('ImageScl').value.trim());
-                    image_list.push('size=' + parseFloat($('ImageSize').value.trim()).toString());
+                
+                    if ($('ImageCT').selectedIndex != -1)
+                    {
+                        image_ct = $('ImageCT').options[$('ImageCT').selectedIndex].value.trim(); // color table, or not specified
+                    }
+                    else
+                    {
+                        image_ct = $('ImageCT').value.trim();
+                    }
+
+                    if ($('ImageScl').selectedIndex != -1)
+                    {
+                        image_scaling = $('ImageScl').options[$('ImageScl').selectedIndex].value.trim(); // color table, or not specified
+                    }
+                    else
+                    {
+                        image_scaling = $('ImageScl').value.trim();
+                    }
+
+                    if ($('ImageSize').selectedIndex != -1)
+                    {
+                        image_zoom = $('ImageSize').options[$('ImageSize').selectedIndex].value.trim(); // color table, or not specified
+                    }
+                    else
+                    {
+                        image_zoom = $('ImageSize').value.trim();
+                    }
+                
+
+                    image_list.push('CT=' + image_ct);
+                    image_list.push('scaling=' + image_scaling);
+                    image_list.push('size=' + parseFloat(image_zoom).toString());
 
                     image_list.sort();
                 }
@@ -4703,7 +4789,6 @@ function validate_protocol_options()
     }
     else if (protocol === 'jpeg' || protocol === 'mpeg' || protocol === 'mp4')
     {
-        alert('validating image protocol options');
         valid = $('ProtocolImageOptions').retrieve('valid', null);
         if (valid === null)
         {
