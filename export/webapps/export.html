@@ -160,7 +160,7 @@ var HTML_REQUESTID_DESC = 'This is your request ID; enter it below and click on 
 
 </script>
 
-<!-- Add functions for export processing and protocol options  -->
+<!-- Add functions for export processing (no more protocols js)  -->
 <script type="text/javascript" src="js/processing.elements.js"></script>
 
 <!-- Add list of seriesnames for which processing on export is not suportted -->
@@ -2362,7 +2362,6 @@ function CreateProcessSpec(spec, fastCallback, callback)
                 // that could be a slow asynchronous call;
                 var actualCB = null;
 
-                alert('calling callback, fast? ' + JSON.stringify(fastCallback));
                 if (fastCallback)
                 {
 
@@ -2477,7 +2476,6 @@ function GetDefaultFormat()
 
     var doInfoReqFn = function()
     {
-        alert('info req');
         var export_app_arguments = null;
         var options = null;
         var origin = null;
@@ -2608,7 +2606,6 @@ function GetDefaultFormat()
     if (series_cache === null || series === null || !series_cache.hasOwnProperty(series))
     {
         // Just call the function. It will determine if it should use the internal or external version of the CGI.
-        alert('calling info req now');
         doInfoReqFn();
     }
 
@@ -2767,7 +2764,7 @@ function ExportRSChanged()
     $('ExportRecordSet').store({ 'count': RecordCount });
 
     // reset the wavelength used for the image options for this record-set
-    $('ProtocolImageOptions').store({ "wavelength" : null });
+    $('ExportRecordSet').store({ "wavelength" : null });
     $("CountButton").style.backgroundColor = colorYellow;
     ExportNewRS(); // to fix operator not pressing enter or count
   }
@@ -2811,14 +2808,12 @@ function ProcessRSChange(error)
                     // start asynchronous call to determine the processing option's disabledState value; the record-set will have
                     // already been entered, and the [$] resolved into an actual record specification; this asynchronous call
                     // could take a long time to complete
-                    alert('requesting rsinfo');
                     RequestRSInfo('', $('ExportRecordSet').value, $('ExportRecordSet').retrieve('last_record', false), function(errMsg) { $('ProcessingCheckbox').disabled = false; $('ProcessingCheckboxLabel').style.color = 'black'; $('ProcessingCheckboxLabel').style['font-weight'] = 'normal'; $('ProcessingWaitMessage').style.display = 'none'; });
                     need_rs_info = true;
                     break; // call RequestRSInfo 1x
                 }
                 else
                 {
-                    alert('disabled state et');
                     $('ProcessingCheckboxLabel').style.color = 'black';
                     $('ProcessingCheckboxLabel').style['font-weight'] = 'normal';
                     $('ProcessingWaitMessage').style.display = 'none';
@@ -2993,6 +2988,7 @@ function SetRecordLimit(callbackAfterJsocinfo)
     return (GetRSCount(callbackAfterJsocinfo));
 }
 
+// reset ==> called in response to RS change, so disabled state is clean
 function update_export_method(reset)
 {
     var valid = null;
@@ -3001,7 +2997,7 @@ function update_export_method(reset)
     {
         valid = ($('ExportMethod').options[2].value.trim().toLowerCase() === EXP_METH_FULL);
         $('ExportMethod').store({ "valid" : true });
-        set_eb_state_disabled(true);
+        set_eb_state_disabled(false);
     }
 
     // there is nothing to modify in response to a user pull-down selection
@@ -3582,35 +3578,55 @@ function SetExportProtocol(byWhom)
     update_protocol_ui(false);
 }
 
-// called when the user modifies ImageCT
-function ProtocolImageUserSet(opt)
+// respond to changes in the protocol options elements (only image options at this point)
+function update_protocol_options_ui(reset)
 {
-    // `opt` is 'vestigial'
-    var color_table_metadata = $('ImageCT').retrieve('color_table_metadata', null);
-    var option = $('ImageCT').options[$('ImageCT').selectedIndex].value.trim();
-    var index = null;
+    // reset validation on all protocol options (only image options at this point)
+    $('ProtocolImageOptions').store({ "valid" : null });
+    $('ExportProtocolHidden').store({ "valid" : null });
 
-    if (color_table_metadata !== null)
+    if (reset)
     {
-        color_table_map = color_table_metadata.retrieve('color_table_map', null);
-        metadata = color_table_map[option];
-
-        if (metadata !== null)
+        update_protocol_options(true);
+        update_hidden_protocol(true);
+    }
+    else
+    {
+        update_protocol_options(false);
+        if (!validate_protocol_options())
         {
-            $('ImageCTTxt').innerHTML = metadata['ct'];
-            $('ImageMinTxt').innerHTML = metadata['min'];                 
-            $('ImageMaxTxt').innerHTML = metadata['max'];
-            $('ImageSclTxt').innerHTML = metadata['scaling'];
+            alert('invalid image options');
+            // current child data are invalid; fix by calling with reset flag
+            update_protocol_options(true);
+        }
+
+        update_hidden_protocol(false);
+        if (!validate_hidden_protocol())
+        {
+            update_hidden_protocol(true);
         }
     }
 }
 
-// called only when initializing image options with color-table metadata; if the 
-// user modifies the ImageCT UI element, the result is a change to the 
+// called when the user modifies ImageCT
+function ProtocolImageUserSet(opt)
+{
+    // `opt` is 'vestigial'
+
+    // dirty since last time the CP button was clicked
+    set_eb_state_disabled(true);
+
+    update_protocol_options_ui(false);
+}
+
+// called when...
+// 1. initializing image options with color-table metadata
+// 2. the user has clicked on the reset-defaults button
+// if the user modifies the ImageCT UI element, the result is a change to the 
 // text elements that appear to the right of the image-option elements;
 // there is no `reset` argument since this function is called only when resetting
 // the options UI
-function update_image_protocol_options(series, wavelength, color_table_metadata)
+function reset_image_protocol_options(record_set_series, record_set_wavelength, color_table_metadata)
 {
     // use the specified wavelength to choose an appropriate color table, and then 
     // use the values from the color table to set the UI element values
@@ -3622,21 +3638,32 @@ function update_image_protocol_options(series, wavelength, color_table_metadata)
     var image_max_element = $('ImageMax');
     var scale = null;
     var image_scale_element = $('ImageScl');
+    var index = null;
 
-    series_wave = series.trim.toLowerCase() + ':' + wavelength.toString();
-    series_wave_map = color_table_metadata.series_wave_map;
-    metadata = series_wave_map[series_wave];
+    series_wave = record_set_series.trim().toLowerCase() + ':' + record_set_wavelength.toString();
 
-    if (metadata == undefined)
+    if (color_table_metadata !== null && color_table_metadata.hasOwnProperty('series_wave_map') && color_table_metadata.series_wave_map !== null)
     {
-        $('defaultvals').innerHTML="no colortable found for this series; use defaults or modify options, otherwise min/max will be calculated from data"
-        $('ImageSer').innerHTML = series;
+        series_wave_map = color_table_metadata.series_wave_map;
+    }
+
+    if (series_wave_map !== null)
+    {
+        metadata = series_wave_map[series_wave];
+    }
+
+    if (metadata === undefined)
+    {
+        $('ImageSer').innerHTML = '[ no colortable located for ' + record_set_series + '; unless edited, min/max will be derived from data ]';
         $('ImageCT').selectedIndex = $('ImageCT').options.length - 1;
         $('ImageMin').value = 'NOT SPECIFIED';
+        $('ImageMin').store({ "specified" : false });
         $('ImageMax').value = 'NOT SPECIFIED';
+        $('ImageMax').store({ "specified" : false });
+
         if (color_table_metadata.scale_indexes['MINMAX'] === undefined)
         {
-            $('ImageScl').selectedIndex = ('ImageCT').options.length - 1;
+            $('ImageScl').selectedIndex = $('ImageCT').options.length - 1;
         }
         else
         {
@@ -3645,81 +3672,96 @@ function update_image_protocol_options(series, wavelength, color_table_metadata)
     }
     else
     {
-        $('ImageSer').innerHTML = series;
+        $('ImageSer').innerHTML = metadata['series'];
         $('ImageCT').selectedIndex = color_table_metadata.color_table_indexes[metadata['ct']];
         $('ImageMin').value = metadata['min'];
+        $('ImageMin').store({ "specified" : true });
         $('ImageMax').value = metadata['max'];
+        $('ImageMax').store({ "specified" : true });
         $('ImageScl').selectedIndex = color_table_metadata.scale_indexes[metadata['scaling']];
     }
+
+    // fix ImageSize options
+    for (index = 0; index < $('ImageSize').options.length; index += 1)
+    {
+        $('ImageSize').options[index].value = $('ImageSize').options[index].value.trim().substr(4); 
+    }
+
+    $('ImageSize').selectedIndex = 2; // 512x512 image
+
+    alert('specified!!');
+    $('ImageSize').store({ "specified" : true });
+
+    update_hidden_protocol(false);
+
+    $('ProtocolImageOptions').store({ "initialized" : true });
 
     set_eb_state_disabled(true);
 }
 
 function validate_image_protocol_options(series, wavelength, color_table_metadata)
 {
-    var hidden_protocol_element = $('ExportProtocolHidden');
-    var hidden_protocol = hidden_protocol_element.value.trim();
-    var image_color_table = $('ImageCT').value.trim();
-    var image_scale = parseFloat($('ImageScl').value.trim());
-    var image_size = parseFloat($('ImageSize').value.trim());
-    var image_min = parseFloat($('ImageMin').value.trim());
-    var image_max = parseFloat($('ImageMax').value.trim());
+    var protocol = $('ExportProtocol').value.trim();
+    var protocol_argument = null;
+    var hidden_protocol = $('ExportProtocolHidden').value.trim();
+    var image_ct = $('ImageCT').value.trim(); // color table, or not specified
+    var image_scaling = $('ImageScl').value.trim(); // scaling (e.g., MINMAX, LOG, ...), or not specified
+    var image_zoom = null; // 1, 4, 8, or 16
+    var image_min = null; // number or not specified
+    var image_max = null; // number or not specified
     var image_list = [];
     var protocol_list = [];
     var index = null;
     var valid = null;
 
-    if (image_scale !== 'NaN' && image_scale > 0 && image_size !== 'NaN' && image_size > 0 && image_min !== 'NaN' && image_min > 0 && image_max !== 'NaN' && image_max > 0)
-    {
-        valid = true;
-    }
-    else
-    {
-        valid = false;
-    }
+    alert('validate_image_protocol_options');
 
-    if (valid)
+    valid = $('ProtocolImageOptions').retrieve('valid', null); 
+
+    if (valid === null)
     {
-        // if the hidden protocol is set, check it
-        if (hidden_protocol.length > 0)
+        image_zoom = parseInt($('ImageSize').value.trim());
+
+        if ($('ImageMin').retrieve('specified', false))
         {
-            image_list.push('min=' + image_min.toString());
-            image_list.push('max=' + image_max.toString());
-            image_list.push('CT=' + image_color_table);
-            image_list.push('scaling=' + image_scale.toString());
-            image_list.push('size=' + image_size.toString());
-            image_list.sort();
+            image_min = parseFloat($('ImageMin').value.trim());
+        }
 
-            protocol_list = hidden_protocol.split(',');
-            protocol_list.sort();
+        if ($('ImageMax').retrieve('specified', false))
+        {
+            image_max = parseFloat($('ImageMax').value.trim());
+        } 
 
-            if (image_list.length == protocol_list.length)
-            {
-                valid = true;
-                for (index = 0; index < protocol_list.length; index += 1)
-                {
-                    if (image_list[index].trim() != protocol_list[index].trim())
-                    {
-                        valid = false;
-                        break;
-                    } 
-                }
-            }
-            else
-            {
-                valid = false;
-            }
+        if (image_zoom !== 'NaN' && image_zoom > 0 && image_min !== 'NaN' && image_max !== 'NaN' && image_min < image_max)
+        {
+            alert('valid');
+            valid = true;
         }
         else
         {
-            // no segments
-            valid = true;
+            alert('invalid');
+            valid = false;
         }
+
+        $('ProtocolImageOptions').store({ "valid" : valid });
     }
 
     return valid;
 }
 
+// called only in response to a 'reset defaults' button click; resetting image protocols only
+function ProtocolImageDefaults()
+{
+    var record_set_series = $('ExportRecordSet').retrieve('series', null);
+    var record_set_wavelength = $('ExportRecordSet').retrieve('wavelength', null);
+    var color_table_metadata = $('ImageCT').retrieve('metadata', null);
+
+    reset_image_protocol_options(record_set_series, record_set_wavelength, color_table_metadata);
+
+    set_eb_state_disabled(true);
+}
+
+// callback is reset_image_protocol_options
 function initialize_image_protocol_options(update_options_callback)
 {
     var color_table_metadata = $('ImageCT').retrieve('metadata', null);
@@ -3728,6 +3770,8 @@ function initialize_image_protocol_options(update_options_callback)
     var wavelength_extracted = (wavelength !== null);
     var extract_wavelength_fn = null;
     var load_color_table_metadata_fn = null;
+
+    alert('initialize');
 
     extract_wavelength_fn = function(color_table_metadata, update_options_callback)
     {
@@ -3750,15 +3794,16 @@ function initialize_image_protocol_options(update_options_callback)
         }
 
         // uses internal DB - that is where the color table series are stored
-        export_app_arguments = { "specification" : specification, "db-host" : db_host, "keywords" : [ "WAVELNTH" ], "number_records" : 1 };
+        export_app_arguments = { "specification" : specification, "db-host" : db_host, "keywords" : [ "WAVELNTH" ], "number-records" : 1 };
 
         on_failure = function(error_message, color_table_metadata)
         {
-            var series = $('ExportRecordSet').retrieve('series', null);
+            var record_set_series = $('ExportRecordSet').retrieve('series', null);
+            var record_set_wavelength = $('ExportRecordSet').retrieve('wavelength', null);
 
             // unlike most error cases, do not set the EB state to disabled; we basically just ignore the filling-in-of image 
             // parameters with a color-table 
-            update_options_callback(series, null, color_table_metadata);
+            update_options_callback(record_set_series, record_set_wavelength, color_table_metadata);
         };
 
         options =
@@ -3769,10 +3814,10 @@ function initialize_image_protocol_options(update_options_callback)
                 var gri_response_obj = response.responseJSON;
                 var error_message = null;
                 var status = null;
-                var series = $('ExportRecordSet').retrieve();
-                var wavelength = null;
+                var record_set_series = $('ExportRecordSet').retrieve('series', null);
+                var record_set_wavelength = null;
                 var color_table_element = $('ImageCT');
-                var color_table_metadata = color_table_metadata;
+                var color_table_metadata = $('ImageCT').retrieve('metadata', null);
 
                 if (gri_response_obj !== null)
                 {
@@ -3783,45 +3828,69 @@ function initialize_image_protocol_options(update_options_callback)
                     }
                     else
                     {
-                        wavelength = Math.round(gri_response_obj.keywords[0].values[0]);
-                        color_table_element.store({ 'wavelength' : wavelength })
-                        update_options_callback(series, wavelength, color_table_metadata);
+                        record_set_wavelength = Math.round(gri_response_obj.keywords[0].values[0]);
+                        $('ExportRecordSet').store({ "wavelength" : record_set_wavelength })
+                        update_options_callback(record_set_series, record_set_wavelength, color_table_metadata);
                     }
                 }
             },
             onFailure : function(response)
             {
                 var error_message = 'failure getting record-set information: ' + JSON.stringify(response.responseJSON.error_message);
-                var color_table_metadata = color_table_metadata;
+                var color_table_metadata = $('ImageCT').retrieve('metadata', null);
 
                 on_failure(error_message, color_table_metadata);
             },
             on428 : function(response)
             {
                 var error_message = 'invalid arguments to record-set endpoint: ' + JSON.stringify(response.responseJSON.error_message);
-                var color_table_metadata = color_table_metadata;
+                var color_table_metadata = $('ImageCT').retrieve('metadata', null);
 
                 on_failure(error_message, color_table_metadata);
             }
         };
+
+        options['parameters'] = export_app_arguments;
+
+        new Ajax.Request(window.location.origin + RECORD_SET_PATH, options);
     };
 
     load_color_table_metadata_fn = function(extract_wavelength_callback, update_options_callback)
     {
         var export_app_arguments = null;
         var options = null;
+        var origin = null;
+        var db_host = null;
         var on_failure = null;
 
-        // uses internal DB - that is where the color table series are stored
-        export_app_arguments = { "specification" : "jsoc.Color_Tables[][]", "db-host" : INTERNAL_SERVER, "keywords" : [ "Inseries", "WAVELNTH", "CT_name", "scalemin", "scalemax", "scaling" ] };
+        origin = ExportOrigin(null);
 
-        on_failure = function(ct_value, scaling_value, callback)
+        if (origin[0] == 'extServer')
         {
-            var color_table_element = $('ImageCT');
-            var scale_element = $('ImageScl');
+            db_host = EXTERNAL_SERVER;
+        }
+        else
+        {
+            db_host = INTERNAL_SERVER;
+        }
 
-            color_table_element.value = ct_value;
-            scale_element.value = scaling_value;
+        // uses internal DB - that is where the color table series are stored
+        export_app_arguments = { "specification" : "jsoc.color_table_metadata[][]", "db-host" : db_host, "keywords" : [ "Inseries", "WAVELNTH", "CT_name", "scalemin", "scalemax", "scaling" ] };
+
+        on_failure = function(callback)
+        {
+            var color_table_indexes = {};
+            var scale_indexes = {};
+            var color_table_metadata = null;
+
+            $('ImageCT').options[0] = new Option('none');
+            color_table_indexes['none'] = 0;
+
+            $('ImageCT').options[scale_option_index] = new Option('none');
+            scale_indexes['none'] = 0;
+
+            color_table_metadata = { "color_table_indexes" : color_table_indexes, "scale_indexes" : scale_indexes, "keywords" : null, "color_table_map" : null, "series_wave_map" : null };
+            $('ImageCT').store({ "metadata" : color_table_metadata });
 
             if (callback !== null)
             {
@@ -3862,18 +3931,16 @@ function initialize_image_protocol_options(update_options_callback)
 
                     if (status.search(/errorcode/i) == 0)
                     {
-                        error_message = 'no color tables found: ' + status.error_message;
-
                         color_table_option_index = 0;
                         scale_option_index = 0;
                         error_message = 'no color tables found';
 
-                        color_table_element.options[0] = new Option(error_message);
-                        color_table_indexes[color_table] = color_table_option_index;
+                        color_table_element.options[0] = new Option('none');
+                        color_table_indexes['none'] = color_table_option_index;
                         color_table_option_index += 1;
 
-                        scale_element.options[scale_option_index] = new Option(error_message);
-                        scale_indexes[scale] = scale_option_index;
+                        scale_element.options[scale_option_index] = new Option('none');
+                        scale_indexes['none'] = scale_option_index;
                         scale_option_index += 1;
                     }
                     else
@@ -3884,14 +3951,13 @@ function initialize_image_protocol_options(update_options_callback)
                         {
                             color_table_option_index = 0;
                             scale_option_index = 0;
-                            error_message = 'no color tables found';
 
-                            color_table_element.options[0] = new Option(error_message);
-                            color_table_indexes[color_table] = color_table_option_index;
+                            color_table_element.options[0] = new Option('none');
+                            color_table_indexes['none'] = color_table_option_index;
                             color_table_option_index += 1;
 
-                            scale_element.options[scale_option_index] = new Option(error_message);
-                            scale_indexes[scale] = scale_option_index;
+                            scale_element.options[scale_option_index] = new Option('none');
+                            scale_indexes['none'] = scale_option_index;
                             scale_option_index += 1;
                         }
                         else
@@ -3915,26 +3981,36 @@ function initialize_image_protocol_options(update_options_callback)
                                 {
                                     color_table_element.options[color_table_option_index] = new Option(color_table);
                                     color_table_indexes[color_table] = color_table_option_index;
+
+                                    // insert into mapping
+                                    color_table_map[color_table] = { "series" : series, "ct" : color_table, "min" : min, "max" : max, "scaling" : scale };
+                                    
                                     color_table_option_index += 1;
                                 }
 
-                                if (sacle_indexes[scale] === undefined)
+                                if (scale_indexes[scale] === undefined)
                                 {
                                     scale_element.options[scale_option_index] = new Option(scale);
                                     scale_indexes[scale] = scale_option_index;
+
                                     scale_option_index += 1;
                                 }
 
-                                // insert into mappings
-                                color_table_map[color_table] = { "ct" : color_table, "min" : min, "max" : max, "scaling" : scale };
-                                series_wave_map[series + ':' + wavelength] = { "series": series, "wavelength" : wavelength, "ct" : color_table, "min" : min, "max" : max, "scaling" : scale};
+                                // insert into mapping
+                                if (series_wave_map[series + ':' + wavelength] === undefined)
+                                {
+                                    series_wave_map[series + ':' + wavelength] = { "series": series, "wavelength" : wavelength, "ct" : color_table, "min" : min, "max" : max, "scaling" : scale};
+                                }
                             }
 
                             // add grey as a default
                             color_table = 'grey.sao';
-                            color_table_element.options[color_table_option_index] = new Option(color_table);
-                            color_table_indexes[color_table] = color_table_option_index;
-                            color_table_option_index += 1;
+                            if (color_table_indexes[color_table] === undefined)
+                            {
+                                color_table_element.options[color_table_option_index] = new Option(color_table);
+                                color_table_indexes[color_table] = color_table_option_index;
+                                color_table_option_index += 1;
+                            }
                         }
                     }
 
@@ -3950,15 +4026,19 @@ function initialize_image_protocol_options(update_options_callback)
             {
                 var error_message = 'failure obtaining record-set information: ' + JSON.stringify(response.responseJSON.error_message);
 
-                on_failure('not found', 'NA', update_options_callback);
+                on_failure(update_options_callback);
             },
             on428: function(response)
             {
                 var error_message = 'invalid arguments to record-set endpoint: ' + JSON.stringify(response.responseJSON.error_message);
  
-                on_failure('not found', 'NA', update_options_callback);
+                on_failure(update_options_callback);
             }
         };
+
+        options['parameters'] = export_app_arguments;
+   
+        new Ajax.Request(window.location.origin + RECORD_SET_PATH, options);
     };
 
     if (metadata_loaded)
@@ -3970,7 +4050,6 @@ function initialize_image_protocol_options(update_options_callback)
         }
         else
         {
-            
             update_options_callback($('ExportRecordSet').retrieve('series', null), wavelength, color_table_metadata);
         }
     }
@@ -3983,46 +4062,72 @@ function initialize_image_protocol_options(update_options_callback)
 
 // update the ExportProtocol UI elements and any stored data; do not touch the protocol-specific
 // options or the hidden protocol string
+// reset ==> called in response to an RS change, so the disabled state is clean
 function update_protocol(reset)
 {
-    var protocol_element = $('ExportProtocol');
-    var valid = null;
+    var protocol = $('ExportProtocol').options[$('ExportProtocol').selectedIndex].value.trim().toLowerCase();
 
     if (reset)
     {
         // fits
-        protocol_element.selectedIndex = 1;
-        valid = (protocol_element.options[protocol_element.selectedIndex].value.trim().toLowerCase() === 'fits');
-        protocol_element.store({ "valid" : true });
-        set_eb_state_disabled(true);
+        $('ExportProtocol').selectedIndex = 1;
+        set_eb_state_disabled(false);
+    }
+    else
+    {
+        if (protocol === 'jpeg' || protocol === 'mpeg' || protocol === 'mp4')
+        {
+            // if we have not initialized the color tables, do that now
+            if (!$('ProtocolImageOptions').retrieve('initialized', false))
+            {
+                initialize_image_protocol_options(reset_image_protocol_options);
+            }
+        }
     }
 
     // there is nothing to modify in response to a user UI edit
 }
 
 // updates both the ProtocolImageOptions and ExportProtocolHidden elements
+// reset ==> called in response to RS change, so disabled state is clean
 function update_protocol_options(reset)
 {
-    var protocol_element = $('ExportProtocol');
-    var protocol_image_options_element = $('ProtocolImageOptions');
-    var color_table_element = $('ImageCT');
-    var protocol = protocol_element.options[protocol_element.selectedIndex].value.trim().toLowerCase();
-    var valid = null;
+    var protocol = $('ExportProtocol').options[$('ExportProtocol').selectedIndex].value.trim().toLowerCase();
     var series = $('ExportRecordSet').retrieve('series', null);
+    var color_table_element = $('ImageCT');
+    var color_table_metadata = color_table_element.retrieve('metadata', null);
     var wavelength = color_table_element.retrieve('wavelength', null);
-    var color_table_metadata = color_table_element.retrieve('color_table_metadata', null);
+    var color_table = color_table_element.options[color_table_element.selectedIndex].value.trim();
+    var color_table_map = null;
+    var metadata = null;
+
+    alert(' update_protocol_options');
 
     if (reset)
     {
-        // reset all protocol option UI elements, regardless of the current protocol - we want to start from scratch
-        protocol_image_options_element.store({ "valid" : null });
-        color_table_element.store({ "color_table_metadata" : null, "wavelength" : null });
-        update_hidden_protocol(true);
-        set_eb_state_disabled(true);
+        // now, we need to reset the options html elements (re-populate with defaults); and if the color tables 
+        // have not been loaded already, we need to do that first
+        if (protocol === 'as-is')
+        {
+            // there are no as-is-specific options to reset; as-is does not make use of the hidden protocol string
+        }
+        else if (protocol === 'fits')
+        {
+            // there are no fits-specific options to reset
+        }
+        if (protocol === 'jpeg' || protocol === 'mpeg' || protocol === 'mp4')
+        {
+            // FULL reset - re-download color table metadata
+            color_table_element.store({ "metadata" : null });
+            $('ExportRecordSet').store({ "wavelength" : null });
+            $('ProtocolImageOptions').store({ "initialized" : null });
+        }
+
+        set_eb_state_disabled(false);
     }
     else
     {
-        // update protocol-specific UI elementsi
+        // update protocol-specific UI elements
         if (protocol === 'as-is')
         {
             // there are no as-is-specific options to update; as-is does not make use of the hidden protocol string
@@ -4030,28 +4135,40 @@ function update_protocol_options(reset)
         else if (protocol === 'fits')
         {
             // there are no fits-specific options to update
-            update_hidden_protocol(false);
         } 
         if (protocol === 'jpeg' || protocol === 'mpeg' || protocol === 'mp4')
         {
-            // this is the only means by which the image options UI is displayed, so we have to initialize the
-            // options if the use has not already done so; after these options are displayed, the user can change
-            // them, in which case ProtocolImageUserSet() will be called, which will update text elements to 
-            // the right of the options text boxes
-            if (protocol_image_options_element.retrieve('valid', null) === null)
+            if ($('ImageMin').value.trim().length > 0)
             {
-                if (color_table_metadata === null || wavelength === null)
-                {
-                    initialize_image_protocol_options(update_image_protocol_options);
-                }
-                else
-                {
-                    update_image_protocol_options(series, wavelength, color_table_metadata);
-                }
+                $('ImageMin').store({ "specified" : true });
+            }
+            else
+            {
+                $('ImageMin').store({ "specified" : false });
             }
 
-            // update the hidden-protocol string
-            update_hidden_protocol(false);
+            if ($('ImageMax').value.trim().length > 0)
+            {
+                $('ImageMax').store({ "specified" : true });
+            }
+            else
+            {
+                $('ImageMax').store({ "specified" : false });
+            }
+
+            if (color_table_metadata !== null && color_table_metadata.color_table_map !== null)
+            {
+                color_table_map = color_table_metadata.color_table_map;
+                metadata = color_table_map[color_table];
+
+                if (metadata !== null)
+                {
+                    $('ImageCTTxt').innerHTML = metadata['series'];
+                    $('ImageMinTxt').innerHTML = metadata['min'];
+                    $('ImageMaxTxt').innerHTML = metadata['max'];
+                    $('ImageSclTxt').innerHTML = metadata['scaling'];
+                }
+            }
         }
     }
 }
@@ -4059,38 +4176,33 @@ function update_protocol_options(reset)
 </script>
 <script type="text/javascript">
 
-// respond to a change in the protocol pull-down (e.g., FITS --> JPEG)
+// respond to a change in the protocol pull-down (e.g., FITS --> JPEG); not responding to change in protocol options
+// reset ==> called in response to RS change, so disabled state is clean
 function update_protocol_ui(reset)
 {
     var compression_element = $('CompressRow');
-    var protocol_image_options_element = $('ProtocolImageOptions');
-    var protocol_element = $('ExportProtocol');
-    var hidden_protocol_element = $('ExportProtocolHidden');
-    var protocol = protocol_element.options[protocol_element.selectedIndex].value.trim().toLowerCase();
+    var protocol = $('ExportProtocol').options[$('ExportProtocol').selectedIndex].value.trim().toLowerCase();
 
+    $('ExportProtocol').store({ "valid" : null });
+    $('ExportProtocolHidden').store({ "valid" : null });
 
     if (reset)
     {
         update_protocol(true);
-        update_protocol_options(true);
+        update_hidden_protocol(true);
     }
     else
     {
-        // update 'parent' UI (the protocol pull-down value)
         update_protocol(false);
-        protocol_element.store({ "valid" : false });
         if (!validate_protocol())
         {
             update_protocol(true);
         }
 
-        // update 'child' UI (compression strings for fits, color-table data for images)
-        update_protocol_options(false);
-        // do not reset validity; the user changed the protocol only, not the protocol options
-        if (!validate_protocol_options())
+        update_hidden_protocol(false);
+        if (!validate_hidden_protocol(false))
         {
-            // current child data are invalid; fix by calling with reset flag
-            update_protocol_options(true);
+            update_hidden_protocol(true);
         }
     }
 
@@ -4098,11 +4210,11 @@ function update_protocol_ui(reset)
     compression_element.style.display = 'none';
     if (protocol === 'as-is' || protocol === 'fits')
     {
-        protocol_image_options_element.style.display = 'none';
+        $('ProtocolImageOptions').style.display = 'none';
     }
     else
     {
-        protocol_image_options_element.style.display = 'table-row';
+        $('ProtocolImageOptions').style.display = 'table-row';
     }
 }
 // tester success
@@ -4186,6 +4298,7 @@ function SetExportCompress()
     update_compression_ui(false);
 }
 
+// reset ==> called in response to RS change, so disabled state is clean
 function update_compression_ui(reset)
 {
     var compression_row_element = $('CompressRow');
@@ -4197,7 +4310,8 @@ function update_compression_ui(reset)
         compression_row_element.style.display = 'none';
         compression_element.selectedIndex = 0; // Rice Compression
         compression_element.store({ "valid" : true });
-        set_eb_state_disabled(true);
+
+        set_eb_state_disabled(false);
     }
     else
     {
@@ -4220,6 +4334,7 @@ function update_compression_ui(reset)
     }
 }
 
+// reset ==> called in response to RS change, so disabled state is clean
 function update_compression(reset)
 {
     var compression_element = $('ExportCompress');
@@ -4229,9 +4344,9 @@ function update_compression(reset)
     {
         // Rice compression
         compression_element.selectedIndex = 0;
-        valid = (compression_element.options[compression_element.selectedIndex].trim().toLowerCase() === 'compress rice');
         compression_element.store({ 'valid' : true });
-        set_eb_state_disabled(true);
+
+        set_eb_state_disabled(false);
     }
 
     // there is nothing to modify in response to a user UI edit
@@ -4264,30 +4379,27 @@ function validate_compression()
 </script>
 <script type="text/javascript">
 
+// reset ==> called in response to RS change, so disabled state is clean
 function update_hidden_protocol(reset)
 {
-    var protocol_element = $('ExportProtocol');
-    var hidden_protocol_element = $('ExportProtocolHidden');
-    var protocol = protocol_element.options[protocol_element.selectedIndex].value.trim().toLowerCase();
+    var protocol = $('ExportProtocol').options[$('ExportProtocol').selectedIndex].value.trim().toLowerCase();
     var hidden_protocol = null;
-    var image_options_element = $('ProtocolImageOptions');
-    var image_minimum = $('ImageMin').value.trim();
-    var image_maximum = $('ImageMax').value.trim();
-    var image_ct = $('ImageCT');
-    var image_scaling = $('ImageScl');
-    var image_size = $('ImageSize');
+    var image_min = parseFloat($('ImageMin').value.trim());
+    var image_max = parseFloat($('ImageMax').value.trim());
+    var image_ct = $('ImageCT').value.trim();
+    var image_scaling = $('ImageScl').value.trim();
+    var image_zoom = $('ImageSize').value.trim();
     var index = null;
     var series_info = null;
     var data_type = null;
     var compression_list = [];
     var image_list = [];
 
-
     if (reset)
     {
-        hidden_protocol_element.value = '';
-        hidden_protocol_element.store({ "valid" : null });
-        set_eb_state_disabled(true);
+        $('ExportProtocolHidden').value = '';
+
+        set_eb_state_disabled(false);
     }
     else
     { 
@@ -4312,7 +4424,14 @@ function update_hidden_protocol(reset)
                     }
                 }
 
-                hidden_protocol_element.value = protocol + ',' + compression_list.join(',');i
+                if (compression_list.length > 0)
+                {
+                    $('ExportProtocolHidden').value = protocol + ',' + compression_list.join(',');
+                }
+                else
+                {
+                    $('ExportProtocolHidden').value = protocol;
+                }
 
                 set_eb_state_disabled(true);
             }
@@ -4334,19 +4453,31 @@ function update_hidden_protocol(reset)
 
             if (hidden_protocol !== null)
             {
-                if ($('ProtocolImageOptions').retrieve('valid', false))
+                if ($('ImageMin').retrieve('specified', false))
                 {
-                    image_list.push('min=' + image_minimum);
-                    image_list.push('max=' + image_maximum);
-                    image_list.push('CT=' + image_ct);
-                    image_list.push('scaling=' + image_scaling);
-                    image_list.push('size=' + image_size);
+                    image_list.push('min=' + parseFloat($('ImageMin').value.trim()).toString());
+                }
 
-                    hidden_protocol_element.value = hidden_protocol;
+                if ($('ImageMax').retrieve('specified', false))
+                {
+                    image_list.push('max=' + parseFloat($('ImageMax').value.trim()).toString());
+                }
+
+                image_list.push('CT=' + $('ImageCT').value.trim());
+
+                image_list.push('scaling=' + $('ImageScl').value.trim());
+
+                image_list.push('size=' + parseFloat($('ImageSize').value.trim()).toString());
+
+                $('ExportProtocolHidden').value = hidden_protocol;
+                
+                if (image_list.length > 0)
+                {
+                    $('ExportProtocolHidden').value = hidden_protocol + ',' + image_list.join(',');
                 }
                 else
                 {
-                    hidden_protocol_element.value = hidden_protocol + ',' + compression_list.join(',');
+                    $('ExportProtocolHidden').value = hidden_protocol;
                 }
 
                 set_eb_state_disabled(true);
@@ -4354,7 +4485,7 @@ function update_hidden_protocol(reset)
         }
     }
 
-    return hidden_protocol_element.value;
+    return $('ExportProtocolHidden').value;
 }
 
 
@@ -4364,12 +4495,11 @@ function update_hidden_protocol(reset)
 function validate_protocol()
 {
     var series_info = null;
-    var protocol_element = $('ExportProtocol');
-    var protocol = protocol_element.options[protocol_element.selectedIndex].value.trim().toLowerCase();
+    var protocol = $('ExportProtocol').options[$('ExportProtocol').selectedIndex].value.trim().toLowerCase();
     var valid = null;
 
-    valid = protocol_element.retrieve('valid', null);
-    
+    valid = $('ExportProtocol').retrieve('valid', null);
+   
     if (valid === null)
     {
         if (protocol === 'as-is' || protocol === 'fits' || protocol === 'jpeg' || protocol === 'mpeg' || protocol === 'mp4')
@@ -4381,7 +4511,7 @@ function validate_protocol()
             valid = false;
         }
 
-        protocol_element.store({ 'valid' : valid });
+        $('ExportProtocol').store({ 'valid' : valid });
     }
 
     return valid;
@@ -4390,45 +4520,202 @@ function validate_protocol()
 </script>
 <script type="text/javascript">
 
+function validate_hidden_protocol()
+{
+    var hidden_protocol = null;
+    var protocol_list = null;
+    var protocol = null;
+    var series_info = null;
+    var data_type = null;
+    var compression_list = null;
+    var image_list = null;
+    var protocol_argument = null;
+    var index = null;
+    var valid = null;
+
+    valid = $('ExportProtocolHidden').retrieve('valid', null);
+
+    if (valid === null)
+    {
+        hidden_protocol = $('ExportProtocolHidden').value.trim();
+        protocol = $('ExportProtocol').options[$('ExportProtocol').selectedIndex].value.trim().toLowerCase(); 
+
+        if (hidden_protocol.length == 0)
+        {
+            if (protocol === 'fits')
+            {
+                valid = false;
+            }
+            else if (protocol === 'jpeg' || protocol === 'mpeg' || protocol === 'mp4')
+            {
+                valid = false;
+            }
+            else
+            {
+                // should have 'as-is' at least
+                valid = false;
+            }
+        }
+        else
+        {
+            protocol_list = hidden_protocol.split(',');
+
+            if (protocol === 'fits')
+            {
+                series_info = get_current_series_info();
+
+                if (series_info === null)
+                {
+                    valid = false;
+                }
+                else
+                {
+                    compression_list = ['fits'];
+
+                    for (index = 0; index < series_info.segments.length; index += 1)
+                    {
+                        data_type = series_info.segments[index].type.trim().toLowerCase();
+
+                        if (data_type === 'float' || data_type === 'double')
+                        {
+                            compression_list.push('**NONE**');
+                        }
+                        else
+                        {
+                            compression_list.push('compress Rice');
+                        }
+                    }
+
+                    if (compression_list.length == protocol_list.length)
+                    {
+                        valid = true;
+                        for (index = 0; index < protocol_list.length; index += 1)
+                        {
+                            if (compression_list[index].trim() != protocol_list[index].trim())
+                            {
+                                alert('problem ' + JSON.stringify(compression_list[index].trim()) + ' ' + JSON.stringify(protocol_list[index].trim()));
+                                valid = false;
+                                break;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        valid = false;
+                    }
+                }
+            }
+            else if (protocol === 'jpeg' || protocol === 'mpeg' || protocol === 'mp4')
+            {
+                protocol_list.sort();
+                image_list = [];
+
+                if (protocol === 'mpeg')
+                {
+                    protocol_argument = 'mpg';
+                }
+                else if (protocol = 'mp4')
+                {
+                    protocol_argument = 'mp4';
+                }
+                else if (protocol = 'jpeg')
+                {
+                    protocol_argument = 'jpg';
+                }
+
+                if (protocol_argument !== null)
+                {
+                    image_list.push(protocol_argument);
+                    
+                    if ($('ImageMin').retrieve('specified', false))
+                    {
+                        image_list.push('min=' + parseFloat($('ImageMin').value.trim()).toString());
+                    }
+
+                    if ($('ImageMax').retrieve('specified', false))
+                    {
+                        image_list.push('max=' + parseFloat($('ImageMax').value.trim()).toString());
+                    }
+
+                    image_list.push('CT=' + $('ImageCT').value.trim());
+                    image_list.push('scaling=' + $('ImageScl').value.trim());
+                    image_list.push('size=' + parseFloat($('ImageSize').value.trim()).toString());
+
+                    image_list.sort();
+                }
+
+                if (image_list.length == protocol_list.length)
+                {
+                    valid = true;
+                    for (index = 0; index < protocol_list.length; index += 1)
+                    {
+                        if (image_list[index].trim() != protocol_list[index].trim())
+                        {
+                            alert('problem ' + JSON.stringify(image_list[index].trim()) + ' ' + JSON.stringify(protocol_list[index].trim()));
+                            valid = false;
+                            break;
+                        }
+                    }
+                }
+                else
+                {
+                    valid = false;
+                }
+            }
+            else
+            {
+                // should be no arguments (no comma-sep list after protocol); as-is used to have arguments, but they were never used
+                if (hidden_protocol.indexOf(',') == -1)
+                {
+                    valid = true;
+                }
+                else
+                {
+                    valid = false;
+                }
+            } 
+        }
+
+        $('ExportProtocolHidden').store({ "valid": valid });
+    }
+
+    return valid;
+}
+
 function validate_fits_protocol_options()
 {
+    return true;
+}
 
+function validate_as_is_protocol_options()
+{
+    return true;
 } 
 
 function validate_protocol_options()
 {
-    var hidden_protocol_element = $('ExportProtocolHidden');
-    var protocol = $('ExportProtocol').value.trim().toLowerCase();
-    var hidden_protocol = hidden_protocol_element.value.trim().toLowerCase();
+    var protocol = $('ExportProtocol').options[$('ExportProtocol').selectedIndex].value.trim().toLowerCase();
     var valid = null;
 
-    valid = hidden_protocol_element.retrieve('valid', null);
-
-    if (valid === null)
+    if (protocol === 'fits')
     {
-        if (protocol === 'fits')
+        valid = validate_fits_protocol_options();
+    }
+    else if (protocol === 'jpeg' || protocol === 'mpeg' || protocol === 'mp4')
+    {
+        alert('validating image protocol options');
+        valid = $('ProtocolImageOptions').retrieve('valid', null);
+        if (valid === null)
         {
-            valid = validate_fits_protocol_options();
-        }
-        else if (protocol === 'jpeg' || protocol === 'mpeg' || protocol === 'mp4')
-        {
-            valid = validate_image_protocol_options() 
-        }
-        else
-        {
-            // should be no arguments (no comma-sep list after protocol); as-is used to have arguments, but there were never used
-            if (hidden_protocol.indexOf(',') == -1)
-            {
-                valid = true;
-            }
-            else
-            {
-                valid = false;
-            }
+            valid = validate_image_protocol_options();
+            $('ProtocolImageOptions').store({ "valid" : valid });
         }
     }
+    else
+    {
+        valid = validate_as_is_protocol_options();
+    }
 
-    hidden_protocol_element.store({ "valid" : valid })
     return valid;
 }
 
@@ -5462,7 +5749,6 @@ function cancel_export()
 // this is the code executed when the user clicks on the ExportButton button
 function ExportButtonOnClickAction()
 {
-    alert("fetch function");
     // if the use was able to click this button, then it was OK to submit an export request
     var EB_state = $('ExportButton').retrieve('state', EB_STATE_DISABLED);
     var internal_fn = null;
@@ -5623,7 +5909,6 @@ function ExportButtonOnClickAction()
             }
 
             export_package = {};
-            alert('exp method ' + JSON.stringify($('ExportMethod').options[$('ExportMethod').selectedIndex].value.trim()));
             if ($('ExportMethod').options[$('ExportMethod').selectedIndex].value.trim().toLowerCase().indexOf('tar') != -1)
             {
                 export_package = { "type" : "tar" };
@@ -5902,8 +6187,6 @@ function ProcessExportResponse(ir_response_obj)
     var interval_fn_timer = null;
     var interval_fn_timeout = null;
 
-    alert('process exp resp');
-
     // state gets set to 0 before leaving this function, so this statement has no effect
     Cookie.setData("state", 3);
 
@@ -6028,12 +6311,8 @@ function ProcessExportResponse(ir_response_obj)
     {
         update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact);
 
-       alert('updated request');
-
         // fill in the request id in $('StatusRequestID') - passing in a request ID will effect this
         update_status_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact);
-
-        alert('updated status');
 
         // we now know that the JSOC has seen the export request; before jsoc_fetch returns, it inserts a row
         // into export_pending_reqs, which means the user has a pending request; jsoc_fetch sets status to 2
@@ -6045,8 +6324,6 @@ function ProcessExportResponse(ir_response_obj)
             $('ExportButton').store('state', EB_STATE_CANCEL_ENABLED);
             $('ExportButton').store({ "ajax-state" : "pre-click" });
             update_export_buttons();
-
-            alert('changed to cancel enedable state; updtae buttons');
 
             interval_fn_timer = $('ExportButton').retrieve('interval', null);
             if (interval_fn_timer === null)
@@ -6234,6 +6511,8 @@ function update_request_section_ui(endpoint_status, endpoint_status_wordy, error
     if (reset)
     {
         request_id_resolved = '';
+        $('RequestIdPlace').style.backgroundColor = colorYellow;
+        $('RequestIdPlace').disabled = true;
     }
     else
     {
@@ -6293,6 +6572,8 @@ function update_request_section_ui(endpoint_status, endpoint_status_wordy, error
     if (reset)
     {
         export_status = '';
+        $('ExportStatus').style.backgroundColor = colorYellow;
+        $('ExportStatus').disabled = true;
     }
     else
     {
@@ -6373,6 +6654,8 @@ function update_request_section_ui(endpoint_status, endpoint_status_wordy, error
     if (reset)
     {
         $('ExportLocation').innerHTML = '';
+        $('ExportLocation').style.backgroundColor = colorYellow;
+        $('ExportLocation').disabled = true;
     }
     else
     {
@@ -6521,7 +6804,7 @@ function update_status_section_ui(endpoint_status, endpoint_status_wordy, error_
     }
 
     $('StatusRequestID').value = request_id_resolved;
-
+    $('StatusRequestID').style.backgroundColor = colorYellow;
 
     // row 1, col 4 - affected by status button click only
     if (reset)
@@ -6777,6 +7060,8 @@ function update_status_section_ui(endpoint_status, endpoint_status_wordy, error_
     if (reset)
     {
         $('StatusStatus').innerHTML = '';
+        $('StatusStatus').style.backgroundColor = colorYellow;
+        $('StatusStatus').disabled = true;
     }
     else
     {
@@ -6842,7 +7127,9 @@ function update_status_section_ui(endpoint_status, endpoint_status_wordy, error_
     // row 5, col 2 (base url of export) - affected by status click only
     if (reset)
     {
-        $('StatusLocation').innerHTML = '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;';
+        $('StatusLocation').innerHTML = '';
+        $('StatusLocation').style.backgroundColor = colorYellow;
+        $('StatusLocation').disabled = true;
     }
     else
     {
@@ -6924,7 +7211,8 @@ function update_status_section_ui(endpoint_status, endpoint_status_wordy, error_
     // row 8 (table of urls)
     if (reset)
     {
-        $('StatusDataLocation').innerHTML = '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;';
+        //$('StatusDataLocation').innerHTML = '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;';
+        $('StatusDataLocation').innerHTML = '';
     }
     else
     {
@@ -7429,19 +7717,19 @@ access the data.
 <div id="SubmitResponseDiv">
 <table>
   <tr>
-    <td>RequestID</td>
-    <td colspan="2"><span id="RequestIdPlace" style="width:12em;background-color:#FFF8DC;">&nbsp;</span></td>
+    <td style="width:11em">RequestID</td>
+    <td><input type="text" id="RequestIdPlace" name="RequestIdPlace" style="width:15em;background-color:#FFF8DC;" value=""></td>
     <td id="RequestIDDesc"></td>
   </tr>
 
   <tr>
-    <td>Status</td>
-    <td colspan="3"> <span id="ExportStatus" style="background-color:#FFF8DC;"> </span ></td>
+    <td style="width:11em">Status</td>
+    <td><input type="text" id="ExportStatus" name="ExportStatus" style="width:15em;background-color:#FFF8DC;" value=""></td>
   </tr>
 
   <tr>
-    <td id="DataLocation">Data Location</td>
-    <td colspan="3"><span id="ExportLocation" style="background-color:#FFF8DC;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span ></td>
+    <td id="DataLocation" style="width:11em">Data Location</td>
+    <td><input type="text" id="ExportLocation" name="ExportLocation" style="width:15em;background-color:#FFF8DC;" value=""></td>
   </tr>
 
 </table>
@@ -7452,8 +7740,8 @@ access the data.
 <p>
 <table>
   <tr>
-    <td style="width:10em" >RequestID</td>
-    <td><input type="text" id="StatusRequestID" name="StatusRequestID" style="width:12em;background-color:#FFF8DC;" value="" onChange="GetStatus();"></td>
+    <td style="width:11em" >RequestID</td>
+    <td><input type="text" id="StatusRequestID" name="StatusRequestID" style="width:15em;background-color:#FFF8DC;" value="" onChange="GetStatus();"></td>
     <td>This is the ID tag for your export request.</td>
     <td><span id="StatusValue">&nbsp;</span></td>
   </tr>
@@ -7473,12 +7761,12 @@ access the data.
 
   <tr>
     <td>Status</td>
-    <td colspan="2"> <span id="StatusStatus" style="background-color:#FFF8DC;"> </span ></td>
+    <td><input type="text" id="StatusStatus" name="StatusStatus" style="width:15em;background-color:#FFF8DC;" value=""></td>
   </tr>
 
   <tr>
     <td>Data Location</td>
-    <td colspan="3"><span id="StatusLocation" style="background-color:#FFF8DC;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span ></td>
+    <td><input type="text" id="StatusLocation" name="StatusLocation" style="width:15em;background-color:#FFF8DC;" value=""></td>
   </tr>
 
   <tr id="TarFileLocationRow" style="display:none;">
