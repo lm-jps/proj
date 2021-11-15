@@ -2283,7 +2283,7 @@ function CreateDataTable(data, valuetable)
       if (data.method.indexOf("ftp") >= 0)
         expURL = "ftp://pail.stanford.edu/export" + data.dir + "/" + thisfile;
       else
-        expURL = "http://jsoc.stanford.edu" + data.dir + "/" + thisfile;
+        expURL = "https://jsoc1.stanford.edu" + data.dir + "/" + thisfile;
       tmp = "<a href='" + expURL + "' target='_blank'>" + thisfile + "<\/a>";
       valuetable = valuetable +  "<td>" + tmp + "<\/td><\/tr>";
       }
@@ -4684,7 +4684,7 @@ function GetStatus()
             }
             else
             {
-                StatusLoc = "http://jsoc.stanford.edu" + data.dir + "/";
+                StatusLoc = "http://jsoc1.stanford.edu" + data.dir + "/";
             }
 
             $("StatusLocation").innerHTML = "<a href='" + StatusLoc + "' target='_blank'>" + StatusLoc + "<\/a>";
