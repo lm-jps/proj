@@ -405,7 +405,7 @@ class StatusOperation(Operation):
 
                 try:
                     dash_index = export_request.method.index('-')
-                    access = export_request.method[dash_index:]
+                    access = export_request.method[:dash_index]
                 except ValueError:
                     access = 'url'
 
@@ -414,7 +414,7 @@ class StatusOperation(Operation):
                 if package['type'] == 'tar':
                     data = [ (record['record'], record['filename']) for record in export_request.raw_response['data'] ]
                 else:
-                    data = list(zip(export_request.urls.record.to_list(), export_request.urls.url.to_list())) 
+                    data = list(zip(export_request.urls.record.to_list(), export_request.urls.url.to_list()))
 
         response_dict = deepcopy(export_request.raw_response)
 
@@ -490,6 +490,7 @@ class PendingResponse(ManageRequestResponse):
     @classmethod
     def generate_response(cls, *, status_code=None, address, request_id, start_time, **response_dict):
         response_dict['comment'] = cls._comment.format(address=address, request_id=request_id, start_time=start_time)
+        response_dict['request_id'] = request_id # needed when export.py converts ManageRequestResponse into dict
         return super().generate_response(status_code=status_code, address=address, request_id=request_id, start_time=start_time, **response_dict)
 
 class CancelResponse(ManageRequestResponse):
@@ -499,6 +500,7 @@ class CancelResponse(ManageRequestResponse):
     @classmethod
     def generate_response(cls, *, status_code=None, address, request_id, start_time, **response_dict):
         response_dict['comment'] = cls._comment.format(address=address, request_id=request_id, start_time=start_time)
+        response_dict['request_id'] = request_id # needed when export.py converts ManageRequestResponse into dict
         return super().generate_response(status_code=status_code, address=address, request_id=request_id, start_time=start_time, **response_dict)
 
 class StatusResponse(ManageRequestResponse):
