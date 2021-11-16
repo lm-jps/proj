@@ -10,6 +10,21 @@
 <link rel="stylesheet" type="text/css" href="tp/css/prototip.css">
 <link rel='icon' type='image/png' href='icons/favicon.png'>
 
+<style type='text/css'>
+.data-cell {
+  text-align:left;
+  background-color:#FFF8DC;
+  border-width:2px;
+  border-color:#EBE9ED;
+  border-style:inset;
+}
+
+body {
+    font:16px Tahoma;
+}
+
+</style>
+
 <script type="text/javascript">
 function include_html(callback)
 {
@@ -157,7 +172,7 @@ var MR_STATUS_REQUEST_CANCELED = 'StatusCode.REQUEST_CANCELED';
 
 var HTML_REQUESTID_DESC = 'This is your request ID; enter it below and click on "request status" to obtain the link to the data.';
 
-
+var HELP_ADDRESS = 'jsoc_help@jsoc.stanford.edu';
 </script>
 
 <!-- Add functions for export processing (no more protocols js)  -->
@@ -769,11 +784,7 @@ function initVars()
   // Form init
     {
     $("ExportRequestor").value = "";
-    $("RequestIdPlace").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
-    $("StatusLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
-    $("TarFileLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
     $("ExportStatus").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
-    $("StatusDataLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
     $('ExportRecordSet').value = "";
     $("ExportCheckMsg").innerHTML = "";
     $("ExportCheckMsg").style.color = colorRealRed;
@@ -910,11 +921,7 @@ function on_load_init_callback()
     for (index = 0; index < $('ImageSize').options.length; index += 1)
     {
         $('ImageSize').options[index].value = $('ImageSize').options[index].value.trim().substr(4);
-        alert('size option ' + $('ImageSize').options[index].value);
     }
-
-
-
 
     Cookie.init({ "name" : "exportdata", "expires" : 14});
     initVars(); // This call runs code that requires RecordSet to be set. However, that is not true
@@ -1179,7 +1186,6 @@ function FileUploadWanted()
     // value after user has checked/unchecked the box
     var box_checked = $('FileUploadCheckbox').checked;
 
-    alert("file upload wanted");
     // dirty since last time the CP button was clicked
     set_eb_state_disabled(true);
 
@@ -1510,7 +1516,6 @@ function ParseSpec(spec, processSpec)
         onSuccess: on_success,
         onFailure: function(response)
         {
-            alert('on failure');
             var gri_response_obj = response.responseJSON;
             var error_message = 'failure parsing record-set specification: ' + JSON.stringfy(gri_response_obj.error_message);
             var process_spec = processSpec;
@@ -4990,6 +4995,19 @@ function set_eb_state_disabled(make_dirty)
 </script>
 <script type="text/javascript">
 
+function address_is_registered()
+{
+    var address = $('ExportNotify').value.trim();
+    var addresses = $('ExportNotify').retrieve('addresses', {});
+    var registration_status = null;
+
+    if (addresses !== null && address.length > 0 && addresses.hasOwnProperty('address') && addresses[address].hasOwnProperty('registration_status'))
+    {
+        registration_status = addresses[address].registration_status;
+    }
+
+    return ((registration_status !== null && (typeof(registration_status) === 'boolean') && registration_status) ? true : false);
+}
 
 // update label, color, disabled
 function update_export_buttons()
@@ -5471,6 +5489,9 @@ function check_for_cancel_enabled_shortcut()
             {
                 // we are done, but the callback is still being called by the email-check code
                 update_export_buttons();
+
+                // need to enable status button if a registered email address exists
+                update_status_section_ui(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
                 return;
             }
 
@@ -5531,11 +5552,11 @@ function check_for_cancel_enabled_shortcut()
             }
 
             update_export_buttons();
+            // need to enable status button if a registered email address exists
+            update_status_section_ui(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
             if (registered !== null)
             {
-                update_export_buttons();
-
                 // we have an answer (email-registration check is no longer pending)
                 if (registered)
                 {
@@ -6523,14 +6544,15 @@ function update_request_section_ui(endpoint_status, endpoint_status_wordy, error
 {
     // update the UI at the bottom of the uppper/request section; there is a table with three columns (the first column is a header - RequestID, Status, Data Location):
     // first column:
-    //   $('DataLocation') - the header is eitheer 'Data Location' (for non-streamed exports) or 'Download' (for streamed exports)
+    //   row 3, column 1 - $('DataLocation'), the header is either 'Data Location' (for non-streamed exports) or 'Download' (for streamed exports)
+    //   row 4, column 1 $('')
     // second column:
-    //   $('RequestIdPlace') - the requestID for an export that was initiated successfully
-    //   $('ExportStatus') - information like if the export is being processed, data are ready for download, the size of data exported, error 
+    //   row 1, column 2 - $('RequestIdPlace'), the requestID for an export that was initiated successfully
+    //   row 2, column 2 - $('ExportStatus'), information like if the export is being processed, data are ready for download, the size of data exported, error 
     //   messages if the data could not be exported
-    //  $('ExportLocation') - a table with URL paths for data
+    //   row 3, column 2 - $('ExportLocation'), a table with URL paths for data
     // third column:
-    //   $('RequestIDDesc') - instructions how to get export status updates (in the lower/status section)
+    //   row 1, column 3 - $('RequestIDDesc'), instructions how to get export status updates (in the lower/status section)
     //   none - only two columns for the 'Status' row
     //   none - only two columns for the 'Data Location' row
     var reset = null;
@@ -6573,7 +6595,6 @@ function update_request_section_ui(endpoint_status, endpoint_status_wordy, error
     }
     else
     {
-        alert('status button click false');
         status_button_click = false;
     }
 
@@ -6593,11 +6614,10 @@ function update_request_section_ui(endpoint_status, endpoint_status_wordy, error
         }
     }
 
+    // row 1, column 2
     if (reset)
     {
         request_id_resolved = '';
-        $('RequestIdPlace').style.backgroundColor = colorYellow;
-        $('RequestIdPlace').disabled = true;
     }
     else
     {
@@ -6619,6 +6639,7 @@ function update_request_section_ui(endpoint_status, endpoint_status_wordy, error
 
     $('RequestIdPlace').innerHTML = request_id_resolved;
 
+    // row 1, column 3
     if (reset)
     {
         request_id_instructions = '';
@@ -6652,13 +6673,12 @@ function update_request_section_ui(endpoint_status, endpoint_status_wordy, error
         }
     }
 
-    $('RequestIDDesc').innerHTML = request_id_instructions;
+    $('RequestIDDesc').value = request_id_instructions;
 
+    // row 2, column 2
     if (reset)
     {
         export_status = '';
-        $('ExportStatus').style.backgroundColor = colorYellow;
-        $('ExportStatus').disabled = true;
     }
     else
     {
@@ -6735,12 +6755,44 @@ function update_request_section_ui(endpoint_status, endpoint_status_wordy, error
 
     $('ExportStatus').innerHTML = export_status;
 
+    // row 3, column 2 - data location base URL
     // only an export button click should create the url table in the upper/request section
     if (reset)
     {
         $('ExportLocation').innerHTML = '';
-        $('ExportLocation').style.backgroundColor = colorYellow;
-        $('ExportLocation').disabled = true;
+    }
+    else
+    {
+        if (status_button_click)
+        {
+            if (sums_directory !== null && sums_directory.length > 0)
+            {
+                if (access !== null && access.toLowerCase() === 'ftp')
+                {
+                    data_base_url = "ftp://pail.stanford.edu/export" + sums_directory + "/";
+                }
+                else
+                {
+                    data_base_url = "http://jsoc.stanford.edu" + sums_directory + "/";
+                }
+
+                link_element = "<a href='" + data_base_url + "' target='_blank'>" + data_base_url + "<\/a>";
+            }
+
+            if (link_element === null)
+            {
+                link_element = '';
+            }
+
+            $('ExportLocation').innerHTML = link_element;
+        }
+    }
+
+
+    // row 4, column 1 - url table
+    if (reset)
+    {
+        $('RequestUrlTable').innerHTML = '';
     }
     else
     {
@@ -6748,12 +6800,11 @@ function update_request_section_ui(endpoint_status, endpoint_status_wordy, error
         {
             if (export_data !== null)
             {
-                $('ExportLocation').innerHTML = CreateDataTable(export_data, data_package) + '<br>';
+                $('RequestUrlTable').innerHTML = CreateDataTable(export_data, data_package) + '<br>';
             }
             else
             {
-                url_table_element = '';
-                $('ExportLocation').innerHTML = '';
+                $('RequestUrlTable').innerHTML = '';
             }
         }
     }
@@ -6839,6 +6890,9 @@ function update_status_section_ui(endpoint_status, endpoint_status_wordy, error_
     var export_button_error = null;
     var status_button_click = null;
     var status_button_error = null;
+    var button_color = null;
+    var button_label = null;
+    var button_disabled = null;
     var request_id_resolved = null;
     var link_element = null;
 
@@ -6930,83 +6984,75 @@ function update_status_section_ui(endpoint_status, endpoint_status_wordy, error_
     {
         $('StatusButton').value = 'get status';
         $('StatusButton').style.backgroundColor = colorPreset;
+        $('StatusButton').disabled = true;
     }
     else
-    {    
+    {
+        // need to enable (registered email address) / disable (no registered email address)
+        if (address_is_registered() && $('StatusRequestID').value.trim().length > 0)
+        {
+            $('StatusButton').disabled = false;
+        }
+        else
+        {
+            $('StatusButton').disabled = true;
+        }
+
         if (status_button_click)
         {
             button_label = $('StatusButton').retrieve('label', null);
             button_color = $('StatusButton').retrieve('color', null);
 
-            if (button_label === null || button_label.length == 0)
+            if ($('StatusButton').retrieve('ajax-state', 'pre-click') === 'ajax-running')
             {
-                // depends on the disposition of the response
-                if (endpoint_status === 'StatusCode.REQUEST_PROCESSING' || endpoint_status === 'StatusCode.REQUEST_QUEUED' || endpoint_status === 'StatusCode.REQUEST_QUEUED_DEBUG')
-                {
-                    button_label = 'get status';
-                }
-                else if (endpoint_status === 'ErrorCode.REQUEST_FATAL_ERROR')
-                {
-                    button_label = 'FAILURE...';
-                }
-                else if (endpoint_status === 'ErrorCoce.REQUEST_NOT_ONLINE')
-                {
-                    button_label = 'timed out';
-                }
-            }
-
-            if (button_label === null || button_label.length == 0)
-            {
-                if ($('StatusButton').retrieve('ajax-state', 'pre-click') === 'ajax-running')
+                if (button_label === null || button_label.length == 0)
                 {
                     button_label = 'wait...';
                 }
-                else
+
+                if (button_color === null || button_color.length == 0)
                 {
-                    if ($('StatusButton').retrieve('error', false))
+                    button_color = colorYellow;
+                }
+
+                button_disabled = true;
+            }
+            else
+            {
+                if ($('StatusButton').retrieve('error', false))
+                {
+                    if (button_label === null || button_label.length == 0)
                     {
                         button_label = 'FAILURE...';
                     }
-                    else
-                    {
-                        button_label = 'get status';
-                    }
-                }
-            }
 
-            if (button_color === null || button_color.length == 0)
-            {
-                if ($('StatusButton').retrieve('ajax-state', 'pre-click') === 'ajax-running')
-                {
-                    button_color = colorPink;
-                }
-                else
-                {
-                    if ($('StatusButton').retrieve('error', false))
+                    if (button_color === null || button_color.length == 0)
                     {
                         button_color = colorDarkPink;
                     }
-                    else
+
+                    button_disabled = true;
+                }
+                else
+                {
+                    if (button_label === null || button_label.length == 0)
                     {
-                        button_color = colorPreset;
+                        button_label = 'get status';
                     }
+
+                    if (button_color === null || button_color.length == 0)
+                    {
+                        button_color = colorGreen;
+                    }
+
+                    button_disabled = false;
                 }
             }
-
+            
             $('StatusButton').value = button_label;
             $('StatusButton').style.backgroundColor = button_color;
+            $('StatusButton').disabled = button_disabled;
         }
-    }
-
-    if ($('ExportNotify').retrieve('valid', false) && $('StatusRequestID').value.trim().length > 0)
-    {
-        // disable status button
-        $('StatusButton').disabled = false;
-    }
-    else
-    {
-        // enable status button
-        $('StatusButton').disabled = true;
     }
 
     // row 2, col 2 (message to the right of button) - affected by both export and status button clicks
@@ -7014,12 +7060,14 @@ function update_status_section_ui(endpoint_status, endpoint_status_wordy, error_
     {
         if ($('ExportNotify').retrieve('valid', false) && $('StatusRequestID').value.trim().length > 0)
         {
-            message = 'click for export status';
+            message = 'Click for export status.';
         }
         else
         {
-            message = 'enter RequestID and registered email address (in Notify, above)'
+            message = 'Enter export ID (RequestID) and registered email address (Notify).'
         }
+
+        $('StatusButtonMsg').style.color = colorBlack;
 
         $('StatusButtonMsg').store({ "message" : null, "error" : null });
     }
@@ -7029,20 +7077,28 @@ function update_status_section_ui(endpoint_status, endpoint_status_wordy, error_
         if (message === null || message.length == 0)
         {
             // depends on the disposition of the response
-            if (endpoint_status === 'StatusCode.REQUEST_PROCESSING' || endpoint_status === 'StatusCode.REQUEST_QUEUED' || endpoint_status === 'StatusCode.REQUEST_QUEUED_DEBUG')
+            if (endpoint_status === 'StatusCode.REQUEST_COMPLETE')
             {
-                message = 'processing';
+                message = 'Click to display status.';
+                $('StatusButtonMsg').style.color = colorBlack;
+            }
+            else if (endpoint_status === 'StatusCode.REQUEST_PROCESSING' || endpoint_status === 'StatusCode.REQUEST_QUEUED' || endpoint_status === 'StatusCode.REQUEST_QUEUED_DEBUG')
+            {
+                message = 'processing...';
+                $('StatusButtonMsg').style.color = colorRealRed;
             }
             else if (endpoint_status === 'ErrorCode.REQUEST_FATAL_ERROR')
             {
                 if (error_message !== null && error_message.length > 0)
                 {
                     message =  error_message;
+                    $('StatusButtonMsg').style.color = colorRealRed;
                 }
             }
             else if (endpoint_status === 'ErrorCoce.REQUEST_NOT_ONLINE')
             {
                 message = 'timed out; export no longer online';
+                $('StatusButtonMsg').style.color = colorRealRed;
             }
         }
 
@@ -7051,6 +7107,7 @@ function update_status_section_ui(endpoint_status, endpoint_status_wordy, error_
             if (endpoint_status_wordy !== null && endpoint_status_wordy.length > 0)
             {
                 message = endpoint_status_wordy;
+                $('StatusButtonMsg').style.color = colorRealRed;
             }
         }
 
@@ -7058,24 +7115,28 @@ function update_status_section_ui(endpoint_status, endpoint_status_wordy, error_
         {
             if ((status_button_click && $('StatusButton').retrieve('ajax-state', 'pre-click') === 'ajax-running') || (export_button_click && $('ExportButton').retrieve('ajax-state', 'pre-click') === 'ajax-running'))
             {
-                message = 'processing status request';
+                message = 'processing...';
+                $('StatusButtonMsg').style.color = colorRealRed;
             }
             else
             {
                 if ((export_button_click && export_button_error) || (status_button_click && status_button_error))
                 {
                     message = 'error';
+                    $('StatusButtonMsg').style.color = colorRealRed;
                 }
                 else
                 {
                     if ($('ExportNotify').retrieve('valid', false) && $('StatusRequestID').value.trim().length > 0)
                     {
-                        message = 'click for export status';
+                        message = 'Click for export status.';
                     }
                     else
                     {
-                        message = 'enter RequestID and registered email address (in Notify, above)'
+                        message = 'Enter export ID (RequestID) and registered email address (Notify)'
                     }
+
+                    $('StatusButtonMsg').style.color = colorBlack;
                 }
             }
         }
@@ -7098,7 +7159,7 @@ function update_status_section_ui(endpoint_status, endpoint_status_wordy, error_
                 // depends on the disposition of the response
                 if (endpoint_status === 'StatusCode.REQUEST_COMPLETE')
                 {
-                    message = 'list formats are index.html, index.json, and index.txt<br>export script file is ' + request_id + '.drmsrun';
+                    message = 'Summary-file formats are html (index.html), json (index.json), and text (index.txt).<br>The export script is ' + request_id + '.drmsrun.';
                 }
                 else if (endpoint_status === 'StatusCode.REQUEST_PROCESSING' || endpoint_status === 'StatusCode.REQUEST_QUEUED' || endpoint_status === 'StatusCode.REQUEST_QUEUED_DEBUG')
                 {
@@ -7145,8 +7206,6 @@ function update_status_section_ui(endpoint_status, endpoint_status_wordy, error_
     if (reset)
     {
         $('StatusStatus').innerHTML = '';
-        $('StatusStatus').style.backgroundColor = colorYellow;
-        $('StatusStatus').disabled = true;
     }
     else
     {
@@ -7257,7 +7316,6 @@ function update_status_section_ui(endpoint_status, endpoint_status_wordy, error_
             if (data_package !== null && data_package.type !== null && data_package.type.toLowerCase() === 'tar')
             {
 
-                alert('data packae type ' + data_package.type);
                 $('TarFileLocation').innerHTML = "<a href='" + data_package.file_name + "'>" + data_package.file_name + "<\/a>";
                 $('TarFileLocationRow').style.display = 'table-row';
             }
@@ -7280,9 +7338,9 @@ function update_status_section_ui(endpoint_status, endpoint_status_wordy, error_
         if (status_button_click)
         {
             // row 7, col 2
-            if (file_format !== null && file_format.toLowerCase() == 'as-is' && keywords !== null && keywords.length > 0)
+            if (file_format !== null && file_format.toLowerCase() == 'as-is' && keywords_file !== null && keywords_file.length > 0)
             {
-                $('KeywordFileLocation').innerHTML = "<a href='" + keywords + "' target='_blank'>" + keywords + "<\/a>";
+                $('KeywordFileLocation').innerHTML = "<a href='" + keywords_file + "' target='_blank'>" + keywords_file + "<\/a>";
                 $('KeywordFileLocationRow').style.display = 'table-row';
             }
             else
@@ -7296,23 +7354,20 @@ function update_status_section_ui(endpoint_status, endpoint_status_wordy, error_
     // row 8 (table of urls)
     if (reset)
     {
-        //$('StatusDataLocation').innerHTML = '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;';
         $('StatusDataLocation').innerHTML = '';
     }
     else
     {
         if (status_button_click)
         {
-            alert('creating url table');
             // only an status button click should create the url table in the lower/status section
             if (export_data !== null)
             {
-                alert('got data - ' + JSON.stringify(export_data));
+                alert('creating url table');
                 $('StatusDataLocation').innerHTML = CreateDataTable(export_data, data_package) + '<br>';
             }
             else
             {
-                alert('no got data');
                 $('StatusDataLocation').innerHTML = '';
             }
         }
@@ -7437,7 +7492,6 @@ function ProcessRequestStatusResponse(mr_response_obj)
 
         if (mr_response_obj.hasOwnProperty('package'))
         {
-            alert('got package ' + JSON.stringify(mr_response_obj.package));
             data_package = mr_response_obj.package;
         }
 
@@ -7465,8 +7519,6 @@ function ProcessRequestStatusResponse(mr_response_obj)
         {
             contact = mr_response_obj.contact;
         }
-
-        alert('extracted response values');
     }
     else
     {
@@ -7541,8 +7593,6 @@ function ProcessRequestStatusResponse(mr_response_obj)
     }
     else if (endpoint_status === 'StatusCode.REQUEST_COMPLETE')
     {
-        alert('complete, no error');
-
         if (export_button_click)
         {
             Cookie.setData('requestid', '');
@@ -7566,11 +7616,9 @@ function ProcessRequestStatusResponse(mr_response_obj)
         }
         else
         {
-            alert('updating upper');
             // need to update $('RequestIdPlace'), $('ExportStatus'), but NOT $('ExportLocation')
             update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact);
 
-            alert('updating lower')
             update_status_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact);
 
             Cookie.setData('state', 1);
@@ -7692,14 +7740,12 @@ function GetStatus()
             method: 'get',
             onSuccess: function(response)
             {
-                alert('success');
                 var mr_response_obj = response.responseJSON;
 
                 $('StatusButton').store({ "ajax-state" : "post-click" });
 
                 if (mr_response_obj !== null)
                 {
-                    alert('got response');
                     ProcessRequestStatusResponse(mr_response_obj);
                 }
             },
@@ -7709,7 +7755,7 @@ function GetStatus()
 
                 $('StatusButton').store({ "ajax-state" : "post-click" });
 
-                ProcessRequestStatusResponse({ "error_message" : error_message });
+                ProcessRequestStatusResponse({ "drms_export_status" : "ErrorCode.REQUEST_FATAL_ERROR",  "drms_export_status_message" : "fatal error", "error_message" : error_message, "contact" : HELP_ADDRESS });
             },
             on428: function(response)
             {
@@ -7717,7 +7763,7 @@ function GetStatus()
 
                 $('StatusButton').store({ "ajax-state" : "post-click" });
 
-                ProcessRequestStatusResponse({ "error_message" : error_message });
+                ProcessRequestStatusResponse({ "drms_export_status" : "ErrorCode.REQUEST_FATAL_ERROR",  "drms_export_status_message" : "fatal error", "error_message" : error_message, "contact" : HELP_ADDRESS });
             },
             onComplete: function()
             {
@@ -7725,20 +7771,10 @@ function GetStatus()
             }
         };
 
-        $("StatusLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
-        $("TarFileLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
-        $("KeywordFileLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
-        $("StatusDataLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
-        $("StatusStatus").innerHTML = "";
-        $("StatusValue").innerHTML = "";
-        $("StatusOther").innerHTML = "";
-        $("StatusButtonMsg").innerHTML = "Processing status request ...";
-        $("StatusButton").value = "Processing ...";
-
         options['parameters'] = export_app_arguments;
 
         $('StatusButton').store({ "ajax-state" : "ajax-running" });
-        update_status_section_ui(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+        update_status_section_ui(null, null, null, request_id, null, null, null, null, null, null, null, null, null, null, null);
 
         alert('starting ajax');
 
@@ -7803,19 +7839,23 @@ access the data.
 <table>
   <tr>
     <td style="width:11em">RequestID</td>
-    <td><input type="text" id="RequestIdPlace" name="RequestIdPlace" style="width:15em;background-color:#FFF8DC;" value=""></td>
-    <td id="RequestIDDesc"></td>
+    <td style='width:12em' class='data-cell'><span id='RequestIdPlace' name='RequestIdPlace'></td>
+    <td id='RequestIDDesc' style='width:15em'></td>
   </tr>
 
   <tr>
     <td style="width:11em">Status</td>
-    <td><input type="text" id="ExportStatus" name="ExportStatus" style="width:15em;background-color:#FFF8DC;" value=""></td>
+    <td colspan='2' class='data-cell'><span id="ExportStatus" name="ExportStatus"></td>
   </tr>
 
   <tr>
     <td id="DataLocation" style="width:11em">Data Location</td>
-    <td><input type="text" id="ExportLocation" name="ExportLocation" style="width:15em;background-color:#FFF8DC;" value=""></td>
+    <td colspan='2' class='data-cell'><span id="ExportLocation" name="ExportLocation"></td>
   </tr>
+
+    <tr>
+        <td colspan='4'><span id='RequestUrlTable'></span></td>
+    </tr>
 
 </table>
 </div>
@@ -7825,47 +7865,51 @@ access the data.
 <p>
 <table>
   <tr>
-    <td style="width:11em" >RequestID</td>
-    <td><input type="text" id="StatusRequestID" name="StatusRequestID" style="width:15em;background-color:#FFF8DC;" value="" onChange="GetStatus();"></td>
-    <td>This is the ID tag for your export request.</td>
-    <td><span id="StatusValue">&nbsp;</span></td>
+    <td style="width:11em">RequestID</td>
+    <td style="width:12em" class='data-cell'><input style="width:12em;border:none;font-size:16px" type="text" id="StatusRequestID" name="StatusRequestID" style="background-color:#FFF8DC;" value="" onChange="GetStatus();"></td>
+    <td style='padding-left:2em;padding-right:2em'>Identify your export request with this ID.</td>
+    <td style='padding-left:2em;padding-right:2em'><span id="StatusValue"></span></td>
   </tr>
 
   <tr>
-    <td colspan="2" align="center" >
-      <input id="StatusButton" type="button" value="get status" style="background-color:#D8D8D8" onClick="GetStatus();" ></td>
-    <td><span id="StatusButtonMsg">Please only click once for status request.</span ></td>
-    <td rowspan="3"><span id="StatusOther">&nbsp;</span></td>
+    <td></td>
+    <td style='text-align:right'>
+      <input id="StatusButton" type="button" value="get status" style="background-color:#D8D8D8" onClick="GetStatus();">
+    </td>
+    <td style='padding-left:2em;padding-right:2em'><span id="StatusButtonMsg"></span </td>
+    <td style='padding-left:2em;padding-right:2em' rowspan="3"><span id="StatusOther"></span></td>
   </tr>
 
   <tr>
-    <td colspan="2" align="center" >
-      <input id="ClearButton" type="button" value="Clear Request" style="background-color:#D8D8D8" onClick="ClearStatus();" ></td>
-    <td>Clear old status RequestID</td>
+    <td></td>
+    <td style='text-align:right'>
+      <input id="ClearButton" type="button" value="clear status" style="background-color:#D8D8D8" onClick="ClearStatus();">
+    </td>
+    <td style='padding-left:2em;padding-right:2em'>Click to clear export status.</td>
   </tr>
 
   <tr>
     <td>Status</td>
-    <td><input type="text" id="StatusStatus" name="StatusStatus" style="width:15em;background-color:#FFF8DC;" value=""></td>
+    <td colspan='2' class='data-cell'><span id="StatusStatus" name="StatusStatus"></td>
   </tr>
 
   <tr>
     <td>Data Location</td>
-    <td><input type="text" id="StatusLocation" name="StatusLocation" style="width:15em;background-color:#FFF8DC;" value=""></td>
+    <td colspan='2' class='data-cell'><span id="StatusLocation" name="StatusLocation"></td>
   </tr>
 
-  <tr id="TarFileLocationRow" style="display:none;">
+  <tr id='TarFileLocationRow' style='display:none;'>
     <td>Tar File Location</td>
-    <td colspan="3"><span id="TarFileLocation"  style="background-color:#FFF8DC;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span ></td>
+    <td colspan='2' class='data-cell'><span id="TarFileLocation" name="TarFileLocation"></span></td>
   </tr>
 
-  <tr id="KeywordFileLocationRow" style="display:none;">
+  <tr id='KeywordFileLocationRow' style='display:none;'>
     <td>Keyword File Location</td>
-    <td colspan="3"><span id="KeywordFileLocation"  style="background-color:#FFF8DC;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span ></td>
+    <td colspan='2' class='data-cell'><span id='KeywordFileLocation' name='KeywordFileLocation'></span></td>
   </tr>
 
   <tr>
-  <td colspan="4"><span id="StatusDataLocation" style="background-color:#FFF8DC;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span ></td>
+  <td colspan='4'><span id='StatusDataLocation' style='background-color:#FFF8DC;'></span></td>
   </tr>
 
 </table>
