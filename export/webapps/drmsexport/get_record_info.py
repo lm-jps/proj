@@ -123,6 +123,7 @@ class Arguments(Args):
                 parser.add_argument('-l', '--log-file', help='the path to the log file', metavar='<log file>', dest='log_file', default=log_file)
                 parser.add_argument('-L', '--logging-level', help='the amount of logging to perform; in order of increasing verbosity: critical, error, warning, info, debug', metavar='<logging level>', dest='logging_level', action=DrmsLogLevelAction, default=DrmsLogLevel.ERROR)
                 parser.add_argument('-N', '--dbname', help='the name of the database that contains export requests', metavar='<db name>', dest='db_name', default=db_name)
+                parser.add_argument('-n', '--number-records', help='the maximum number of records for which information is returned', metavar='<maximum number of records>', dest='number_records', type=int, default=None)
                 parser.add_argument('-P', '--dbport', help='the port on the host machine that is accepting connections for the database', metavar='<db host port>', dest='db_port', type=int, default=db_port)
                 parser.add_argument('-s', '--segments', help='list of segments for which information is returned', action=ListAction, dest='segments', default=None)
                 parser.add_argument('-U', '--dbuser', help='the name of the database user account', metavar='<db user>', dest='db_user', default=db_user)
@@ -132,7 +133,7 @@ class Arguments(Args):
                 arguments.drms_client = None
             else:
                 # `program_args` has all `arguments` values, in final form; validate them
-                def extract_module_args(*, specification, db_host, drms_client_type='ssh', drms_client=None, keywords=None, links=None, log_file=log_file, logging_level='error', db_name=db_name, db_port=db_port, segments=None, db_user=db_user, webserver=None):
+                def extract_module_args(*, specification, db_host, drms_client_type='ssh', drms_client=None, keywords=None, links=None, log_file=log_file, logging_level='error', db_name=db_name, number_records=None, db_port=db_port, segments=None, db_user=db_user, webserver=None):
                     arguments = {}
 
                     arguments['specification'] = specification
@@ -144,6 +145,7 @@ class Arguments(Args):
                     arguments['log_file'] = log_file
                     arguments['logging_level'] = DrmsLogLevelAction.string_to_level(logging_level)
                     arguments['db_name'] = db_name
+                    arguments['number_records'] = number_records
                     arguments['db_port'] = db_port
                     arguments['segments'] = segments # list
                     arguments['db_user'] = db_user
@@ -222,7 +224,7 @@ def perform_action(is_program, program_name=None, **kwargs):
 
         try:
             log.write_debug([ f'[ perform_action ] calling securedrms.SSHClient.query()' ])
-            record_set_info_dict = drms_client.query(ds=arguments.specification, key=arguments.keywords, seg=arguments.segments, link=arguments.links, raw_response=True)
+            record_set_info_dict = drms_client.query(ds=arguments.specification, key=arguments.keywords, seg=arguments.segments, link=arguments.links, n=arguments.number_records, raw_response=True)
         except Exception as exc:
             raise ExportActionError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
 
@@ -248,7 +250,7 @@ from action import Action
 from parse_specification import ParseSpecificationAction
 class GetRecordInfoAction(Action):
     actions = [ 'get_record_set_info' ]
-    def __init__(self, *, method, specification, db_host, drms_client_type=None, drms_client=None, keywords=None, links=None, logging_level=None, db_name=None, db_port=None, segments=None, db_user=None, webserver=None):
+    def __init__(self, *, method, specification, db_host, drms_client_type=None, drms_client=None, keywords=None, links=None, logging_level=None, db_name=None, number_records=None, db_port=None, segments=None, db_user=None, webserver=None):
         self._method = getattr(self, method)
         self._specification = specification
         self._db_host = db_host # the host `webserver` uses (private webserver uses private db host)
@@ -259,7 +261,8 @@ class GetRecordInfoAction(Action):
         self._options['links'] = links # list
         self._options['logging_level'] = logging_level
         self._options['db_name'] = db_name
-        self._options['db_port'] = db_port
+        self._options['number_records'] = number_records # int
+        self._options['db_port'] = db_port # int
         self._options['segments'] = segments # list
         self._options['db_user'] = db_user
         self._options['webserver'] = webserver # host name - gets converted to object in `get_arguments()`
