@@ -163,6 +163,12 @@ class Arguments(Args):
 
             arguments.private_db_host = private_db_host
 
+            if not GetRecordInfoAction.is_valid_specification(arguments.specification, arguments.db_host, arguments.webserver.host, arguments.logging_level._fullname):
+                raise ArgumentsError(error_message=f'invalid record-set specification')
+
+            if not GetRecordInfoAction._parse_cache[arguments.specification].attributes.hasfilts and arguments.number_records is None:
+                raise ArgumentsError(error_message=f'must specify either a record-set filter, or a maximum number of records')
+
             cls._arguments = arguments
 
         return cls._arguments
@@ -250,6 +256,8 @@ from action import Action
 from parse_specification import ParseSpecificationAction
 class GetRecordInfoAction(Action):
     actions = [ 'get_record_set_info' ]
+    _parse_cache = {}
+
     def __init__(self, *, method, specification, db_host, drms_client_type=None, drms_client=None, keywords=None, links=None, logging_level=None, db_name=None, number_records=None, db_port=None, segments=None, db_user=None, webserver=None):
         self._method = getattr(self, method)
         self._specification = specification
@@ -275,33 +283,36 @@ class GetRecordInfoAction(Action):
     def is_valid_specification(cls, specification, db_host, webserver, logging_level=None):
         is_valid = None
 
-        try:
-            if db_host is None:
-                # if this method is called before URL arguments are parsed, then `db_host` is not known;
-                # use default (public) export DB (specification parser does not use DB so it does not matter)
-                try:
-                    drms_params = DRMSParams()
+        if specification in cls._parse_cache:
+            is_valid = True
+        else:
+            try:
+                if db_host is None:
+                    # if this method is called before URL arguments are parsed, then `db_host` is not known;
+                    # use default (public) export DB (specification parser does not use DB so it does not matter)
+                    try:
+                        drms_params = DRMSParams()
 
-                    if drms_params is None:
-                        raise ParametersError(error_message='unable to locate DRMS parameters package')
+                        if drms_params is None:
+                            raise ParametersError(error_message='unable to locate DRMS parameters package')
 
-                    db_host_resolved = drms_params.get_required('EXPORT_DB_HOST_DEFAULT')
-                except DPMissingParameterError as exc:
-                    raise ParametersError(exc_info=sys_exc_info(), error_message=str(exc))
-            else:
-                db_host_resolved = db_host
+                        db_host_resolved = drms_params.get_required('EXPORT_DB_HOST_DEFAULT')
+                    except DPMissingParameterError as exc:
+                        raise ParametersError(exc_info=sys_exc_info(), error_message=str(exc))
+                else:
+                    db_host_resolved = db_host
 
-            # parse specification
-            cls._parse_response = None
-            action = Action.action(action_type='parse_specification', args={ 'specification' : specification, 'db_host' : db_host_resolved, 'webserver' : webserver, 'logging_level' : logging_level })
-            response = action()
-            cls._parse_response = response
-            is_valid = False if isinstance(response, ErrorResponse) else True
-        except:
-            is_valid = False
+                # parse specification
+                action = Action.action(action_type='parse_specification', args={ 'specification' : specification, 'db_host' : db_host_resolved, 'webserver' : webserver, 'logging_level' : logging_level })
+                response = action()
+                is_valid = False if isinstance(response, ErrorResponse) else True
+            except:
+                is_valid = False
+
+            if is_valid:
+                cls._parse_cache[specification] = response
 
         return is_valid
-
 
 if __name__ == "__main__":
     try:
