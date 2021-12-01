@@ -2,11 +2,11 @@
 
 from argparse import Action as ArgsAction
 import inspect
+from json import loads as json_loads, dumps as json_dumps
 from os import environ
 from os.path import join as path_join
 from sys import exc_info as sys_exc_info, exit as sys_exit
-
-from drms_export import Error as ExportError, ErrorCode as ExportErrorCode, Response, securedrms
+from drms_export import Connection, Error as ExportError, ErrorCode as ExportErrorCode, ExpServerBaseError, get_arguments as ss_get_arguments, get_message, Response, send_message
 from drms_parameters import DRMSParams, DPMissingParameterError
 from drms_utils import Arguments as Args, Choices, CmdlParser, Formatter as DrmsLogFormatter, Log as DrmsLog, LogLevel as DrmsLogLevel, LogLevelAction as DrmsLogLevelAction, MakeObject, StatusCode as SC
 from utils import extract_program_and_module_args
@@ -20,16 +20,24 @@ class ErrorCode(ExportErrorCode):
     PARAMETERS = (1, 'failure locating DRMS parameters')
     ARGUMENTS = (2, 'bad arguments')
     LOGGING = (3, 'failure logging messages')
-    DRMS_CLIENT = (4, 'drms client error')
+    EXPORT_SERVER = (4, 'export-server communication error')
 
 class PsBaseError(ExportError):
     def __init__(self, *, exc_info=None, error_message=None):
         if exc_info is not None:
+            import traceback
+
+            # for use with some exception handlers
             self.exc_info = exc_info
             e_type, e_obj, e_tb = exc_info
+            file_info = traceback.extract_tb(e_tb)[0]
+            file_name = file_info.filename if hasattr(file_info, 'filename') else ''
+            line_number = str(file_info.lineno) if hasattr(file_info, 'lineno') else ''
 
             if error_message is None:
-                error_message = f'{e_type.__name__}: {str(e_obj)}'
+                error_message = f'{file_name}:{line_number}: {e_type.__name__}: {str(e_obj)}'
+            else:
+                error_message = f'{error_message} [ {file_name}:{line_number}: {e_type.__name__}: {str(e_obj)} ]'
 
         super().__init__(error_message=error_message)
 
@@ -42,8 +50,8 @@ class ArgumentsError(PsBaseError):
 class LoggingError(PsBaseError):
     _error_code = ErrorCode.LOGGING
 
-class DRMSClientError(PsBaseError):
-    _error_code = ErrorCode.DRMS_CLIENT
+class ExportServerError(PsBaseError):
+    _error_code = ErrorCode.EXPORT_SERVER
 
 def name_to_ws_obj(name, drms_params):
     webserver_dict = {}
@@ -152,6 +160,9 @@ class Arguments(Args):
 from action import Action
 class ParseSpecificationAction(Action):
     actions = [ 'parse_specification' ]
+
+    _log = None
+
     def __init__(self, *, method, specification, db_host, logging_level=None, db_name=None, db_port=None, db_user=None, webserver=None):
         self._method = getattr(self, method)
         self._specification = specification
@@ -166,10 +177,31 @@ class ParseSpecificationAction(Action):
     def parse_specification(self):
         # returns dict
         prog_name = inspect.currentframe().f_code.co_name
-        response = perform_action(is_program=False, program_name=prog_name, specification=self._specification, db_host=self._db_host, options=self._options)
+        response = perform_action(action_obj=self, is_program=False, program_name=prog_name, specification=self._specification, db_host=self._db_host, options=self._options)
         return response
 
-def perform_action(*, is_program, program_name=None, **kwargs):
+    @property
+    def log(self):
+        return self.__class__._log
+
+    @log.setter
+    def log(self, log):
+        self.__class__._log = log
+
+def send_request(request, connection, log):
+    json_message = json_dumps(request)
+
+    log.write_debug([ f'[ send_request ] sending message to server:' ])
+    log.write_debug([ f'[ send_request ] {json_message}' ])
+    send_message(connection, json_message)
+
+    message = get_message(connection)
+    log.write_debug([ f'[ send_request ] server response:' ])
+    log.write_debug([ f'[ send_request ] {message}' ])
+
+    return message
+
+def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
     # catch all expections so we can always generate a response
     response = None
     log = None
@@ -184,50 +216,55 @@ def perform_action(*, is_program, program_name=None, **kwargs):
                 raise ParametersError(error_message=f'unable to locate DRMS parameters package')
 
             arguments = Arguments.get_arguments(is_program=is_program, program_name=program_name, program_args=program_args, module_args=module_args, drms_params=drms_params)
-        except ExportError as exc:
-            exc.exc_info = sys_exc_info()
-            raise exc
+        except ArgsError as exc:
+            raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
         except Exception as exc:
             raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
 
-        try:
-            formatter = DrmsLogFormatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
-            log = DrmsLog(arguments.log_file, arguments.logging_level, formatter)
-        except Exception as exc:
-            raise LoggingError(error_message=f'{str(exc)}')
+        if action_obj is None or action_obj.log is None:
+            try:
+                formatter = DrmsLogFormatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+                log = DrmsLog(arguments.log_file, arguments.logging_level, formatter)
+                action_obj.log = log
+            except Exception as exc:
+                raise LoggingError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+        else:
+            log = action_obj.log
 
         log.write_debug([ f'[ perform_action ] action arguments: {str(arguments)}' ])
 
         try:
-            if arguments.drms_client is None:
-                # make a public client, since either public or private can parse record-set specifications
-                debug = True if arguments.logging_level == DrmsLogLevel.DEBUG else False
-                factory = securedrms.SecureClientFactory(debug=debug, email=arguments.address)
-                use_ssh = True if arguments.drms_client_type == 'ssh' else False
-                connection_info = { 'dbhost' : arguments.db_host, 'dbport' : arguments.db_port, 'dbname' : arguments.db_name, 'dbuser' : arguments.db_user }
+            # use socket server to call drms_parserecset
+            nested_module_args = { 'log_file' : arguments.log_file, 'logging_level' : arguments.logging_level._fullname }
+            nested_arguments = ss_get_arguments(is_program=False, module_args=nested_module_args)
 
-                log.write_debug([ f'[ perform_action ] creating public securedrms client' ])
-                public_drms_client = factory.create_client(server='jsoc_external', use_ssh=use_ssh, use_internal=False, connection_info=connection_info)
-                drms_client = public_drms_client
-            else:
-                # could be either public or private client
-                drms_client = arguments.drms_client
+            with Connection(server=nested_arguments.server, listen_port=nested_arguments.listen_port, log=log) as connection:
+                message = { 'request_type' : 'parse_specification', 'specification' : arguments.specification }
+                response = send_request(message, connection, log)
+                message = { 'request_type' : 'quit' }
+                send_request(message, connection, log)
 
-            response_dict = drms_client.parse_spec(arguments.specification)
+            # message is raw JSON from drms_parserecset
+            response_dict = json_loads(response)
 
             if response_dict['errMsg'] is not None:
-                raise DRMSClientError(error_message=f'failure parsing record-set specification {arguments.export_arguments["specification"]}: {response_dict["errMsg"]}')
-        except ExportError as exc:
-            exc.exc_info = sys_exc_info()
-            raise exc
+                raise ExportServerError(error_message=f'failure parsing record-set specification {arguments.export_arguments["specification"]}: {response_dict["errMsg"]}')
+        except ExpServerBaseError as exc:
+            raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
         except Exception as exc:
-            raise DRMSClientError(exc_info=sys_exc_info())
+            raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
 
         response = Response.generate_response(status_code=StatusCode.SUCCESS, **response_dict)
-    except ExportError as exc:
+    except ExpServerBaseError as exc:
         response = exc.response
-        e_type, e_obj, e_tb = exc.exc_info
-        error_message = f'{e_type.__name__} (LINE {str(e_tb.tb_lineno)}): {str(e_obj)}'
+        error_message = exc.message
+
+        if log:
+            log.write_error([ error_message ])
+        else:
+            print(error_message)
+    except Exception as exc:
+        error_message = str(exc)
 
         if log:
             log.write_error([ error_message ])
@@ -241,6 +278,10 @@ if __name__ == '__main__':
         response = perform_action(is_program=True)
     except ExportError as exc:
         response = exc.response
+        error_message = exc.message
+
+        if log:
+            log.write_error([ error_message ])
 
     print(response.generate_json())
 
