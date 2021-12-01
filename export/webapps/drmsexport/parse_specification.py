@@ -217,7 +217,6 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
 
         if action_obj is None or action_obj.log is None:
             try:
-                print('should be here')
                 formatter = DrmsLogFormatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
                 log = DrmsLog(arguments.log_file, arguments.logging_level, formatter)
                 if action_obj is not None:
@@ -231,10 +230,9 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
 
         try:
             # use socket server to call drms_parserecset
-            nested_module_args = { 'log_file' : arguments.log_file, 'logging_level' : arguments.logging_level._fullname }
-            nested_arguments = ss_get_arguments(is_program=False, module_args=nested_module_args)
+            nested_arguments = ss_get_arguments(is_program=False, module_args={})
 
-            with Connection(server=nested_arguments.server, listen_port=nested_arguments.listen_port, log=log) as connection:
+            with Connection(server=nested_arguments.server, listen_port=nested_arguments.listen_port, timeout=nested_arguments.message_timeout, log=log) as connection:
                 message = { 'request_type' : 'parse_specification', 'specification' : arguments.specification }
                 response = send_request(message, connection, log)
                 message = { 'request_type' : 'quit' }
