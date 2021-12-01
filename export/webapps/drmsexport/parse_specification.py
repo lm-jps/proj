@@ -101,7 +101,7 @@ class Arguments(Args):
                 if program_args is not None and len(program_args) > 0:
                     args = program_args
 
-                parser_args = { 'usage' : f'%(prog)s specification=<specification> dbhost=<db host> [ -a/--address=<registered email address> ] [ -c/--drms-client-type=<ssh/http> ] [ -l/--log-file=<log file path> [ -L/--logging-level=<critical/error/warning/info/debug> ] [ -H/--dbhost=<db host> ] [ -N/--dbname=<db name> ] [ -P/--dbport=<db port> ] [ -U/--dbuser=<db user>] [ --webserver=<host> ]' }
+                parser_args = { 'usage' : f'%(prog)s specification=<specification> dbhost=<db host> [ -l/--log-file=<log file path> [ -L/--logging-level=<critical/error/warning/info/debug> ] [ -H/--dbhost=<db host> ] [ -N/--dbname=<db name> ] [ -P/--dbport=<db port> ] [ -U/--dbuser=<db user>] [ --webserver=<host> ]' }
 
                 if program_name is not None and len(program_name) > 0:
                     parser_args['prog'] = program_name
@@ -113,8 +113,6 @@ class Arguments(Args):
                 parser.add_argument('dbhost', help='the machine hosting the database that contains export requests from this site', metavar='<db host>', dest='db_host', required=True)
 
                 # optional
-                parser.add_argument('-a', '--address', help='the email addressed registered for export', metavar='<email address>', dest='address', default=None)
-                parser.add_argument('-c', '--drms-client-type', help='securedrms client type (ssh, http)', choices=[ 'ssh', 'http' ], dest='drms_client_type', default='ssh')
                 parser.add_argument('-l', '--log-file', help='the path to the log file', metavar='<log file>', dest='log_file', default=log_file)
                 parser.add_argument('-L', '--logging-level', help='the amount of logging to perform; in order of increasing verbosity: critical, error, warning, info, debug', metavar='<logging level>', dest='logging_level', action=DrmsLogLevelAction, default=DrmsLogLevel.ERROR)
                 parser.add_argument('-N', '--dbname', help='the name of the database that contains export requests', metavar='<db name>', dest='db_name', default=db_name)
@@ -123,16 +121,12 @@ class Arguments(Args):
                 parser.add_argument('-w', '--webserver', help='the webserver invoking this script', metavar='<webserver>', action=create_webserver_action(drms_params), dest='webserver', default=name_to_ws_obj(None, drms_params))
 
                 arguments = Arguments(parser=parser, args=args)
-                arguments.drms_client = None
             else:
-                def extract_module_args(*, specification, db_host, address=None, drms_client_type='ssh', drms_client=None, log_file=log_file, logging_level='error', db_name=db_name, db_port=db_port, db_user=db_user, webserver=None):
+                def extract_module_args(*, specification, db_host, log_file=log_file, logging_level='error', db_name=db_name, db_port=db_port, db_user=db_user, webserver=None):
                     arguments = {}
 
                     arguments['specification'] = specification
                     arguments['db_host'] = db_host
-                    arguments['address'] = address
-                    arguments['drms_client_type'] = drms_client_type
-                    arguments['drms_client'] = drms_client
                     arguments['log_file'] = log_file
                     arguments['logging_level'] = DrmsLogLevelAction.string_to_level(logging_level)
                     arguments['db_name'] = db_name
@@ -223,9 +217,11 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
 
         if action_obj is None or action_obj.log is None:
             try:
+                print('should be here')
                 formatter = DrmsLogFormatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
                 log = DrmsLog(arguments.log_file, arguments.logging_level, formatter)
-                action_obj.log = log
+                if action_obj is not None:
+                    action_obj.log = log
             except Exception as exc:
                 raise LoggingError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
         else:
@@ -275,7 +271,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
 
 if __name__ == '__main__':
     try:
-        response = perform_action(is_program=True)
+        response = perform_action(action_obj=None, is_program=True)
     except ExportError as exc:
         response = exc.response
         error_message = exc.message
