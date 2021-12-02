@@ -56,6 +56,7 @@ class ExportServerError(PsBaseError):
 def name_to_ws_obj(name, drms_params):
     webserver_dict = {}
     webserver_dict['host'] = name
+
     if name is None or len(name) == 0 or name.strip().lower() == 'none':
         # assume public
         webserver_dict['public'] = True
@@ -201,6 +202,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
     log = None
 
     try:
+        # removes each options with a value of None
         program_args, module_args = extract_program_and_module_args(is_program=is_program, **kwargs)
 
         try:
@@ -210,8 +212,6 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
                 raise ParametersError(error_message=f'unable to locate DRMS parameters package')
 
             arguments = Arguments.get_arguments(is_program=is_program, program_name=program_name, program_args=program_args, module_args=module_args, drms_params=drms_params)
-        except ArgsError as exc:
-            raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
         except Exception as exc:
             raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
 
@@ -249,7 +249,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
             raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
 
         response = Response.generate_response(status_code=StatusCode.SUCCESS, **response_dict)
-    except ExpServerBaseError as exc:
+    except PsBaseError as exc:
         response = exc.response
         error_message = exc.message
 
