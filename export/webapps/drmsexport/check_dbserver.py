@@ -39,6 +39,7 @@ class ErrorCode(ExportErrorCode):
     WHITELIST = (5, 'whitelists are unsupported')
     SERIES_INFO = (6, 'unable to obtain series information')
     EXPORT_SERVER = (7, 'export-server communication error')
+    UNHANDLED_EXCEPTION = (8, 'unhandled exception')
 
 class CdbBaseError(ExportError):
     def __init__(self, *, exc_info=None, error_message=None):
@@ -76,6 +77,9 @@ class SeriesInfoError(CdbBaseError):
 
 class ExportServerError(CdbBaseError):
     _error_code = ErrorCode.EXPORT_SERVER
+
+class UnhandledExpectionError(CdbBaseError):
+    _error_code = ErrorCode.UNHANDLED_EXCEPTION
 
 class ValidateArgumentAction(ArgsAction):
     def __call__(self, parser, namespace, value, option_string=None):
@@ -322,23 +326,28 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
             response = Response.generate_response(status_code=StatusCode.SUCCESS, **response_dict)
         except ExpServerBaseError as exc:
             raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
-    except ExportError as exc:
+    except CdbBaseError as exc:
         response = exc.response
-        e_type, e_obj, e_tb = exc.exc_info
-        error_msg = f'ERROR LINE {str(e_tb.tb_lineno)}: {exc.message}'
+        error_message = exc.message
 
-        print(f'{error_msg}')
+        if log:
+            log.write_error([ error_message ])
+        else:
+            print(error_message)
+    except Exception as exc:
+        response = UnhandledExpectionError(exc_info=sys_exc_info(), error_message=f'{str(exc)}').response
+        error_message = str(exc)
+
+        if log:
+            log.write_error([ error_message ])
+        else:
+            print(error_message)
 
     return response
 
-
 # Parse arguments
 if __name__ == "__main__":
-    try:
-        response = perform_action(action_obj=None, is_program=True)
-    except ExportError as exc:
-        response = exc.response
-
+    response = perform_action(action_obj=None, is_program=True)
     print(response.generate_json())
 
     # Always return 0. If there was an error, an error code (the 'status' property) and message (the 'statusMsg' property) goes in the returned HTML.
