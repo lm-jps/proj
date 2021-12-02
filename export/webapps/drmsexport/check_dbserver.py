@@ -332,7 +332,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
 
         if log:
             log.write_error([ error_message ])
-        else:
+        elif is_program:
             print(error_message)
     except Exception as exc:
         response = UnhandledExceptionError(exc_info=sys_exc_info(), error_message=f'{str(exc)}').response
@@ -340,7 +340,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
 
         if log:
             log.write_error([ error_message ])
-        else:
+        elif is_program:
             print(error_message)
 
     return response

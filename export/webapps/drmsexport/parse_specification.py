@@ -252,8 +252,8 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
                 raise ExportServerError(error_message=f'failure parsing record-set specification {arguments.export_arguments["specification"]}: {response_dict["errMsg"]}')
         except ExpServerBaseError as exc:
             raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{exc.message}')
-        except PsBaseError:
-            raise
+        except PsBaseError as exc:
+            raise PsBaseError(exc_info=sys_exc_info(), error_message=f'{exc.message}')
         except Exception as exc:
             raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
 
@@ -264,7 +264,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
 
         if log:
             log.write_error([ error_message ])
-        else:
+        elif is_program:
             print(error_message)
     except Exception as exc:
         response = UnhandledExceptionError(exc_info=sys_exc_info(), error_message=f'{str(exc)}').response
@@ -272,7 +272,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
 
         if log:
             log.write_error([ error_message ])
-        else:
+        elif is_program:
             print(error_message)
 
     return response
