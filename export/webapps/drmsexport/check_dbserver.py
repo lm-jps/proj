@@ -18,14 +18,16 @@
 #   { "server" : "hmidb2", "series" : [{ "hmi.M_45s" : { "server" : "hmidb2" } }, { "hmi.does_not_exist" : { "server" : None }}], "status" : 0 }
 
 from argparse import Action as ArgsAction
-from json import loads as json_loads
+from json import loads as json_loads, dumps as json_dumps
+from os.path import join as path_join
 from sys import exc_info as sys_exc_info, exit as sys_exit
 
 from drms_parameters import DRMSParams, DPMissingParameterError
-from drms_utils import Arguments as Args, ArgumentsError as ArgsError, CmdlParser, MakeObject, StatusCode as ExportStatusCode
-from drms_export import Response, Error as ExportError, ErrorCode as ExportErrorCode
-from drms_export import securedrms
+from drms_utils import Arguments as Args, ArgumentsError as ArgsError, CmdlParser, Formatter as DrmsLogFormatter, ListAction, Log as DrmsLog, LogLevel as DrmsLogLevel, LogLevelAction as DrmsLogLevelAction, MakeObject, StatusCode as ExportStatusCode
+from drms_export import Connection, ExpServerBaseError, Error as ExportError, ErrorCode as ExportErrorCode, Response, get_arguments as ss_get_arguments, get_message, send_message
 from utils import extract_program_and_module_args
+
+DEFAULT_LOG_FILE = 'cd_log.txt'
 
 class StatusCode(ExportStatusCode):
     SUCCESS = (0, 'success')
@@ -33,20 +35,27 @@ class StatusCode(ExportStatusCode):
 class ErrorCode(ExportErrorCode):
     PARAMETERS = (1, 'failure locating DRMS parameters')
     ARGUMENTS = (2, 'bad arguments')
-    WHITELIST = (3, 'whitelists are unsupported')
-    SERIES_INFO = (4, 'unable to obtain series information')
-    SECURE_DRMS = (5, 'failure with securedrms interface')
+    LOGGING = (4, 'failure logging messages')
+    WHITELIST = (5, 'whitelists are unsupported')
+    SERIES_INFO = (6, 'unable to obtain series information')
+    EXPORT_SERVER = (7, 'export-server communication error')
 
 class CdbBaseError(ExportError):
     def __init__(self, *, exc_info=None, error_message=None):
         if exc_info is not None:
+            import traceback
+
+            # for use with some exception handlers
             self.exc_info = exc_info
             e_type, e_obj, e_tb = exc_info
+            file_info = traceback.extract_tb(e_tb)[0]
+            file_name = file_info.filename if hasattr(file_info, 'filename') else ''
+            line_number = str(file_info.lineno) if hasattr(file_info, 'lineno') else ''
 
             if error_message is None:
-                error_message = f'{e_type.__name__}: {str(e_obj)}'
+                error_message = f'{file_name}:{line_number}: {e_type.__name__}: {str(e_obj)}'
             else:
-                error_message = f'{error_message} [ {e_type.__name__}: {str(e_obj)} ]'
+                error_message = f'{error_message} [ {file_name}:{line_number}: {e_type.__name__}: {str(e_obj)} ]'
 
         super().__init__(error_message=error_message)
 
@@ -56,14 +65,17 @@ class ParametersError(CdbBaseError):
 class ArgumentsError(CdbBaseError):
     _error_code = ErrorCode.ARGUMENTS
 
+class LoggingError(CdbBaseError):
+    _error_code = ErrorCode.LOGGING
+
 class WhitelistError(CdbBaseError):
     _error_code = ErrorCode.WHITELIST
 
 class SeriesInfoError(CdbBaseError):
     _error_code = ErrorCode.SERIES_INFO
 
-class SecureDRMSError(CdbBaseError):
-    _error_code = ErrorCode.SECURE_DRMS
+class ExportServerError(CdbBaseError):
+    _error_code = ErrorCode.EXPORT_SERVER
 
 class ValidateArgumentAction(ArgsAction):
     def __call__(self, parser, namespace, value, option_string=None):
@@ -83,6 +95,7 @@ class Arguments(Args):
     def get_arguments(cls, *, is_program, program_name=None, program_args=None, module_args=None, drms_params, refresh=True):
         if cls._arguments is None or refresh:
             try:
+                log_file = path_join(drms_params.get_required('EXPORT_LOG_DIR'), DEFAULT_LOG_FILE)
                 db_port = int(drms_params.get_required('DRMSPGPORT'))
                 db_name = drms_params.get_required('DBNAME')
                 db_user = drms_params.get_required('WEB_DBUSER')
@@ -99,7 +112,7 @@ class Arguments(Args):
                 if program_args is not None and len(program_args) > 0:
                     args = program_args
 
-                parser_args = { 'usage' : '%(prog)s public-db-host=<db host> series=<DRMS series list> [ -c/--drms-client-type=<ssh/http> ] [ -d/--debug ] [ -/P--dbport=<db port> ] [ -N/--dbname=<db name> ] [ -U/--dbuser=<db user> ] [ -w/--wlfile=<white-list text file> ]' }
+                parser_args = { 'usage' : '%(prog)s public-db-host=<db host> series=<DRMS series list> [ -l/--log-file=<log file path> [ -L/--logging-level=<critical/error/warning/info/debug> ] [ -/P--dbport=<db port> ] [ -N/--dbname=<db name> ] [ -U/--dbuser=<db user> ] [ -w/--wlfile=<white-list text file> ]' }
 
                 if program_name is not None and len(program_name) > 0:
                     parser_args['prog'] = program_name
@@ -114,27 +127,24 @@ class Arguments(Args):
                 parser.add_argument('s', 'series', help='a comma-separated ist of series to be checked', metavar='<series>', action=ListAction, dest='series', required=True)
 
                 # Optional
-                parser.add_argument('-c', '--drms-client-type', help='securedrms client type (ssh, http)', choices=[ 'ssh', 'http' ], dest='drms_client_type', default='ssh')
-                parser.add_argument('-d', '--debug', help='print helpful securedrms diagnostics', dest='debug', action='store_true', default=False)
+                parser.add_argument('-l', '--log-file', help='the path to the log file', metavar='<log file>', dest='log_file', default=log_file)
+                parser.add_argument('-L', '--logging-level', help='the amount of logging to perform; in order of increasing verbosity: critical, error, warning, info, debug', metavar='<logging level>', dest='logging_level', action=DrmsLogLevelAction, default=DrmsLogLevel.ERROR)
                 parser.add_argument('-P', '--dbport', help='the port on the machine hosting DRMS data series names', metavar='<db host port>', dest='db_port', default=db_port)
                 parser.add_argument('-N', '--dbname', help='the name of the database serving DRMS series names', metavar='<db name>', dest='db_name', default=db_name)
                 parser.add_argument('-U', '--dbuser', help='the user to log-in to the serving database as', metavar='<db user>', dest='db_user', default=db_user)
                 parser.add_argument('-w', '--wlfile', help='the text file containing the definitive list of internal series accessible via the external web site', metavar='<white-list file>', dest='wl_file', action=ValidateArgumentAction, default=wl_file)
 
                 arguments = Arguments(parser=parser, args=args)
-
-                arguments.drms_client = None
             else:
                 # `program_args` has all `arguments` values, in final form; validate them
                 # `series` is py list of DRMS data series
-                def extract_module_args(*, public_db_host, series, drms_client_type='ssh', drms_client=None, debug=False, db_port=db_port, db_name=db_name, db_user=db_user, wl_file=wl_file):
+                def extract_module_args(*, public_db_host, series, log_file=log_file, logging_level='error', db_port=db_port, db_name=db_name, db_user=db_user, wl_file=wl_file):
                     arguments = {}
 
                     arguments['public_db_host'] = public_db_host
                     arguments['series'] = series # list
-                    arguments['drms_client_type'] = drms_client_type
-                    arguments['drms_client'] = drms_client
-                    arguments['debug'] = debug
+                    arguments['log_file'] = log_file
+                    arguments['logging_level'] = DrmsLogLevelAction.string_to_level(logging_level)
                     arguments['db_port'] = db_port
                     arguments['db_name'] = db_name
                     arguments['db_user'] = db_user
@@ -159,21 +169,31 @@ from action import Action
 from get_series_info import GetSeriesInfoAction
 class DetermineDbServerAction(Action):
     actions = [ 'determine_db_server' ]
-    def __init__(self, *, method, public_db_host, series, drms_client_type=None, drms_client=None, db_port=None, db_name=None, db_user=None):
+
+    _log = None
+
+    def __init__(self, *, method, public_db_host, series, logging_level=None, db_port=None, db_name=None, db_user=None):
         self._method = getattr(self, method)
         self._public_db_host = public_db_host
         self._series = series # py list
         self._options = {}
-        self._options['drms_client_type'] = drms_client_type
-        self._options['drms_client'] = drms_client
+        self._options['logging_level'] = logging_level
         self._options['db_port'] = db_port
         self._options['db_name'] = db_name
         self._options['db_user'] = db_user
 
     def determine_db_server(self):
         # returns dict
-        response = perform_action(is_program=False, public_db_host=self._public_db_host, series=self._series, options=self._options)
+        response = perform_action(action_obj=self, is_program=False, public_db_host=self._public_db_host, series=self._series, options=self._options)
         return response
+
+    @property
+    def log(self):
+        return self.__class__._log
+
+    @log.setter
+    def log(self, log):
+        self.__class__._log = log
 
     # `series` is a py list of series
     @classmethod
@@ -209,8 +229,16 @@ def get_whitelist(wl_file):
 
     return white_list
 
-def perform_action(is_program, program_name=None, **kwargs):
+def send_request(request, connection, log):
+    json_message = json_dumps(request)
+    send_message(connection, json_message)
+    message = get_message(connection)
+
+    return message
+
+def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
     response = None
+    log = None
 
     try:
         program_args, module_args = extract_program_and_module_args(is_program=is_program, **kwargs)
@@ -227,76 +255,62 @@ def perform_action(is_program, program_name=None, **kwargs):
         except Exception as exc:
             raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
 
+        if action_obj is None or action_obj.log is None:
+            try:
+                formatter = DrmsLogFormatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+                log = DrmsLog(arguments.log_file, arguments.logging_level, formatter)
+                if action_obj is not None:
+                    action_obj.log = log
+            except Exception as exc:
+                raise LoggingError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+        else:
+            log = action_obj.log
+
+        log.write_debug([ f'[ perform_action ] action arguments: {str(arguments)}' ])
+
         try:
-            factory = None
-
-            # call show_series on the external host; if all series are on the external host, return the external server `arguments.db_host`; show_series does not provide a way to search for a list of series, so make a hash of all series, then assess each series for membsership in the list
-            #
-            # There is no JSOC_DBPORT DRMS parameter, much to my surprise. We need to append ':' + str(optD['dbport']) to optD['db_host'].
-
-            # XXX use securedrms.py to call, on external server, show_series -qz f'JSOC_DBHOST={arguments.db_host}:str({arguments.dbport})' JSOC_DBNAME=arguments.dbname JSOC_DBUSER=arguments.dbuser; obtain json_response
-            if arguments.drms_client is None:
-                connection_info = { 'dbhost' : arguments.public_db_host, 'dbport' : arguments.db_port, 'dbname' : arguments.db_name, 'dbuser' : arguments.db_user }
-
-                factory = securedrms.SecureClientFactory(debug=arguments.debug)
-                if arguments.drms_client_type == 'ssh':
-                    sshclient_external = factory.create_client(server='jsoc_external', use_ssh=True, use_internal=False, connection_info=connection_info)
-                else:
-                    sshclient_external = factory.create_client(server='jsoc_external', use_ssh=False, use_internal=False, connection_info=connection_info)
-            else:
-                # use client passed in from flask app - must be a public client
-                if arguments.drms_client.use_internal:
-                    raise SecureDRMSError(error_message=f'must provide a securedrms client with public access')
-
-                sshclient_external = arguments.drms_client
-
-            # we also need an internal client for pass-through series, if the servers support pass-through series
-            if arguments.has_wl:
-                if factory is None:
-                    factory = securedrms.SecureClientFactory(debug=arguments.debug)
-
-                connection_info = { 'dbhost' : arguments.private_db_host, 'dbport' : arguments.db_port, 'dbname' : arguments.db_name, 'dbuser' : arguments.db_user }
-                if arguments.drms_client_type == 'ssh':
-                    sshclient_internal = factory.create_client(server='jsoc_internal', use_ssh=True, use_internal=True, connection_info=connection_info)
-                else:
-                    sshclient_internal = factory.create_client(server='jsoc_internal', use_ssh=False, use_internal=True, connection_info=connection_info)
-
-            # securedrms configuration does not include ssh_show_series_wrapper, so the results will include only series that are implemented in the public database (i.e., no "pass-through" series)
             response_dict = {}
 
             if len(arguments.series) > 0:
-                response_dict['series'] = []
-                use_public_server = True
-                white_list = None
-                supporting_server = False
+                nested_arguments = ss_get_arguments(is_program=False, module_args={})
 
-                for series in arguments.series:
-                    series_regex = series.lower().replace('.', '[.]')
-                    public_series = sshclient_external.series(regex=series_regex, full=False)
-                    if len(public_series) == 0:
-                        if arguments.has_wl:
-                            # try private server
-                            private_series = sshclient_internal.series(regex=series_regex, full=False)
+                with Connection(server=nested_arguments.server, listen_port=nested_arguments.listen_port, timeout=nested_arguments.message_timeout, log=log) as connection:
+                    response_dict['series'] = []
+                    use_public_server = True
+                    white_list = None
+                    supporting_server = False
 
-                            if white_list is None:
-                                white_list = get_whitelist(arguments.wl_file) # if no whitelist exists, then this is the empty set
+                    for series in arguments.series:
+                        series_regex = series.lower().replace('.', '[.]')
 
-                            if series.lower() in white_list and len(private_series) != 0:
-                                response_dict['series'].append({ series : { 'server' : arguments.private_db_host } })
-                                supporting_server = True
-                                use_public_server = False
+                        message = { 'request_type' : 'series_list', 'series_regex' : series_regex, 'db_host' : arguments.public_db_host }
+                        response = json_loads(send_request(message, connection, log))
+
+                        if len(response['names']) == 0:
+                            if arguments.has_wl:
+                                # try private server
+                                message = { 'request_type' : 'series_list', 'series_regex' : series_regex, 'db_host' : arguments.private_db_host }
+                                response = json_loads(send_request(message, connection, log))
+
+                                if white_list is None:
+                                    white_list = get_whitelist(arguments.wl_file) # if no whitelist exists, then this is the empty set
+
+                                if series.lower() in white_list and len(response['names']) != 0:
+                                    response_dict['series'].append({ series : { 'server' : arguments.private_db_host } })
+                                    supporting_server = True
+                                    use_public_server = False
+                                else:
+                                    response_dict['series'].append({ series : { 'server' : None } })
                             else:
                                 response_dict['series'].append({ series : { 'server' : None } })
                         else:
-                            response_dict['series'].append({ series : { 'server' : None } })
-                    else:
-                        response_dict['series'].append({ series : { 'server' : arguments.public_db_host } })
-                        supporting_server = True
+                            response_dict['series'].append({ series : { 'server' : arguments.public_db_host } })
+                            supporting_server = True
 
-                if supporting_server:
-                    response_dict['server'] = arguments.public_db_host if use_public_server else arguments.private_db_host
-                else:
-                    response_dict['server'] = None
+                    if supporting_server:
+                        response_dict['server'] = arguments.public_db_host if use_public_server else arguments.private_db_host
+                    else:
+                        response_dict['server'] = None
             else:
                 response_dict['server'] = None
                 response_dict['series'] = []
@@ -306,8 +320,8 @@ def perform_action(is_program, program_name=None, **kwargs):
             #   { "server" : "hmidb2", "series" : [{ "hmi.M_45s" : { "server" : "hmidb2" } }, { "hmi.not_on_white_list" : { "server" : None }}], "status" : 0 }
             #   { "server" : "hmidb2", "series" : [{ "hmi.M_45s" : { "server" : "hmidb2" } }, { "hmi.does_not_exist" : { "server" : None }}], "status" : 0 }
             response = Response.generate_response(status_code=StatusCode.SUCCESS, **response_dict)
-        except securedrms.SecureDRMSError as exc:
-            response = SecureDRMSError(error_message=str(exc)).response
+        except ExpServerBaseError as exc:
+            raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
     except ExportError as exc:
         response = exc.response
         e_type, e_obj, e_tb = exc.exc_info
@@ -321,7 +335,7 @@ def perform_action(is_program, program_name=None, **kwargs):
 # Parse arguments
 if __name__ == "__main__":
     try:
-        response = perform_action(is_program=True)
+        response = perform_action(action_obj=None, is_program=True)
     except ExportError as exc:
         response = exc.response
 
