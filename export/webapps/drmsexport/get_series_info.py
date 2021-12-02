@@ -8,10 +8,10 @@ from os.path import join as path_join
 from psycopg2 import Error as PGError, connect as pg_connect
 from sys import exc_info as sys_exc_info, exit as sys_exit
 
-from drms_export import Error as ExportError, ErrorCode as ExportErrorCode, ErrorResponse, Response, securedrms
+from drms_export import Error as ExportError, ErrorCode as ExportErrorCode, ErrorResponse, Response
 from drms_parameters import DRMSParams, DPMissingParameterError
 from drms_utils import Arguments as Args, ArgumentsError as ArgsError, Choices, CmdlParser, Formatter as DrmsLogFormatter, ListAction, Log as DrmsLog, LogLevel as DrmsLogLevel, LogLevelAction as DrmsLogLevelAction, MakeObject, StatusCode as SC
-from utils import extract_program_and_module_args, create_drms_client
+from utils import extract_program_and_module_args, get_db_host
 
 DEFAULT_LOG_FILE = 'gsi_log.txt'
 
@@ -26,22 +26,28 @@ class ErrorCode(ExportErrorCode):
     PARAMETERS = (101, 'failure locating DRMS parameters')
     ARGUMENTS = (102, 'bad arguments')
     LOGGING = (103, 'failure logging messages')
-    DRMS_CLIENT = (104, 'drms client error')
-    EXPORT_ACTION = (105, 'failure calling export action')
-    RESPONSE = (106, 'unable to generate valid response')
-    DB_CONNECTION = (107, 'failure connecting to database')
-    DB_COMMAND = (108, 'failure executing database command')
+    EXPORT_ACTION = (104, 'failure calling export action')
+    RESPONSE = (105, 'unable to generate valid response')
+    DB_CONNECTION = (106, 'failure connecting to database')
+    DB_COMMAND = (107, 'failure executing database command')
+    UNHANDLED_EXCEPTION = (108, 'unhandled exception')
 
 class GsiBaseError(ExportError):
     def __init__(self, *, exc_info=None, error_message=None):
         if exc_info is not None:
+            import traceback
+
+            # for use with some exception handlers
             self.exc_info = exc_info
             e_type, e_obj, e_tb = exc_info
+            file_info = traceback.extract_tb(e_tb)[0]
+            file_name = file_info.filename if hasattr(file_info, 'filename') else ''
+            line_number = str(file_info.lineno) if hasattr(file_info, 'lineno') else ''
 
             if error_message is None:
-                error_message = f'{e_type.__name__}: {str(e_obj)}'
+                error_message = f'{file_name}:{line_number}: {e_type.__name__}: {str(e_obj)}'
             else:
-                error_message = f'{error_message} [ {e_type.__name__}: {str(e_obj)} ]'
+                error_message = f'{error_message} [ {file_name}:{line_number}: {e_type.__name__}: {str(e_obj)} ]'
 
         super().__init__(error_message=error_message)
 
@@ -54,9 +60,6 @@ class ArgumentsError(GsiBaseError):
 class LoggingError(GsiBaseError):
     _error_code = ErrorCode.LOGGING
 
-class DRMSClientError(GsiBaseError):
-    _error_code = ErrorCode.DRMS_CLIENT
-
 class ExportActionError(GsiBaseError):
     _error_code = ErrorCode.EXPORT_ACTION
 
@@ -68,6 +71,9 @@ class DBConnectionError(GsiBaseError):
 
 class DBCommandError(GsiBaseError):
     _error_code = ErrorCode.DB_COMMAND
+
+class UnhandledExceptionError(GsiBaseError):
+    _error_code = ErrorCode.UNHANDLED_EXCEPTION
 
 def name_to_ws_obj(name, drms_params):
     webserver_dict = {}
@@ -126,7 +132,7 @@ class Arguments(Args):
                 if program_args is not None and len(program_args) > 0:
                     args = program_args
 
-                parser_args = { 'usage' : '%(prog)s series=<DRMS series> db_host=<db host> [ -c/--drms-client-type=<ssh/http> ] [ --log-file=<log file path> ] [ --logging-level=<critical/error/warning/info/debug> ] [ -N/--dbname=<db name> ] [ -P/--dbport=<db port> ] [ -U/--dbuser=<db user>] [ -w/--webserver=<host> ]' }
+                parser_args = { 'usage' : '%(prog)s series=<DRMS series> db_host=<db host> [ --log-file=<log file path> ] [ --logging-level=<critical/error/warning/info/debug> ] [ -N/--dbname=<db name> ] [ -P/--dbport=<db port> ] [ -U/--dbuser=<db user>] [ -w/--webserver=<host> ]' }
                 if program_name is not None and len(program_name) > 0:
                     parser_args['prog'] = program_name
 
@@ -137,7 +143,6 @@ class Arguments(Args):
                 parser.add_argument('dbhost', help='the machine hosting the database that contains export requests from this site', metavar='<db host>', dest='db_host', required=True)
 
                 # optional
-                parser.add_argument('-c', '--drms-client-type', help='securedrms client type (ssh, http, none)', choices=[ 'ssh', 'http', 'none' ], dest='drms_client_type', default='none')
                 parser.add_argument('--keywords', help='a list of DRMS keywords for which information is to be displayed', action=AttributeListAction, dest='keywords', default=True)
                 parser.add_argument('--links', help='a list of DRMS links for which information is to be displayed', action=AttributeListAction, dest='links', default=True)
                 parser.add_argument('-l', '--log-file', help='the path to the log file', metavar='<log file>', dest='log_file', default=log_file)
@@ -150,18 +155,15 @@ class Arguments(Args):
                 parser.add_argument('-w', '--webserver', help='the webserver invoking this script', metavar='<webserver>', action=create_webserver_action(drms_params), dest='webserver', default=name_to_ws_obj(None, drms_params))
 
                 arguments = Arguments(parser=parser, args=args)
-                arguments.drms_client = None
             else:
                 # `program_args` has all `arguments` values, in final form; validate them
                 # `series` is a str
-                def extract_module_args(*, series, db_host, parse_record_sets=False, drms_client_type='none', drms_client=None, log_file=log_file, logging_level='error', db_name=db_name, db_port=db_port, db_user=db_user, keywords=True, links=True, segments=True, webserver=None):
+                def extract_module_args(*, series, db_host, parse_record_sets=False, log_file=log_file, logging_level='error', db_name=db_name, db_port=db_port, db_user=db_user, keywords=True, links=True, segments=True, webserver=None):
                     arguments = {}
 
                     arguments['series'] = series
                     arguments['db_host'] = db_host
                     arguments['parse_record_sets'] = parse_record_sets
-                    arguments['drms_client_type'] = drms_client_type
-                    arguments['drms_client'] = drms_client
                     arguments['log_file'] = log_file
                     arguments['logging_level'] = DrmsLogLevelAction.string_to_level(logging_level)
                     arguments['db_name'] = db_name
@@ -364,7 +366,7 @@ def get_series_info_from_db(*, series, cursor, keywords=None, links=None, segmen
                 except PGError as exc:
                     raise DBCommandError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
 
-def perform_action(*, is_program, program_name=None, **kwargs):
+def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
     # catch all expections so we can always generate a response
     response = None
     log = None
@@ -384,11 +386,16 @@ def perform_action(*, is_program, program_name=None, **kwargs):
         except Exception as exc:
             raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
 
-        try:
-            formatter = DrmsLogFormatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
-            log = DrmsLog(arguments.log_file, arguments.logging_level, formatter)
-        except Exception as exc:
-            raise LoggingError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+        if action_obj is None or action_obj.log is None:
+            try:
+                formatter = DrmsLogFormatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+                log = DrmsLog(arguments.log_file, arguments.logging_level, formatter)
+                if action_obj is not None:
+                    action_obj.log = log
+            except Exception as exc:
+                raise LoggingError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+        else:
+            log = action_obj.log
 
         if is_program:
             log.write_debug([ f'[ perform_action ] program invocation' ])
@@ -416,50 +423,41 @@ def perform_action(*, is_program, program_name=None, **kwargs):
         else:
             series = arguments.series
 
-        if arguments.drms_client_type == 'none':
-            # connect to DB directly (fastest method)
-            log.write_debug([ f'[ perform_action ] direct DB connection' ])
+        # connect to DB directly (fastest method)
+        log.write_debug([ f'[ perform_action ] direct DB connection' ])
 
-            with pg_connect(database=arguments.db_name, host=arguments.db_host, port=str(arguments.db_port), user=arguments.db_user) as conn:
-                with conn.cursor() as cursor:
-                    unique_series = list(OrderedDict.fromkeys(series))
-                    keywords = arguments.keywords if type(arguments.keywords) == bool else list(OrderedDict.fromkeys(arguments.keywords))
-                    links = arguments.links if type(arguments.links) == bool else list(OrderedDict.fromkeys(arguments.links))
-                    segments = arguments.segments if type(arguments.segments) == bool else list(OrderedDict.fromkeys(arguments.segments))
+        with pg_connect(database=arguments.db_name, host=arguments.db_host, port=str(arguments.db_port), user=arguments.db_user) as conn:
+            with conn.cursor() as cursor:
+                unique_series = list(OrderedDict.fromkeys(series))
+                keywords = arguments.keywords if type(arguments.keywords) == bool else list(OrderedDict.fromkeys(arguments.keywords))
+                links = arguments.links if type(arguments.links) == bool else list(OrderedDict.fromkeys(arguments.links))
+                segments = arguments.segments if type(arguments.segments) == bool else list(OrderedDict.fromkeys(arguments.segments))
 
-                    series_info = {}
+                series_info = {}
 
-                    for one_series in unique_series:
-                        get_series_info_from_db(series=one_series, cursor=cursor, keywords=keywords, links=links, segments=segments, log=log, series_info=series_info)
+                for one_series in unique_series:
+                    get_series_info_from_db(series=one_series, cursor=cursor, keywords=keywords, links=links, segments=segments, log=log, series_info=series_info)
 
-            response_dict = series_info
-            response_dict['status_code'] = StatusCode.SUCCESS
+        response_dict = series_info
+        response_dict['status_code'] = StatusCode.SUCCESS
 
-            response = Response.generate_response(**response_dict)
-        else:
-            # use securedrms
-            debug = True if arguments.logging_level == DrmsLogLevel.DEBUG else False
-            drms_client = create_drms_client(webserver=arguments.webserver, series=arguments.series, specification=None, drms_client_type=arguments.drms_client_type, public_drms_client_server='jsoc_external', private_drms_client_server='jsoc_internal', private_db_host=arguments.private_db_host, db_host=arguments.db_host, db_port=arguments.db_port, db_name=arguments.db_name, db_user=arguments.db_user, debug=debug, log=log)
-
-            if drms_client is None:
-                raise DRMSClientError(error_message=f'unable to obtain securedrms client')
-
-            try:
-                series_info = drms_client.info(series=arguments.series)
-            except Exception as exc:
-                raise ExportActionError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
-
-            response = get_response(series_info, log)
-    except ExportError as exc:
-        raise
+        response = Response.generate_response(**response_dict)
+    except GsiBaseError as exc:
         response = exc.response
-        e_type, e_obj, e_tb = exc.exc_info
-        error_msg = f'ERROR LINE {str(e_tb.tb_lineno)}: {exc.message}'
+        error_message = exc.message
 
-        if log is not None:
-            log.write_error([ f'[ perform_action ] {error_msg}' ])
-        else:
-            print(f'{error_msg}')
+        if log:
+            log.write_error([ error_message ])
+        elif is_program:
+            print(error_message)
+    except Exception as exc:
+        response = UnhandledExceptionError(exc_info=sys_exc_info(), error_message=f'{str(exc)}').response
+        error_message = str(exc)
+
+        if log:
+            log.write_error([ error_message ])
+        elif is_program:
+            print(error_message)
 
     if log is not None:
         log.write_info([ f'[ perform_action ] request complete; status {response.status_code.description()}' ])
@@ -471,15 +469,16 @@ from action import Action
 from parse_specification import ParseSpecificationAction
 class GetSeriesInfoAction(Action):
     actions = [ 'get_series_info' ]
-    def __init__(self, *, method, series, db_host, parse_record_sets=False, drms_client_type=None, drms_client=None, logging_level=None, db_name=None, db_port=None, db_user=None, keywords=None, links=None, segments=None, webserver=None):
+
+    _log = None
+
+    def __init__(self, *, method, series, db_host, parse_record_sets=False, logging_level=None, db_name=None, db_port=None, db_user=None, keywords=None, links=None, segments=None, webserver=None):
         self._method = getattr(self, method)
         self._series = series # py list
         self._db_host = db_host # host webserver uses (private webserver uses private db host)
         self._webserver = webserver # dict
         self._options = {}
         self._options['parse_record_sets'] = parse_record_sets
-        self._options['drms_client_type'] = drms_client_type
-        self._options['drms_client'] = drms_client
         self._options['logging_level'] = logging_level
         self._options['db_name'] = db_name
         self._options['db_port'] = db_port
@@ -490,8 +489,16 @@ class GetSeriesInfoAction(Action):
         self._options['webserver'] = webserver # host name - gets converted to object in `get_arguments()`
 
     def get_series_info(self):
-        response = perform_action(is_program=False, series=self._series, db_host=self._db_host, options=self._options)
+        response = perform_action(action_obj=self, is_program=False, series=self._series, db_host=self._db_host, options=self._options)
         return response
+
+    @property
+    def log(self):
+        return self.__class__._log
+
+    @log.setter
+    def log(self, log):
+        self.__class__._log = log
 
     # `series` is a py list of series OR a list of record-set specifications
     @classmethod
@@ -526,14 +533,7 @@ class GetSeriesInfoAction(Action):
 
 
 if __name__ == "__main__":
-    try:
-        response = perform_action(is_program=True)
-    except ExportError as exc:
-        response = exc.response
-    except Exception as exc:
-        error = ExportActionError(exc_info=sys_exc_info())
-        response = error.response
-
+    response = perform_action(action_obj=None, is_program=True)
     print(response.generate_json())
 
     # Always return 0. If there was an error, an error code (the 'status' property) and message (the 'statusMsg' property) goes in the returned HTML.
