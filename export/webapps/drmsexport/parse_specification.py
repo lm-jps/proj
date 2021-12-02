@@ -278,15 +278,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
     return response
 
 if __name__ == '__main__':
-    try:
-        response = perform_action(action_obj=None, is_program=True)
-    except ExportError as exc:
-        response = exc.response
-        error_message = exc.message
-
-        if log:
-            log.write_error([ error_message ])
-
+    response = perform_action(action_obj=None, is_program=True)
     print(response.generate_json())
 
     sys_exit(0)
