@@ -28,17 +28,25 @@ class ErrorCode(ExportErrorCode):
     DRMS_CLIENT = (104, 'drms client error')
     EXPORT_ACTION = (105, 'failure calling export action')
     RESPONSE = (106, 'unable to generate valid response')
+    EXPORT_SERVER = (107, 'export-server communication error')
+    UNHANDLED_EXCEPTION = (108, 'unhandled exception')
 
 class GriBaseError(ExportError):
     def __init__(self, *, exc_info=None, error_message=None):
         if exc_info is not None:
+            import traceback
+
+            # for use with some exception handlers
             self.exc_info = exc_info
             e_type, e_obj, e_tb = exc_info
+            file_info = traceback.extract_tb(e_tb)[0]
+            file_name = file_info.filename if hasattr(file_info, 'filename') else ''
+            line_number = str(file_info.lineno) if hasattr(file_info, 'lineno') else ''
 
             if error_message is None:
-                error_message = f'{e_type.__name__}: {str(e_obj)}'
+                error_message = f'{file_name}:{line_number}: {e_type.__name__}: {str(e_obj)}'
             else:
-                error_message = f'{error_message} [ {e_type.__name__}: {str(e_obj)} ]'
+                error_message = f'{error_message} [ {file_name}:{line_number}: {e_type.__name__}: {str(e_obj)} ]'
 
         super().__init__(error_message=error_message)
 
@@ -59,6 +67,12 @@ class ExportActionError(GriBaseError):
 
 class ResponseError(GriBaseError):
     _error_code = ErrorCode(ErrorCode.RESPONSE)
+
+class ExportServerError(GriBaseError):
+    _error_code = ErrorCode.EXPORT_SERVER
+
+class UnhandledExceptionError(GriBaseError):
+    _error_code = ErrorCode.UNHANDLED_EXCEPTION
 
 def name_to_ws_obj(name, drms_params):
     webserver_dict = {}
@@ -261,7 +275,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
             nested_arguments = ss_get_arguments(is_program=False, module_args={})
 
             with Connection(server=nested_arguments.server, listen_port=nested_arguments.listen_port, timeout=nested_arguments.message_timeout, log=log) as connection:
-                message = { 'request_type' : 'record_info', 'specification' : arguments.specification, 'keywords' : arguments.keywords, 'segments' : arguments.segments, 'links' : arguments.links, 'number_records' : arguments.number_records }
+                message = { 'request_type' : 'record_info', 'specification' : arguments.specification, 'keywords' : arguments.keywords, 'segments' : arguments.segments, 'links' : arguments.links, 'number_records' : arguments.number_records, 'db_host' : resolved_db_host }
                 response = send_request(message, connection, log)
                 message = { 'request_type' : 'quit' }
                 send_request(message, connection, log)
@@ -282,6 +296,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
         else:
             print(error_message)
     except Exception as exc:
+        response = UnhandledExceptionError(exc_info=sys_exc_info(), error_message=f'{str(exc)}').response
         error_message = str(exc)
 
         if log:
@@ -381,14 +396,7 @@ class GetRecordInfoAction(Action):
         return is_valid
 
 if __name__ == "__main__":
-    try:
-        response = perform_action(action_obj=None, is_program=True)
-    except ExportError as exc:
-        response = exc.response
-    except Exception as exc:
-        error = ExportActionError(exc_info=sys_exc_info())
-        response = error.response
-
+    response = perform_action(action_obj=None, is_program=True)
     print(response.generate_json())
 
     # Always return 0. If there was an error, an error code (the 'status' property) and message (the 'statusMsg' property) goes in the returned HTML.
