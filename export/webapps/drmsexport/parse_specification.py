@@ -54,7 +54,7 @@ class LoggingError(PsBaseError):
 class ExportServerError(PsBaseError):
     _error_code = ErrorCode.EXPORT_SERVER
 
-class UnhandledExpectionError(PsBaseError):
+class UnhandledExceptionError(PsBaseError):
     _error_code = ErrorCode.UNHANDLED_EXCEPTION
 
 def name_to_ws_obj(name, drms_params):
@@ -267,7 +267,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
         else:
             print(error_message)
     except Exception as exc:
-        response = UnhandledExpectionError(exc_info=sys_exc_info(), error_message=f'{str(exc)}').response
+        response = UnhandledExceptionError(exc_info=sys_exc_info(), error_message=f'{str(exc)}').response
         error_message = str(exc)
 
         if log:
