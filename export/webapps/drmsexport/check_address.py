@@ -44,17 +44,24 @@ class ErrorCode(ExportErrorCode):
     DB = (5, 'failure executing database command')
     DB_CONNECTION = (6, 'failure connecting to database')
     DUPLICATION = (7, 'address is already registered')
+    UNHANDLED_EXCEPTION = (8, 'unhandled exception')
 
 class CaBaseError(ExportError):
     def __init__(self, *, exc_info=None, error_message=None):
         if exc_info is not None:
+            import traceback
+
+            # for use with some exception handlers
             self.exc_info = exc_info
             e_type, e_obj, e_tb = exc_info
+            file_info = traceback.extract_tb(e_tb)[0]
+            file_name = file_info.filename if hasattr(file_info, 'filename') else ''
+            line_number = str(file_info.lineno) if hasattr(file_info, 'lineno') else ''
 
             if error_message is None:
-                error_message = f'{e_type.__name__}: {str(e_obj)}'
+                error_message = f'{file_name}:{line_number}: {e_type.__name__}: {str(e_obj)}'
             else:
-                error_message = f'{error_message} [ {e_type.__name__}: {str(e_obj)} ]'
+                error_message = f'{error_message} [ {file_name}:{line_number}: {e_type.__name__}: {str(e_obj)} ]'
 
         super().__init__(error_message=error_message)
 
@@ -78,6 +85,9 @@ class DBConnectionError(CaBaseError):
 
 class DuplicationError(CaBaseError):
     _error_code = ErrorCode.DUPLICATION
+
+class UnhandledExceptionError(CaBaseError):
+    _error_code = ErrorCode.UNHANDLED_EXCEPTION
 
 class CheckAddressResponse(Response):
     _status_code = None
@@ -229,6 +239,9 @@ def generate_registered_or_pending_response(cursor, arguments, confirmation):
 from action import Action
 class CheckAddressAction(Action):
     actions = [ 'check_address', 'register_address' ]
+
+    _log = None
+
     def __init__(self, *, method, address, logging_level=None, db_host=None, db_port=None, db_name=None, db_user=None, user_name=None, user_snail=None):
         self._method = getattr(self, method)
         self._address = address
@@ -243,13 +256,21 @@ class CheckAddressAction(Action):
 
     def check_address(self):
         # returns dict
-        response = perform_action(is_program=False, operation='check', address=self._address, options=self._options)
+        response = perform_action(action_obj=self, is_program=False, operation='check', address=self._address, options=self._options)
         return response
 
     def register_address(self):
         # returns dict
-        response = perform_action(is_program=False, operation='register', address=self._address, options=self._options)
+        response = perform_action(action_obj=self, is_program=False, operation='register', address=self._address, options=self._options)
         return response
+
+    @property
+    def log(self):
+        return self.__class__._log
+
+    @log.setter
+    def log(self, log):
+        self.__class__._log = log
 
 def initiate_registration(cursor, arguments, log):
     # the address is not in the db, and the user did request registration ==> registration initiated
@@ -303,7 +324,7 @@ def initiate_registration(cursor, arguments, log):
 
     return response
 
-def perform_action(is_program, program_name=None, **kwargs):
+def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
     response = None
     log = None
 
@@ -319,17 +340,20 @@ def perform_action(is_program, program_name=None, **kwargs):
             arguments = Arguments.get_arguments(is_program=is_program, program_name=program_name, program_args=program_args, module_args=module_args, drms_params=drms_params)
         except ArgsError as exc:
             raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
-        except ExportError as exc:
-            exc.exc_info = sys_exc_info()
-            raise exc
         except Exception as exc:
             raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
 
-        try:
-            formatter = DrmsLogFormatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
-            log = DrmsLog(arguments.log_file, arguments.logging_level, formatter)
-        except Exception as exc:
-            raise LoggingError(error_message=f'{str(exc)}')
+
+        if action_obj is None or action_obj.log is None:
+            try:
+                formatter = DrmsLogFormatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+                log = DrmsLog(arguments.log_file, arguments.logging_level, formatter)
+                if action_obj is not None:
+                    action_obj.log = log
+            except Exception as exc:
+                raise LoggingError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+        else:
+            log = action_obj.log
 
         log.write_debug([ f'[ perform_action] program arguments: {str(program_args)}', f'[ perform_action] module arguments: {str(module_args)}' ])
 
@@ -366,17 +390,27 @@ def perform_action(is_program, program_name=None, **kwargs):
         except psycopg2.OperationalError as exc:
             # closes the cursor and connection
             raise DBConnectionError(error_message=f'unable to connect to the database: {str(exc)}')
-    except ExportError as exc:
+    except CaBaseError as exc:
         response = exc.response
+        error_message = exc.message
+
+        if log:
+            log.write_error([ error_message ])
+        elif is_program:
+            print(error_message)
+    except Exception as exc:
+        response = UnhandledExceptionError(exc_info=sys_exc_info(), error_message=f'{str(exc)}').response
+        error_message = str(exc)
+
+        if log:
+            log.write_error([ error_message ])
+        elif is_program:
+            print(error_message)
 
     return response
 
 if __name__ == "__main__":
-    try:
-        response = perform_action(is_program=True)
-    except ExportError as exc:
-        response = exc.response
-
+    response = perform_action(action_obj=None, is_program=True)
     print(response.generate_json())
 
     # Always return 0. If there was an error, an error code (the 'status' property) and message (the 'statusMsg' property) goes in the returned HTML.
