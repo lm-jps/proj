@@ -21,6 +21,7 @@ class ErrorCode(ExportErrorCode):
     ARGUMENTS = (2, 'bad arguments')
     LOGGING = (3, 'failure logging messages')
     EXPORT_SERVER = (4, 'export-server communication error')
+    UNHANDLED_EXCEPTION = (5, 'unhandled exception')
 
 class PsBaseError(ExportError):
     def __init__(self, *, exc_info=None, error_message=None):
@@ -52,6 +53,9 @@ class LoggingError(PsBaseError):
 
 class ExportServerError(PsBaseError):
     _error_code = ErrorCode.EXPORT_SERVER
+
+class UnhandledExpectionError(PsBaseError):
+    _error_code = ErrorCode.UNHANDLED_EXCEPTION
 
 def name_to_ws_obj(name, drms_params):
     webserver_dict = {}
@@ -235,16 +239,21 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
             with Connection(server=nested_arguments.server, listen_port=nested_arguments.listen_port, timeout=nested_arguments.message_timeout, log=log) as connection:
                 message = { 'request_type' : 'parse_specification', 'specification' : arguments.specification }
                 response = send_request(message, connection, log)
+
+                # message is raw JSON from drms_parserecset
+                response_dict = json_loads(response)
+
+                if 'status' in response_dict and response_dict['status'] == 'export_server_error':
+                    raise ExportServerError(error_message=f'{response_dict["error_message"]}')
                 message = { 'request_type' : 'quit' }
                 send_request(message, connection, log)
-
-            # message is raw JSON from drms_parserecset
-            response_dict = json_loads(response)
 
             if response_dict['errMsg'] is not None:
                 raise ExportServerError(error_message=f'failure parsing record-set specification {arguments.export_arguments["specification"]}: {response_dict["errMsg"]}')
         except ExpServerBaseError as exc:
-            raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+            raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{exc.message}')
+        except PsBaseError:
+            raise
         except Exception as exc:
             raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
 
@@ -258,6 +267,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
         else:
             print(error_message)
     except Exception as exc:
+        response = UnhandledExpectionError(exc_info=sys_exc_info(), error_message=f'{str(exc)}').response
         error_message = str(exc)
 
         if log:
