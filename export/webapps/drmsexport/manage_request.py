@@ -21,12 +21,14 @@
 from argparse import Action as ArgsAction
 from copy import deepcopy
 from datetime import timedelta
+from json import dumps as json_dumps, loads as json_loads
 from os.path import join as path_join
 import psycopg2
 from re import compile as re_compile
 from sys import exc_info as sys_exc_info, exit as sys_exit, stdout as sys_stdout
+from urllib.parse import urlunsplit
 
-from drms_export import Error as ExportError, ErrorCode as ExportErrorCode, ErrorResponse, Response, securedrms
+from drms_export import Connection, ExpServerBaseError, Error as ExportError, ErrorCode as ExportErrorCode, ErrorResponse, Response, get_arguments as ss_get_arguments, get_message, send_message
 from drms_parameters import DRMSParams, DPMissingParameterError
 from drms_utils import Arguments as Args, ArgumentsError as ArgsError, CmdlParser, Formatter as DrmsLogFormatter, Log as DrmsLog, LogLevel as DrmsLogLevel, LogLevelAction as DrmsLogLevelAction, MakeObject, StatusCode as SC
 from utils import extract_program_and_module_args
@@ -66,18 +68,26 @@ class ErrorCode(ExportErrorCode):
     CHECK = (208, 'unable to check export request for export user {address}')
     CANCEL = (209, 'unable to cancel export request for export user {address}')
     STATUS = (210, 'unable to check export-request for export user {address}')
+    EXPORT_SERVER = (211, 'export-server communication error')
+    UNHANDLED_EXCEPTION = (212, 'unhandled exception')
 
 # exceptions
 class MrBaseError(ExportError):
     def __init__(self, *, exc_info=None, error_message=None):
         if exc_info is not None:
+            import traceback
+
+            # for use with some exception handlers
             self.exc_info = exc_info
             e_type, e_obj, e_tb = exc_info
+            file_info = traceback.extract_tb(e_tb)[0]
+            file_name = file_info.filename if hasattr(file_info, 'filename') else ''
+            line_number = str(file_info.lineno) if hasattr(file_info, 'lineno') else ''
 
             if error_message is None:
-                error_message = f'{e_type.__name__}: {str(e_obj)}'
+                error_message = f'{file_name}:{line_number}: {e_type.__name__}: {str(e_obj)}'
             else:
-                error_message = f'{error_message} [ {e_type.__name__}: {str(e_obj)} ]'
+                error_message = f'{error_message} [ {file_name}:{line_number}: {e_type.__name__}: {str(e_obj)} ]'
 
         super().__init__(error_message=error_message)
 
@@ -111,6 +121,13 @@ class CancelError(MrBaseError):
 
 class StatusError(MrBaseError):
     _error_code = ErrorCode.STATUS
+
+class ExportServerError(MrBaseError):
+    _error_code = ErrorCode.EXPORT_SERVER
+
+class UnhandledExceptionError(MrBaseError):
+    _error_code = ErrorCode.UNHANDLED_EXCEPTION
+
 
 def name_to_ws_obj(name, drms_params):
     webserver_dict = {}
@@ -154,6 +171,7 @@ class Arguments(Args):
                 db_user = drms_params.get_required('WEB_DBUSER')
                 pending_requests_table = drms_params.get_required('EXPORT_PENDING_REQUESTS_TABLE')
                 timeout = drms_params.get_required('EXPORT_PENDING_REQUESTS_TIME_OUT')
+                download_web_domain = drms_params.get_required('WEB_DOMAIN_PUBLIC')
             except DPMissingParameterError as exc:
                 raise ParametersError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
 
@@ -178,7 +196,6 @@ class Arguments(Args):
                 parser.add_argument('dbhost', help='the machine hosting the database that contains export requests from this site', metavar='<db host>', dest='db_host', required=True)
 
                 # optional
-                parser.add_argument('-c', '--drms-client-type', help='securedrms client type (ssh, http)', choices=[ 'ssh', 'http' ], dest='drms_client_type', default='ssh')
                 parser.add_argument('-i', '--id', help='request ID; required if operation == status', metavar='<export request ID>', dest='request_id', default=None)
                 parser.add_argument('-l', '--log-file', help='the path to the log file', metavar='<log file>', dest='log_file', default=log_file)
                 parser.add_argument('-L', '--logging-level', help='the amount of logging to perform; in order of increasing verbosity: critical, error, warning, info, debug', metavar='<logging level>', dest='logging_level', action=DrmsLogLevelAction, default=DrmsLogLevel.ERROR)
@@ -225,6 +242,7 @@ class Arguments(Args):
                 raise ArgumentsError(error_message=f'must specify `id` argument if operation is `status`')
 
             arguments.private_db_host = private_db_host
+            arguments.download_web_domain = download_web_domain
 
             cls._arguments = arguments
 
@@ -327,11 +345,16 @@ class StatusOperation(Operation):
     _name = 'status'
     _exception = StatusError
 
-    def __call__(self, *, cursor, pending_requests_table, timeout=timedelta(minutes=60), drms_client, request_id):
+    def __call__(self, *, cursor, pending_requests_table, timeout=timedelta(minutes=60), connection, request_id, db_host, download_web_domain):
         delete_request = None
-        export_request = drms_client.export_from_id(request_id) # updates status with jsoc_fetch exp_status call
+        message = { 'request_type' : 'export_status', 'address' : self._address, 'request_id' : request_id, 'db_host' : db_host }
+        response = send_request(message, connection, self._log)
+        export_status_dict = json_loads(response)
 
-        status_code = self.get_request_status_code(export_request)
+        if 'export_server_status' in export_status_dict and export_status_dict['export_server_status'] == 'export_server_error':
+            raise ExportServerError(error_message=f'{export_status_dict["error_message"]}')
+
+        status_code = self.get_request_status_code(export_status_dict)
 
         self._log.write_debug([ f'[ StatusOperation.__call__ ] export request {request_id} status is `{status_code.description(address=self._address)}`' ])
 
@@ -343,12 +366,15 @@ class StatusOperation(Operation):
                 # request should be in pending requests table
                 delete_request = False
         else:
-            # GRRRRR! if an error occurred, then export_request contains almost no info, not even the request ID; add
+            # GRRRRR! if an error occurred, then export_status_dict contains almost no info, not even the request ID; add
             # property that does contain the request id value
-            export_request.REQUEST_ID = request_id
+            export_status_dict['REQUEST_ID'] = request_id
 
             # request should NOT be in pending requests table
             delete_request = True
+
+        # to make URLs for the downloadables
+        export_status_dict['DOWNLOAD_WEB_DOMAIN'] = download_web_domain
 
         super().__call__(cursor, pending_requests_table, timeout)
         if self._request_id is not None and self._request_id == request_id:
@@ -361,7 +387,7 @@ class StatusOperation(Operation):
                 try:
                     operation = OperationFactory(operation_name=CancelOperation._name, address=self._address, log=self._log)
                     operation(cursor=cursor, pending_requests_table=pending_requests_table, timeout=timeout)
-                except ExportError as exc:
+                except MrBaseError as exc:
                     error_msg = f'unable to cancel orphaned pending request `{self._request_id}` for user `{self._address}`'
                     raise self._generate_exception(exc=self._exception, exc_info=sys_exc_info(), error_message=error_msg)
         else:
@@ -370,71 +396,130 @@ class StatusOperation(Operation):
                 # request should have been in the pending-requests table; log as a warning
                 self._log.write_warning([ f'[ StatusOperation.__call__ ] export system is processing request {self._request_id}, but that request is not in the pending-requests table'])
 
-        self._response = self.get_response(export_request)
+        self._response = self.get_response(export_status_dict)
 
-    def get_response_dict(self, export_request):
+    def get_response_dict(self, export_status_dict):
         self._log.write_debug([ f'[ StatusOperation.get_response_dict ]' ])
-        error_code, status_code = self.get_request_status(export_request) # 2/12 ==> asynchronous processing, 0 ==> synchronous processing
+        error_code, status_code = self.get_request_status(export_status_dict) # 2/12 ==> asynchronous processing, 0 ==> synchronous processing
         data = None
         export_directory = None
         keywords_file= None
         tar_file = None
+        method = None
         request_url = None
         access = None
         package = None
+        file_format = None
+        record_count = None
+        file_count = None
+        mb_exported = None
         contact = None
         fetch_error = None
 
-        request_id = export_request.request_id if export_request.request_id is not None else export_request.REQUEST_ID
+        # request ID is not consistently provided in response JSON
+        if 'requestid' in export_status_dict:
+            # no error, and non-image file formats
+            request_id = export_status_dict['requestid']
+        elif 'reqid' in export_status_dict:
+            # no error, image protocols
+            request_id = export_status_dict['reqid']
+        elif 'REQUEST_ID' in export_status_dict:
+            # some errors, no request ID in response, so use the one stored by calling code
+            request_id = export_status_dict['REQUEST_ID']
+        else:
+            request_id = None
+
+        if 'protocol' in export_status_dict:
+            file_format = export_status_dict['protocol'].lower()
+        elif 'FILE_FORMAT' in export_status_dict:
+            file_format = export_status_dict['FILE_FORMAT'].lower()
+        else:
+            file_format = None
+
+        file_count = export_status_dict.get('count')
+        record_count = export_status_dict.get('rcount')
+        mb_exported = export_status_dict.get('size')
 
         if error_code is not None:
-            self._log.write_debug([ f'[ StatusOperation.get_response_dict ] error calling fetch `{error_code.description()}` for request `{request_id}`'])
+            self._log.write_debug([ f'[ StatusOperation.get_response_dict ] error calling fetch `{error_code.description()}` for request `{str(request_id)}`'])
             # a fetch error occurred (`fetch_error` has the error message returned by fetch, `status_description` has the IR error message)
-            fetch_error = export_request.error # None, unless an error occurred
+            fetch_error = export_status_dict.get('error') # None, unless an error occurred
             status_code = error_code
         else:
             # no fetch error occurred
-            self._log.write_debug([ f'[ StatusOperation.get_response_dict ] NO error calling fetch, status `{status_code.description()}` for request `{request_id}`'])
+            self._log.write_debug([ f'[ StatusOperation.get_response_dict ] NO error calling fetch, status `{status_code.description()}` for request `{str(request_id)}`'])
 
             if status_code == StatusCode.REQUEST_COMPLETE:
                 self._log.write_debug([ f'[ StatusOperation.get_response_dict ] exported data were generated for request `{request_id}`'])
-                export_directory = export_request.dir
-                keywords_file = export_request.keywords
-                tar_file = export_request.tarfile
-                request_url = export_request.request_url
 
-                try:
-                    dash_index = export_request.method.index('-')
-                    access = export_request.method[:dash_index]
-                except ValueError:
-                    access = 'url'
+                # not all of these attributes are provides in all responses, so use `get()`
+                export_directory = export_status_dict.get('dir')
+                keywords_file = export_status_dict.get('keywords')
+                tar_file = export_status_dict.get('tarfile')
+                method = export_status_dict.get('method')
+
+                download_web_domain = export_status_dict.get('DOWNLOAD_WEB_DOMAIN')
+                if download_web_domain is not None and export_directory is not None:
+                    # URL of the export SU
+                    request_url = urlunsplit(('http', download_web_domain, export_directory, None, None))
+
+                if method is not None:
+                    try:
+                        dash_index = method.index('-')
+                        access = method[:dash_index]
+                    except ValueError:
+                        access = 'url'
 
                 package = { 'type' : None if tar_file is None else 'tar', 'file_name' : None if tar_file is None else tar_file }
 
-                if package['type'] == 'tar':
-                    data = [ (record['record'], record['filename']) for record in export_request.raw_response['data'] ]
-                else:
-                    data = list(zip(export_request.urls.record.to_list(), export_request.urls.url.to_list()))
+                file_information = export_status_dict.get('data')
+                if file_information is not None:
+                    if package['type'] == 'tar':
+                        data = [ (record['record'], record['filename']) for record in file_information ]
+                    else:
+                        # make URLs
+                        url_information = [] # (record_spec, filename, url)
+                        file_information_resolved = None
 
-        response_dict = deepcopy(export_request.raw_response)
+                        if file_format in ['mpg', 'mp4']:
+                            file_information_adjusted = deepcopy(file_information)
+
+                            if file_information_adjusted.record[0].startswith('movie'):
+                                file_information_adjusted.record[0] = None
+
+                            file_information_resolved = file_information_adjusted
+                        else:
+                            file_information_resolved = file_information
+
+                        if package['type'] == 'tar':
+                            # record.filename is full path
+                            for record in file_information_resolved:
+                                url_information.append({ 'record' : record.record, 'filename' : path_basename(record.filename), 'url' : urlunsplit(access, download_web_domain, record.filename, None, None) })
+                        else:
+                            # record.filename is base file name
+                            for record in file_information_resolved:
+                                url_information.append({ 'record' : record.record, 'filename' : record.filename, 'url' : urlunsplit(access, download_web_domain, path_join(export_directory, record.filename), None, None) })
+
+                        data = list(zip(url_information.record.to_list(), url_information.url.to_list()))
+
+        response_dict = deepcopy(export_status_dict)
 
         if isinstance(status_code, ErrorCode):
-            contact = export_request.contact
+            contact = export_status_dict.get('contact')
             response_dict.update({ 'error_code' : error_code, 'error_message' : fetch_error, 'request_id' : request_id, 'contact' : contact })
         else:
-            response_dict = deepcopy(export_request.raw_response)
-            response_dict.update({ 'status_code' : status_code, 'fetch_error' : fetch_error, 'request_id' : request_id, 'file_format' : export_request.file_format, 'package' : package, 'access' : access, 'number_records' : export_request.record_count, 'number_files' : export_request.file_count, 'mb_exported' : export_request.size, 'sums_directory' : export_directory, 'keywords_file' : keywords_file, 'tar_file' : tar_file, 'request_url' : request_url, 'export_data' : data })
+            response_dict.update({ 'status_code' : status_code, 'fetch_error' : fetch_error, 'request_id' : request_id, 'file_format' : file_format, 'package' : package, 'access' : access, 'number_records' : record_count, 'number_files' : file_count, 'mb_exported' : mb_exported, 'sums_directory' : export_directory, 'keywords_file' : keywords_file, 'tar_file' : tar_file, 'request_url' : request_url, 'export_data' : data })
 
         self._log.write_debug([ f'[ StatusOperation.get_response_dict] response dictionary `{str(response_dict)}`'])
 
         return (error_code is not None, response_dict)
 
-    def get_response(self, export_request):
+    def get_response(self, export_status_dict):
         self._log.write_debug([ f'[ StatusOperation.get_response ]' ])
         # was there an error?
         error_code = None
 
-        error_occurred, response_dict = self.get_response_dict(export_request)
+        error_occurred, response_dict = self.get_response_dict(export_status_dict)
 
         if error_occurred:
             # an error occurred in jsoc_fetch; this is not the same thing as an error happening in MR so we have to manually
@@ -445,26 +530,26 @@ class StatusOperation(Operation):
 
         return response
 
-    def get_request_status(self, export_request):
+    def get_request_status(self, export_status_dict):
         self._log.write_debug([ f'[ StatusOperation.get_status ]' ])
         error_code = None
         status_code = None
 
         try:
-            error_code = ErrorCode(int(export_request.status))
+            error_code = ErrorCode(int(export_status_dict['status']))
         except KeyError:
             pass
 
         if error_code is None:
             try:
-                status_code = StatusCode(int(export_request.status))
+                status_code = StatusCode(int(export_status_dict['status']))
             except KeyError:
-                raise DRMSClientError(exc_info=sys_exc_info(), error_message=f'unexpected fetch status returned {str(export_request.status)}')
+                raise InvalidMessageError(exc_info=sys_exc_info(), error_message=f'unexpected fetch status returned {str(export_status_dict["status"])}')
 
         return (error_code, status_code)
 
-    def get_request_status_code(self, export_request):
-        error_code, status_code = self.get_request_status(export_request)
+    def get_request_status_code(self, export_status_dict):
+        error_code, status_code = self.get_request_status(export_status_dict)
         code = error_code if error_code is not None else status_code
 
         return code
@@ -520,8 +605,6 @@ class PendingRequestAction(Action):
 
     _reg_ex = None
     _log = None
-    _public_drms_client = None
-    _private_drms_client = None
 
     def __init__(self, *, method, address, db_host, drms_client_type=None, drms_client=None, request_id=None, logging_level=None, db_name=None, db_port=None, pending_requests_table=None, timeout=None, db_user=None, webserver=None):
         self._method = getattr(self, method)
@@ -597,6 +680,13 @@ def requires_private_db(request_id):
     # private if ends in '_' ['X' '_'] 'I' 'N'
     return True if match.group(6) is not None else False
 
+def send_request(request, connection, log):
+    json_message = json_dumps(request)
+    send_message(connection, json_message)
+    message = get_message(connection)
+
+    return message
+
 def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
     response = None
     log = None
@@ -639,74 +729,44 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
             response = None
 
             try:
+                # `arguments.db_host` contains the pending requests table - the public webserver uses a public db host,
+                # and the private webserver uses the private db host
                 with psycopg2.connect(host=arguments.db_host, port=str(arguments.db_port), database=arguments.db_name, user=arguments.db_user) as conn:
                     with conn.cursor() as cursor:
                         if isinstance(operation, StatusOperation):
                             # there are two types of request IDs that the public webserver supports:
                             #   JSOC_20210821_050 - external DB handled the request
                             #   JSOC_20210821_051_X_IN - internal DB handled the request
-                            #
-                            # since a securedrms client, if provided, is a public client, a status operation will require
-                            # the creation of a private securedrms client if the request ID has the second form
-                            #
-                            # there is one type of request ID that the private webserver supports:
-                            #   JSOC_20210821_052_IN - internal DB handled the request
-                            #
-                            # if a securedrms client is provided, it is a private one, so we can use it directly
-                            factory = None
-                            public_drms_client = arguments.drms_client if arguments.webserver.public and arguments.drms_client is not None else None
-                            private_drms_client = arguments.drms_client if not arguments.webserver.public and arguments.drms_client is not None else None
-
-                            public_drms_client = action_obj.public_drms_client if (public_drms_client is None and action_obj is not None) else public_drms_client
-                            private_drms_client = action_obj.private_drms_client if (private_drms_client is None and action_obj is not None) else private_drms_client
-
                             try:
-                                private_client_needed = requires_private_db(arguments.request_id)
+                                private_db_needed = requires_private_db(arguments.request_id)
                             except Exception as exc:
                                 raise ExportActionError(exc_info=sys_exc_info(), error_message=str(exc))
 
-                            if private_client_needed:
-                                log.write_debug([ f'[ perform_action ] private securedrms client required' ])
+                            if not private_db_needed and arguments.db_host == arguments.private_db_host:
+                                raise ArgumentsError(error_message=f'request ID {arguments.request_id} requires public database access, but client is the private webserver (uses public database host `{arguments.db_host}`)')
+
+                            if private_db_needed:
+                                resolved_db_host = arguments.private_db_host
+                                log.write_debug([ f'[ perform_action ] accessing private database host {arguments.db_host}' ])
                             else:
-                                log.write_debug([ f'[ perform_action ] public securedrms client OK' ])
+                                # must be public db host - a private host would have caused ArgumentsError exception
+                                resolved_db_host = arguments.db_host
+                                log.write_debug([ f'[ perform_action ] access public database host {arguments.db_host}' ])
 
-                            if private_client_needed and private_drms_client is None:
-                                # create private drms client
-                                try:
-                                    if factory is None:
-                                        factory = securedrms.SecureClientFactory(debug=(arguments.logging_level == DrmsLogLevel.DEBUG), email=arguments.address)
+                            try:
+                                # use socket server to call jsoc_fetch
+                                nested_arguments = ss_get_arguments(is_program=False, module_args={})
 
-                                    use_ssh = True if arguments.drms_client_type == 'ssh' else False
-                                    connection_info = { 'dbhost' : arguments.private_db_host, 'dbport' : arguments.db_port, 'dbname' : arguments.db_name, 'dbuser' : arguments.db_user }
+                                with Connection(server=nested_arguments.server, listen_port=nested_arguments.listen_port, timeout=nested_arguments.message_timeout, log=log) as connection:
+                                    operation(cursor=cursor, pending_requests_table=arguments.pending_requests_table, timeout=arguments.timeout, connection=connection, request_id=arguments.request_id, db_host=resolved_db_host, download_web_domain=arguments.download_web_domain)
 
-                                    log.write_debug([ f'[ perform_action ] creating private securedrms client' ])
-                                    private_drms_client = factory.create_client(server='jsoc_internal', use_ssh=use_ssh, use_internal=False, connection_info=connection_info)
-                                    if action_obj is not None:
-                                        action_obj.private_drms_client = private_drms_client
-                                except securedrms.SecureDRMSError as exc:
-                                    raise DRMSClientError(exc_info=sys_exc_info())
-                                except Exception as exc:
-                                    raise DRMSClientError(exc_info=sys_exc_info())
-                            elif not private_client_needed and public_drms_client is None:
-                                # create public drms client
-                                try:
-                                    if factory is None:
-                                        factory = securedrms.SecureClientFactory(debug=(arguments.logging_level == DrmsLogLevel.DEBUG), email=arguments.address)
+                                    message = { 'request_type' : 'quit' }
+                                    send_request(message, connection, log)
 
-                                    use_ssh = True if arguments.drms_client_type == 'ssh' else False
-                                    connection_info = { 'dbhost' : arguments.db_host, 'dbport' : arguments.db_port, 'dbname' : arguments.db_name, 'dbuser' : arguments.db_user }
-
-                                    log.write_debug([ f'[ perform_action ] creating public securedrms client' ])
-                                    public_drms_client = factory.create_client(server='jsoc_external', use_ssh=use_ssh, use_internal=False, connection_info=connection_info)
-                                    if action_obj is not None:
-                                        action_obj.public_drms_client = public_drms_client
-                                except securedrms.SecureDRMSError as exc:
-                                    raise DRMSClientError(exc_info=sys_exc_info())
-                                except Exception as exc:
-                                    raise DRMSClientError(exc_info=sys_exc_info())
-
-                            drms_client = private_drms_client if private_client_needed else public_drms_client
-                            operation(cursor=cursor, pending_requests_table=arguments.pending_requests_table, timeout=arguments.timeout, drms_client=drms_client, request_id=arguments.request_id)
+                            except ExpServerBaseError as exc:
+                                raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+                            except Exception as exc:
+                                raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
                         else:
                             operation(cursor=cursor, pending_requests_table=arguments.pending_requests_table, timeout=arguments.timeout)
 
@@ -716,30 +776,30 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
                 raise DBConnectionError(exc_info=sys_exc_info(), error_message=f'unable to connect to the database: {str(exc)}')
         except Exception as exc:
             raise ExportActionError(exc_info=sys_exc_info(), error_message=str(exc))
-    except ExportError as exc:
+    except ExpServerBaseError as exc:
         response = exc.response
-        e_type, e_obj, e_tb = exc.exc_info
+        error_message = exc.message
 
         if log:
-            log.write_error([ f'[ perform_action ] ERROR LINE {str(e_tb.tb_lineno)}: {exc.message}' ])
-        else:
-            print(f'[ perform_action ] ERROR LINE {str(e_tb.tb_lineno)}: {exc.message}')
+            log.write_error([ error_message ])
+        elif is_program:
+            print(error_message)
+    except Exception as exc:
+        response = UnhandledExceptionError(exc_info=sys_exc_info(), error_message=f'{str(exc)}').response
+        error_message = str(exc)
+
+        if log:
+            log.write_error([ error_message ])
+        elif is_program:
+            print(error_message)
 
     if log:
         log.write_info([f'[ perform_action ] request complete; status {response.status_code.description()}'])
 
     return response
 
-
 if __name__ == "__main__":
-    try:
-        response = perform_action(action_obj=None, is_program=True)
-    except ExportError as exc:
-        response = exc.response
-    except Exception as exc:
-        error = ExportActionError(exc_info=sys_exc_info())
-        response = error.response
-
+    response = perform_action(action_obj=None, is_program=True)
     print(response.generate_json())
 
     # Always return 0. If there was an error, an error code (the 'status' property) and message (the 'statusMsg' property) goes in the returned HTML.
