@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 from argparse import Action as ArgsAction
+from functools import lru_cache
 import inspect
 from json import loads as json_loads, dumps as json_dumps
 from os import environ
@@ -176,6 +177,7 @@ class ParseSpecificationAction(Action):
     def parse_specification(self):
         # returns dict
         prog_name = inspect.currentframe().f_code.co_name
+
         response = perform_action(action_obj=self, is_program=False, program_name=prog_name, specification=self._specification, db_host=self._db_host, options=self._options)
         return response
 
@@ -189,16 +191,38 @@ class ParseSpecificationAction(Action):
 
 def send_request(request, connection, log):
     json_message = json_dumps(request)
-
-    log.write_debug([ f'[ send_request ] sending message to server:' ])
-    log.write_debug([ f'[ send_request ] {json_message}' ])
     send_message(connection, json_message)
-
     message = get_message(connection)
-    log.write_debug([ f'[ send_request ] server response:' ])
-    log.write_debug([ f'[ send_request ] {message}' ])
 
     return message
+
+def request_parsed_specification(*, specification, log=None):
+    log = log
+
+    @lru_cache
+    def submit_request():
+        nested_arguments = ss_get_arguments(is_program=False, module_args={})
+
+        with Connection(server=nested_arguments.server, listen_port=nested_arguments.listen_port, timeout=nested_arguments.message_timeout, log=log) as connection:
+            message = { 'request_type' : 'parse_specification', 'specification' : specification }
+            response = send_request(message, connection, log)
+
+            # message is raw JSON from drms_parserecset
+            parsed_specification_dict = json_loads(response)
+
+            if parsed_specification_dict.get('export_server_status') == 'export_server_error':
+                raise ExportServerError(error_message=f'{parsed_specification_dict["error_message"]}')
+
+            message = { 'request_type' : 'quit' }
+            send_request(message, connection, log)
+
+        error_message = parsed_specification_dict.get('errMsg')
+        if error_message is not None:
+            raise ExportServerError(error_message=f'failure parsing record-set specification {kwargs["specification"]}: {error_message}')
+
+        return parsed_specification_dict
+
+    return submit_request()
 
 def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
     # catch all expections so we can always generate a response
@@ -234,22 +258,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
 
         try:
             # use socket server to call drms_parserecset
-            nested_arguments = ss_get_arguments(is_program=False, module_args={})
-
-            with Connection(server=nested_arguments.server, listen_port=nested_arguments.listen_port, timeout=nested_arguments.message_timeout, log=log) as connection:
-                message = { 'request_type' : 'parse_specification', 'specification' : arguments.specification }
-                response = send_request(message, connection, log)
-
-                # message is raw JSON from drms_parserecset
-                response_dict = json_loads(response)
-
-                if 'status' in response_dict and response_dict['status'] == 'export_server_error':
-                    raise ExportServerError(error_message=f'{response_dict["error_message"]}')
-                message = { 'request_type' : 'quit' }
-                send_request(message, connection, log)
-
-            if response_dict['errMsg'] is not None:
-                raise ExportServerError(error_message=f'failure parsing record-set specification {arguments.export_arguments["specification"]}: {response_dict["errMsg"]}')
+            parsed_specification_dict = request_parsed_specification(specification=arguments.specification, log=log)
         except ExpServerBaseError as exc:
             raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{exc.message}')
         except PsBaseError as exc:
@@ -257,7 +266,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
         except Exception as exc:
             raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
 
-        response = Response.generate_response(status_code=StatusCode.SUCCESS, **response_dict)
+        response = Response.generate_response(status_code=StatusCode.SUCCESS, **parsed_specification_dict)
     except PsBaseError as exc:
         response = exc.response
         error_message = exc.message
