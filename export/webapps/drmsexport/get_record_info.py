@@ -277,11 +277,14 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
             with Connection(server=nested_arguments.server, listen_port=nested_arguments.listen_port, timeout=nested_arguments.message_timeout, log=log) as connection:
                 message = { 'request_type' : 'record_info', 'specification' : arguments.specification, 'keywords' : arguments.keywords, 'segments' : arguments.segments, 'links' : arguments.links, 'number_records' : arguments.number_records, 'db_host' : resolved_db_host }
                 response = send_request(message, connection, log)
+                # message is raw JSON from jsoc_info
+                record_set_info_dict = json_loads(response)
+
+                if 'export_server_status' in record_set_info_dict and record_set_info_dict['export_server_status'] == 'export_server_error':
+                    raise ExportServerError(error_message=f'{response_dict["error_message"]}')
+
                 message = { 'request_type' : 'quit' }
                 send_request(message, connection, log)
-
-            # message is raw JSON from jsoc_info
-            record_set_info_dict = json_loads(response)
             response = get_response(record_set_info_dict, log)
         except ExpServerBaseError as exc:
             raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
@@ -293,7 +296,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
 
         if log:
             log.write_error([ error_message ])
-        else:
+        elif is_program:
             print(error_message)
     except Exception as exc:
         response = UnhandledExceptionError(exc_info=sys_exc_info(), error_message=f'{str(exc)}').response
@@ -301,7 +304,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
 
         if log:
             log.write_error([ error_message ])
-        else:
+        elif is_program:
             print(error_message)
 
     if log is not None:
