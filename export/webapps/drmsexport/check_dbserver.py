@@ -18,6 +18,7 @@
 #   { "server" : "hmidb2", "series" : [{ "hmi.M_45s" : { "server" : "hmidb2" } }, { "hmi.does_not_exist" : { "server" : None }}], "status" : 0 }
 
 from argparse import Action as ArgsAction
+from functools import lru_cache
 from json import loads as json_loads, dumps as json_dumps
 from os.path import join as path_join
 from sys import exc_info as sys_exc_info, exit as sys_exit
@@ -251,6 +252,50 @@ def send_request(request, connection, log):
 
     return message
 
+@lru_cache
+def determine_server(series, public_db_host, private_db_host, has_wl, wl_file):
+    nested_arguments = ss_get_arguments(is_program=False, module_args={})
+    log = DetermineDbServerAction.get_log()
+
+    with Connection(server=nested_arguments.server, listen_port=nested_arguments.listen_port, timeout=nested_arguments.message_timeout, log=log) as connection:
+        log.write_info([ f'[ perform_action] connection to socket server successful' ])
+        series_obj = None
+        supporting_server = False
+        use_public_server = True
+
+        series_regex = f'^{series.strip().lower().replace(".", "[.]")}$'
+
+        message = { 'request_type' : 'series_list', 'series_regex' : series_regex, 'db_host' : public_db_host }
+        response = json_loads(send_request(message, connection, log))
+
+        if response.get('export_server_status') == 'export_server_error':
+            raise ExportServerError(error_message=f'{response["error_message"]}')
+
+        if len(response['names']) == 0:
+            if has_wl:
+                # try private server
+                message = { 'request_type' : 'series_list', 'series_regex' : series_regex, 'db_host' : private_db_host }
+                response = json_loads(send_request(message, connection, log))
+
+                white_list = get_whitelist(wl_file) # if no whitelist exists, then this is the empty set
+
+                if series.lower() in white_list and len(response['names']) != 0:
+                    series_obj = { series : { 'server' : private_db_host } }
+                    supporting_server = True
+                    use_public_server = False
+                else:
+                    series_obj = { series : { 'server' : None } }
+            else:
+                series_obj = { series : { 'server' : None } }
+        else:
+            series_obj = { series : { 'server' : public_db_host } }
+            supporting_server = True
+
+        message = { 'request_type' : 'quit' }
+        send_request(message, connection, log)
+
+    return (supporting_server, use_public_server, series_obj)
+
 def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
     response = None
     log = None
@@ -291,52 +336,23 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
             response_dict = {}
 
             if len(arguments.series) > 0:
-                nested_arguments = ss_get_arguments(is_program=False, module_args={})
 
-                with Connection(server=nested_arguments.server, listen_port=nested_arguments.listen_port, timeout=nested_arguments.message_timeout, log=log) as connection:
-                    log.write_info([ f'[ perform_action] connection to socket server successful' ])
-                    response_dict['series'] = []
-                    use_public_server = True
-                    white_list = None
-                    supporting_server = False
+                response_dict['series'] = []
+                use_public_server = True
+                white_list = None
+                supporting_server = True
 
-                    for series in arguments.series:
-                        series_regex = series.lower().replace('.', '[.]')
+                for series in arguments.series:
+                    print(f'trying {series}')
+                    is_supported, is_public, series_obj = determine_server(series, arguments.public_db_host, arguments.private_db_host, arguments.has_wl, arguments.wl_file)
+                    response_dict['series'].append(series_obj)
+                    use_public_server &= is_public
+                    supporting_server &= is_supported
 
-                        message = { 'request_type' : 'series_list', 'series_regex' : series_regex, 'db_host' : arguments.public_db_host }
-                        response = json_loads(send_request(message, connection, log))
-
-                        if response.get('export_server_status') == 'export_server_error':
-                            raise ExportServerError(error_message=f'{response["error_message"]}')
-
-                        message = { 'request_type' : 'quit' }
-                        send_request(message, connection, log)
-
-                        if len(response['names']) == 0:
-                            if arguments.has_wl:
-                                # try private server
-                                message = { 'request_type' : 'series_list', 'series_regex' : series_regex, 'db_host' : arguments.private_db_host }
-                                response = json_loads(send_request(message, connection, log))
-
-                                if white_list is None:
-                                    white_list = get_whitelist(arguments.wl_file) # if no whitelist exists, then this is the empty set
-
-                                if series.lower() in white_list and len(response['names']) != 0:
-                                    response_dict['series'].append({ series : { 'server' : arguments.private_db_host } })
-                                    supporting_server = True
-                                    use_public_server = False
-                                else:
-                                    response_dict['series'].append({ series : { 'server' : None } })
-                            else:
-                                response_dict['series'].append({ series : { 'server' : None } })
-                        else:
-                            response_dict['series'].append({ series : { 'server' : arguments.public_db_host } })
-                            supporting_server = True
-
-                    if supporting_server:
-                        response_dict['server'] = arguments.public_db_host if use_public_server else arguments.private_db_host
-                    else:
-                        response_dict['server'] = None
+                if supporting_server:
+                    response_dict['server'] = arguments.public_db_host if use_public_server else arguments.private_db_host
+                else:
+                    response_dict['server'] = None
             else:
                 response_dict['server'] = None
                 response_dict['series'] = []
