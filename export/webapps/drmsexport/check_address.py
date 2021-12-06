@@ -128,11 +128,15 @@ class Arguments(Args):
                 user_info_fn = drms_params.get_required('EXPORT_USER_INFO_FN')
                 user_info_insert_fn = drms_params.get_required('EXPORT_USER_INFO_INSERT_FN')
                 regemail_timeout = drms_params.get_required('REGEMAIL_TIMEOUT')
-                log_file = path_join(drms_params.get_required('EXPORT_LOG_DIR'), DEFAULT_LOG_FILE)
             except DPMissingParameterError as exc:
                 raise ParametersError(error_message=f'{str(exc)}')
 
             if is_program:
+                try:
+                    log_file = path_join(drms_params.get_required('EXPORT_LOG_DIR'), DEFAULT_LOG_FILE)
+                except DPMissingParameterError as exc:
+                    raise ParametersError(exc_info=sys_exc_info(), error_message=str(exc))
+
                 args = None
 
                 if program_args is not None and len(program_args) > 0:
@@ -161,19 +165,19 @@ class Arguments(Args):
 
                 arguments = Arguments(parser=parser, args=args)
             else:
-                def extract_module_args(*, address, operation, log_file=log_file, logging_level='error', db_host=db_host, db_port=db_port, db_name=db_name, db_user=db_user, user_name=None, user_snail=None):
+                def extract_module_args(*, address, operation, log=None, db_host=db_host, db_port=db_port, db_name=db_name, db_user=db_user, user_name=None, user_snail=None):
                     arguments = {}
 
                     arguments['address'] = address
                     arguments['operation'] = operation
-                    arguments['log_file'] = log_file
-                    arguments['logging_level'] = DrmsLogLevelAction.string_to_level(logging_level)
                     arguments['db_host'] = db_host
                     arguments['db_port'] = db_port
                     arguments['db_name'] = db_name
                     arguments['db_user'] = db_user
                     arguments['user_name'] = user_name
                     arguments['user_snail'] = user_snail
+
+                    CheckAddressAction.set_log(log)
 
                     return arguments
 
@@ -242,11 +246,11 @@ class CheckAddressAction(Action):
 
     _log = None
 
-    def __init__(self, *, method, address, logging_level=None, db_host=None, db_port=None, db_name=None, db_user=None, user_name=None, user_snail=None):
+    def __init__(self, *, method, address, log=None, db_host=None, db_port=None, db_name=None, db_user=None, user_name=None, user_snail=None):
         self._method = getattr(self, method)
         self._address = address
         self._options = {}
-        self._options['logging_level'] = logging_level
+        self._options['logging_level'] = log
         self._options['db_host'] = db_host
         self._options['db_port'] = db_port
         self._options['db_name'] = db_name
@@ -271,6 +275,14 @@ class CheckAddressAction(Action):
     @log.setter
     def log(self, log):
         self.__class__._log = log
+
+    @classmethod
+    def set_log(cls, log=None):
+        cls._log = DrmsLog(None, None, None) if log is None else log
+
+    @classmethod
+    def get_log(cls):
+        return cls._log
 
 def initiate_registration(cursor, arguments, log):
     # the address is not in the db, and the user did request registration ==> registration initiated
@@ -343,19 +355,22 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
         except Exception as exc:
             raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
 
-
-        if action_obj is None or action_obj.log is None:
+        if is_program:
             try:
                 formatter = DrmsLogFormatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
                 log = DrmsLog(arguments.log_file, arguments.logging_level, formatter)
-                if action_obj is not None:
-                    action_obj.log = log
+                CheckAddressAction._log = log
             except Exception as exc:
                 raise LoggingError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
         else:
             log = action_obj.log
 
-        log.write_debug([ f'[ perform_action] program arguments: {str(program_args)}', f'[ perform_action] module arguments: {str(module_args)}' ])
+        if is_program:
+            log.write_debug([ f'[ perform_action ] program invocation' ])
+        else:
+            log.write_debug([ f'[ perform_action ] module invocation' ])
+
+        log.write_debug([ f'[ perform_action ] action arguments: {str(arguments)}' ])
 
         try:
             log.write_debug([ f'[ perform_action ] connecting to database: host={arguments.db_host}, port={str(arguments.db_port)}, user={arguments.db_user}, db={arguments.db_name}' ])
