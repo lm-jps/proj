@@ -2,7 +2,6 @@
 
 from argparse import Action as ArgsAction
 from copy import deepcopy
-from functools import lru_cache
 from json import loads as json_loads, dumps as json_dumps
 from os.path import join as path_join
 from sys import exc_info as sys_exc_info, exit as sys_exit
@@ -108,7 +107,6 @@ class Arguments(Args):
     def get_arguments(cls, *, is_program, program_name=None, program_args=None, module_args=None, drms_params, refresh=True):
         if cls._arguments is None or refresh:
             try:
-                log_file = path_join(drms_params.get_required('EXPORT_LOG_DIR'), DEFAULT_LOG_FILE)
                 private_db_host = drms_params.get_required('SERVER')
                 db_port = int(drms_params.get_required('DRMSPGPORT'))
                 db_name = drms_params.get_required('DBNAME')
@@ -117,6 +115,11 @@ class Arguments(Args):
                 raise ParametersError(exc_info=sys_exc_info(), error_message=str(exc))
 
             if is_program:
+                try:
+                    log_file = path_join(drms_params.get_required('EXPORT_LOG_DIR'), DEFAULT_LOG_FILE)
+                except DPMissingParameterError as exc:
+                    raise ParametersError(exc_info=sys_exc_info(), error_message=str(exc))
+
                 args = None
 
                 if program_args is not None and len(program_args) > 0:
@@ -149,7 +152,7 @@ class Arguments(Args):
                 arguments.drms_client = None
             else:
                 # `program_args` has all `arguments` values, in final form; validate them
-                def extract_module_args(*, specification, db_host, drms_client_type='ssh', drms_client=None, keywords=None, links=None, log_file=log_file, logging_level='error', db_name=db_name, number_records=None, db_port=db_port, segments=None, db_user=db_user, webserver=None):
+                def extract_module_args(*, specification, db_host, drms_client_type='ssh', drms_client=None, keywords=None, links=None, db_name=db_name, number_records=None, db_port=db_port, segments=None, db_user=db_user, webserver=None, log=None):
                     arguments = {}
 
                     arguments['specification'] = specification
@@ -158,14 +161,14 @@ class Arguments(Args):
                     arguments['drms_client'] = drms_client
                     arguments['keywords'] = keywords # list
                     arguments['links'] = links # list
-                    arguments['log_file'] = log_file
-                    arguments['logging_level'] = DrmsLogLevelAction.string_to_level(logging_level)
                     arguments['db_name'] = db_name
                     arguments['number_records'] = number_records
                     arguments['db_port'] = db_port
                     arguments['segments'] = segments # list
                     arguments['db_user'] = db_user
                     arguments['webserver'] = name_to_ws_obj(webserver, drms_params) # sets webserver.public = True if webserver is None
+
+                    GetRecordInfoAction.set_log(log)
 
                     return arguments
 
@@ -178,14 +181,6 @@ class Arguments(Args):
                 raise ArgumentsError(error_message=f'cannot specify private db server to handle public webserver requests')
 
             arguments.private_db_host = private_db_host
-
-            if not GetRecordInfoAction.is_valid_specification(arguments.specification, arguments.db_host, arguments.webserver.host, arguments.logging_level._fullname):
-                raise ArgumentsError(error_message=f'invalid record-set specification')
-
-            parsed_specification = get_parsed_specification(arguments.specification, arguments.db_host, arguments.webserver.host)
-
-            if not parsed_specification.attributes.hasfilts and arguments.number_records is None:
-                raise ArgumentsError(error_message=f'must specify either a record-set filter, or a maximum number of records')
 
             cls._arguments = arguments
 
@@ -241,12 +236,11 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
         except Exception as exc:
             raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
 
-        if action_obj is None or action_obj.log is None:
+        if is_program:
             try:
                 formatter = DrmsLogFormatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
                 log = DrmsLog(arguments.log_file, arguments.logging_level, formatter)
-                if action_obj is not None:
-                    action_obj.log = log
+                GetRecordInfoAction._log = log
             except Exception as exc:
                 raise LoggingError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
         else:
@@ -259,7 +253,14 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
 
         log.write_debug([ f'[ perform_action ] action arguments: {str(arguments)}' ])
 
+        if not GetRecordInfoAction.is_valid_specification(arguments.specification, arguments.db_host, arguments.webserver.host):
+            raise ArgumentsError(error_message=f'invalid record-set specification')
+
         parsed_specification = GetRecordInfoAction.get_parsed_specification(arguments.specification, arguments.db_host, arguments.webserver.host)
+
+        if not parsed_specification.attributes.hasfilts and arguments.number_records is None:
+            raise ArgumentsError(error_message=f'must specify either a record-set filter, or a maximum number of records')
+
         series = []
         for subset in parsed_specification.attributes.subsets:
             series.append(subset.seriesname)
@@ -280,7 +281,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
                 # message is raw JSON from jsoc_info
                 record_set_info_dict = json_loads(response)
 
-                if 'export_server_status' in record_set_info_dict and record_set_info_dict['export_server_status'] == 'export_server_error':
+                if record_set_info_dict.get('export_server_status') == 'export_server_error':
                     raise ExportServerError(error_message=f'{response_dict["error_message"]}')
 
                 message = { 'request_type' : 'quit' }
@@ -290,7 +291,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
             raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
         except Exception as exc:
             raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
-    except ExpServerBaseError as exc:
+    except GriBaseError as exc:
         response = exc.response
         error_message = exc.message
 
@@ -315,22 +316,12 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
 # for use in export web app
 from action import Action
 from parse_specification import ParseSpecificationAction
-
-@lru_cache
-def get_parsed_specification(specification, db_host, webserver):
-    action = Action.action(action_type='parse_specification', args={ 'specification' : specification, 'db_host' : db_host, 'webserver' : webserver, 'logging_level' : GetRecordInfoAction.logging_level })
-    action.log = GetRecordInfoAction._log
-    parsed_specification = action()
-
-    return parsed_specification
-
 class GetRecordInfoAction(Action):
     actions = [ 'get_record_set_info' ]
 
     _log = None
-    logging_level = None
 
-    def __init__(self, *, method, specification, db_host, drms_client_type=None, drms_client=None, keywords=None, links=None, logging_level=None, db_name=None, number_records=None, db_port=None, segments=None, db_user=None, webserver=None):
+    def __init__(self, *, method, specification, db_host, drms_client_type=None, drms_client=None, keywords=None, links=None, log=None, db_name=None, number_records=None, db_port=None, segments=None, db_user=None, webserver=None):
         self._method = getattr(self, method)
         self._specification = specification
         self._db_host = db_host # the host `webserver` uses (private webserver uses private db host)
@@ -339,7 +330,7 @@ class GetRecordInfoAction(Action):
         self._options['drms_client'] = drms_client
         self._options['keywords'] = keywords # list
         self._options['links'] = links # list
-        self._options['logging_level'] = logging_level
+        self._options['log'] = log
         self._options['db_name'] = db_name
         self._options['number_records'] = number_records # int
         self._options['db_port'] = db_port # int
@@ -360,16 +351,26 @@ class GetRecordInfoAction(Action):
         self.__class__._log = log
 
     @classmethod
+    def set_log(cls, log=None):
+        cls._log = DrmsLog(None, None, None) if log is None else log
+
+    @classmethod
+    def get_log(cls):
+        return cls._log
+
+    @classmethod
     def get_parsed_specification(cls, specification, db_host, webserver):
-        parsed_specification = get_parsed_specification(specification, db_host, webserver)
+        action = Action.action(action_type='parse_specification', args={ 'log' : cls._log, 'specification' : specification, 'db_host' : db_host, 'webserver' : webserver })
+        parsed_specification = action()
 
         if isinstance(parsed_specification, ErrorResponse) or parsed_specification is None:
+            cls._log.write_error([ f'[ get_parsed_specification ] {parsed_specification.attributes.error_message}'])
             raise ArgumentsError(error_message=f'unable to parse specification `{specification}`')
 
         return parsed_specification
 
     @classmethod
-    def is_valid_specification(cls, specification, db_host, webserver, logging_level=None):
+    def is_valid_specification(cls, specification, db_host, webserver):
         is_valid = None
 
         try:
@@ -389,7 +390,6 @@ class GetRecordInfoAction(Action):
                 db_host_resolved = db_host
 
             # parse specification
-            cls._logging_level = logging_level
             response = cls.get_parsed_specification(specification, db_host_resolved, webserver)
 
             is_valid = False if isinstance(response, ErrorResponse) else True
