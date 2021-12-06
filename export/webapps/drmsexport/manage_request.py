@@ -176,6 +176,11 @@ class Arguments(Args):
                 raise ParametersError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
 
             if is_program:
+                try:
+                    log_file = path_join(drms_params.get_required('EXPORT_LOG_DIR'), DEFAULT_LOG_FILE)
+                except DPMissingParameterError as exc:
+                    raise ParametersError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+
                 args = None
 
                 if program_args is not None and len(program_args) > 0:
@@ -210,7 +215,7 @@ class Arguments(Args):
                 arguments.drms_client = None
             else:
                 # module invocation
-                def extract_module_args(*, address, operation, db_host, drms_client_type='ssh', drms_client=None, request_id=None, log_file=log_file, logging_level='error', db_name=db_name, db_port=db_port, pending_requests_table=pending_requests_table, timeout=timeout, db_user=db_user, webserver=None):
+                def extract_module_args(*, address, operation, db_host, drms_client_type='ssh', drms_client=None, request_id=None, log=None, db_name=db_name, db_port=db_port, pending_requests_table=pending_requests_table, timeout=timeout, db_user=db_user, webserver=None):
                     arguments = {}
 
                     arguments['address'] = address
@@ -219,14 +224,14 @@ class Arguments(Args):
                     arguments['drms_client_type'] = drms_client_type
                     arguments['drms_client'] = drms_client
                     arguments['request_id'] = request_id
-                    arguments['log_file'] = log_file
-                    arguments['logging_level'] = DrmsLogLevelAction.string_to_level(logging_level)
                     arguments['db_name'] = db_name
                     arguments['db_port'] = db_port
                     arguments['pending_requests_table'] = pending_requests_table
                     arguments['timeout'] = timeout
                     arguments['db_user'] = db_user
                     arguments['webserver'] = name_to_ws_obj(webserver, drms_params) # sets webserver.public = True if webserver is None
+
+                    PendingRequestAction.set_log(log)
 
                     return arguments
 
@@ -351,7 +356,7 @@ class StatusOperation(Operation):
         response = send_request(message, connection, self._log)
         export_status_dict = json_loads(response)
 
-        if 'export_server_status' in export_status_dict and export_status_dict['export_server_status'] == 'export_server_error':
+        if export_status_dict.get('export_server_status') == 'export_server_error':
             raise ExportServerError(error_message=f'{export_status_dict["error_message"]}')
 
         status_code = self.get_request_status_code(export_status_dict)
@@ -606,7 +611,7 @@ class PendingRequestAction(Action):
     _reg_ex = None
     _log = None
 
-    def __init__(self, *, method, address, db_host, drms_client_type=None, drms_client=None, request_id=None, logging_level=None, db_name=None, db_port=None, pending_requests_table=None, timeout=None, db_user=None, webserver=None):
+    def __init__(self, *, method, address, db_host, drms_client_type=None, drms_client=None, request_id=None, log=None, db_name=None, db_port=None, pending_requests_table=None, timeout=None, db_user=None, webserver=None):
         self._method = getattr(self, method)
         self._address = address
         self._db_host = db_host
@@ -614,7 +619,7 @@ class PendingRequestAction(Action):
         self._options['drms_client_type'] = drms_client_type
         self._options['drms_client'] = drms_client
         self._options['request_id'] = request_id
-        self._options['logging_level'] = logging_level
+        self._options['log'] = log
         self._options['db_name'] = db_name
         self._options['db_port'] = db_port
         self._options['pending_requests_table'] = pending_requests_table
@@ -654,21 +659,13 @@ class PendingRequestAction(Action):
     def log(self, log):
         self.__class__._log = log
 
-    @property
-    def public_drms_client(self):
-        return self.__class__._public_drms_client
+    @classmethod
+    def set_log(cls, log=None):
+        cls._log = DrmsLog(None, None, None) if log is None else log
 
-    @public_drms_client.setter
-    def public_drms_client(self, public_drms_client):
-        self.__class__._public_drms_client = public_drms_client
-
-    @property
-    def private_drms_client(self):
-        return self.__class__._private_drms_client
-
-    @private_drms_client.setter
-    def private_drms_client(self, private_drms_client):
-        self.__class__._private_drms_client = private_drms_client
+    @classmethod
+    def get_log(cls):
+        return cls._log
 
 def requires_private_db(request_id):
     reg_ex = PendingRequestAction.get_reg_ex()
@@ -706,12 +703,11 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
         except Exception as exc:
             raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
 
-        if action_obj is None or action_obj.log is None:
+        if is_program:
             try:
                 formatter = DrmsLogFormatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
                 log = DrmsLog(arguments.log_file, arguments.logging_level, formatter)
-                if action_obj is not None:
-                    action_obj.log = log
+                PendingRequestAction.set_log(log)
             except Exception as exc:
                 raise LoggingError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
         else:
