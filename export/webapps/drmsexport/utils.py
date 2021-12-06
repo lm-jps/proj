@@ -56,11 +56,12 @@ def get_db_host(*, webserver, series, private_db_host, db_host, db_port, db_name
             log.write_debug([ f'[ get_db_host ] determining DB server suitable for requested data from series `{", ".join(series)}`' ])
 
             action_type = 'determine_db_server'
-            action_args = { 'public_db_host' : db_host, 'series' : series }
+            action_args = { 'log' : log, 'public_db_host' : db_host, 'series' : series }
             action = Action.action(action_type=action_type, args=action_args)
             response = action()
 
             if isinstance(response, ErrorResponse):
+                log.write_error([ f'[ get_db_host ] {response.attributes.error_message}'])
                 raise exc(error_message=f'failure calling `{action_type}` action')
 
             # could be either public or private db host
