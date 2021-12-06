@@ -99,18 +99,21 @@ class Arguments(Args):
     def get_arguments(cls, *, is_program, program_name=None, program_args=None, module_args=None, drms_params, refresh=True):
         if cls._arguments is None or refresh:
             try:
-                log_file = path_join(drms_params.get_required('EXPORT_LOG_DIR'), DEFAULT_LOG_FILE)
                 db_port = int(drms_params.get_required('DRMSPGPORT'))
                 db_name = drms_params.get_required('DBNAME')
                 db_user = drms_params.get_required('WEB_DBUSER')
                 wl_file = drms_params.get_required('WL_FILE')
-
                 private_db_host = drms_params.get_required('SERVER')
                 has_wl = drms_params.get_required('WL_HASWL')
             except DPMissingParameterError as exc:
                 raise ParametersError(error_message=str(exc))
 
             if is_program:
+                try:
+                    log_file = path_join(drms_params.get_required('EXPORT_LOG_DIR'), DEFAULT_LOG_FILE)
+                except DPMissingParameterError as exc:
+                    raise ParametersError(error_message=str(exc))
+
                 args = None
 
                 if program_args is not None and len(program_args) > 0:
@@ -142,17 +145,17 @@ class Arguments(Args):
             else:
                 # `program_args` has all `arguments` values, in final form; validate them
                 # `series` is py list of DRMS data series
-                def extract_module_args(*, public_db_host, series, log_file=log_file, logging_level='error', db_port=db_port, db_name=db_name, db_user=db_user, wl_file=wl_file):
+                def extract_module_args(*, public_db_host, series, log=None, db_port=db_port, db_name=db_name, db_user=db_user, wl_file=wl_file):
                     arguments = {}
 
                     arguments['public_db_host'] = public_db_host
                     arguments['series'] = series # list
-                    arguments['log_file'] = log_file
-                    arguments['logging_level'] = DrmsLogLevelAction.string_to_level(logging_level)
                     arguments['db_port'] = db_port
                     arguments['db_name'] = db_name
                     arguments['db_user'] = db_user
                     arguments['wl_file'] = wl_file
+
+                    DetermineDbServerAction.set_log(log)
 
                     return arguments
 
@@ -176,12 +179,12 @@ class DetermineDbServerAction(Action):
 
     _log = None
 
-    def __init__(self, *, method, public_db_host, series, logging_level=None, db_port=None, db_name=None, db_user=None):
+    def __init__(self, *, method, public_db_host, series, log=None, db_port=None, db_name=None, db_user=None):
         self._method = getattr(self, method)
         self._public_db_host = public_db_host
         self._series = series # py list
         self._options = {}
-        self._options['logging_level'] = logging_level
+        self._options['log'] = log
         self._options['db_port'] = db_port
         self._options['db_name'] = db_name
         self._options['db_user'] = db_user
@@ -199,9 +202,17 @@ class DetermineDbServerAction(Action):
     def log(self, log):
         self.__class__._log = log
 
+    @classmethod
+    def set_log(cls, log=None):
+        cls._log = DrmsLog(None, None, None) if log is None else log
+
+    @classmethod
+    def get_log(cls):
+        return cls._log
+
     # `series` is a py list of series
     @classmethod
-    def is_valid_series_set(cls, series, db_host, webserver, logging_level=None):
+    def is_valid_series_set(cls, series, db_host, webserver):
         try:
             if db_host is None:
                 # if this method is called before URL arguments are parsed, then `db_host` is not known;
@@ -218,7 +229,7 @@ class DetermineDbServerAction(Action):
             else:
                 db_host_resolved = db_host
 
-            return GetSeriesInfoAction.is_valid_series_set(series, db_host_resolved, webserver, logging_level)
+            return GetSeriesInfoAction.is_valid_series_set(series, db_host_resolved, webserver, cls._log)
         except:
             return False
 
@@ -259,18 +270,20 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
         except Exception as exc:
             raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
 
-        if action_obj is None or action_obj.log is None:
+        if is_program:
             try:
                 formatter = DrmsLogFormatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
                 log = DrmsLog(arguments.log_file, arguments.logging_level, formatter)
-                if action_obj is not None:
-                    action_obj.log = log
-                else:
-                    ParseSpecificationAction._log = log
+                DetermineDbServerAction._log = log
             except Exception as exc:
                 raise LoggingError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
         else:
             log = action_obj.log
+
+        if is_program:
+            log.write_debug([ f'[ perform_action ] program invocation' ])
+        else:
+            log.write_debug([ f'[ perform_action ] module invocation' ])
 
         log.write_debug([ f'[ perform_action ] action arguments: {str(arguments)}' ])
 
@@ -281,6 +294,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
                 nested_arguments = ss_get_arguments(is_program=False, module_args={})
 
                 with Connection(server=nested_arguments.server, listen_port=nested_arguments.listen_port, timeout=nested_arguments.message_timeout, log=log) as connection:
+                    log.write_info([ f'[ perform_action] connection to socket server successful' ])
                     response_dict['series'] = []
                     use_public_server = True
                     white_list = None
