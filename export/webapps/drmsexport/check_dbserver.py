@@ -128,7 +128,7 @@ class Arguments(Args):
 
                 # Required
                 parser.add_argument('public-db-host', help='the machine hosting the EXTERNAL database that serves DRMS data series names.', metavar='<db host>', action=ValidateArgumentAction, dest='public_db_host', required=True)
-                parser.add_argument('s', 'series', help='a comma-separated ist of series to be checked', metavar='<series>', action=ListAction, dest='series', required=True)
+                parser.add_argument('s', 'series', help='a comma-separated list of series to be checked', metavar='<series>', action=ListAction, dest='series', required=True) # ListAction makes a list out of comma-separated-list string
 
                 # Optional
                 parser.add_argument('-l', '--log-file', help='the path to the log file', metavar='<log file>', dest='log_file', default=log_file)
@@ -289,6 +289,12 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
 
                         message = { 'request_type' : 'series_list', 'series_regex' : series_regex, 'db_host' : arguments.public_db_host }
                         response = json_loads(send_request(message, connection, log))
+
+                        if response.get('export_server_status') == 'export_server_error':
+                            raise ExportServerError(error_message=f'{response["error_message"]}')
+
+                        message = { 'request_type' : 'quit' }
+                        send_request(message, connection, log)
 
                         if len(response['names']) == 0:
                             if arguments.has_wl:
