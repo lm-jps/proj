@@ -118,7 +118,6 @@ class Arguments(Args):
     def get_arguments(cls, *, is_program, program_name=None, program_args=None, module_args=None, drms_params, refresh=True):
         if cls._arguments is None or refresh:
             try:
-                log_file = path_join(drms_params.get_required('EXPORT_LOG_DIR'), DEFAULT_LOG_FILE)
                 private_db_host = drms_params.get_required('SERVER')
                 db_port = int(drms_params.get_required('DRMSPGPORT'))
                 db_name = drms_params.get_required('DBNAME')
@@ -127,19 +126,24 @@ class Arguments(Args):
                 raise ParametersError(exc_info=sys_exc_info(), error_message=str(exc))
 
             if is_program:
+                try:
+                    log_file = path_join(drms_params.get_required('EXPORT_LOG_DIR'), DEFAULT_LOG_FILE)
+                except DPMissingParameterError as exc:
+                    raise ParametersError(exc_info=sys_exc_info(), error_message=str(exc))
+
                 args = None
 
                 if program_args is not None and len(program_args) > 0:
                     args = program_args
 
-                parser_args = { 'usage' : '%(prog)s series=<DRMS series> db_host=<db host> [ --log-file=<log file path> ] [ --logging-level=<critical/error/warning/info/debug> ] [ -N/--dbname=<db name> ] [ -P/--dbport=<db port> ] [ -U/--dbuser=<db user>] [ -w/--webserver=<host> ]' }
+                parser_args = { 'usage' : '%(prog)s series=<DRMS series list> db_host=<db host> [ --log-file=<log file path> ] [ --logging-level=<critical/error/warning/info/debug> ] [ -N/--dbname=<db name> ] [ -P/--dbport=<db port> ] [ -U/--dbuser=<db user>] [ -w/--webserver=<host> ]' }
                 if program_name is not None and len(program_name) > 0:
                     parser_args['prog'] = program_name
 
                 parser = CmdlParser(**parser_args)
 
                 # required
-                parser.add_argument('series', help='the DRMS series for which information is to be obtained', metavar='<DRMS series>', action=ListAction, dest='series', required=True)
+                parser.add_argument('series', help='a comma-separated list of series to be checked', metavar='<DRMS series>', action=ListAction, dest='series', required=True)
                 parser.add_argument('dbhost', help='the machine hosting the database that contains export requests from this site', metavar='<db host>', dest='db_host', required=True)
 
                 # optional
@@ -158,14 +162,12 @@ class Arguments(Args):
             else:
                 # `program_args` has all `arguments` values, in final form; validate them
                 # `series` is a str
-                def extract_module_args(*, series, db_host, parse_record_sets=False, log_file=log_file, logging_level='error', db_name=db_name, db_port=db_port, db_user=db_user, keywords=True, links=True, segments=True, webserver=None):
+                def extract_module_args(*, series, db_host, parse_record_sets=False, log=None, db_name=db_name, db_port=db_port, db_user=db_user, keywords=True, links=True, segments=True, webserver=None):
                     arguments = {}
 
-                    arguments['series'] = series
+                    arguments['series'] = series # a list
                     arguments['db_host'] = db_host
                     arguments['parse_record_sets'] = parse_record_sets
-                    arguments['log_file'] = log_file
-                    arguments['logging_level'] = DrmsLogLevelAction.string_to_level(logging_level)
                     arguments['db_name'] = db_name
                     arguments['db_port'] = db_port
                     arguments['db_user'] = db_user
@@ -173,6 +175,8 @@ class Arguments(Args):
                     arguments['links'] = False if (type(links) == list and len(links) == 0) else links
                     arguments['segments'] = False if (type(segments) == list and len(segments) == 0) else segments
                     arguments['webserver'] = name_to_ws_obj(webserver, drms_params) # sets webserver.public = True if webserver is None
+
+                    GetSeriesInfoAction.set_log(log)
 
                     return arguments
 
@@ -411,7 +415,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
             series = []
             for one_specification in arguments.series:
                 log.write_debug([ f'[ perform_action ] specification `{one_specification}`' ])
-                action = Action.action(action_type='parse_specification', args={ 'specification' : one_specification, 'db_host' : arguments.db_host, 'webserver' : arguments.webserver.host, 'logging_level' : arguments.logging_level._fullname })
+                action = Action.action(action_type='parse_specification', args={ 'specification' : one_specification, 'db_host' : arguments.db_host, 'webserver' : arguments.webserver.host, 'log' : log })
                 response = action()
 
                 log.write_debug([ f'[ perform_action ] parse action response `{str(response)}`' ])
@@ -420,6 +424,8 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
                     for subset in response.attributes.subsets:
                         log.write_debug([ f'[ perform_action ] series extracted: `{subset.seriesname}`' ])
                         series.append(subset.seriesname)
+                else:
+                    log.write_error([ f'[ perform_action ] {response.attributes.error_message}'])
         else:
             series = arguments.series
 
@@ -472,14 +478,14 @@ class GetSeriesInfoAction(Action):
 
     _log = None
 
-    def __init__(self, *, method, series, db_host, parse_record_sets=False, logging_level=None, db_name=None, db_port=None, db_user=None, keywords=None, links=None, segments=None, webserver=None):
+    def __init__(self, *, method, series, db_host, parse_record_sets=False, log=None, db_name=None, db_port=None, db_user=None, keywords=None, links=None, segments=None, webserver=None):
         self._method = getattr(self, method)
         self._series = series # py list
         self._db_host = db_host # host webserver uses (private webserver uses private db host)
         self._webserver = webserver # dict
         self._options = {}
         self._options['parse_record_sets'] = parse_record_sets
-        self._options['logging_level'] = logging_level
+        self._options['log'] = log
         self._options['db_name'] = db_name
         self._options['db_port'] = db_port
         self._options['db_user'] = db_user
@@ -500,9 +506,17 @@ class GetSeriesInfoAction(Action):
     def log(self, log):
         self.__class__._log = log
 
+    @classmethod
+    def set_log(cls, log=None):
+        cls._log = DrmsLog(None, None, None) if log is None else log
+
+    @classmethod
+    def get_log(cls):
+        return cls._log
+
     # `series` is a py list of series OR a list of record-set specifications
     @classmethod
-    def is_valid_series_set(cls, series, db_host, webserver, logging_level=None):
+    def is_valid_series_set(cls, series, db_host, webserver):
         is_valid = None
         try:
             if db_host is None:
@@ -521,7 +535,7 @@ class GetSeriesInfoAction(Action):
                 db_host_resolved = db_host
 
             # parse specification
-            action = Action.action(action_type='parse_specification', args={ 'specification' : ','.join(series), 'db_host' : db_host_resolved, 'webserver' : webserver, 'logging_level' : logging_level })
+            action = Action.action(action_type='parse_specification', args={ 'specification' : ','.join(series), 'db_host' : db_host_resolved, 'webserver' : webserver, 'log' : cls._log })
             response = action()
 
             # record-set specifications are allowed in lieu of series names, so it is OK if filters exist
