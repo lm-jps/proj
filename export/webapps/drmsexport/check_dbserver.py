@@ -343,7 +343,6 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
                 supporting_server = True
 
                 for series in arguments.series:
-                    print(f'trying {series}')
                     is_supported, is_public, series_obj = determine_server(series, arguments.public_db_host, arguments.private_db_host, arguments.has_wl, arguments.wl_file)
                     response_dict['series'].append(series_obj)
                     use_public_server &= is_public
