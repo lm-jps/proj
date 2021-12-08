@@ -61,15 +61,14 @@ class ErrorCode(ExportErrorCode):
     PARAMETERS = (201, 'failure locating DRMS parameters')
     ARGUMENTS = (202, 'bad arguments')
     LOGGING = (203, 'failure logging messages')
-    DRMS_CLIENT = (204, 'drms client error')
-    DB = (205, 'failure executing database command')
-    DB_CONNECTION = (206, 'failure connecting to database')
-    EXPORT_ACTION = (207, 'failure calling export action')
-    CHECK = (208, 'unable to check export request for export user {address}')
-    CANCEL = (209, 'unable to cancel export request for export user {address}')
-    STATUS = (210, 'unable to check export-request for export user {address}')
-    EXPORT_SERVER = (211, 'export-server communication error')
-    UNHANDLED_EXCEPTION = (212, 'unhandled exception')
+    DB = (204, 'failure executing database command')
+    DB_CONNECTION = (205, 'failure connecting to database')
+    EXPORT_ACTION = (206, 'failure calling export action')
+    CHECK = (207, 'unable to check export request for export user {address}')
+    CANCEL = (208, 'unable to cancel export request for export user {address}')
+    STATUS = (209, 'unable to check export-request for export user {address}')
+    EXPORT_SERVER = (210, 'export-server communication error')
+    UNHANDLED_EXCEPTION = (211, 'unhandled exception')
 
 # exceptions
 class MrBaseError(ExportError):
@@ -100,9 +99,6 @@ class ArgumentsError(MrBaseError):
 
 class LoggingError(MrBaseError):
     _error_code = ErrorCode.LOGGING
-
-class DRMSClientError(MrBaseError):
-    _error_code = ErrorCode.DRMS_CLIENT
 
 class DBError(MrBaseError):
     _error_code = ErrorCode.DB
@@ -164,7 +160,6 @@ class Arguments(Args):
     def get_arguments(cls, *, is_program, program_name=None, program_args=None, module_args=None, drms_params, refresh=True):
         if cls._arguments is None or refresh:
             try:
-                log_file = path_join(drms_params.get_required('EXPORT_LOG_DIR'), DEFAULT_LOG_FILE)
                 private_db_host = drms_params.get_required('SERVER')
                 db_port = drms_params.get_required('DRMSPGPORT')
                 db_name = drms_params.get_required('DBNAME')
@@ -212,17 +207,14 @@ class Arguments(Args):
                 parser.add_argument('-w', '--webserver', help='the webserver invoking this script', metavar='<webserver>', action=create_webserver_action(drms_params), dest='webserver', default=name_to_ws_obj(None, drms_params))
 
                 arguments = Arguments(parser=parser, args=args)
-                arguments.drms_client = None
             else:
                 # module invocation
-                def extract_module_args(*, address, operation, db_host, drms_client_type='ssh', drms_client=None, request_id=None, log=None, db_name=db_name, db_port=db_port, pending_requests_table=pending_requests_table, timeout=timeout, db_user=db_user, webserver=None):
+                def extract_module_args(*, address, operation, db_host, request_id=None, log=None, db_name=db_name, db_port=db_port, pending_requests_table=pending_requests_table, timeout=timeout, db_user=db_user, webserver=None):
                     arguments = {}
 
                     arguments['address'] = address
                     arguments['operation'] = operation
                     arguments['db_host'] = db_host
-                    arguments['drms_client_type'] = drms_client_type
-                    arguments['drms_client'] = drms_client
                     arguments['request_id'] = request_id
                     arguments['db_name'] = db_name
                     arguments['db_port'] = db_port
@@ -413,6 +405,7 @@ class StatusOperation(Operation):
         method = None
         request_url = None
         access = None
+        scheme = None
         package = None
         file_format = None
         record_count = None
@@ -470,10 +463,11 @@ class StatusOperation(Operation):
 
                 if method is not None:
                     try:
-                        dash_index = method.index('-')
-                        access = method[:dash_index]
+                        access = method[:3]
                     except ValueError:
                         access = 'url'
+
+                scheme = 'https' if access == 'url' else 'ftp'
 
                 package = { 'type' : None if tar_file is None else 'tar', 'file_name' : None if tar_file is None else tar_file }
 
@@ -483,14 +477,15 @@ class StatusOperation(Operation):
                         data = [ (record['record'], record['filename']) for record in file_information ]
                     else:
                         # make URLs
-                        url_information = [] # (record_spec, filename, url)
+                        url_information = { 'record' : [], 'filename' : [], 'url' : []} # ( 'record' : [ record_specs ], 'filename' : [ filenames ], 'url' : [ urls ])
                         file_information_resolved = None
 
                         if file_format in ['mpg', 'mp4']:
                             file_information_adjusted = deepcopy(file_information)
 
-                            if file_information_adjusted.record[0].startswith('movie'):
-                                file_information_adjusted.record[0] = None
+                            # look at the first record only (there is only one)
+                            if file_information_adjusted[0]['record'].startswith('movie'):
+                                file_information_adjusted[0]['record'] = None
 
                             file_information_resolved = file_information_adjusted
                         else:
@@ -499,13 +494,17 @@ class StatusOperation(Operation):
                         if package['type'] == 'tar':
                             # record.filename is full path
                             for record in file_information_resolved:
-                                url_information.append({ 'record' : record.record, 'filename' : path_basename(record.filename), 'url' : urlunsplit(access, download_web_domain, record.filename, None, None) })
+                                url_information['record'].append(record['record'])
+                                url_information['filename'].append(path_basename(record['filename']))
+                                url_information['url'].append(urlunsplit((scheme, download_web_domain, record['filename'], None, None)))
                         else:
                             # record.filename is base file name
                             for record in file_information_resolved:
-                                url_information.append({ 'record' : record.record, 'filename' : record.filename, 'url' : urlunsplit(access, download_web_domain, path_join(export_directory, record.filename), None, None) })
+                                url_information['record'].append(record['record'])
+                                url_information['filename'].append(record['filename'])
+                                url_information['url'].append(urlunsplit((scheme, download_web_domain, path_join(export_directory, record['filename']), None, None)))
 
-                        data = list(zip(url_information.record.to_list(), url_information.url.to_list()))
+                        data = list(zip(url_information['record'], url_information['url']))
 
         response_dict = deepcopy(export_status_dict)
 
@@ -611,13 +610,11 @@ class PendingRequestAction(Action):
     _reg_ex = None
     _log = None
 
-    def __init__(self, *, method, address, db_host, drms_client_type=None, drms_client=None, request_id=None, log=None, db_name=None, db_port=None, pending_requests_table=None, timeout=None, db_user=None, webserver=None):
+    def __init__(self, *, method, address, db_host, request_id=None, log=None, db_name=None, db_port=None, pending_requests_table=None, timeout=None, db_user=None, webserver=None):
         self._method = getattr(self, method)
         self._address = address
         self._db_host = db_host
         self._options = {}
-        self._options['drms_client_type'] = drms_client_type
-        self._options['drms_client'] = drms_client
         self._options['request_id'] = request_id
         self._options['log'] = log
         self._options['db_name'] = db_name
