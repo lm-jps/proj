@@ -3,7 +3,7 @@
 from action import Action
 from drms_export import ErrorResponse
 
-__all__ = [ 'extract_program_and_module_args', 'create_drms_client' ]
+__all__ = [ 'extract_program_and_module_args', 'get_db_host' ]
 
 def extract_program_and_module_args(*, is_program, **kwargs):
     program_args = None
@@ -34,11 +34,12 @@ def extract_program_and_module_args(*, is_program, **kwargs):
     return (program_args, module_args)
 
 
-# determines which type of drms client - a private one, or a public one - is needed to serve drms client requests, and returns the
-# needed client; the determination is based upon the provided webserver (which has a `public` property), drms_client, series, and
+# determines which db host - the private one, or a public one - is needed to serve export-client requests; the
+# determination is based upon the provided webserver (which has a `public` property), series, and
 # specification arguments
-# `webserver` can be None; if so, then db_host must be public
+# `webserver` can be None; if so, then `webserver` and `db_host` must be public
 # `series` is a comma-separated list of DRMS data series
+# `db_host` the database host selected to support requests from `webserver` (public webserver --> public db host)
 def get_db_host(*, webserver, series, private_db_host, db_host, db_port, db_name, db_user, exc, log):
     from check_dbserver import DetermineDbServerAction
 
