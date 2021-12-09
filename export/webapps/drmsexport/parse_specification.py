@@ -214,7 +214,6 @@ def request_parsed_specification(specification):
     log = ParseSpecificationAction._log
 
     with Connection(server=nested_arguments.server, listen_port=nested_arguments.listen_port, timeout=nested_arguments.message_timeout, log=log) as connection:
-        print(f'sending request for {specification}')
         message = { 'request_type' : 'parse_specification', 'specification' : specification }
         response = send_request(message, connection, log)
 
