@@ -24,11 +24,10 @@ class ErrorCode(ExportErrorCode):
     PARAMETERS = (101, 'failure locating DRMS parameters')
     ARGUMENTS = (102, 'bad arguments')
     LOGGING = (103, 'failure logging messages')
-    DRMS_CLIENT = (104, 'drms client error')
-    EXPORT_ACTION = (105, 'failure calling export action')
-    RESPONSE = (106, 'unable to generate valid response')
-    EXPORT_SERVER = (107, 'export-server communication error')
-    UNHANDLED_EXCEPTION = (108, 'unhandled exception')
+    EXPORT_ACTION = (104, 'failure calling export action')
+    RESPONSE = (105, 'unable to generate valid response')
+    EXPORT_SERVER = (106, 'export-server communication error')
+    UNHANDLED_EXCEPTION = (107, 'unhandled exception')
 
 class GriBaseError(ExportError):
     def __init__(self, *, exc_info=None, error_message=None):
@@ -57,9 +56,6 @@ class ArgumentsError(GriBaseError):
 
 class LoggingError(GriBaseError):
     _error_code = ErrorCode.LOGGING
-
-class DRMSClientError(GriBaseError):
-    _error_code = ErrorCode.DRMS_CLIENT
 
 class ExportActionError(GriBaseError):
     _error_code = ErrorCode.EXPORT_ACTION
@@ -125,7 +121,7 @@ class Arguments(Args):
                 if program_args is not None and len(program_args) > 0:
                     args = program_args
 
-                parser_args = { 'usage' : '%(prog)s specification=<DRMS record-set specification> dbhost=<db host> [ -c/--drms-client-type=<ssh/http>] [ -k/--keywords=<keywords> ] [ -K/--links=<links> ] [ -l/--log-file=<log file path> [ -L/--logging-level=<critical/error/warning/info/debug> ] [ -N/--dbname=<db name> ] [ -P/--dbport=<db port> ] [ -s/--segments=<segments> ] [ -U/--dbuser=<db user>] [ -w/--webserver=<host> ] ' }
+                parser_args = { 'usage' : '%(prog)s specification=<DRMS record-set specification> dbhost=<db host> [ -k/--keywords=<keywords> ] [ -K/--links=<links> ] [ -l/--log-file=<log file path> [ -L/--logging-level=<critical/error/warning/info/debug> ] [ -N/--dbname=<db name> ] [ -P/--dbport=<db port> ] [ -s/--segments=<segments> ] [ -U/--dbuser=<db user>] [ -w/--webserver=<host> ] ' }
                 if program_name is not None and len(program_name) > 0:
                     parser_args['prog'] = program_name
 
@@ -136,7 +132,6 @@ class Arguments(Args):
                 parser.add_argument('dbhost', help='the machine hosting the database that contains export requests from this site', metavar='<db host>', dest='db_host', required=True)
 
                 # optional
-                parser.add_argument('-c', '--drms-client-type', help='securedrms client type (ssh, http)', choices=[ 'ssh', 'http' ], dest='drms_client_type', default='ssh')
                 parser.add_argument('-k', '--keywords', help='list of keywords for which information is returned', action=ListAction, dest='keywords', default=None)
                 parser.add_argument('-K', '--links', help='list of links for which information is returned', action=ListAction, dest='links', default=None)
                 parser.add_argument('-l', '--log-file', help='the path to the log file', metavar='<log file>', dest='log_file', default=log_file)
@@ -149,16 +144,13 @@ class Arguments(Args):
                 parser.add_argument('-w', '--webserver', help='the webserver invoking this script', metavar='<webserver>', action=create_webserver_action(drms_params), dest='webserver', default=name_to_ws_obj(None, drms_params))
 
                 arguments = Arguments(parser=parser, args=args)
-                arguments.drms_client = None
             else:
                 # `program_args` has all `arguments` values, in final form; validate them
-                def extract_module_args(*, specification, db_host, drms_client_type='ssh', drms_client=None, keywords=None, links=None, db_name=db_name, number_records=None, db_port=db_port, segments=None, db_user=db_user, webserver=None, log=None):
+                def extract_module_args(*, specification, db_host, keywords=None, links=None, db_name=db_name, number_records=None, db_port=db_port, segments=None, db_user=db_user, webserver=None, log=None):
                     arguments = {}
 
                     arguments['specification'] = specification
                     arguments['db_host'] = db_host
-                    arguments['drms_client_type'] = drms_client_type
-                    arguments['drms_client'] = drms_client
                     arguments['keywords'] = keywords # list
                     arguments['links'] = links # list
                     arguments['db_name'] = db_name
@@ -204,14 +196,8 @@ def get_response(client_response_dict, log):
 
 def send_request(request, connection, log):
     json_message = json_dumps(request)
-
-    log.write_debug([ f'[ send_request ] sending message to server:' ])
-    log.write_debug([ f'[ send_request ] {json_message}' ])
     send_message(connection, json_message)
-
     message = get_message(connection)
-    log.write_debug([ f'[ send_request ] server response:' ])
-    log.write_debug([ f'[ send_request ] {message}' ])
 
     return message
 
@@ -321,13 +307,11 @@ class GetRecordInfoAction(Action):
 
     _log = None
 
-    def __init__(self, *, method, specification, db_host, drms_client_type=None, drms_client=None, keywords=None, links=None, log=None, db_name=None, number_records=None, db_port=None, segments=None, db_user=None, webserver=None):
+    def __init__(self, *, method, specification, db_host, keywords=None, links=None, log=None, db_name=None, number_records=None, db_port=None, segments=None, db_user=None, webserver=None):
         self._method = getattr(self, method)
         self._specification = specification
         self._db_host = db_host # the host `webserver` uses (private webserver uses private db host)
         self._options = {}
-        self._options['drms_client_type'] = drms_client_type
-        self._options['drms_client'] = drms_client
         self._options['keywords'] = keywords # list
         self._options['links'] = links # list
         self._options['log'] = log
