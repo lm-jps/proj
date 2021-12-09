@@ -25,12 +25,13 @@ DUMMY_FITS_FILE_NAME = 'data.FITS'
 
 class StatusCode(SC):
     # fetch success status codes
-    REQUEST_COMPLETE = (0, 'request has been completely processed')
-    REQUEST_PROCESSING = (1, 'processing request')
-    REQUEST_QUEUED = (2, 'request has been queued for processing') # status == 2 exists only in jsoc.export_new; jsoc_fetch op=exp_request creates a record in this table and sets the status value to 2 (or 12)
+    REQUEST_COMPLETE = (0, 'export has been completely processed')
+    REQUEST_PROCESSING = (1, 'processing export')
+    REQUEST_QUEUED = (2, 'export has been queued for processing') # status == 2 exists only in jsoc.export_new; jsoc_fetch op=exp_request creates a record in this table and sets the status value to 2 (or 12)
     # this should go away - if in jsoc.export_new, but not in jsoc.export, then this is the same as REQUEST_QUEUED
-    REQUEST_NOT_QUEUED = (6, 'request has not been queued yet') # can no longer happen with jsoc_fetch op=exp_status call
-    REQUEST_QUEUED_DEBUG = (12, 'request has been queued for processing')
+    REQUEST_NOT_QUEUED = (6, 'export has not been queued yet') # can no longer happen with jsoc_fetch op=exp_status call
+    REQUEST_QUEUED_DEBUG = (12, 'export has been queued for processing')
+    REQUEST_GENERATOR_READY = (20, 'export is now generator accessible; (`destination`, `generator`) provided with this response')
 
 class ErrorCode(ExportErrorCode):
     # fetch error codes
@@ -572,7 +573,7 @@ def export_premium(*, address, requestor=None, db_host, download_web_domain, log
     except Exception as exc:
         raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
 
-    # if jsoc_fetch processed the request synchronously, then it will have returned status == 0 to `drms_client` - there is no request id created, so `request` will not have an `id` property; if jsoc_fetch processed the request asynchronously (because data were offline), then `request` will have an `id` property that contains the request ID needed by exportdata.html so it can poll for export-processing completion
+    # if jsoc_fetch processed the request synchronously, then it will have returned status == 0 to the socket server - there is no request id created, so `request` will not have an `id` property; if jsoc_fetch processed the request asynchronously (because data were offline), then `request` will have an `id` property that contains the request ID needed by exportdata.html so it can poll for export-processing completion
 
     try:
         response = get_response(export_status_dict, log)
@@ -766,6 +767,8 @@ def export_streamed(*, request_action, address, db_host, log, export_arguments):
     }
     '''
     response = None
+    destination = None
+    generator = None
 
     # new socket-server stuff
 
@@ -787,7 +790,10 @@ def export_streamed(*, request_action, address, db_host, log, export_arguments):
         # 2. server sends response telling client to start downloading payload over socket
         # 3. client reads payload from socket until server shuts down server end of socket
         # 4. client closes client end of socket
-        connection = Connection(server=nested_arguments.server, listen_port=nested_arguments.listen_port, timeout=nested_arguments.message_timeout, log=log)
+
+        # call connect() when instantiating Connection outside of a context manager; the CM returns
+        # a socket object, but the constructor does not
+        connection = Connection(server=nested_arguments.server, listen_port=nested_arguments.listen_port, timeout=nested_arguments.message_timeout, log=log).connect()
         destination['connection'] = connection
 
         # this message will start the child process on the export server; the child process will write to connection
@@ -807,30 +813,20 @@ def export_streamed(*, request_action, address, db_host, log, export_arguments):
         #   - returns generator object to download the rest of the payload over the connection
         generator = create_generator(destination=destination)
 
-        if request_action is not None:
+        if request_action is None:
+            download_directory = export_arguments.get('download-directory')
+            file_name = destination.get('file_name')
+
+            if download_directory is not None and file_name is not None:
+                destination['file_path'] = path_join(download_directory, file_name)
+        else:
             # if this is being run in a module context, then the caller will iterate through generator;
             # the caller also needs access to the destination (which contains the file name for the
             # downloaded content) to generate HTTP headers
             request_action.destination = destination
             request_action.generator = generator
-        else:
-            if is_program:
-                # iterate through generator, which generates binary export content (e.g., a FITS file);
-                # write output to stdout; the caller can save a file or redirect stdout to a file
-                download_directory = export_arguments.get('download-directory')
-                file_name = destination.get('file_name')
 
-                if download_directory is not None and file_name is not None:
-                    file_path = path_join(download_directory, file_name)
-
-                    with open(file_path, mode='wb') as file_out:
-                        for data in action_obj.generator:
-                            file_out.write(data)
-                else:
-                    for data in action_obj.generator:
-                        sys_stdout.write(data)
-
-        response = Response.generate_response(status_code=StatusCode.REQUEST_COMPLETE)
+        response = Response.generate_response(status_code=StatusCode.REQUEST_GENERATOR_READY)
     except ExportServerError as exc:
         close_connection = True
         response = ErrorResponse.generate_response(error_code=ErrorCode.REQUEST_FATAL_ERROR, error_message=f'{exc.message}')
@@ -843,10 +839,16 @@ def export_streamed(*, request_action, address, db_host, log, export_arguments):
             connection.shutdown(SHUT_RDWR)
             connection.close()
 
+    else:
+        # the socket connection needs to remain open until generation is complete; so the code that
+        # iterates through the generator must close the connection (which is accessible through the
+        # destination returned)
+        pass
+
     # this never gets back to browser - browser just displays the file data
     # streamed back to it; the browser reads the headers sent back (which
     # should include a 200 if everything worked out)
-    return response
+    return (response, (destination, generator))
 
 def send_request(request, connection, log):
     json_message = json_dumps(request)
@@ -943,6 +945,8 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
         #   status : export status (1, 2, 4, 6, 7)
         #   error : a string describing a jsoc_fetch error or null
         #   requestid : the export Request ID or null (for synchronous requests)
+        destination = None
+        generator = None
 
         try:
             export_arguments = arguments.export_arguments # dict
@@ -958,7 +962,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
             elif arguments.export_type == 'streamed':
                 # supports no-processing, no-tar, stream-access, native file format attributes; exports a single file only, all SUs must be online; use securedrms.SecureClient.export_package()
                 log.write_info([ f'[ perform_action ] servicing streamed request for user `{arguments.address}`: {str(export_arguments)}' ])
-                response = export_streamed(request_action=action_obj, drms_client=drms_client, address=arguments.address, log=log, export_arguments=export_arguments)
+                (response, (destination, generator)) = export_streamed(request_action=action_obj, address=arguments.address, db_host=resolved_db_host, log=log, export_arguments=export_arguments)
         except Exception as exc:
             raise ExportActionError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
     except IrBaseError as exc:
@@ -981,7 +985,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
     if log is not None:
         log.write_info([f'[ perform_action ] request complete; status {response.status_code.description()}'])
 
-    return response
+    return (response, (destination, generator))
 
 # for use in export web app
 from action import Action
@@ -1125,15 +1129,26 @@ class InitiateRequestAction(Action):
         return cls._log
 
 if __name__ == "__main__":
-    try:
-        response = perform_action(action_obj=None, is_program=True, request_action=None)
-    except ExportError as exc:
-        response = exc.response
-    except Exception as exc:
-        error = ExportActionError(exc_info=sys_exc_info())
-        response = error.response
+    response, (destination, generator) = perform_action(action_obj=None, is_program=True, request_action=None)
 
-    print(response.generate_json())
+    if not isinstance(response, ErrorCode):
+        if response.status_code == StatusCode.REQUEST_GENERATOR_READY:
+            if destination is not None:
+                file_path = destination.get('file_path')
+
+            if generator is not None:
+                # iterate through generator, which generates binary export content (e.g., a FITS file);
+                # write output to stdout; the caller can save a file or redirect stdout to a file
+
+                if file_path is not None:
+                    with open(file_path, mode='wb') as file_out:
+                        for data in generator:
+                            file_out.write(data)
+                else:
+                    for data in generator:
+                        sys_stdout.buffer.write(data)
+        else:
+            print(response.generate_json())
 
     # Always return 0. If there was an error, an error code (the 'status' property) and message (the 'statusMsg' property) goes in the returned HTML.
     sys_exit(0)
