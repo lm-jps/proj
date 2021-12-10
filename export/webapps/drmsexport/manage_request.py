@@ -644,7 +644,8 @@ class PendingRequestAction(Action):
         return cls._reg_ex
 
     @classmethod
-    def is_valid_request_id(cls, address, logging_level=None):
+    def is_valid_request_id(cls, address, log):
+        cls.set_log(log)
         reg_ex = cls.get_reg_ex()
         return reg_ex.match(address) is not None
 
@@ -658,7 +659,8 @@ class PendingRequestAction(Action):
 
     @classmethod
     def set_log(cls, log=None):
-        cls._log = DrmsLog(None, None, None) if log is None else log
+        if cls._log is None:
+            cls._log = DrmsLog(None, None, None) if log is None else log
 
     @classmethod
     def get_log(cls):

@@ -195,7 +195,8 @@ class ParseSpecificationAction(Action):
 
     @classmethod
     def set_log(cls, log=None):
-        cls._log = DrmsLog(None, None, None) if log is None else log
+        if cls._log is None:
+            cls._log = DrmsLog(None, None, None) if log is None else log
 
     @classmethod
     def get_log(cls):

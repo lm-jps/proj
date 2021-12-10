@@ -239,7 +239,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
 
         log.write_debug([ f'[ perform_action ] action arguments: {str(arguments)}' ])
 
-        if not GetRecordInfoAction.is_valid_specification(arguments.specification, arguments.db_host, arguments.webserver.host):
+        if not GetRecordInfoAction.is_valid_specification(arguments.specification, arguments.db_host, arguments.webserver.host, log):
             raise ArgumentsError(error_message=f'invalid record-set specification')
 
         parsed_specification = GetRecordInfoAction.get_parsed_specification(arguments.specification, arguments.db_host, arguments.webserver.host)
@@ -336,7 +336,8 @@ class GetRecordInfoAction(Action):
 
     @classmethod
     def set_log(cls, log=None):
-        cls._log = DrmsLog(None, None, None) if log is None else log
+        if cls._log is None:
+            cls._log = DrmsLog(None, None, None) if log is None else log
 
     @classmethod
     def get_log(cls):
@@ -354,7 +355,8 @@ class GetRecordInfoAction(Action):
         return parsed_specification
 
     @classmethod
-    def is_valid_specification(cls, specification, db_host, webserver):
+    def is_valid_specification(cls, specification, db_host, webserver, log):
+        cls.set_log(log)
         is_valid = None
 
         try:

@@ -388,7 +388,7 @@ class AddressRegistrationResource(Resource):
 # called from public website only
 from check_dbserver import DetermineDbServerAction
 class ServerResource(Resource):
-    _arguments = { 'public_db_host' : fields.Str(required=True, data_key='public-db-host'), 'series' : fields.List(fields.Str, required=True, validate=lambda a: DetermineDbServerAction.is_valid_series_set(a, None, urlparse(request.base_url).hostname)), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'db_user' : fields.Str(required=False, data_key='db-user') }
+    _arguments = { 'public_db_host' : fields.Str(required=True, data_key='public-db-host'), 'series' : fields.List(fields.Str, required=True, validate=lambda a: DetermineDbServerAction.is_valid_series_set(a, None, urlparse(request.base_url).hostname, APP_LOG)), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'db_user' : fields.Str(required=False, data_key='db-user') }
 
     @use_kwargs(_arguments, location='querystring')
     def get(self, public_db_host, series, db_name=None, db_port=None, db_user=None):
@@ -399,7 +399,7 @@ class ServerResource(Resource):
 
 from get_record_info import GetRecordInfoAction
 class RecordSetResource(Resource):
-    _arguments = { 'specification' : fields.Str(required=True, validate=lambda a: GetRecordInfoAction.is_valid_specification(a, None, urlparse(request.base_url).hostname)), 'db_host' : fields.Str(required=True, data_key='db-host'), 'parse_only' : fields.Bool(required=False, data_key='parse-only'), 'keywords' : fields.List(fields.Str, required=False), 'segments' : fields.List(fields.Str, required=False), 'links' : fields.List(fields.Str, required=False), 'db_name' : fields.Str(required=False, data_key='db-name'), 'number_records' : fields.Int(required=False, data_key='number-records'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'db_user' : fields.Str(required=False, data_key='db-user') }
+    _arguments = { 'specification' : fields.Str(required=True, validate=lambda a: GetRecordInfoAction.is_valid_specification(a, None, urlparse(request.base_url).hostname, APP_LOG)), 'db_host' : fields.Str(required=True, data_key='db-host'), 'parse_only' : fields.Bool(required=False, data_key='parse-only'), 'keywords' : fields.List(fields.Str, required=False), 'segments' : fields.List(fields.Str, required=False), 'links' : fields.List(fields.Str, required=False), 'db_name' : fields.Str(required=False, data_key='db-name'), 'number_records' : fields.Int(required=False, data_key='number-records'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'db_user' : fields.Str(required=False, data_key='db-user') }
 
     @use_kwargs(_arguments, location='querystring')
     def get(self, specification, db_host, parse_only=False, keywords=None, segments=None, links=None, db_name=None, number_records=None, db_port=None, db_user=None):
@@ -416,7 +416,7 @@ class RecordSetResource(Resource):
 
 from get_series_info import GetSeriesInfoAction
 class SeriesResource(Resource):
-    _arguments = { 'series' : fields.List(fields.Str, required=True, validate=lambda s: GetSeriesInfoAction.is_valid_series_set(s, None, urlparse(request.base_url).hostname)), 'db_host' : fields.Str(required=True, data_key='db-host'), 'parse_record_sets' : fields.Boolean(required=False, data_key='parse-record-sets'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'db_user' : fields.Str(required=False, data_key='db-user'), 'keywords' : fields.List(fields.Str, required=False), 'links' : fields.List(fields.Str, required=False), 'segments' : fields.List(fields.Str, required=False)}
+    _arguments = { 'series' : fields.List(fields.Str, required=True, validate=lambda s: GetSeriesInfoAction.is_valid_series_set(s, None, urlparse(request.base_url).hostname, APP_LOG)), 'db_host' : fields.Str(required=True, data_key='db-host'), 'parse_record_sets' : fields.Boolean(required=False, data_key='parse-record-sets'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'db_user' : fields.Str(required=False, data_key='db-user'), 'keywords' : fields.List(fields.Str, required=False), 'links' : fields.List(fields.Str, required=False), 'segments' : fields.List(fields.Str, required=False)}
 
     @use_kwargs(_arguments, location='querystring')
     def get(self, series, db_host, parse_record_sets=False, db_name=None, db_port=None, db_user=None, keywords=None, links=None, segments=None):
@@ -427,7 +427,7 @@ class SeriesResource(Resource):
 
 from initiate_request import InitiateRequestAction, ErrorCode as IRErrorCode
 class PremiumExportRequestResource(Resource):
-    _arguments = { 'address' : fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : fields.Str(required=True, data_key='db-host'), 'export_arguments' : fields.Str(required=True, validate=lambda a: InitiateRequestAction.is_valid_arguments(a), data_key='export-arguments'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'requestor' : fields.Str(required=False), 'db_user' : fields.Str(required=False, data_key='db-user') }
+    _arguments = { 'address' : fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : fields.Str(required=True, data_key='db-host'), 'export_arguments' : fields.Str(required=True, validate=lambda a: InitiateRequestAction.is_valid_arguments(a, APP_LOG), data_key='export-arguments'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'requestor' : fields.Str(required=False), 'db_user' : fields.Str(required=False, data_key='db-user') }
 
     @use_kwargs(_arguments)
     def post(self, address, db_host, export_arguments, db_name=None, db_port=None, requestor=None, db_user=None):
@@ -439,7 +439,8 @@ class PremiumExportRequestResource(Resource):
 
     def call_action(self):
         action = Action.action(action_type='start_premium_export', args=self._action_arguments)
-        return action().generate_serializable_dict()
+        response, (destination, generator) = action()
+        return response.generate_serializable_dict()
 
 class PremiumExportRequestFromFormResource(PremiumExportRequestResource):
     @use_kwargs(PremiumExportRequestResource._arguments, location='form')
@@ -453,7 +454,7 @@ class PremiumExportRequestFromFormResource(PremiumExportRequestResource):
         return self.call_action()
 
 class MiniExportRequestResource(Resource):
-    _arguments = { 'address' : fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : fields.Str(required=True, data_key='db-host'), 'export_arguments' : fields.Str(required=True, validate=lambda a: InitiateRequestAction.is_valid_arguments(a), data_key='export-arguments'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'requestor' : fields.Str(required=False), 'db_user' : fields.Str(required=False, data_key='db-user') }
+    _arguments = { 'address' : fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : fields.Str(required=True, data_key='db-host'), 'export_arguments' : fields.Str(required=True, validate=lambda a: InitiateRequestAction.is_valid_arguments(a, APP_LOG), data_key='export-arguments'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'requestor' : fields.Str(required=False), 'db_user' : fields.Str(required=False, data_key='db-user') }
 
     @use_kwargs(_arguments)
     def post(self, address, db_host, export_arguments, db_name=None, db_port=None, requestor=None, db_user=None):
@@ -465,7 +466,8 @@ class MiniExportRequestResource(Resource):
 
     def call_action(self):
         action = Action.action(action_type='start_mini_export', args=self._action_arguments)
-        return action().generate_serializable_dict()
+        response, (destination, generator) = action()
+        return response.generate_serializable_dict()
 
 class MiniExportRequestFromFormResource(MiniExportRequestResource):
     @use_kwargs(MiniExportRequestResource._arguments, location='form')
@@ -477,7 +479,7 @@ class MiniExportRequestFromFormResource(MiniExportRequestResource):
         return self.call_action()
 
 class StreamedExportRequestResource(Resource):
-    _arguments = { 'address' : fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : fields.Str(required=True, data_key='db-host'), 'export_arguments' : fields.Str(required=True, validate=lambda a: InitiateRequestAction.is_valid_arguments(a), data_key='export-arguments'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'requestor' : fields.Str(required=False), 'db_user' : fields.Str(required=False, data_key='db-user') }
+    _arguments = { 'address' : fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : fields.Str(required=True, data_key='db-host'), 'export_arguments' : fields.Str(required=True, validate=lambda a: InitiateRequestAction.is_valid_arguments(a, APP_LOG), data_key='export-arguments'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'requestor' : fields.Str(required=False), 'db_user' : fields.Str(required=False, data_key='db-user') }
 
     @use_kwargs(_arguments)
     def post(self, address, db_host, export_arguments, db_name=None, db_port=None, requestor=None, db_user=None):
@@ -488,11 +490,11 @@ class StreamedExportRequestResource(Resource):
 
         # starts the child process and creates a generator to return data from the output content stream
         # response, when successful, will not be sent back to browser, but it can be used here to check for errors
-        action_response = action()
+        response, (destination, generator) = action()
 
-        if isinstance(action_response, IRErrorCode):
-            # return an error response using the `action_response` description
-            return make_response(action_response.attributes.drms_export_status_description, 500)
+        if isinstance(response, IRErrorCode):
+            # return an error response using the `response` description
+            return make_response(response.attributes.drms_export_status_description, 500)
 
         # call the generator's first iteration; this reads the download file name from the
         # child process' output stream and stores it in the destination object
@@ -525,7 +527,7 @@ class PendingRequestResource(Resource):
         return action().generate_serializable_dict()
 
 class PendingRequestStatusResource(Resource):
-    _arguments = { 'address' : fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : fields.Str(required=True, data_key='db-host'), 'request_id' : fields.Str(required=True, data_key='request-id', validate=lambda a: PendingRequestAction.is_valid_request_id(a)), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'db_user' : fields.Str(required=False, data_key='db-user'), 'pending_requests_table' : fields.Str(required=False, data_key='pending-requests-table'), 'timeout' : fields.Int(required=False) }
+    _arguments = { 'address' : fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : fields.Str(required=True, data_key='db-host'), 'request_id' : fields.Str(required=True, data_key='request-id', validate=lambda a: PendingRequestAction.is_valid_request_id(a, APP_LOG)), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'db_user' : fields.Str(required=False, data_key='db-user'), 'pending_requests_table' : fields.Str(required=False, data_key='pending-requests-table'), 'timeout' : fields.Int(required=False) }
 
     @use_kwargs(_arguments, location='querystring')
     def get(self, address, db_host, request_id, db_name=None, db_port=None, db_user=None, pending_requests_table=None, timeout=None):

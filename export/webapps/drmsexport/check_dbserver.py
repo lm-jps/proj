@@ -205,7 +205,8 @@ class DetermineDbServerAction(Action):
 
     @classmethod
     def set_log(cls, log=None):
-        cls._log = DrmsLog(None, None, None) if log is None else log
+        if cls._log is None:
+            cls._log = DrmsLog(None, None, None) if log is None else log
 
     @classmethod
     def get_log(cls):
@@ -213,7 +214,9 @@ class DetermineDbServerAction(Action):
 
     # `series` is a py list of series
     @classmethod
-    def is_valid_series_set(cls, series, db_host, webserver):
+    def is_valid_series_set(cls, series, db_host, webserver, log):
+        cls.set_log(log)
+
         try:
             if db_host is None:
                 # if this method is called before URL arguments are parsed, then `db_host` is not known;
@@ -258,7 +261,7 @@ def determine_server(series, public_db_host, private_db_host, has_wl, wl_file):
     log = DetermineDbServerAction.get_log()
 
     with Connection(server=nested_arguments.server, listen_port=nested_arguments.listen_port, timeout=nested_arguments.message_timeout, log=log) as connection:
-        log.write_info([ f'[ perform_action] connection to socket server successful' ])
+        log.write_info([ f'[ determine_server] connection to socket server successful' ])
         series_obj = None
         supporting_server = False
         use_public_server = True
@@ -307,7 +310,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
             drms_params = DRMSParams()
 
             if drms_params is None:
-                raise ParameterError(error_message='unable to locate DRMS parameters file (drmsparams.py)')
+                raise ParametersError(error_message='unable to locate DRMS parameters file (drmsparams.py)')
 
             arguments = Arguments.get_arguments(is_program=is_program, program_name=program_name, program_args=program_args, module_args=module_args, drms_params=drms_params)
         except ArgsError as exc:
