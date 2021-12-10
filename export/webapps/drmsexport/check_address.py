@@ -250,7 +250,7 @@ class CheckAddressAction(Action):
         self._method = getattr(self, method)
         self._address = address
         self._options = {}
-        self._options['logging_level'] = log
+        self._options['log'] = log
         self._options['db_host'] = db_host
         self._options['db_port'] = db_port
         self._options['db_name'] = db_name
