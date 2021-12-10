@@ -183,7 +183,7 @@ class Arguments(Args):
                 arguments = Arguments(parser=parser, args=args)
             else:
                 # `program_args` has all `arguments` values, in final form; validate them
-                def extract_module_args(*, address, export_type, db_host, export_arguments, file_specification=None, log=log, logging_level='error', db_name=db_name, db_port=db_port, requestor=None, db_user=db_user, webserver=None):
+                def extract_module_args(*, address, export_type, db_host, export_arguments, file_specification=None, log=None, db_name=db_name, db_port=db_port, requestor=None, db_user=db_user, webserver=None):
                     arguments = {}
 
                     arguments['address'] = address
@@ -860,6 +860,8 @@ def send_request(request, connection, log):
 def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
     # catch all expections so we can always generate a response
     response = None
+    destination = None
+    generator = None
     log = None
 
     try:
@@ -945,9 +947,6 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
         #   status : export status (1, 2, 4, 6, 7)
         #   error : a string describing a jsoc_fetch error or null
         #   requestid : the export Request ID or null (for synchronous requests)
-        destination = None
-        generator = None
-
         try:
             export_arguments = arguments.export_arguments # dict
 
@@ -1027,7 +1026,7 @@ class InitiateRequestAction(Action):
           number-records : <maximum number of records exported>
         }
         '''
-        response = perform_action(action_obj=self, is_program=False, export_type='premium', request_action=self, address=self._address, db_host=self._db_host, export_arguments=self._export_arguments, options=self._options)
+        response = perform_action(action_obj=self, is_program=False, export_type='premium', address=self._address, db_host=self._db_host, export_arguments=self._export_arguments, options=self._options)
         return response
 
     def start_mini_export(self):
@@ -1039,7 +1038,7 @@ class InitiateRequestAction(Action):
           number-records : <maximum number of records exported>
         }
         '''
-        response = perform_action(action_obj=self, is_program=False, export_type='mini', request_action=self, address=self._address, db_host=self._db_host, export_arguments=self._export_arguments, options=self._options)
+        response = perform_action(action_obj=self, is_program=False, export_type='mini', address=self._address, db_host=self._db_host, export_arguments=self._export_arguments, options=self._options)
         return response
 
     def start_streamed_export(self):
@@ -1055,14 +1054,15 @@ class InitiateRequestAction(Action):
         return response
 
     def generate_headers(self):
-        if self.destination is not None and self.destination.header_extracted and self.destination.file_name is not None:
+        if self.destination is not None and self.destination['header_extracted'] and self.destination['file_name'] is not None:
             headers = Headers()
-            headers.add('Content-Disposition', 'attachment', filename=f'{self.destination.file_name}')
+            headers.add('Content-Disposition', 'attachment', filename=f'{self.destination["file_name"]}')
             headers.add('Content-Transfer-Encoding', 'BINARY')
             return headers
 
     @classmethod
-    def is_valid_arguments(cls, arguments_json, logging_level=None):
+    def is_valid_arguments(cls, arguments_json, log):
+        cls.set_log(log)
         is_valid = None
         try:
             json_loads(arguments_json)
@@ -1122,14 +1122,15 @@ class InitiateRequestAction(Action):
 
     @classmethod
     def set_log(cls, log=None):
-        cls._log = DrmsLog(None, None, None) if log is None else log
+        if cls._log is None:
+            cls._log = DrmsLog(None, None, None) if log is None else log
 
     @classmethod
     def get_log(cls):
         return cls._log
 
 if __name__ == "__main__":
-    response, (destination, generator) = perform_action(action_obj=None, is_program=True, request_action=None)
+    response, (destination, generator) = perform_action(action_obj=None, is_program=True)
 
     if not isinstance(response, ErrorCode):
         if response.status_code == StatusCode.REQUEST_GENERATOR_READY:
