@@ -277,7 +277,7 @@ def get_series_info_from_db(*, series, cursor, keywords=None, links=None, segmen
 
                     for row in rows:
                         if row[1].lower() not in keywords_with_info:
-                            series_info[series.lower()]['keywords'][row[1].lower()] = { 'data-type' : row[2], 'constant-value': row[5] if row[5] else 'na', 'physical-unit' : row[4], 'rank' : row[6], 'description' : row[7] }
+                            series_info[series.lower()]['keywords'][row[1].lower()] = { 'data-type' : row[2], 'constant-value': row[3] if row[5] else 'na', 'physical-unit' : row[4], 'rank' : row[6], 'description' : row[7] }
 
                             keywords_with_info.add(row[1].lower())
 
