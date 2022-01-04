@@ -110,6 +110,7 @@ var AIA_SCALE_CTYPE2 = 'HPLT-TAN';
 var KEYWORD_SPEC = '*spec*';
 var KEYWORD_ONLINE = '*online*';
 var KEYWORD_SIZE = '*size*';
+var KEYWORD_RECNUM = '*recnum*';
 var AIA_NAMESPACE = 'aia';
 var NA = 'na';
 var AIA_SCALE_NAXES = 2;
@@ -170,7 +171,7 @@ var MR_STATUS_NOT_PENDING = 'StatusCode.NOT_PENDING';
 var MR_STATUS_PENDING = 'StatusCode.PENDING';
 var MR_STATUS_REQUEST_CANCELED = 'StatusCode.REQUEST_CANCELED';
 
-var HTML_REQUESTID_DESC = 'This is your request ID; enter it below and click on "request status" to obtain the link to the data.';
+var HTML_REQUESTID_DESC = 'Enter this ID in RequestID (below) to obtain export status';
 
 var HELP_ADDRESS = 'jsoc_help@jsoc.stanford.edu';
 </script>
@@ -244,6 +245,7 @@ var MANAGE_REQUEST_ON_SUCCESS_INTERVAL = function(op, callback_fn)
 
             if (status.search(/errorcode/i) == 0)
             {
+                alert('error calling pend req status ' + str(status));
                 // error calling MR - do nothing (don't change state)
                 $("ExportButtonMsg").innerHTML = mr_response_obj.error_message;
                 error = true;
@@ -254,13 +256,13 @@ var MANAGE_REQUEST_ON_SUCCESS_INTERVAL = function(op, callback_fn)
             }
             else if (op == MR_OPERATION_CHECK)
             {
+                alert('pend req status result ' + JSON.stringify(status));
                 // action depends on state and status
                 if (status == MR_STATUS_NOT_PENDING)
                 {
                     if (state == EB_STATE_ENABLED)
                     {
                         state = EB_STATE_SUBMIT_ENABLED;
-                        $('ExportButton').store({ "ajax-state" : "pre-click" });
                     }
                     else if (state == EB_STATE_SUBMIT_ENABLED)
                     {
@@ -273,8 +275,9 @@ var MANAGE_REQUEST_ON_SUCCESS_INTERVAL = function(op, callback_fn)
                     }
                     else if (state == EB_STATE_CANCEL_ENABLED)
                     {
+                        alert('setting state to path');
                         state = EB_STATE_PATH;
-                        $('ExportButton').store({ "ajax-state" : "pre-click" });
+                        GetStatus();
                     }
                     else if (state == EB_STATE_PATH)
                     {
@@ -664,37 +667,35 @@ function OnEnterKey(evt,action)
 var previousSeries = "";
 function NotifyProcessingCode()
 {
-    // called when RecordSet is changed.
+    // called when RecordSet is changed, after series info and record info have been downloaded and assimilated.
     // Set flags to alert processing or method options here.
     // variables here will usually be defined in exportdata.d/processing.js
     // or exportdata.d/export_request_form.html
 
-    // SeriesName is determined asynchronously.
-    if (SeriesName == previousSeries)
-    {
-        SetProcessing(-1, null); // Do not initialize all processing options to their defaults.
-    }
-    else
-    {
-        SetProcessing(-2, null); // Init all processing options to their defaults.
-    }
+    // series is determined asynchronously.
+    var series = $('ExportRecordSet').retrieve('series', null);
+    var previous_series = $('ExportRecordSet').retrieve('previous_series', null);
 
-    previousSeries = SeriesName;
+    if (series !== null)
+    {
+        if (series === previous_series)
+        {
+            SetProcessing(-1, null); // Do not initialize all processing options to their defaults.
+        }
+        else
+        {
+            SetProcessing(-2, null); // Init all processing options to their defaults.
+        }
+
+        $('ExportRecordSet').store({ "previous_series" : series })
+    }
 }
 
 // Global vars
 var Host = location.host;
 var Internal = 0;
-var SeriesName;
 var SeriesInfo;
-var AiaLev1AttributesGlobal = null; // set in GetDefaultFormat()
-var AiaLev1KeywordsGlobal = null; // set in GetDefaultFormat()
-var firstRealSegment;
 var RequestID;
-var RecordLimit;
-var RecordCount = null; // Initialized in initVars(), Modified in GetRSCount()
-var ExportQueryOK;
-var ExportRecordSetOK;
 var ExportProcessingOptions;
 var ExportUserOK;
 var TipsEnabled;
@@ -717,8 +718,6 @@ var ProtocolOptionsSet = 0;
 // Misc vars
 var firstTimePrime;
 var expURL;
-var IsAia = null;
-var IsAiaLev1 = null; // is true, then we need to use the default file format string for aia.lev1p5
 
 // Colors
 var colorNeutral = "#D4D0C8";
@@ -748,14 +747,12 @@ function initVars()
     Internal = 1;
   else
     Internal = 0;
-  SeriesName = "";
   RequestID = "";
-  RecordCount = null;
-  $('ExportRecordSet').store({ 'count': RecordCount });
-  RecordLimit = 0;
-  ExportRecordSetOK = 0;
-  ExportQueryOK = 0;
-  ExportUserOK = 0;
+    $('ExportRecordSet').store({ "count" : null, "series" : null, "valid" : null });
+    update_record_set_ui(true);
+    $('ExportRecordLimit').value = 'none';
+    $('ExportRecordLimit').store({ "limit" : null })  
+ExportUserOK = 0;
   TipsEnabled = 1;
   firstTimePrime = "";
   ProcessingAllowed = 1;
@@ -783,6 +780,7 @@ function initVars()
   // if (state < 2)
   // Form init
     {
+    $('StatusButton').store({ "ajax-state" : "pre-click" })
     $("ExportRequestor").value = "";
     $("ExportStatus").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
     $('ExportRecordSet').value = "";
@@ -794,8 +792,6 @@ function initVars()
     $("ProcessingCheckbox").checked = 0;
     // Protocols
     $("ProtocolRow").style.display="none";
-    $('ExportProtocol').selectedIndex = 1;
-    $("ExportProtocolHidden").value = "FITS";
     $("ExportCompress").selectedIndex = 0;
     $("CompressRow").style.display="none";
     $("ProtocolImageOptions").style.display="none";
@@ -819,7 +815,6 @@ function initVars()
     $("TarFileLocationRow").style.display = "none";
     $("KeywordFileLocationRow").style.display = "none";
     $("ShowQueryCheckbox").checked = 0;
-    $("StatusRequestID").value = "";
     
     update_export_method_ui(true);
     }
@@ -830,7 +825,7 @@ function initVars()
     set_eb_state_disabled(false);
 
     $('ExportButton').store({ "reset" : true });
-    update_request_section_ui(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+    update_request_section_ui(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, false);
 
     $('StatusButton').store({ "reset" : true });
     update_status_section_ui(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
@@ -925,7 +920,7 @@ function on_load_init_callback()
 
     Cookie.init({ "name" : "exportdata", "expires" : 14});
     initVars(); // This call runs code that requires RecordSet to be set. However, that is not true
-              // before it is set below [ $("ExportRecordSet").value = args.ds ]
+              // before it is set below [ $('ExportRecordSet').value = args.ds ]
 
     if (Internal)
     {
@@ -950,26 +945,13 @@ function on_load_init_callback()
 
     if (args.limit)
     {
-        $("ExportRecordLimit").value = args.limit;
-
-        if (args.limit == "none")
-        {
-            RecordLimit = 0;
-        }
-        else
-        {
-            RecordLimit = args.limit;
-        }
+        $('ExportRecordLimit').value = args.limit;
+        update_record_limit_ui(false);
     }
 
-  if (needcount && $('ExportRecordSet').value != "")
+    if (needcount && $('ExportRecordSet').value != "")
     {
-        if (GetRSCount(null))
-        {
-            $("ExportCheckMsg").innerHTML = "Invalid record-set specification";
-        }
-
-        GetDefaultFormat();
+        update_record_set_ui(true);
     }
 
     CreateTips();
@@ -1138,16 +1120,18 @@ function ToggleHelp()
 <script type="text/javascript">
 
 
-// Check list of seriesnames for which processing options are not available for SeriesName spec given
+// Check list of series for which processing options are not available
 function CheckNoProcessingList()
   {
   var n = NoProcessingList.length;
   var i;
   var result = 1;
   var prior = ProcessingAllowed;
+    var series = $('ExportRecordSet').retrieve('series', null)
+
   for (i=0; i<n; i++)
     {
-        if (SeriesName == NoProcessingList[i])
+        if (series == NoProcessingList[i])
         {
             result = 0;
             break;
@@ -1165,9 +1149,7 @@ function CheckNoProcessingList()
 
 function file_upload_on_init()
   {
-  ExportQueryOK = 0;
   $('ExportRecordSet').value = "";
-  ExportRecordSetOK = 0;
   $('FileUploadCheckbox').checked = 0;
   $("RSCountPlace").innerHTML = "";
   $("ExportButton").value = "Submit Export Request";
@@ -1189,13 +1171,12 @@ function FileUploadWanted()
     // dirty since last time the CP button was clicked
     set_eb_state_disabled(true);
 
-    ExportQueryOK = 0;
     if (box_checked)
     {
         // box is now in checked state
         alert("effl 0");
         $('ExportRecordSet').value = '*file*';
-        ExportRecordSetOK = 1;
+        $('ExportRecordSet').store({ "valid" : true });
         $('RecordSetRow').style.display = 'none';
         $('RecordCountRow').style.display = 'none';
         $('ExportOpID').value = 'exp_request';
@@ -1289,15 +1270,15 @@ function create_export_endpoint_arguments(method)
 
     if (method === EXP_METH_QUICK)
     {
-       export_endpoint_arguments = { "file_name_format" : $('ExportFilenameFmt').value, "number_records" : parseInt($('ExportRecordLimit').value), "specification" : $('ExportRecordSet').value }; 
+       export_endpoint_arguments = { "file-name-format" : $('ExportFilenameFmt').value, "number-records" : get_max_records(), "specification" : $('ExportRecordSet').value }; 
     }
     else if (method == EXP_METH_STREAMED)
     {
-        export_endpoint_arguments = { "file_name_format" : $('ExportFilenameFmt').value, "specification" : $('ExportRecordSet').value };
+        export_endpoint_arguments = { "file-name-format" : $('ExportFilenameFmt').value, "specification" : $('ExportRecordSet').value };
     }
     else
     {
-        export_endpoint_arguments = { "access" : access, "package" : export_package, "specification" : $('ExportRecordSet').value, "file_format" : file_format, "file_format_args" : file_format_args, "file_name_format" : $('ExportFilenameFmt').value, "number_records" : parseInt($('ExportRecordLimit').value), "processing" : ProcessingObj };
+        export_endpoint_arguments = { "access" : access, "package" : export_package, "specification" : $('ExportRecordSet').value, "file-format" : file_format, "file-format-args" : file_format_args, "file-name-format" : $('ExportFilenameFmt').value, "number-records" : get_max_records(), "processing" : ProcessingObj };
     }
 
     alert('exp args ' + JSON.stringify(export_endpoint_arguments));
@@ -1361,6 +1342,9 @@ function MakeFileUploadRequest()
     $('ExportFormElement').submit();
 }
 
+</script>
+<script type="text/javascript">
+
 // called when file-upload response has loaded into the FileUploadFrame iframe
 function process_file_upload_response()
 {
@@ -1398,6 +1382,7 @@ function file_upload_on_complete()
 function CallLookdata()
   {
   var recset = $('ExportRecordSet').value;
+    var record_count = $('ExportRecordSet').retrieve('count', null);
   var posbracket = recset.indexOf("[");
   var posRbracket = recset.lastIndexOf("]");
   var posCurlbracket = recset.indexOf("{");
@@ -1412,10 +1397,9 @@ function CallLookdata()
         lookdataargs += "&rs=" + recfilt
     }
 
-    // I guess the RecordCount can never be negative.
-    if (RecordCount !== null && RecordCount > 0)
+    if (record_count !== null && record_count > 0)
     {
-        lookdataargs += "&n=" + RecordCount.toString();
+        lookdataargs += "&n=" + record_count.toString();
     }
 
   LookdataWindow=window.open("http://" + Host + "/ajax/" + LOOKDATA + ".html?" + encodeURIComponent(lookdataargs), "JSOC Lookdata");
@@ -1435,37 +1419,35 @@ function WlSeriesInfo()
 }
 
 // onSuccess() function for ParseSpec() 
-function CreateParseSpecResponse(processSpec)
+// callback assimilates parsed-spec info
+function CreateParseSpecOnSuccess(callback)
 {
-    var parseSpecResponseCallback = processSpec;
+    var on_success_fn = function(response)
+    {
+        var gri_response_obj = response.responseJSON;
+        var status = null;
+        var error_message = null;
 
-    var ParseSpecResponse =
-        function(response)
+        if (gri_response_obj !== null)
         {
-            var gri_response_obj = response.responseJSON;
-            var status = null;
-            var error_message = null;
+            status = gri_response_obj.drms_export_status;
+            error_message = null;
 
-            if (gri_response_obj !== null)
+            if (status.search(/errorcode/i) == 0)
             {
-                status = gri_response_obj.drms_export_status;
-                error_message = null;
-
-                if (status.search(/errorcode/i) == 0)
-                {
-                    error_message = 'failure parsing record-set specification: ' + JSON.stringify(gri_response_obj.error_message);
-                }
-
-                // gri_response_obj contains parsed spec data; use it
-                // callback closure
-                if (parseSpecResponseCallback !== null)
-                {
-                    parseSpecResponseCallback(error_message, gri_response_obj);
-                }
+                error_message = 'failure parsing record-set specification: ' + JSON.stringify(gri_response_obj.error_message);
             }
-        };
 
-    return ParseSpecResponse;
+            // gri_response_obj contains parsed spec data; use it
+            // callback closure
+            if (callback !== null)
+            {
+                callback(error_message, gri_response_obj);
+            }
+        }
+    };
+
+    return on_success_fn;
 }
 
 </script>
@@ -1473,8 +1455,9 @@ function CreateParseSpecResponse(processSpec)
 
 // parses record-set specification, but does not validate parts (could return a string which is a valid series name, but
 // of a series that does not exist
-// `processSpec` is function returned by CreateProcessSpec()
-function ParseSpec(spec, processSpec)
+// `processSpec` is function returned by CreateProcessParsedFn()
+// callback - assimilate parse-spec info; args error_message, data - called from on_success
+function ParseSpec(callback)
 {
     var export_app_arguments = null;
     var db_host = null;
@@ -1494,19 +1477,19 @@ function ParseSpec(spec, processSpec)
         db_host = INTERNAL_SERVER;
     }
 
-    export_app_arguments = { "specification" : spec, "db-host" : db_host, "parse-only" : true };
+    export_app_arguments = { "specification" : $('ExportRecordSet').value, "db-host" : db_host, "parse-only" : true };
 
-    on_success = CreateParseSpecResponse(processSpec);
+    on_success = CreateParseSpecOnSuccess(callback);
 
-    on_failure = function(error_message, response_obj)
+    on_failure = function(error_message)
     {
         $('RSCountPlace').innerHTML = error_message;
         $('ExportRecordSet').disabled = false;
         set_eb_state_disabled(true);
 
-        if (process_spec !== null)
+        if (callback !== null)
         {
-            process_spec(error_message, response_obj);
+            callback(error_message, null);
         }
     };
 
@@ -1518,17 +1501,15 @@ function ParseSpec(spec, processSpec)
         {
             var gri_response_obj = response.responseJSON;
             var error_message = 'failure parsing record-set specification: ' + JSON.stringfy(gri_response_obj.error_message);
-            var process_spec = processSpec;
 
-            on_failure(error_message, gri_response_obj);
+            on_failure(error_message);
         },
         on428: function(response)
         {
             var gri_response_obj = response.responseJSON;
             var error_message = 'invalid arguments to record-set endpoint: ' + JSON.stringfy(gri_response_obj.error_message);
-            var process_spec = processSpec;
 
-            on_failure(error_message, gri_response_obj);
+            on_failure(error_message);
         },
         onComplete: function()
         {
@@ -1544,263 +1525,292 @@ function ParseSpec(spec, processSpec)
 </script>
 <script type="text/javascript">
 
-// callback is processRecordCount
-function CreateRequestRSInfoCallback(callback, lastRecord)
+
+// callback is the code that enables/disables processing options
+function CreateAssimilateRecordInfoFn(callback)
 {
-    var processRSInfo =
-        function(response)
+    var assimilate_record_info_fn = function(error_message, gri_response_obj)
+    {
+        var resolved_error_message = error_message;
+        var status = null;
+        var aiaScaleCompatibilityChecked = null;
+        var compatible = null;
+        var online = null;
+        var size = null;
+        var index = null;
+        var valIndex = null;
+        var ctype1Checked = null;
+        var ctype2Checked = null;
+        var first_record_recnum = null;
+        var last_record_recnum = null;
+
+        if (resolved_error_message === null)
         {
-            var gri_response_obj = response.responseJSON;
-            var error_message = null;
-            var status = null;
-            var aiaScaleCompatibilityChecked = null;
-            var compatible = null;
-            var online = null;
-            var size = null;
-            var index = null;
-            var valIndex = null;
+            aiaScaleCompatibilityChecked = false;
 
-            if (gri_response_obj !== null)
+            $('ExportRecordSet').store({ "count" : gri_response_obj.count, "valid" : true });
+            $('RSCountPlace').innerHTML = gri_response_obj.count.toString();
+
+            aiaScaleCompatibilityChecked = ($('OptionAiaScale').retrieve('disabled_state', null) !== null);
+
+            // check for compatibility with aia_scale processing
+
+            // aia_scale compatibility has not yet been determined; check now
+            // loop through all records, checking the keyword criteria; jsoc_info
+            // does not provide hash-accessibility to keyword info, so must
+            // loop through all keywords
+            if (gri_response_obj.hasOwnProperty('keywords'))
             {
-                status = gri_response_obj.drms_export_status;
+                ctype1Checked = false;
+                ctype2Checked = false;
 
-                if (status.search(/errorcode/i) == 0)
+                if (aiaScaleCompatibilityChecked)
                 {
-                    error_message = 'failure getting record-set information: ' + status.error_message;
-                    RecordCount = null; // global
-                    $('ExportRecordSet').store({ 'count': RecordCount });
-                    $("RSCountPlace").innerHTML = error_message;
-                    ExportRecordSetOK = 0; // global
-                    SeriesName = ''; // global
-
-                    if (callback !== null)
-                    {
-                        callback(errMsg);
-                    }
+                    ctype1Checked = true;
+                    ctype2Checked = true;
                 }
                 else
                 {
-                    aiaScaleCompatibilityChecked = false;
+                    compatible = true;
+                }
 
-                    RecordCount = gri_response_obj.count; // global
-                    $('ExportRecordSet').store({ 'count': RecordCount });
-                    $("RSCountPlace").innerHTML = gri_response_obj.count.toString();
-                    ExportRecordSetOK = 1; // global
+                for (index = 0; index < gri_response_obj.keywords.length; index++)
+                {
+                    // we are assured that the CTYPE keywords will be in the jsoc_info results,
+                    // even if the series does not have those keywords; if a keyword
+                    // does not exist in the series, jsoc_info prints 'Invalid Keylink'
+                    // for the keyword value (as long as the keyword is specified in the keys argument
+                    // to jsoc_info)
+                    if (compatible && !ctype1Checked && gri_response_obj.keywords[index].name.strip().toLowerCase() == KEYWORD_CTYPE1.toLowerCase())
+                    {
+                        for (valIndex = 0; compatible && valIndex < gri_response_obj.keywords[index].values.length; valIndex++)
+                        {
+                            // loop over records
+                            if (gri_response_obj.keywords[index].values[valIndex] != AIA_SCALE_CTYPE1)
+                            {
+                                compatible = false;
+                                break;
+                            }
+                        }
 
-                    aiaScaleCompatibilityChecked = ($('OptionAiaScale').retrieve('disabled_state', null) !== null);
+                        ctype1Checked = true;
+                    }
 
-                    // check for compatibility with aia_scale processing
+                    if (compatible && !ctype2Checked && gri_response_obj.keywords[index].name.strip().toLowerCase() == KEYWORD_CTYPE2.toLowerCase())
+                    {
+                        for (valIndex = 0; compatible && valIndex < gri_response_obj.keywords[index].values.length; valIndex++)
+                        {
+                            // loop over records
+                            if (gri_response_obj.keywords[index].values[valIndex] != AIA_SCALE_CTYPE2)
+                            {
+                                compatible = false;
+                                break;
+                            }
+                        }
 
-                    // aia_scale compatibility has not yet been determined; check now
-                    // loop through all records, checking the keyword criteria; jsoc_info
-                    // does not provide hash-accessibility to keyword info, so must
-                    // loop through all keywords
+                        ctype2Checked = true;
+                    }
+
+                    // check to see if all SUs are online
+                    if (online === null && gri_response_obj.keywords[index].name.strip().toLowerCase() == KEYWORD_ONLINE.toLowerCase())
+                    {
+                        online = true;
+
+                        for (valIndex = 0; valIndex < gri_response_obj.keywords[index].values.length; valIndex++)
+                        {
+                            // loop over records
+                            if (gri_response_obj.keywords[index].values[valIndex].toLowerCase() != 'y')
+                            {
+                                online = false;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (size === null && gri_response_obj.keywords[index].name.strip().toLowerCase() == KEYWORD_SIZE.toLowerCase())
+                    {
+                        size = 0;
+
+                        for (var valIndex = 0; valIndex < gri_response_obj.keywords[index].values.length; valIndex++)
+                        {
+                            // loop over records
+                            size += gri_response_obj.keywords[index].values[valIndex];
+                        }
+                    }
+
+                    // set fist/last recnum state
+                    if (gri_response_obj.keywords[index].name.strip().toLowerCase() === KEYWORD_RECNUM.toLowerCase())
+                    {
+                        first_record_recnum = gri_response_obj.keywords[index].values[0];
+                        last_record_recnum = gri_response_obj.keywords[index].values[gri_response_obj.keywords[index].values.length - 1];
+                        $('ExportRecordSet').store({ "first_record_recnum" : first_record_recnum, "last_record_recnum" : last_record_recnum });
+                    }
+
+                    if (ctype1Checked && ctype2Checked && online !== null && size != null)
+                    {
+                        break;
+                    }
+                }
+            }
+            else if (!aiaScaleCompatibilityChecked)
+            {
+                // no keyword information was returned by jsoc_info, so we cannot tell if this series;
+                // this happens if no rows were returned
+                compatible = false;
+            }
+
+            if (!aiaScaleCompatibilityChecked)
+            {
+                // we definitively know whether or not aia_scale processing should be disabled
+                if (compatible)
+                {
+                    $('OptionAiaScale').store({ 'disabled_state' : false });
+                }
+                else
+                {
+                    $('OptionAiaScale').store({ 'disabled_state' : true });
+                }
+            }
+
+            if (online)
+            {
+                $('ExportRecordSet').store({ 'allSUsOnline' : true });
+            }
+            else
+            {
+                $('ExportRecordSet').store({ 'allSUsOnline' : false });
+            }
+
+            $('ExportRecordSet').store({ 'sizeSU' : size });
+
+            if (!$('OptionAiaScale').retrieve('disabled_state', false))
+            {
+                // this series' first segment has a 2D-image with a CTYPE1 value of 'HPLN-TAN' and a CTYPE2 value of 'HPLT-TAN' so
+                // it is compatible with aia_scale processing; the code to determine this is split between processSeriesSelection and
+                // processRSInfo
+
+                // this should remain disabled until all asynchronous processing completes
+                $('OptionAiaScaleLabel').innerHTML = 'aia_scale - Scale image to 0.6 arcsec/pixel';
+                $('OptionAiaScaleLabel').setStyle({ color: 'black' });
+
+                // the determination of which aia_scale proc to use was already determined; in processSeriesSelection()
+                // a check of the LVL_NUM keyword was performed; this keyword must be constant, since a series cannot be
+                // a mix of levels
+                if ($('ExportRecordSet').retrieve('is_aia_lev1', null) === null && $('ExportRecordSet').retrieve('is_aia', false))
+                {
                     if (gri_response_obj.hasOwnProperty('keywords'))
                     {
-                        var ctype1Checked = false;
-                        var ctype2Checked = false;
-
-                        if (aiaScaleCompatibilityChecked)
-                        {
-                            ctype1Checked = true;
-                            ctype2Checked = true;
-                        }
-                        else
-                        {
-                            compatible = true;
-                        }
-
                         for (index = 0; index < gri_response_obj.keywords.length; index++)
                         {
-                            // we are assured that the CTYPE keywords will be in the jsoc_info results,
-                            // even if the series does not have those keywords; if a keyword
-                            // does not exist in the series, jsoc_info prints 'Invalid Keylink'
-                            // for the keyword value (as long as the keyword is specified in the keys argument
-                            // to jsoc_info)
-                            if (compatible && !ctype1Checked && gri_response_obj.keywords[index].name.strip().toLowerCase() == KEYWORD_CTYPE1.toLowerCase())
+                            // loop over keywords
+                            if (gri_response_obj.keywords[index].name.strip().toLowerCase() == KEYWORD_LVL_NUM.toLowerCase())
                             {
-                                for (valIndex = 0; compatible && valIndex < gri_response_obj.keywords[index].values.length; valIndex++)
-                                {
-                                    // loop over records
-                                    if (gri_response_obj.keywords[index].values[valIndex] != AIA_SCALE_CTYPE1)
-                                    {
-                                        compatible = false;
-                                        break;
-                                    }
-                                }
-
-                                ctype1Checked = true;
-                            }
-
-                            if (compatible && !ctype2Checked && gri_response_obj.keywords[index].name.strip().toLowerCase() == KEYWORD_CTYPE2.toLowerCase())
-                            {
-                                for (valIndex = 0; compatible && valIndex < gri_response_obj.keywords[index].values.length; valIndex++)
-                                {
-                                    // loop over records
-                                    if (gri_response_obj.keywords[index].values[valIndex] != AIA_SCALE_CTYPE2)
-                                    {
-                                        compatible = false;
-                                        break;
-                                    }
-                                }
-
-                                ctype2Checked = true;
-                            }
-
-                            // check to see if all SUs are online
-                            if (online === null && gri_response_obj.keywords[index].name.strip().toLowerCase() == KEYWORD_ONLINE.toLowerCase())
-                            {
-                                online = true;
+                                $('ExportRecordSet').store('is_aia_lev1', true);
 
                                 for (valIndex = 0; valIndex < gri_response_obj.keywords[index].values.length; valIndex++)
                                 {
-                                    // loop over records
-                                    if (gri_response_obj.keywords[index].values[valIndex].toLowerCase() != 'y')
+                                    // loop over records (one value element per DRMS record)
+                                    var lvlnumString = gri_response_obj.keywords[index].values[valIndex];
+                                    var lvlnum = null;
+
+                                    // the series has a LVL_NUM constant keyword
+                                    // round so we can compare floats
+                                    lvlnum = Math.floor(10 * (parseFloat(lvlnumString) + 0.02)); // level numbers should be much farther apart than 0.02
+
+                                    if (lvlnum != 10)
                                     {
-                                        online = false;
+                                        /* this is NOT an aia lev1 series */
+                                        $('ExportRecordSet').store('is_aia_lev1', false);
                                         break;
                                     }
                                 }
-                            }
 
-                            if (size === null && gri_response_obj.keywords[index].name.strip().toLowerCase() == KEYWORD_SIZE.toLowerCase())
-                            {
-                                size = 0;
-
-                                for (var valIndex = 0; valIndex < gri_response_obj.keywords[index].values.length; valIndex++)
-                                {
-                                    // loop over records
-                                    size += gri_response_obj.keywords[index].values[valIndex];
-                                }
-                            }
-
-                            if (ctype1Checked && ctype2Checked && online !== null && size != null)
-                            {
-                                break;
+                                break; // look only at the LVL_NUM keyword
                             }
                         }
                     }
-                    else if (!aiaScaleCompatibilityChecked)
+                }
+            }
+            else
+            {
+                // not compatible with aia_scale processing
+
+                // this should remain disabled until all asynchronous processing completes
+                $('OptionAiaScaleLabel').innerHTML = 'aia_scale - Scale image to 0.6 arcsec/pixel (compatible with 2D dataseries with CTYPE1 == HPLN-TAN and CTYPE2 == HPLT-TAN only)'
+                $('OptionAiaScaleLabel').setStyle({ color: 'grey' });
+
+                // uncheck the aia_scale checkbox if it is currently checked
+                if ($('OptionAiaScale').checked)
+                {
+                    $('OptionAiaScale').checked = false;
+                }
+            }
+
+            // if the user has specified the current record with [$], then replace [$] with the record-specification
+            if ($('ExportRecordSet').retrieve('last_record', false) && gri_response_obj.hasOwnProperty('keywords'))
+            {
+                for (index = 0; index < gri_response_obj.keywords.length; index++)
+                {
+                    if (gri_response_obj.keywords[index].name.strip().toLowerCase() == '*spec*' && gri_response_obj.keywords[index].values.length == 1)
                     {
-                        // no keyword information was returned by jsoc_info, so we cannot tell if this series;
-                        // this happens if no rows were returned
-                        compatible = false;
+                        $('ExportRecordSet').value = gri_response_obj.keywords[index].values[0];
+                        break;
                     }
+                }
+            }
+        }
 
-                    if (!aiaScaleCompatibilityChecked)
-                    {
-                        // we definitively know whether or not aia_scale processing should be disabled
-                        if (compatible)
-                        {
-                            $('OptionAiaScale').store({ 'disabled_state' : false });
-                        }
-                        else
-                        {
-                            $('OptionAiaScale').store({ 'disabled_state' : true });
-                        }
-                    }
+        if (callback !== null)
+        {
+            callback(resolved_error_message);
+        }
+    };
 
-                    if (online)
-                    {
-                        $('ExportRecordSet').store({ 'allSUsOnline' : true });
-                    }
-                    else
-                    {
-                        $('ExportRecordSet').store({ 'allSUsOnline' : false });
-                    }
+    return assimilate_record_info_fn;
+}
 
-                    $('ExportRecordSet').store({ 'sizeSU' : size });
+</script>
+<script type="text/javascript">
 
-                    if (!$('OptionAiaScale').retrieve('disabled_state', false))
-                    {
-                        // this series' first segment has a 2D-image with a CTYPE1 value of 'HPLN-TAN' and a CTYPE2 value of 'HPLT-TAN' so
-                        // it is compatible with aia_scale processing; the code to determine this is split between processSeriesSelection and
-                        // processRSInfo
+// callback is code that assimilates the gri_response_obj; it calls the code that enables/disables processing options
+function CreateDownloadRecordInfoOnSuccess(callback)
+{
+    var on_success_fn = function(response)
+    {
+        var gri_response_obj = response.responseJSON;
+        var error_message = null;
+        var status = null;
+        var aiaScaleCompatibilityChecked = null;
+        var compatible = null;
+        var online = null;
+        var size = null;
+        var index = null;
+        var valIndex = null;
 
-                        // this should remain disabled until all asynchronous processing completes
-                        $('OptionAiaScaleLabel').innerHTML = 'aia_scale - Scale image to 0.6 arcsec/pixel';
-                        $('OptionAiaScaleLabel').setStyle({ color: 'black' });
+        if (gri_response_obj !== null)
+        {
+            status = gri_response_obj.drms_export_status;
 
-                        // the determination of which aia_scale proc to use was already determined; in processSeriesSelection()
-                        // a check of the LVL_NUM keyword was performed; this keyword must be constant, since a series cannot be
-                        // a mix of levels
-                        if (IsAiaLev1 === null && IsAia)
-                        {
-                            if (gri_response_obj.hasOwnProperty('keywords'))
-                            {
-                                for (index = 0; index < gri_response_obj.keywords.length; index++)
-                                {
-                                    // loop over keywords
-                                    if (gri_response_obj.keywords[index].name.strip().toLowerCase() == KEYWORD_LVL_NUM.toLowerCase())
-                                    {
-                                        IsAiaLev1 = true;
+            if (status.search(/errorcode/i) == 0)
+            {
+                error_message = 'failure getting record-set information: ' + status.error_message;
+                $('ExportRecordSet').store({ "count" : null, "valid" : false });
+                $("RSCountPlace").innerHTML = error_message;
 
-                                        for (valIndex = 0; valIndex < gri_response_obj.keywords[index].values.length; valIndex++)
-                                        {
-                                            // loop over records (one value element per DRMS record)
-                                            var lvlnumString = gri_response_obj.keywords[index].values[valIndex];
-                                            var lvlnum = null;
-
-                                            // the series has a LVL_NUM constant keyword
-                                            // round so we can compare floats
-                                            lvlnum = Math.floor(10 * (parseFloat(lvlnumString) + 0.02)); // level numbers should be much farther apart than 0.02
-
-                                            if (lvlnum != 10)
-                                            {
-                                                /* this is NOT an aia lev1 series */
-                                                IsAiaLev1 = false;
-                                                break;
-                                            }
-                                        }
-
-                                        break; // look only at the LVL_NUM keyword
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    else
-                    {
-                        // not compatible with aia_scale processing
-
-                        // this should remain disabled until all asynchronous processing completes
-                        $('OptionAiaScaleLabel').innerHTML = 'aia_scale - Scale image to 0.6 arcsec/pixel (compatible with 2D dataseries with CTYPE1 == HPLN-TAN and CTYPE2 == HPLT-TAN only)'
-                        $('OptionAiaScaleLabel').setStyle({ color: 'grey' });
-
-                        // uncheck the aia_scale checkbox if it is currently checked
-                        if ($('OptionAiaScale').checked)
-                        {
-                            $('OptionAiaScale').checked = false;
-                        }
-                    }
-
-                    // if the user has specified the current record with [$], then replace [$] with the record-specification
-                    if (lastRecord && gri_response_obj.hasOwnProperty('keywords'))
-                    {
-                        for (index = 0; index < gri_response_obj.keywords.length; index++)
-                        {
-                            if (gri_response_obj.keywords[index].name.strip().toLowerCase() == '*spec*' && gri_response_obj.keywords[index].values.length == 1)
-                            {
-                                $('ExportRecordSet').value = gri_response_obj.keywords[index].values[0];
-                                break;
-                            }
-                        }
-                    }
+                if (callback !== null)
+                {
+                    callback(error_message, gri_response_obj);
                 }
             }
 
             if (callback !== null)
             {
-                if (!ExportRecordSetOK)
-                {
-                    error_message = $("RSCountPlace").innerHTML;
-                }
-
-                callback(error_message);
+                callback(error_message, gri_response_obj);
             }
-        };
+        }
+    };
 
-    return processRSInfo;
+    return on_success_fn;
 }
 
 // tester success
@@ -1817,6 +1827,7 @@ function CreateObtainFastRecordCountCallback(callback)
         {
             var gri_response_obj = response.responseJSON;
             var status = null;
+            var number_records = null;
             var error_message = null;
 
             if (gri_response_obj !== null)
@@ -1826,29 +1837,19 @@ function CreateObtainFastRecordCountCallback(callback)
                 if (status.search(/errorcode/i) == 0)
                 {
                     error_message = 'failure counting records: ' + JSON.stringify(gri_response_obj.error_message);
-                    RecordCount = null; // global
-                    $('ExportRecordSet').store({ 'count': RecordCount });
-                    $("RSCountPlace").innerHTML = error_message;
-                    ExportRecordSetOK = 0; // global
+                    $('RSCountPlace').innerHTML = error_message;
                 }
                 else
                 {
                     // 'StatusCode.SUCCESS' is the only other possible status
-                    RecordCount = gri_response_obj.count; // global
-                    $('ExportRecordSet').store({ 'count': RecordCount });
-                    $("RSCountPlace").innerHTML = gri_response_obj.count;
-                    ExportRecordSetOK = 1; // global
+                    number_records = gri_response_obj.count;
+                    $('RSCountPlace').innerHTML = number_records;
                 }
+
+                $('ExportRecordSet').store({ "count" : number_records, "valid" : (error_message === null) })
 
                 if (callback !== null)
                 {
-                    error_message = null;
-
-                    if (!ExportRecordSetOK)
-                    {
-                        error_message = $("RSCountPlace").innerHTML;
-                    }
-
                     callback(error_message);
                 }
             }
@@ -1894,7 +1895,7 @@ function ObtainFastRecordCount(errMsg, spec, callback)
             db_host = INTERNAL_SERVER;
         }
 
-        export_app_arguments = { "specification" : spec, "db-host" : db_host, "number-records" : RecordLimit };
+        export_app_arguments = { "specification" : spec, "db-host" : db_host, "number-records" : get_max_records() };
 
         // callback is processRecordCount; response.count has record count
         on_success = CreateObtainFastRecordCountCallback(callback);
@@ -1903,11 +1904,8 @@ function ObtainFastRecordCount(errMsg, spec, callback)
         {
             var callback = callback;
 
-            RecordCount = null;
-            $('ExportRecordSet').store({ 'count': RecordCount });
+            $('ExportRecordSet').store({ "count" : null, "series" : null, "valid" : false });
             $('RSCountPlace').innerHTML = error_message;
-            ExportRecordSetOK = 0;
-            SeriesName = '';
             $('ExportRecordSet').disabled = false;
             set_eb_state_disabled(true);
 
@@ -1949,7 +1947,8 @@ function ObtainFastRecordCount(errMsg, spec, callback)
 <script type="text/javascript">
 
 // if errMsg, then do not call jsoc_info, but we still have to call the callback (which is processRecordCount)
-function RequestRSInfo(errMsg, spec, lastRecord, callback)
+// callback is code that assimilates the gri_response_obj; it calls the code that enables/disables processing options
+function DownloadRecordInfo(callback)
 {
     var export_app_arguments = null;
     var options = null;
@@ -1958,76 +1957,65 @@ function RequestRSInfo(errMsg, spec, lastRecord, callback)
     var on_success = null;
     var on_failure = null;
 
-    if (errMsg && errMsg.length != 0)
+    // if this is the external host, then use jsocinfointext; this CGI will choose the correct db server to handle the series;
+    // if this is the internal host, then use jsoc_info, which will use the internal db server; Host, RecordLimit and EXTERNAL_SERVER
+    // are globals
+    origin = ExportOrigin(null);
+
+    if (origin[0] == 'extServer')
     {
-        if (callback !== null)
-        {
-            callback(errMsg);
-        }
+        db_host = EXTERNAL_SERVER;
     }
     else
     {
-        // if this is the external host, then use jsocinfointext; this CGI will choose the correct db server to handle the series;
-        // if this is the internal host, then use jsoc_info, which will use the internal db server; Host, RecordLimit and EXTERNAL_SERVER
-        // are globals
-        origin = ExportOrigin(null);
-
-        if (origin[0] == 'extServer')
-        {
-            db_host = EXTERNAL_SERVER;
-        }
-        else
-        {
-            db_host = INTERNAL_SERVER;
-        }
-
-        export_app_arguments = { "specification" : spec, "db-host" : db_host, "number-records" : RecordLimit, "keywords" : [ KEYWORD_CTYPE1 + ',' + KEYWORD_CTYPE2 + ',' + KEYWORD_LVL_NUM + ',' + KEYWORD_SPEC + ',' + KEYWORD_ONLINE + ',' + KEYWORD_SIZE ] };
-
-        on_success = CreateRequestRSInfoCallback(callback, lastRecord);
-
-        on_failure = function(error_message)
-        {
-            var callback = callback;
-
-            RecordCount = null;
-            $('ExportRecordSet').store({ 'count': RecordCount });
-            $('RSCountPlace').innerHTML = error_message;
-            ExportRecordSetOK = 0;
-            SeriesName = '';
-            $('ExportRecordSet').disabled = false;
-            set_eb_state_disabled(true);
-
-            if (callback)
-            {
-                callback(error_message);
-            }
-        };
-
-        options =
-        {
-            method: 'get',
-            onSuccess: on_success,
-            onFailure: function(response)
-            {
-                var error_message = 'failure getting record-set information: ' + JSON.stringify(response.responseJSON.error_message);
-
-                return on_failure(error_message);
-            },
-            on428: function(response)
-            {
-                var error_message = 'invalid arguments to record-set endpoint: ' + JSON.stringify(response.responseJSON.error_message);
-
-                return on_failure(error_message);
-            },
-            onComplete: function(response)
-            {
-            }
-        };
-
-        options['parameters'] = export_app_arguments;
-
-        new Ajax.Request(window.location.origin + RECORD_SET_PATH, options);
+        db_host = INTERNAL_SERVER;
     }
+
+    export_app_arguments = { "specification" : $('ExportRecordSet').value, "db-host" : db_host, "number-records" : get_max_records(), "keywords" : [ KEYWORD_CTYPE1 + ',' + KEYWORD_CTYPE2 + ',' + KEYWORD_LVL_NUM + ',' + KEYWORD_SPEC + ',' + KEYWORD_ONLINE + ',' + KEYWORD_SIZE + ',' + KEYWORD_RECNUM ] };
+
+    on_success = CreateDownloadRecordInfoOnSuccess(callback);
+
+    on_failure = function(error_message)
+    {
+        var callback = callback;
+
+        $('ExportRecordSet').store({ "count" : null, "series" : null, "valid" : false });
+        $('RSCountPlace').innerHTML = error_message;
+        $('ExportRecordSet').disabled = false;
+        set_eb_state_disabled(true);
+
+        if (callback)
+        {
+            callback(error_message);
+        }
+    };
+
+    options =
+    {
+        method: 'get',
+        onSuccess: on_success,
+        onFailure: function(response)
+        {
+            var error_message = 'failure getting record-set information: ' + JSON.stringify(response.responseJSON.error_message);
+
+            return on_failure(error_message);
+        },
+        on428: function(response)
+        {
+            var error_message = 'invalid arguments to record-set endpoint: ' + JSON.stringify(response.responseJSON.error_message);
+
+            return on_failure(error_message);
+        },
+        onComplete: function(response)
+        {
+        }
+    };
+
+    $('RSCountPlace').innerHTML = RSCountActiveMSg;
+
+    options['parameters'] = export_app_arguments;
+
+    new Ajax.Request(window.location.origin + RECORD_SET_PATH, options);
 }
 
 // tester success
@@ -2057,21 +2045,12 @@ function CreateExportDownloadLink(err, callback)
     }
     else
     {
-        // XXX check to see if count is null - if so, then run requestRSInfo()
-        var count = $('ExportRecordSet').retrieve('count', null);
-        var sizeSU = $('ExportRecordSet').retrieve('sizeSU', null);
-
         Cookie.setData("state", 0);
         Cookie.setData("requestid", "");
 
         $("ExportButtonMsg").innerHTML = 'Please use the link below to download data prior to initiating a new request';
         $("ExportButton").value = 'Submit Export Request'; // if user clicks, then export-complete message displays
         $("ExportButton").style.backgroundColor = "#D8D8D8"; // grey
-
-        RequestID = 'N/A';
-        $("RequestIdPlace").update(RequestID);
-        $("RequestIDDesc").update("");
-        $("ExportStatus").update("Download size = " + Math.round(10 * sizeSU/1024/1024) / 10 + " MB");
 
         host = Host.toLowerCase();
         args.dbhost = serverMap[host];
@@ -2082,14 +2061,17 @@ function CreateExportDownloadLink(err, callback)
 
         // make an href - when the user clicks on this link, either a save-file dialog will display or, if the user
         // has set-up their mime-type file association, the file will display in a viewer like ds9
-        $('DataLocation').update('Download');
 
         // disable the beforeunload event handler
         $('ExportLocation').observe('click', function(event) { window.onbeforeunload = null; $('FileUploadFormID').store({ 'beforeunloadOverride' : true }); });
         // make an href - when the user clicks on this link, either a save-file dialog will display or, if the user
         // has set-up their mime-type file association, the file will display in a viewer like ds9
         linkUrl = new Element('a', { 'href' : url } ).update(args.spec);
-        $('ExportLocation').update(linkUrl);
+
+        $('DataLocation').store({ "header" : "Download" });
+        $('ExportLocation').store({ "link" : linkUrl });
+
+        update_request_section_ui(null, null, null, null, $('ExportRecordSet').retrieve('sizeSU', null), null, null, null, null, null, null, null, null, null, null, false);
     }
 
     if (callback !== null)
@@ -2098,132 +2080,169 @@ function CreateExportDownloadLink(err, callback)
     }
 }
 
-// callback is requestRSInfo
-function CreateProcessSeriesSelection(spec, series, seriesNs, callback)
+// callback is code that enables/disables processing items
+function CreateAssimilateSeriesInfoFn(callback)
 {
-    var processSeriesSelection =
-        function(response)
+    var assimilate_series_info_fn = function(error_message, gsi_response_obj)
+    {
+        // 'StatusCode.SUCCESS' is the only other possible status
+        // successfully obtained series info
+        var compatible = null;
+        var series = $('ExportRecordSet').retrieve('series', null);
+        var series_ns = $('ExportRecordSet').retrieve('series_ns', null);
+        var keywordsObj = null;
+        var resolved_error_message = error_message;
+
+        if (resolved_error_message === null)
         {
-            var gsi_response_obj = response.responseJSON;
-            var error_message = null;
-            var status = null;
-
-            if (gsi_response_obj !== null)
+            if (series === null || series_ns === null)
             {
-                status = gsi_response_obj.drms_export_status;
-
-                if (status.search(/errorcode/i) == 0)
+                resolved_error_message = 'unable to retrieve series information; series not provided';
+            }
+            else
+            {
+                for (var segment in gsi_response_obj[series.toLowerCase()].segments)
                 {
-                    error_message = 'failure getting series information: ' + JSON.stringify(gsi_response_obj.error_message);
-                    RecordCount = null; // global
-                    $('ExportRecordSet').store({ 'count': RecordCount });
-                    $("RSCountPlace").innerHTML = error_message;
-                    SeriesName = ''; //global
-                }
-                else
-                {
-                    // 'StatusCode.SUCCESS' is the only other possible status
-                    // successfully obtained series info
-                    var compatible = null;
-                    var keywordsObj = null;
-
-                    for (var segment in gsi_response_obj[series.toLowerCase()].segments)
+                    if (gsi_response_obj[series.toLowerCase()].segments.hasOwnProperty(segment))
                     {
-                        if (gsi_response_obj[series.toLowerCase()].segments.hasOwnProperty(segment))
+                        if ((parseInt(gsi_response_obj[series.toLowerCase()].segments[segment]['segment-number']) == 0) &&
+                             (parseInt(gsi_response_obj[series.toLowerCase()].segments[segment]['number-axes']) != 2))
                         {
-                            if ((parseInt(gsi_response_obj[series.toLowerCase()].segments[segment]['segment-number']) == 0) &&
-                                 (parseInt(gsi_response_obj[series.toLowerCase()].segments[segment]['number-axes']) != 2))
-                            {
-                                // we know that aia_scale should definitely be disabled; store that information now so we can skip
-                                // the secondary check in processRSInfo
-                                $('OptionAiaScale').store({ 'disabled_state' : true });
-                                compatible = false;
-                                break;
-                            }
-                        }
-                    }
-
-                    keywordsObj = gsi_response_obj[series.toLowerCase()].keywords;
-
-                    if (compatible === null)
-                    {
-                        // compatibility not yet determined
-                        if (!keywordsObj.hasOwnProperty(KEYWORD_CTYPE1.toLowerCase()) || !keywordsObj.hasOwnProperty(KEYWORD_CTYPE2.toLowerCase()))
-                        {
+                            // we know that aia_scale should definitely be disabled; store that information now so we can skip
+                            // the secondary check in processRSInfo
+                            $('OptionAiaScale').store({ 'disabled_state' : true });
                             compatible = false;
-                        }
-                        else
-                        {
-                            if ((keywordsObj[KEYWORD_CTYPE1.toLowerCase()]['constant-value'] != AIA_SCALE_CTYPE1 &&
-                                 keywordsObj[KEYWORD_CTYPE1.toLowerCase()]['constant-value'] != NA) ||
-                                (keywordsObj[KEYWORD_CTYPE2.toLowerCase()]['constant-value'] != AIA_SCALE_CTYPE2 &&
-                                 keywordsObj[KEYWORD_CTYPE2.toLowerCase()]['constant-value'] != NA))
-                            {
-                                // we know that aia_scale should definitely be disabled; store that information now so we can skip
-                                // the secondary check in
-                                $('OptionAiaScale').store({ 'disabled_state' : true });
-                                compatible = false;
-                            }
+                            break;
                         }
                     }
+                }
 
-                    // we can also determine compatibility with the MPT-selection check box
-                    if (seriesNs.toLowerCase() == AIA_NAMESPACE)
+                keywordsObj = gsi_response_obj[series.toLowerCase()].keywords;
+
+                if (compatible === null)
+                {
+                    // compatibility not yet determined
+                    if (!keywordsObj.hasOwnProperty(KEYWORD_CTYPE1.toLowerCase()) || !keywordsObj.hasOwnProperty(KEYWORD_CTYPE2.toLowerCase()))
                     {
-                        $('AiaScaleUseMptCheckbox').disabled = false;
-                        $('AiaScaleUseMptCheckboxLabel').innerHTML = 'Use a master pointing table to scale images (instead of keyword values)&nbsp';
-                        $('AiaScaleUseMptCheckboxLabel').setStyle({ color: 'black' });
+                        compatible = false;
                     }
                     else
                     {
-                        $('AiaScaleUseMptCheckbox').disabled = true;
-                        $('AiaScaleUseMptCheckboxLabel').innerHTML = 'Use a master pointing table to scale images (instead of keyword values - compatible with AIA series only)&nbsp';
-                        $('AiaScaleUseMptCheckboxLabel').setStyle({ color: 'grey' });
-                    }
-
-                    // finally, if KEYWORD_LVL_NUM is constant in an AIA series, then set the aia_scale processing flag that determines
-                    // which aia_scale proc is used
-                    if (seriesNs.toLowerCase() == AIA_NAMESPACE)
-                    {
-                        IsAia = true;
-
-                        if (keywordsObj.hasOwnProperty(KEYWORD_LVL_NUM.toLowerCase()))
+                        if ((keywordsObj[KEYWORD_CTYPE1.toLowerCase()]['constant-value'] != AIA_SCALE_CTYPE1 &&
+                             keywordsObj[KEYWORD_CTYPE1.toLowerCase()]['constant-value'] != NA) ||
+                            (keywordsObj[KEYWORD_CTYPE2.toLowerCase()]['constant-value'] != AIA_SCALE_CTYPE2 &&
+                             keywordsObj[KEYWORD_CTYPE2.toLowerCase()]['constant-value'] != NA))
                         {
-                            var lvlnumString = keywordsObj[KEYWORD_LVL_NUM.toLowerCase()]['constant-value'];
-                            var lvlnum = null;
+                            // we know that aia_scale should definitely be disabled; store that information now so we can skip
+                            // the secondary check in
+                            $('OptionAiaScale').store({ 'disabled_state' : true });
+                            compatible = false;
+                        }
+                    }
+                }
 
-                            if (lvlnumString != NA)
+
+                // we can also determine compatibility with the MPT-selection check box
+                if (series_ns.toLowerCase() == AIA_NAMESPACE)
+                {
+                    $('AiaScaleUseMptCheckbox').disabled = false;
+                    $('AiaScaleUseMptCheckboxLabel').innerHTML = 'Use a master pointing table to scale images (instead of keyword values)&nbsp';
+                    $('AiaScaleUseMptCheckboxLabel').setStyle({ color: 'black' });
+                }
+                else
+                {
+                    $('AiaScaleUseMptCheckbox').disabled = true;
+                    $('AiaScaleUseMptCheckboxLabel').innerHTML = 'Use a master pointing table to scale images (instead of keyword values - compatible with AIA series only)&nbsp';
+                    $('AiaScaleUseMptCheckboxLabel').setStyle({ color: 'grey' });
+                }
+
+                // finally, if KEYWORD_LVL_NUM is constant in an AIA series, then set the aia_scale processing flag that determines
+                // which aia_scale proc is used
+                if (series_ns.toLowerCase() == AIA_NAMESPACE)
+                {
+                    $('ExportRecordSet').store('is_aia', true);
+
+                    if (keywordsObj.hasOwnProperty(KEYWORD_LVL_NUM.toLowerCase()))
+                    {
+                        var lvlnumString = keywordsObj[KEYWORD_LVL_NUM.toLowerCase()]['constant-value'];
+                        var lvlnum = null;
+
+                        if (lvlnumString != NA)
+                        {
+                            // the series has a LVL_NUM constant keyword
+                            // round so we can compare floats
+                            lvlnum = Math.floor(10 * (parseFloat(lvlnumString) + 0.02)); // level numbers should be much farther apart than 0.02
+
+                            if (lvlnum == 10)
                             {
-                                // the series has a LVL_NUM constant keyword
-                                // round so we can compare floats
-                                lvlnum = Math.floor(10 * (parseFloat(lvlnumString) + 0.02)); // level numbers should be much farther apart than 0.02
-
-                                if (lvlnum == 10)
-                                {
-                                    /* this is an aia lev1 series */
-                                    IsAiaLev1 = true;
-                                }
+                                /* this is an aia lev1 series */
+                                $('ExportRecordSet').store({ "is_aia_lev1" : true });
                             }
                         }
                     }
-
                 }
-            }
 
-            if (callback !== null)
-            {
-                callback(error_message);
-            }
-        };
+                // cache series info
+                series_cache = $('ExportRecordSet').retrieve('series_cache', null);
 
-    return processSeriesSelection;
+                if (series_cache !== null && series !== null && (series_cache[series.toLowerCase()] === undefined || series_cache[series.toLowerCase()] === null))
+                {
+                    series_cache[series.toLowerCase()] = gsi_response_obj[series.toLowerCase()];
+                }
+
+                // GenerateFileFormatString does the following:
+                //    file format string, first segment, first time-prime key
+                GenerateFileFormatString(gsi_response_obj);
+                var ii = 1;
+            }
+        }
+
+        if (callback !== null)
+        {
+            callback(resolved_error_message);
+        }
+    }
+
+    return assimilate_series_info_fn;
 }
 
-// tester success
-</script>
-<script type="text/javascript">
 
-function RequestSeriesInfo(series, process_series_on_success, callback)
+// callback is code that assimilates the gri_response_obj; it calls the code that enables/disables processing options
+function CreateDownloadSeriesInfoOnSuccess(callback)
+{
+    var on_success_fn = function(response)
+    {
+        var gsi_response_obj = response.responseJSON;
+        var error_message = null;
+        var series = $('ExportRecordSet').retrieve('series', null);
+        var series_ns = $('ExportRecordSet').retrieve('series_ns', null);
+        var status = null;
+
+        if (gsi_response_obj !== null)
+        {
+            status = gsi_response_obj.drms_export_status;
+
+            if (status.search(/errorcode/i) == 0)
+            {
+                error_message = 'failure getting series information: ' + JSON.stringify(gsi_response_obj.error_message);
+                $('ExportRecordSet').store({ "count" : null, "series" : null, "series_ns" : null, "valid" : false});
+                $("RSCountPlace").innerHTML = error_message;
+            }
+            else
+            {
+                if (callback !== null)
+                {
+                    callback(error_message, gsi_response_obj);
+                }
+            }
+        }
+    };
+
+    return on_success_fn;
+}
+
+// callback is code that assimilates series info in gsi_response_obj; it calls the code that enables/disables processing options
+function DownloadSeriesInfo(callback)
 {
     var export_app_arguments = null;
     var options = null;
@@ -2243,17 +2262,17 @@ function RequestSeriesInfo(series, process_series_on_success, callback)
         db_host = INTERNAL_SERVER;
     }
 
-    export_app_arguments = { "series" : [ series ], "db-host" : db_host, "links" : [] };
+    export_app_arguments = { "series" : [ $('ExportRecordSet').retrieve('series', null) ], "db-host" : db_host, "links" : [] };
 
-    on_success = process_series_on_success;
+    on_success = CreateDownloadSeriesInfoOnSuccess(callback);
 
     on_failure = function(error_message)
     {
 
-        $('ExportRecordSet').store({ "count" : null, "series" : null});
+        $('ExportRecordSet').store({ "count" : null, "series" : null, "series_ns" : null, "valid" : false });
         $('RSCountPlace').innerHTML = error_message;
         $('ExportRecordSet').disabled = false;
-        set_eb_state_disabled(true); 
+        set_eb_state_disabled(true);
 
         if (callback !== null)
         {
@@ -2274,7 +2293,7 @@ function RequestSeriesInfo(series, process_series_on_success, callback)
         on428: function(response)
         {
             var error_message = 'invalid arguments to series endpoint: ' + JSON.stringify(response.responseJSON.error_message);
-            
+
             on_failure(error_message);
         },
         onComplete: function(response)
@@ -2287,47 +2306,45 @@ function RequestSeriesInfo(series, process_series_on_success, callback)
     new Ajax.Request(window.location.origin + SERIES_PATH, options);
 }
 
+
+
+
+// tester success
+</script>
+<script type="text/javascript">
+
 // tester success
 </script>
 <script type="text/javascript">
 
 
-// callback - called after record-set specification has been successfully processed (this does not mean that the
 // series is valid - it just means the specification has valid syntax); callback is generally processRecordCount
-
-function CreateProcessSpec(spec, fastCallback, callback)
+function CreateAssimilateParsedSpecFn()
 {
-    // called by onSuccess() of ParseSpec(), which is the function returned by CreateParseSpecResponse()
+    // called by onSuccess() of ParseSpec(), which is the function returned by CreateParseSpecOnSuccess()
     // extracts series name and checks for record-set filter
-    var processSpec =
+    var assimilate_parsed_spec_fn =
         function(error_message, data)
         {
+            var enable_processing_options_fn = null;
+            var assimilate_series_info_fn = null;
+            var assimilate_record_info_fn = null;
+
             if (error_message)
             {
-                RecordCount = null;
-                $('ExportRecordSet').store({ 'count': RecordCount });
-                ExportRecordSetOK = 0;
+                $('ExportRecordSet').store({ "count" : null, "series" : null, "valid" : false });
                 $('RSCountPlace').innerHTML = error_message;
-
-                // if an error occurred, we still need to call the callback callback
-                if (callback !== null)
-                {
-                    callback(error_message);
-                }
             }
             else
             {
                 // since we've only parsed the record-set specification, but have not yet tried to count records
                 // we know we have valid series name, but we do not know if the series exists
-
-                // set SeriesName
                 var series = data.subsets[0].seriesname;
                 var seriesNs = data.subsets[0].seriesns;
                 var validSpec = data.subsets[0].spec;
                 var lastRecord = false;
 
-                SeriesName = series; // global
-                if (!data.hasfilts && RecordLimit == 0)
+                if (!data.hasfilts && $('ExportRecordLimit').retrieve('limit', null) === null)
                 {
                     validSpec = series + '[$]' + (data.subsets[0].segments === null ? '' : data.subsets[0].segments);
                     lastRecord = true;
@@ -2345,7 +2362,7 @@ function CreateProcessSpec(spec, fastCallback, callback)
                 $('ExportRecordSet').value = validSpec;
 
                 // store parsed series name for this record set
-                $('ExportRecordSet').store({ 'series' : series })
+                $('ExportRecordSet').store({ "series" : series, "series_ns" : seriesNs })
 
                 // initialize series cache for this series
                 series_cache = $('ExportRecordSet').retrieve('series_cache', null);
@@ -2355,9 +2372,9 @@ function CreateProcessSpec(spec, fastCallback, callback)
                     $('ExportRecordSet').store({ 'series_cache' : series_cache });
                 }
 
-                if (!series_cache.hasOwnProperty(series))
+                if (series_cache[series.toLowerCase()] === undefined || series_cache[series.toLowerCase()] === null)
                 {
-                    series_cache[series] = null; // to be filled in with series struct info after series endpoint has loaded
+                    series_cache[series.toLowerCase()] = null; // to be filled in with series struct info after series endpoint has loaded
                 }
 
                 // use the parsed series name to call the jsocInfoCGI to get the series information;
@@ -2375,29 +2392,41 @@ function CreateProcessSpec(spec, fastCallback, callback)
 
                 // if we want the callback to return results quickly, then we need to skip running requestRSInfo() since
                 // that could be a slow asynchronous call;
-                var actualCB = null;
 
-                if (fastCallback)
-                {
 
-                    // we only need to do this if the record count has not yet been obtained
-                    actualCB = function(error_message) { ObtainFastRecordCount(error_message, validSpec, callback); };
+                // we only need to do this if the record count has not yet been obtained
+                // ART - as far as I can tell, there is no need to wait this long to get record count, and there
+                // is no processing to do after the count has been calculated - do this much earlier
+                // instead, this can be done at the same time RequestSeriesInfo() is called - we just need the 
+                // record-set to be modified, if need be. And there should be no call back to call after the
+                // the number of records has been counted
 
-                    // if we have skipped the requestRSInfo callback, then we need to do that later
-                }
-                else
-                {
-                    // gets record count too, but could be slow async call
-                    actualCB = function(error_message) { RequestRSInfo(error_message, validSpec, lastRecord, callback); };
-                }
+                // if we have skipped the requestRSInfo callback, then we need to do that later
 
-                // `processSeriesSelection` is an onSuccess, with `actualCB` as its callback
-                var processSeriesSelection = CreateProcessSeriesSelection(validSpec, series, seriesNs, actualCB);
-                RequestSeriesInfo(series, processSeriesSelection, actualCB);
+
+                enable_processing_options_fn = CreateEnableProcessingOptionsFn();
+
+                assimilate_record_info_fn = CreateAssimilateRecordInfoFn(enable_processing_options_fn);
+
+                // start record-info ajax (for record count, enable/disable processing items) and series-info ajax (for file format,
+                // first time-prime, series cache, first segment, enable/disable processing items) in parallel
+
+                // ajax callback is assimilate_record_info_fn, which calls the function that enables/disables processing items
+                // ART - GRRRR! assimilate_record_info_fn really needs to call RECORD_PATH again, for various keyword values
+                // for the first and last records, for processing initialization; we need the results of DownloadRecordInfo()
+                // so we can extract the recnums of the first/last records, and then use those to make a new record info download
+                // for the processing keywords for the first/last records
+                DownloadRecordInfo(assimilate_record_info_fn)
+
+                assimilate_series_info_fn = CreateAssimilateSeriesInfoFn(enable_processing_options_fn);
+
+                // ajax callback is assimilate_series_info_fn, which calls the function that enables/disables processing items
+                DownloadSeriesInfo(assimilate_series_info_fn);
+                
             }
         };
 
-    return processSpec;
+    return assimilate_parsed_spec_fn;
 }
 
 // Internal-DB pass-through.
@@ -2409,36 +2438,6 @@ function CreateProcessSpec(spec, fastCallback, callback)
 //
 // IF THE CALLBACK IS NOT null THEN IT MUST BE CALLED, EVEN ON ERROR; OTHERWISE, CERTAIN GLOBAL VARIABLES
 // WILL NOT BE SET APPROPRIATELY
-function GetRSCount(countCallback)
-{
-    ExportQueryOK = 0;
-    ExportRecordSetOK = 0;
-    SeriesName = "";
-    SeriesAttributesGlobal = null;
-    $('ExportFilenameFmt').store({ 'originalFormat' : null }); // we have neither determined the original format nor the aia.lev1p5-format yet
-    IsAia = null;
-    IsAiaLev1 = null;
-
-    var recset = $('ExportRecordSet').value;
-
-    if (recset.length == 0)
-    {
-        $("RSCountPlace").innerHTML = "ERROR - missing record-set specification.";
-        return(1);
-    }
-
-    $("RSCountPlace").innerHTML = RSCountActiveMSg;
-    // we need not only the series name, but we need the CTYPE1 and CTYPE2 keyword values so that
-    // we can determine if the series is suitable for aia_scale processing; from recset, we can
-    // extract the seriesname
-    var cb = CreateProcessSpec(recset, true, countCallback);
-    ParseSpec(recset, cb); // stores series in $('ExportRecordSet') 'series' attribute (value is an object with k-v for each series)
-
-    RecordCount = null; // To indicate that the RecordCount has not been set yet.
-    $('ExportRecordSet').store({ 'count': RecordCount });
-
-    return(0);
-}
 
 function GetCompatibleFormat(series, attributes, keywords)
 {
@@ -2480,229 +2479,68 @@ function GetCompatibleFormat(series, attributes, keywords)
 // load the series endpoint; the securedrms client caches the series information, so if 
 // the endpoint is loaded for a previous invocation, the response will be returned quickly;
 // the series information is NOT cached in the javascript - that is something to consider
-function GetDefaultFormat()
+function GenerateFileFormatString(gsi_response_obj)
 {
-    var RecordSet = $('ExportRecordSet').value;
-    var series_cache = null;
-    var series = null;
-
-    series_cache = $('ExportRecordSet').retrieve('series_cache', null);
-    series = $('ExportRecordSet').retrieve('series', null);
-
-    var doInfoReqFn = function()
+    if (gsi_response_obj !== null)
     {
-        var export_app_arguments = null;
-        var options = null;
-        var origin = null;
-        var db_host = null;
+        var series = $('ExportRecordSet').retrieve('series', null);
+        var keywords = (new Hash(gsi_response_obj[series.toLowerCase()].keywords)).keys();
+        var segments = (new Hash(gsi_response_obj[series.toLowerCase()].segments)).keys();
+        var prime_key_length = gsi_response_obj[series.toLowerCase()].attributes.drmsprimekey.length;
+        var number_keys = keywords.length;
+        var format = null;
+        var key_index = null;
+        var seg_index = null;
+        var member = null;
+        var member_obj = null;
+        var series_cache = null;
+        var series = $('ExportRecordSet').retrieve('series', null);
 
-        origin = ExportOrigin(null);
-
-        if (origin[0] == 'extServer')
+        if (prime_key_length == 0)
         {
-            db_host = EXTERNAL_SERVER;
+            format = series + '.{recnum:%lld}.{segment}';
         }
         else
         {
-            db_host = INTERNAL_SERVER;
-        }
-
-        // the series endpoint automatically follows links for both keywords and segments
-        export_app_arguments = { "series" : [ $('ExportRecordSet').value ], "db-host" : db_host, "parse-record-sets" : true, "links" : [] };
-
-        options =
-        {
-            method: 'get',
-            onSuccess: function(response)
+            format = series + '.';
+            for (key_index = 0; key_index < prime_key_length; key_index += 1)
             {
-                var gsi_response_obj = response.responseJSON;
-                var status = null;
-                var error_message = null;
+                member = gsi_response_obj[series.toLowerCase()].attributes.drmsprimekey[key_index].replace(/_index/i, '');
+                member_obj = gsi_response_obj[series.toLowerCase()].keywords[member.toLowerCase()];
 
-                if (gsi_response_obj !== null)
+                if (member_obj['data-type'].toLowerCase() === 'time')
                 {
-                    status = gsi_status_obj.drms_export_status;
-
-                    if (status.search(/errorcode/i) == 0)
+                    if ($('ExportRecordSet').retrieve('first_time_pkey', null) === null)
                     {
-                        error_message = 'failure getting series information: ' + JSON.stringify(gsi_response_obj.error_message);
+                        $('ExportRecordSet').store({ "first_time_pkey" : member })
                     }
-                    else
-                    {
-                        var keywords = (new Hash(gsi_response_obj.keywords)).keys();
-                        var segments = (new Hash(gsi_response_obj.segments)).keys();
-                        var prime_key_length = gsi_response_obj.drmsprimekey.length;
-                        var number_keys = keywords.length;
-                        var format = null;
-                        var key_index = null;
-                        var seg_index = null;
-                        var member = null;
-                        var member_obj = null;
-                        var series_cache = null;
-                        var series = null;
 
-                        // cache series info
-                        series_cache = $('ExportRecordSet').retrieve('series_cache', null);
-                        series = $('ExportRecordSet').retrieve('series', null);
-
-                        if (series_cache !== null && series !== null && (!series_cache.hasOwnProperty(series) || series_cache[series] === null))
-                        {
-                            series_cache[series] = gsi_response_obj;
-                        }
-
-                        if (prime_key_length == 0)
-                        {
-                            format = series + '.{recnum:%lld}.{segment}';
-                        }
-                        else
-                        {
-                            format = series + '.';
-                            for (key_index = 0; key_index < prime_key_length; key_index += 1)
-                            {
-                                member = gsi_response_obj.drmsprimekey[key_index];
-                                member_obj = gsi_response_obj.keywords[member.toLowerCase()];
-
-                                if (member_obj['data-type'].toLowerCase() === 'time')
-                                {
-                                    if (firstTimePrime === null || firstTimePrime === '')
-                                    {
-                                        // global
-                                        firstTimePrime = member;
-                                    }
-
-                                    format = format + '{' + member + ':A}.';
-                                }
-                                else
-                                {
-                                    format = format + '{' + member + '}.';
-                                }
-
-                            }
-
-                            format = format + '{segment}';
-                        }
-
-                        $('ExportFilenameFmt').value = format;
-                        $('ExportFilenameFmt').store('valid', true);
-
-                        for (seg_index = 0; seg_index < segments.length; seg_index += 1)
-                        {
-                            if (gsi_response_obj.segments[segments[seg_index].toLowerCase()].protocol.toLowerCase() === 'fits')
-                            {
-                                // global
-                                firstRealSegment = segments[seg_index];
-                                break;
-                            }
-                        }
-                    }
-                }
-            },
-            onFailure: function(response)
-            {
-                alert('[ GetDefaultFormat ] Something went wrong...');
-                set_eb_state_disabled(true);
-            },
-            on428: function(response)
-            {
-                alert('[ GetDefaultFormat ] Something went wrong...');
-                set_eb_state_disabled(true);
-            },
-            onComplete: function(response)
-            {
-            }
-        };
-
-        options['parameters'] = export_app_arguments;
-
-        new Ajax.Request(window.location.origin + SERIES_PATH, options);
-    };
-
-
-    if (series_cache === null || series === null || !series_cache.hasOwnProperty(series))
-    {
-        // Just call the function. It will determine if it should use the internal or external version of the CGI.
-        doInfoReqFn();
-    }
-
-    if (IsAiaLev1 && (!AiaLev1AttributesGlobal || !AiaLev1KeywordsGlobal))
-    {
-        // now we have to get the default format information for aia.lev1p5; we only use this information
-        // if there is an aia_scale processing step, but do it now since we do not know if the user
-        // will check the aia_scale checkbox or not
-        var export_app_arguments = null;
-        var options = null;
-        var origin = null;
-        var db_host = null;
-
-        origin = ExportOrigin(null);
-
-        if (origin[0] == 'extServer')
-        {
-            db_host = EXTERNAL_SERVER;
-        }
-        else
-        {
-            db_host = INTERNAL_SERVER;
-        }
-
-        // the series endpoint automatically follows links for both keywords and segments
-        export_app_arguments = { "series" : [ AIA_LEV1P5 ], "db-host" : db_host, "links" : [], "segments" : [] };
-
-        options =
-        {
-            method: 'get',
-            onSuccess: function(response)
-            {
-                var gsi_response_obj = response.responseJSON;
-                var status = null;
-                var error_message = null;
-
-                if (gsi_response_obj !== null)
-                {
-                    status = gsi_status_obj.drms_export_status;
-
-                    if (status.search(/errorcode/i) == 0)
-                    {
-                        error_message = 'failure getting series information: ' + JSON.stringify(gsi_response_obj.error_message);
-
-                        // don't do anything; let the process of getting the aia.lev1p5 format fail
-                        AiaLev1AttributesGlobal = null;
-                        AiaLev1KeywordsGlobal = null;
-                    }
-                    else
-                    {
-                        AiaLev1AttributesGlobal = data[AIA_LEV1P5.toLowerCase()].attributes;
-                        AiaLev1KeywordsGlobal = data[AIA_LEV1P5.toLowerCase()].keywords;
-                    }
+                    format = format + '{' + member + ':A}.';
                 }
                 else
                 {
-                    AiaLev1AttributesGlobal = null;
-                    AiaLev1KeywordsGlobal = null;
+                    format = format + '{' + member + '}.';
                 }
-            },
-            onFailure: function(response)
-            {
-                AiaLev1AttributesGlobal = null;
-                AiaLev1KeywordsGlobal = null;
-                set_eb_state_disabled(true);
-            },
-            on428: function(response)
-            {
-                AiaLev1AttributesGlobal = null;
-                AiaLev1KeywordsGlobal = null;
-                set_eb_state_disabled(true);
-            },
-            onComplete: function(response)
-            {
             }
-        };
 
-        options['parameters'] = export_app_arguments;
+            format = format + '{segment}';
+        }
 
-        alert('aia stuff');
-        new Ajax.Request(window.location.origin + SERIES_PATH, options);
+        $('ExportFilenameFmt').value = format;
+        $('ExportFilenameFmt').store('valid', true);
+
+        for (seg_index = 0; seg_index < segments.length; seg_index += 1)
+        {
+            if (gsi_response_obj[series.toLowerCase()].segments[segments[seg_index].toLowerCase()].protocol.toLowerCase() === 'fits')
+            {
+                $('ExportRecordSet').store({ "first_fits_segment" : segments[seg_index] })
+                break;
+            }
+        }
+        var ix = 10;
     }
+
+    var mm = 12;
 }
 // tester success
 </script>
@@ -2745,26 +2583,6 @@ function CreateDataTable(export_data, package)
     return valuetable;
 }
 
-function delete_data_table()
-{
-    // var su_link = $("StatusDataLocation").select('a')[0];
-
-    // the top section
-    $("ExportLocation").innerHTML = "";
-
-    // the table in the lower section ("JSOC Data Export Status and Retrieval")
-    $("StatusDataLocation").innerHTML = "";
-
-    $("StatusLocation").innerHTML = "";
-
-    // if (su_link !== null && su_link !== undefined)
-    //{
-    //    alert('dub');
-//
-  //      su_link.remove();
-    //}
-}
-
 function ExportNop()
   {
   }
@@ -2774,9 +2592,7 @@ function ExportRSChanged()
     // dirty since last time the CP button was clicked
     set_eb_state_disabled(true);
 
-    ExportQueryOK = 0;
-    RecordCount = null; // This will cause the record-count global to be updated later.
-    $('ExportRecordSet').store({ 'count': RecordCount });
+    $('ExportRecordSet').store({ "count" : null });
 
     // reset the wavelength used for the image options for this record-set
     $('ExportRecordSet').store({ "wavelength" : null });
@@ -2787,85 +2603,102 @@ function ExportRSChanged()
 </script>
 <script type="text/javascript">
 
-// called after the record count is complete (always gets called when the user changes the record-set specification)
-function ProcessRSChange(error)
+// called once after series info has been downloaded, and once after record info has been downloaded; after the second
+// call, the series cache will have been initialized AND the number of records will have been determined
+function CreateEnableProcessingOptionsFn()
 {
-    var option_index;
-    var processing_option_id;
-    var disabled_state_rec_dep;
-    var need_rs_info = false;
-
-    // GetDefaultFormat() starts another jsoc_info asnchronously. It sets firstTimePrime. firstTimePrime is used in processing.js.
-    // GetDefaultFormat() requires SeriesName, which is set in the first jsoc_info.
-    // ProcessRSChange() is now not called until the first jsoc_info has completed.
-    if (error === null)
+    var enable_processing_options_fn = function(error_message)
     {
-        firstTimePrime = ""; // Used in GetDefaultFormat()
-        GetDefaultFormat();
+        var option_index;
+        var processing_option_id;
+        var disabled_state_rec_dep;
+        var need_rs_info = false;
+        var series_cache = null;
+        var series = null;
+        var number_records = null;
+        var resolved_error_message = error_message;
 
-        CheckNoProcessingList();
-        // NotifyProcessingCode requires the first jsoc_info to have completed (the one started by SetRecordLimit()).
-        // It also requires that SetProcessing() has completed its asynchronous running.
-        NotifyProcessingCode();
-
-        // check each export processing step's disabled_state (except for processing option 0 - that is no_op)
-        for (option_index = 1; option_index < ExportProcessingOptions.length; option_index++)
+        if (resolved_error_message === null)
         {
-            processing_option_id = ExportProcessingOptions[option_index].id;
-            disabled_state_rec_dep = $(processing_option_id).retrieve('disabled_state_rec_dep', false);
+            series_cache = $('ExportRecordSet').retrieve('series_cache', null);
+            series = $('ExportRecordSet').retrieve('series', null);
+            number_records = $('ExportRecordSet').retrieve('count', null);
 
-            if (disabled_state_rec_dep)
+            if (series_cache !== null && series !== null && series_cache[series.toLowerCase()] !== undefined && series_cache[series.toLowerCase()] !== null && number_records !== null)
             {
-                // SET disabled state (if it is not set already - null means that true/false value has not yet been determined); the
-                // way we do this is to get rs info
-                if ($(processing_option_id).retrieve('disabled_state', null) === null)
+                CheckNoProcessingList();
+                // NotifyProcessingCode requires the first jsoc_info to have completed (the one started by SetRecordLimit()).
+                // It also requires that SetProcessing() has completed its asynchronous running.
+                NotifyProcessingCode();
+
+                // check each export processing step's disabled_state (except for processing option 0 - that is no_op)
+                for (option_index = 1; option_index < ExportProcessingOptions.length; option_index++)
                 {
-                    // start asynchronous call to determine the processing option's disabledState value; the record-set will have
-                    // already been entered, and the [$] resolved into an actual record specification; this asynchronous call
-                    // could take a long time to complete
-                    RequestRSInfo('', $('ExportRecordSet').value, $('ExportRecordSet').retrieve('last_record', false), function(errMsg) { $('ProcessingCheckbox').disabled = false; $('ProcessingCheckboxLabel').style.color = 'black'; $('ProcessingCheckboxLabel').style['font-weight'] = 'normal'; $('ProcessingWaitMessage').style.display = 'none'; });
-                    need_rs_info = true;
-                    break; // call RequestRSInfo 1x
+                    processing_option_id = ExportProcessingOptions[option_index].id;
+                    disabled_state_rec_dep = $(processing_option_id).retrieve('disabled_state_rec_dep', false);
+
+                    if (disabled_state_rec_dep)
+                    {
+                        // SET disabled state (if it is not set already - null means that true/false value has not yet been determined); the
+                        // way we do this is to get rs info; if disabled_state_rec_dep, then whether the processing item is enabled depends
+                        // on the record information
+                        if ($(processing_option_id).retrieve('disabled_state', null) === null)
+                        {
+                            // ART - this is an error condition; we should have already determined disabled_state in CreateAssimilateRecordInfoFn() function; 
+                            // however, just assume that the option is disabled
+                            $(processing_option_id).store({ "disabled_state" : true });
+                        }
+                    }
                 }
-                else
-                {
-                    $('ProcessingCheckboxLabel').style.color = 'black';
-                    $('ProcessingCheckboxLabel').style['font-weight'] = 'normal';
-                    $('ProcessingWaitMessage').style.display = 'none';
-                }
+
+                $('ProcessingCheckboxLabel').style.color = 'black';
+                $('ProcessingCheckboxLabel').style['font-weight'] = 'normal';
+                $('ProcessingWaitMessage').style.display = 'none';
+
+                // we don't have to wait to enable 'enable processing' checkbox
+                $('ProcessingCheckbox').disabled = false;
+
+                // must set to false every time the user enters a specification, even on error, otherwise the user will never
+                // be able to enter a new specification
+                newRSRunning = false;
+
+                // Re-enable the RecordSet text box.
+                $('ExportRecordSet').disabled = false;
             }
         }
-
-        if (!need_rs_info)
+        else
         {
-            // we don't have to wait to enable 'enable processing' checkbox
-            $('ProcessingCheckbox').disabled = false;
-        }
-    }
-    else
-    {
-        // something went wrong; uncheck any processing check boxes that are checked and hide the processing UI
-        for (iProc = 0; iProc < ExportProcessingOptions.length; iProc++)
-        {
-            var ExpOpt = ExportProcessingOptions[iProc];
-
-            $(ExpOpt.id).checked = false;
-            if (ExpOpt.id != 'OptionNone' && ExpOpt.hasOwnProperty('rowid'))
+            // something went wrong; uncheck any processing check boxes that are checked and hide the processing UI
+            for (iProc = 0; iProc < ExportProcessingOptions.length; iProc++)
             {
-                // the 'none' processing step has no processing UI html element
-                $(ExpOpt.rowid).style.display = "none";
+                var ExpOpt = ExportProcessingOptions[iProc];
+
+                $(ExpOpt.id).checked = false;
+                if (ExpOpt.id != 'OptionNone' && ExpOpt.hasOwnProperty('rowid'))
+                {
+                    // the 'none' processing step has no processing UI html element
+                    $(ExpOpt.rowid).style.display = "none";
+                }
             }
+
+            // must set to false every time the user enters a specification, even on error, otherwise the user will never
+            // be able to enter a new specification
+            newRSRunning = false;
+
+            // Re-enable the RecordSet text box.
+            $('ExportRecordSet').disabled = false;
         }
-    }
 
-    update_export_buttons();
+        if (resolved_error_message !== null)
+        {
+            $('ProcessingWaitMessage').style.display = 'table-row';
+            $('ProcessingWaitMessage').innerHTML = resolved_error_message;
+        }
 
-    // Re-enable the RecordSet text box.
-    $('ExportRecordSet').disabled = false;
+        update_export_buttons();
+    };
 
-    // must set to false every time the user enters a specification, even on error, otherwise the user will never
-    // be able to enter a new specification
-    newRSRunning = false;
+    return enable_processing_options_fn;
 }
 
 
@@ -2935,16 +2768,10 @@ function ExportNewRS()
         $(ExpOpt.id).disabled = true;
     }
 
-    SeriesName = "";
-    ExportQueryOK = 0;
     $("CountButton").style.backgroundColor = colorNeutral;
 
     // Disable RecordSet text edit while the asynchronous stuff runs for the newly set record-set.
     $('ExportRecordSet').disabled = true;
-
-    // we changed the record-set - clear out record count
-    RecordCount = null
-    $('ExportRecordSet').store({ 'count' : null });
 
     // this is the text after RequestID in the upper section; we just changed the input parameters, so get rid of this
     $("RequestIdPlace").innerHTML = "";
@@ -2953,12 +2780,53 @@ function ExportNewRS()
     $("StatusRequestID").value = "";
 
     // get rid of the results tables in the upper and lower sections
-    delete_data_table();
+    $('ExportButton').store({"reset" : true });
+    update_request_section_ui(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, false);
+    
+    $('StatusButton').store({ "reset" : true });
+    update_status_section_ui(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
-    // SetRecordLimit() starts jsoc_info asynchronously (via GetRSCount()).
-    if (SetRecordLimit(ProcessRSChange))
+    update_protocol_ui(false);
+
+    // a change in RS plus a change in record limit causes a change in the number of records - starts jsoc_info asynchronously
+    update_record_set_ui(false);
+
+    set_eb_state_disabled(true);
+}
+
+</script>
+<script type="text/javascript">
+
+
+function update_processing_us(reset)
+{
+
+}
+
+</script>                                                                                                                                                                                            <script type="text/javascript">
+
+
+// respond to change in record-set value
+function update_record_set_ui(reset)
+{
+    // reset - these attributes will be set by parse/series info/rs info processes
+    $('ExportRecordSet').store({ "count" : null, "series" : null, "is_aia" : null, "is_aia_lev1" : null, "valid" : null });
+    $('ExportFilenameFmt').store({ 'originalFormat' : null });
+
+    if (reset)
     {
-        return; // SetRecordLimit calls GetRSCount(), non-zero on RS syntax error
+        set_eb_state_disabled(false);
+    }
+    else
+    {
+        // parse specification, then get series and record info in parallel
+        // does these things:
+        //  - makes spec valid
+        //  - calculates last record
+        //  - stores value of series in $('ExportRecordSet') series attribute
+        //  - initializes series cache
+
+        ParseSpec(CreateAssimilateParsedSpecFn()); // stores series in $('ExportRecordSet') 'series' attribute (value is an object with k-v for each series)
     }
 }
 
@@ -2966,41 +2834,44 @@ function ExportNewRS()
 </script>
 <script type="text/javascript">
 
-
-function SetRecordLimit(callbackAfterJsocinfo)
+function update_record_limit_ui(reset)
 {
-    var newLimit;
+    var limit = null;
 
-    // dirty since last time the CP button was clicked
-    set_eb_state_disabled(true);
+    if (reset)
+    {
+        set_eb_state_disabled(false);
+    }
 
-    newLimit = 1 * $("ExportRecordLimit").value;
-    if (isNaN(newLimit))
-    {  // newlimit is a non-numeric string
-        newLimit = $("ExportRecordLimit").value;
-        if (newLimit == "none")
-        {
-            RecordLimit = 0;
-        }
-        else
-        {
-            $("ExportRecordLimit").style.backgroundColor = colorRed;
-            alert("RecordLimit must be a number or 'none'");
-            RecordLimit = 0;
-        }
+    limit = parseInt($('ExportRecordLimit').value);
+
+    if (reset || limit == 0 || $('ExportRecordLimit').value.trim().toLowerCase() === 'none')
+    {
+        $('ExportRecordLimit').style.color = colorBlack;
+        $('ExportRecordLimit').value = 'none';
+        $('ExportRecordLimit').store('limit', null);
+    }
+    else if (isNaN(limit))
+    {
+        $('ExportRecordLimit').style.color = colorRed;
+        $('ExportRecordLimit').value = 'none';
+        $('ExportRecordLimit').store('limit', null);
+        $('ExportCheckMsg').store('cp_message', 'Record Limit value must be an integer or the string `none`');
+        update_export_buttons()
     }
     else
     {
-        if (newLimit == 0)
-        {
-            $("ExportRecordLimit").value = "none";
-        }
-
-        RecordLimit = newLimit;
+        $('ExportRecordLimit').style.color = colorBlack;
+        $('ExportRecordLimit').store('limit', limit);
     }
+}
 
-    $("ExportRecordLimit").style.backgroundColor = colorWhite;
-    return (GetRSCount(callbackAfterJsocinfo));
+// onChange() of ExportRecordLimit; symbol is in html form, so do not change it
+function SetRecordLimit()
+{
+    // dirty since last time the CP button was clicked
+    set_eb_state_disabled(true);
+    return update_record_limit_ui(False)
 }
 
 // reset ==> called in response to RS change, so disabled state is clean
@@ -3163,8 +3034,6 @@ function ProcessingEnabled()
     var processing_option = null;
     var disabled_state = null;
 
-    ExportQueryOK = 0;
-
     if ($("ProcessingCheckboxHide").checked)
     {
         $("ProcessingCheckbox").checked = false;
@@ -3203,7 +3072,7 @@ function ProcessingEnabled()
     if (ProcessingAllowed == 0)
       {
       $("ProcessingWaitMessage").style.display = "table-row";
-      $("ProcessingWaitMessage").innerHTML = "Processing not available for series " + SeriesName;
+      $("ProcessingWaitMessage").innerHTML = "Processing not available for series " + $('ExportRecordSet').retrieve('series', '');
       $("ProcessingCheckboxHide").checked = true;
       $("ProcessingShowCheckbox").style.display = "none";
       }
@@ -3246,13 +3115,20 @@ function unserialize_arguments(serialized_arguments)
         name_space = serialized_arguments.slice(0, separator_index);
         pairs = serialized_arguments.slice(separator_index + 1).split(",");
 
-        argument_obj[name_space] = {};
+        argument_obj[name_space] = { "unnamed" : [] };
 
         for (index = 0; index < pairs.length; index += 1)
         {
             pair = pairs[index];
             separator_index = pair.search(/[=]/);
-            argument_obj[name_space][pair.slice(0, separator_index)] = pair.slice(separator_index + 1);
+            if (separator_index > 0)
+            {
+                argument_obj[name_space][pair.slice(0, separator_index)] = pair.slice(separator_index + 1);
+            }
+            else
+            {
+                argument_obj[name_space]['unnamed'].push(pair);
+            }
         }
     }
     else
@@ -3263,8 +3139,23 @@ function unserialize_arguments(serialized_arguments)
     return argument_obj;
 }
 
+function get_max_records()
+{
+    var max_records = null;
+
+    max_records = $('ExportRecordLimit').retrieve('limit', null);
+    if (max_records === null)
+    {
+        max_records = 0;
+    }
+
+    return max_records;
+}
+
 function runSetProcessing(intervalFn, spCallback)
 {
+    var max_records_str = null;
+
     // 0 if no procesing enabled (Enable Processing is not checked),  -1 if same seriesname, -2 if series has changed between export processing requests.
     // ichecked > 0 if the user clicks on/off a processing-step checkbox.
     if (setProcessingRunning)
@@ -3286,8 +3177,6 @@ function runSetProcessing(intervalFn, spCallback)
 		return;
 	}
 
-    ExportQueryOK = 0;
-
     if (ProcessingAllowed == 0)
     {
         $(ExportProcessingOptions[0].id).checked = true;
@@ -3300,7 +3189,7 @@ function runSetProcessing(intervalFn, spCallback)
     ExportProcessingOK = null;
 
     // Add recordLimit FIRST always. Could change when user changes RecordSet specification.
-    ExportProcessingArgs = "n=" + RecordLimit;
+    ExportProcessingArgs = "n=" + get_max_records().toString();
 
     // do not put RecordLimit in ProcessingObj
     ProcessingObj = {};
@@ -3587,7 +3476,7 @@ function SetExportProtocol(byWhom)
 {
     // byWhom is 'vestigial'
 
-    // dirty since last time the CP button was clicked
+    // disable address
     set_eb_state_disabled(true);
 
     update_protocol_ui(false);
@@ -3604,6 +3493,9 @@ function update_protocol_options_ui(reset)
     {
         update_protocol_options(true);
         update_hidden_protocol(true);
+
+        // the above calls imply that validate_protocol_options() will set valid to true
+        validate_protocol_options();
     }
     else
     {
@@ -3643,7 +3535,6 @@ function ProtocolImageUserSet(opt)
 // the options UI
 function reset_image_protocol_options(record_set_series, record_set_wavelength, color_table_metadata)
 {
-    alert('reset_image_protocol_options');
     // use the specified wavelength to choose an appropriate color table, and then 
     // use the values from the color table to set the UI element values
     var series_wave = null;
@@ -3679,7 +3570,7 @@ function reset_image_protocol_options(record_set_series, record_set_wavelength, 
 
         if (color_table_metadata.scale_indexes['MINMAX'] === undefined)
         {
-            $('ImageScl').selectedIndex = $('ImageCT').options.length - 1;
+            $('ImageScl').selectedIndex = $('ImageScl').options.length - 1;
         }
         else
         {
@@ -3698,8 +3589,6 @@ function reset_image_protocol_options(record_set_series, record_set_wavelength, 
     }
 
     $('ImageSize').selectedIndex = 2; // 512x512 image
-
-    $('ImageSize').store({ "specified" : true });
 
     update_hidden_protocol(false);
 
@@ -3734,7 +3623,7 @@ function validate_image_protocol_options(series, wavelength, color_table_metadat
 
     if ($('ImageScl').selectedIndex != -1)
     {
-        image_scaling = $('ImageScl').options[$('ImageScl').selectedIndex].value.trim(); // color table, or not specified
+        image_scaling = $('ImageScl').options[$('ImageScl').selectedIndex].value.trim();
     }
     else
     {
@@ -3743,15 +3632,12 @@ function validate_image_protocol_options(series, wavelength, color_table_metadat
 
     if ($('ImageSize').selectedIndex != -1)
     {
-        image_zoom = $('ImageSize').options[$('ImageSize').selectedIndex].value.trim(); // color table, or not specified
+        image_zoom = $('ImageSize').options[$('ImageSize').selectedIndex].value.trim();
     }
     else
     {
         image_zoom = $('ImageSize').value.trim();
     }
-
-
-
 
     valid = $('ProtocolImageOptions').retrieve('valid', null); 
 
@@ -4222,6 +4108,7 @@ function update_protocol_ui(reset)
     {
         update_protocol(true);
         update_hidden_protocol(true);
+        validate_protocol();
     }
     else
     {
@@ -4416,8 +4303,8 @@ function update_hidden_protocol(reset)
 {
     var protocol = $('ExportProtocol').options[$('ExportProtocol').selectedIndex].value.trim().toLowerCase();
     var hidden_protocol = null;
-    var image_min = parseFloat($('ImageMin').value.trim());
-    var image_max = parseFloat($('ImageMax').value.trim());
+    var image_min = null;
+    var image_max = null;
     var image_ct = null;
     var image_scaling = null;
     var image_zoom = null;
@@ -4425,43 +4312,16 @@ function update_hidden_protocol(reset)
     var series_info = null;
     var data_type = null;
     var compression_list = [];
+    var segments = null;
     var image_list = [];
-
-    if ($('ImageCT').selectedIndex != -1)
-    {
-        image_ct = $('ImageCT').options[$('ImageCT').selectedIndex].value.trim(); // color table, or not specified
-    }
-    else
-    {
-        image_ct = $('ImageCT').value.trim();
-    }
-
-    if ($('ImageScl').selectedIndex != -1)
-    {
-        image_scaling = $('ImageScl').options[$('ImageScl').selectedIndex].value.trim(); // color table, or not specified
-    }
-    else
-    {
-        image_scaling = $('ImageScl').value.trim();
-    }
-
-    if ($('ImageSize').selectedIndex != -1)
-    {
-        image_zoom = $('ImageSize').options[$('ImageSize').selectedIndex].value.trim(); // color table, or not specified
-    }
-    else
-    {
-        image_zoom = $('ImageSize').value.trim();
-    }
 
     if (reset)
     {
-        $('ExportProtocolHidden').value = '';
-
+        $('ExportProtocolHidden').value = protocol;
         set_eb_state_disabled(false);
     }
     else
-    { 
+    {
         if (protocol === 'fits')
         {
             // force Rice compression, except for floating-point images
@@ -4469,9 +4329,11 @@ function update_hidden_protocol(reset)
 
             if (series_info !== null)
             {
-                for (index = 0; index < series_info.segments.length; index += 1)
+                segments = (new Hash(series_info.segments)).keys();
+
+                for (index = 0; index < segments.length; index += 1)
                 {
-                    data_type = series_info.segments[index].type.time.toLowerCase();
+                    data_type = series_info.segments[segments[index]]['data-type'].toLowerCase();
 
                     if (data_type === 'float' || data_type === 'double')
                     {
@@ -4501,32 +4363,61 @@ function update_hidden_protocol(reset)
             {
                 hidden_protocol = 'mpg';
             }
-            else if (protocol = 'mp4')
+            else if (protocol === 'mp4')
             {
-                hidden_protocol = 'mp4';
+                hidden_protocol === 'mp4';
             }
-            else if (protocol = 'jpeg')
+            else if (protocol === 'jpeg')
             {
                 hidden_protocol = 'jpg';
             }
 
             if (hidden_protocol !== null)
             {
+                if ($('ImageCT').selectedIndex != -1)
+                {
+                    image_ct = $('ImageCT').options[$('ImageCT').selectedIndex].value.trim(); // color table, or not specified
+                }
+                else
+                {
+                    image_ct = $('ImageCT').value.trim();
+                }
+
+                if ($('ImageScl').selectedIndex != -1)
+                {
+                    image_scaling = $('ImageScl').options[$('ImageScl').selectedIndex].value.trim(); // color table, or not specified
+                }
+                else
+                {
+                    image_scaling = $('ImageScl').value.trim();
+                }
+
+                if ($('ImageSize').selectedIndex != -1)
+                {
+                    image_zoom = $('ImageSize').options[$('ImageSize').selectedIndex].value.trim(); // color table, or not specified
+                }
+                else
+                {
+                    image_zoom = $('ImageSize').value.trim();
+                }
+
                 if ($('ImageMin').retrieve('specified', false))
                 {
-                    image_list.push('min=' + parseFloat($('ImageMin').value.trim()).toString());
+                    image_min = parseFloat($('ImageMin').value.trim());
+                    image_list.push('min=' + image_min.toString());
                 }
 
                 if ($('ImageMax').retrieve('specified', false))
                 {
-                    image_list.push('max=' + parseFloat($('ImageMax').value.trim()).toString());
+                    image_max = parseFloat($('ImageMax').value.trim());
+                    image_list.push('max=' + image_max.toString());
                 }
 
-                image_list.push('CT=' + $('ImageCT').value.trim());
+                image_list.push('CT=' + image_ct);
 
-                image_list.push('scaling=' + $('ImageScl').value.trim());
+                image_list.push('scaling=' + image_scaling);
 
-                image_list.push('size=' + parseFloat($('ImageSize').options[$('ImageSize').selectedIndex].value.trim()).toString());
+                image_list.push('size=' + image_zoom.toString());
 
                 $('ExportProtocolHidden').value = hidden_protocol;
                 
@@ -4553,7 +4444,6 @@ function update_hidden_protocol(reset)
 
 function validate_protocol()
 {
-    var series_info = null;
     var protocol = $('ExportProtocol').options[$('ExportProtocol').selectedIndex].value.trim().toLowerCase();
     var valid = null;
 
@@ -4587,6 +4477,7 @@ function validate_hidden_protocol()
     var series_info = null;
     var data_type = null;
     var compression_list = null;
+    var segments = null;
     var image_list = null;
     var image_ct = null;
     var image_scaling = null;
@@ -4633,10 +4524,11 @@ function validate_hidden_protocol()
                 else
                 {
                     compression_list = ['fits'];
+                    segments = (new Hash(series_info.segments)).keys();
 
-                    for (index = 0; index < series_info.segments.length; index += 1)
+                    for (index = 0; index < segments.length; index += 1)
                     {
-                        data_type = series_info.segments[index].type.trim().toLowerCase();
+                        data_type = series_info.segments[segments[index]]['data-type'].trim().toLowerCase();
 
                         if (data_type === 'float' || data_type === 'double')
                         {
@@ -4676,11 +4568,11 @@ function validate_hidden_protocol()
                 {
                     protocol_argument = 'mpg';
                 }
-                else if (protocol = 'mp4')
+                else if (protocol === 'mp4')
                 {
                     protocol_argument = 'mp4';
                 }
-                else if (protocol = 'jpeg')
+                else if (protocol === 'jpeg')
                 {
                     protocol_argument = 'jpg';
                 }
@@ -4699,7 +4591,6 @@ function validate_hidden_protocol()
                         image_list.push('max=' + parseFloat($('ImageMax').value.trim()).toString());
                     }
 
-                
                     if ($('ImageCT').selectedIndex != -1)
                     {
                         image_ct = $('ImageCT').options[$('ImageCT').selectedIndex].value.trim(); // color table, or not specified
@@ -4816,9 +4707,9 @@ function get_current_series_info()
     var series_cache = record_set_element.retrieve('series_cache', {});
     var info = null;
 
-    if (series !== null)
+    if (series !== null && series_cache !== null)
     {
-        info = series_cache[series];
+        info = series_cache[series.toLowerCase()];
     }
 
     return info;
@@ -4830,6 +4721,7 @@ function validate_fits_protocol_options()
     var index = null;
     var data_type = null;
     var compression_list = [];
+    var segments = null;
 
     series_info = get_current_series_info();
 
@@ -4839,9 +4731,10 @@ function validate_fits_protocol_options()
     }
     else
     {
-        for (index = 0; index < series_info.segments.length; index += 1)
+        segments = (new Hash(series_info.segments)).keys();
+        for (index = 0; index < segments.length; index += 1)
         {
-            data_type = series_info.segments[index].type.time.toLowerCase();
+            data_type = series_info.segments[segments[index]]['data-type'].trim().toLowerCase();
 
             if (data_type === 'float' || data_type === 'double')
             {
@@ -4908,7 +4801,7 @@ function disable_input()
 {
     $("FileUploadCheckbox").disabled = true;
     $('ExportRecordSet').disabled = true;
-    $("ExportRecordLimit").disabled = true;
+    $('ExportRecordLimit').disabled = true;
     $("CountButton").disabled = true;
     $("ExportMethod").disabled = true;
     $('ExportFilenameFmt').disabled = true;
@@ -4921,7 +4814,7 @@ function enable_input(address_too)
 {
     $("FileUploadCheckbox").disabled = false;
     $('ExportRecordSet').disabled = false;
-    $("ExportRecordLimit").disabled = false;
+    $('ExportRecordLimit').disabled = false;
     $("CountButton").disabled = false;
     $("ExportMethod").disabled = false;
     $('ExportFilenameFmt').disabled = false;
@@ -4956,7 +4849,7 @@ function set_eb_state_disabled(make_dirty)
     {
 
     }
-    else if (state == EB_STATE_SUBMIT_ENABLED || state == EB_STATE_PATH || state == EB_STATE_CANCEL || state == EB_STATE_CANCELED || statue == EB_STATE_TIMEOUT)
+    else if (state == EB_STATE_SUBMIT_ENABLED || state == EB_STATE_PATH || state == EB_STATE_CANCEL || state == EB_STATE_CANCELED || state == EB_STATE_TIMEOUT)
     {
         // EB_STATE_SUBMIT_ENABLED - user wants to change input instead of clicking on `submit`
         // EB_STATE_PATH - export request complete, time to reset for the next request
@@ -5001,7 +4894,7 @@ function address_is_registered()
     var addresses = $('ExportNotify').retrieve('addresses', {});
     var registration_status = null;
 
-    if (addresses !== null && address.length > 0 && addresses.hasOwnProperty('address') && addresses[address].hasOwnProperty('registration_status'))
+    if (addresses !== null && address.length > 0 && addresses.hasOwnProperty(address) && addresses[address].hasOwnProperty('registration_status'))
     {
         registration_status = addresses[address].registration_status;
     }
@@ -5025,9 +4918,16 @@ function update_export_buttons()
     var registration_pending = null;
     var address_registered = null;
     var eb_dirty = $("ExportCheckButton").retrieve('dirty', false); // dirty == false ==> page was reset
+    var button_label = null;
+    var button_message = null;
+
+    button_label = $('ExportButton').retrieve('label', null);
+    button_message = $('ExportButtonMsg').retrieve('message', null);
 
     if (state == EB_STATE_DISABLED)
     {
+        $('ExportButton').store({ "ajax-state" : "pre-click"});
+
         if (addresses !== null && address.length > 0 && Object.prototype.hasOwnProperty.call(addresses, address) && Object.prototype.hasOwnProperty.call(addresses[address], 'registration_status'))
         {
             registration_status = addresses[address].registration_status;
@@ -5217,17 +5117,17 @@ function update_export_buttons()
     }
     else if (state == EB_STATE_ENABLED)
     {
-        $("ExportCheckButton").disabled = true;
+        $('ExportCheckButton').disabled = true;
 
-        $('ExportCheckMsg').style.backgroundColor = colorBlack;
+        $('ExportCheckMsg').style.color = colorBlack;
         if (check_message === null)
         {
             check_message = '';
         }
         $('ExportCheckMsg').innerHTML = check_message;
 
-        $("ExportButton").value = "wait...";
-        $("ExportButtonMsg").innerHTML = '';
+        $('ExportButton').value = 'wait...';
+        $('ExportButtonMsg').innerHTML = '';
 
         // the user has already selected all the export parameters; don't allow them to change them
         disable_input();
@@ -5251,15 +5151,15 @@ function update_export_buttons()
 
         if ($('ExportButton').retrieve('error', false))
         {
-            $('ExportButton').value = $('ExportButton').retrieve('label', 'FAILURE...');
+            $('ExportButton').value = (button_label !== null) ? button_label : 'FAILURE...';
             $('ExportButton').style.backgroundColor = colorDarkPink;
-            $('ExportButtonMsg').innerHTML = $('ExportButtonMsg').retrieve('message', 'failure initiating export request');
+            $('ExportButtonMsg').innerHTML = (button_message !== null) ? button_message : 'Failure initiating export request';
         }
         else
         {
-            $('ExportButton').value = $('ExportButton').retrieve('label', 'wait...');
+            $('ExportButton').value = (button_label !== null) ? button_label : 'wait...';
             $('ExportButton').style.backgroundColor = colorYellow;
-            $('ExportButtonMsg').innerHTML = $('ExportButtonMsg').retrieve('message', '');
+            $('ExportButtonMsg').innerHTML = (button_message !== null) ? button_message : '';
         }
 
         disable_input();
@@ -5274,15 +5174,15 @@ function update_export_buttons()
 
         if ($('ExportButton').retrieve('error', false))
         {
-            $('ExportButton').value = $('ExportButton').retrieve('label', 'FAILURE...');
+            $('ExportButton').value = (button_label !== null) ? button_label : 'FAILURE...';
             $('ExportButton').style.backgroundColor = colorDarkPink;
-            $('ExportButtonMsg').innerHTML = $('ExportButtonMsg').retrieve('message', 'failure initiating export request');
+            $('ExportButtonMsg').innerHTML = (button_message !== null) ? button_message : 'Failure initiating export request';
         }
         else
         {
-            $('ExportButton').value = $('ExportButton').retrieve('label', 'FAILURE...');
-            $('ExportButton').style.backgroundColor = colorDarkPink;
-            $('ExportButtonMsg').innerHTML = $('ExportButtonMsg').retrieve('message', 'failure initiating export request');
+            $('ExportButton').value = (button_label !== null) ? button_label : 'cancel';
+            $('ExportButton').style.backgroundColor = colorGreen;
+            $('ExportButtonMsg').innerHTML = (button_message !== null) ? button_message : 'Click to cancel pending export';
         }
 
         $("ExportButton").disabled = false;
@@ -5292,19 +5192,22 @@ function update_export_buttons()
     }
     else if (state == EB_STATE_PATH)
     {
+        alert('XX in path section of update butt');
         $('ExportCheckMsg').innerHTML = '';
 
         if ($('ExportButton').retrieve('error', false))
         {
-            $('ExportButton').value = $('ExportButton').retrieve('label', 'FAILURE...');
+            $('ExportButton').value = (button_label !== null) ? button_label : 'FAILURE...';
             $('ExportButton').style.backgroundColor = colorDarkPink;
-            $('ExportButtonMsg').innerHTML = $('ExportButtonMsg').retrieve('message', 'failure exporting data');
+            $('ExportButtonMsg').innerHTML = (button_message !== null) ? button_message : 'Failure exporting data';
+            alert('XX error');
         }
         else
         {
-            $('ExportButton').value = $('ExportButton').retrieve('label', 'get path');
+            $('ExportButton').value = (button_label !== null) ? button_label : 'new export';
             $('ExportButton').style.backgroundColor = colorGreen;
-            $('ExportButtonMsg').innerHTML = $('ExportButtonMsg').retrieve('message', 'click to obtain URL path to exported data');
+            $('ExportButtonMsg').innerHTML = (button_message !== null) ? button_message : 'Export is complete; click to initiate new export';
+            alert('XX no error');
         }
 
         $("ExportButton").disabled = false;
@@ -5317,15 +5220,15 @@ function update_export_buttons()
 
         if ($('ExportButton').retrieve('error', false))
         {
-            $('ExportButton').value = $('ExportButton').retrieve('label', 'FAILURE...');
+            $('ExportButton').value = (button_label !== null) ? button_label : 'FAILURE...';
             $('ExportButton').style.backgroundColor = colorDarkPink;
-            $('ExportButtonMsg').innerHTML = $('ExportButtonMsg').retrieve('message', 'failure cancelling export');
+            $('ExportButtonMsg').innerHTML = (button_message !== null) ? button_message : 'Failure canceling export';
         }
         else
         {
-            $('ExportButton').value = $('ExportButton').retrieve('label', 'wait...');
+            $('ExportButton').value = (button_label !== null) ? button_label : 'wait...';
             $('ExportButton').style.backgroundColor = colorGreen;
-            $('ExportButtonMsg').innerHTML = $('ExportButtonMsg').retrieve('message', 'cancelling export');
+            $('ExportButtonMsg').innerHTML = (button_message !== null) ? button_message : 'cancelling export';
         }
 
         $('ExportButton').disabled = true;
@@ -5338,15 +5241,15 @@ function update_export_buttons()
 
         if ($('ExportButton').retrieve('error', false))
         {
-            $('ExportButton').value = $('ExportButton').retrieve('label', 'FAILURE...');
+            $('ExportButton').value = (button_label !== null) ? button_label : 'FAILURE...';
             $('ExportButton').style.backgroundColor = colorDarkPink;
-            $('ExportButtonMsg').innerHTML = $('ExportButtonMsg').retrieve('message', 'unable to proceed');
+            $('ExportButtonMsg').innerHTML = (button_message !== null) ? button_message : 'Unable to proceed';
         }
         else
         {
-            $('ExportButton').value = $('ExportButton').retrieve('label', 'canceled');
+            $('ExportButton').value = (button_label !== null) ? button_label : 'canceled';
             $('ExportButton').style.backgroundColor = colorRed;
-            $('ExportButtonMsg').innerHTML = $('ExportButtonMsg').retrieve('message', 'export request canceled; click to continue');
+            $('ExportButtonMsg').innerHTML = (button_message !== null) ? button_message : 'Export request canceled; click to continue';
         }
 
         $('ExportButton').disabled = false;
@@ -5388,7 +5291,7 @@ function is_ok_to_submit(element, attribute)
 
     if (is_ok)
     {
-        if (!ExportRecordSetOK)
+        if (!$('ExportRecordSet').retrieve('valid', false))
         {
             message = 'Please enter valid record-set specification';
             is_ok = false;
@@ -5426,7 +5329,7 @@ function is_ok_to_submit(element, attribute)
     {
         protocol = $('ExportProtocol').options[$('ExportProtocol').selectedIndex].value.trim().toLowerCase();
 
-        if ((protocol === 'fits' || protocol === 'jpeg' || protocol === 'mpeg' || protocol === 'mp4') && !$('ExportProtocolHidden').retrieve('valid', false))
+        if ((protocol !== 'fits' && protocol !== 'jpeg' && protocol !== 'mpeg' && protocol !== 'mp4') || !$('ExportProtocolHidden').retrieve('valid', false))
         {
             message = 'Internal error: hidden protocol string not set';
             is_ok = false;
@@ -5505,7 +5408,6 @@ function check_for_cancel_enabled_shortcut()
                 {
                     if (registration_status == 'registering' || registration_status == 'pending')
                     {
-                      alert('should not be here');
                         registered = null;
                     }
                     else if (registration_status == 'timed_out_server')
@@ -5648,7 +5550,7 @@ function CheckExportButtonOnClickAction()
     // complete the SetProcessing part of this check
     // If there was an error in the processing options, then ExportProcessingOK is not true.
     // ProcessingOK() is synchronous.
-    $("ExportCheckMsg").store({ 'cp_message' : null });
+    $("ExportCheckMsg").store({ "cp_message" : null });
 
     // first deal with missing record-set specification; this is allowed if there is an email address provided
     if ($('ExportRecordSet').value.trim().length == 0 && $("ExportNotify").value.trim().length > 0)
@@ -5664,7 +5566,7 @@ function CheckExportButtonOnClickAction()
         if (record_count === null)
         {
             // deal with bad record-set specification
-            $("ExportCheckMsg").store({ 'cp_message' : 'Still counting records; wait a second then retry' });
+            $("ExportCheckMsg").store({ "cp_message" : "Still counting records; wait a second then retry" });
             update_export_buttons();
             return 0;
         }
@@ -5674,7 +5576,7 @@ function CheckExportButtonOnClickAction()
     // use is_ok_to_submit() to get an error message to display in the CP button message
 
     // update the UI and internal variables with values the user has chosen
-    SetExportProtocol(1);
+    update_protocol_ui(false);
 
     // This is an asynchronous call, so we need to put the following "isOK" check into a
     // callback function. Return isOK == 0 since we do not know if it is OK to do an export
@@ -5690,7 +5592,6 @@ function CheckExportButtonOnClickAction()
         update_export_buttons();
         startEmailCheck($("ExportNotify"), $("ExportRequestor"), $("ExportCheckMsg"), update_export_buttons, null);
 
-        // note - ExportQueryOK is missing here
     }
 
     // notificationAddressOK may be in the process of being updated asynchronously, in which case notificationAddressOK == false
@@ -5713,7 +5614,7 @@ function CheckExportButtonOnClickAction()
             //   5. stream the file (tar or fits)
             if ($('ExportRecordSet').retrieve('count', null) > 1)
             {
-                $("ExportCheckMsg").store({ 'cp_message' : 'url_direct can only be used if exporting a single FITS file' });
+                $("ExportCheckMsg").store({ "cp_message" : "url_direct can only be used if exporting a single FITS file" });
                 isOK = false;
             }
             else
@@ -5746,8 +5647,8 @@ function CheckExportButtonOnClickAction()
             args.protocol = $('ExportProtocolHidden').value;
         }
 
-        $('ExportRecordSet').store({ 'exportArgs' : args });
-        $('ExportCheckMsg').store({ 'cp_message' : 'OK to submit export request' });
+        $('ExportRecordSet').store({ "exportArgs" : args });
+        $('ExportCheckMsg').store({ "cp_message" : "OK to submit export request" });
         update_export_buttons();
         ExportShowQuery();
 
@@ -5866,7 +5767,7 @@ function ExportButtonOnClickAction()
         EB_state = EB_STATE_SUBMIT;
         $('ExportButton').store('state', EB_state);
         // update_export_buttons();
-        update_request_section_ui(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+        update_request_section_ui(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, false);
 
         // call jsoc_fetch now
     }
@@ -5922,13 +5823,13 @@ function ExportButtonOnClickAction()
     {
         // need to use the PENDING_REQUEST_STATUS_PATH endpoint and ProcessRequestStatusResponse() 
         // as the onSuccess() - we update just the upper/request section's status ui
-        $('ExportRecordSet').store({ 'exportArgs' : { "op" : "exp_status", "requestid" : $('RequestIdPlace').innerHTML } });
+        GetStatus();
     }
     else
     {
         $('ExportButton').store({ "error" : true });
         $('ExportButtonMsg').store({ "message" : "unexpected-export button state" });
-        update_request_section_ui(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+        update_request_section_ui(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, false);
 
         set_eb_state_disabled(true);
 
@@ -5991,7 +5892,7 @@ function ExportButtonOnClickAction()
         {
             export_endpoint = MINI_EXPORT_REQUEST_PATH;
 
-            export_endpoint_arguments = { "specification" : export_arguments.ds, "file_name_format" : export_arguments.filenamefmt, "number_records" : RecordLimit };
+            export_endpoint_arguments = { "specification" : export_arguments.ds, "file-name-format" : export_arguments.filenamefmt, "number-records" : get_max_records() };
         }
         else if (method.toLowerCase() == EXP_METH_STREAMED)
         {
@@ -6031,15 +5932,22 @@ function ExportButtonOnClickAction()
             {
                 file_format = argument_namespace.toLowerCase();
 
-                // file_format_args are extra arguments for the protocol types of JPEG, MPEG, and MP4
+                // file_format_args are extra arguments for the protocol types of JPEG, MPEG, MP4, and FITS (compression strings are
+                // arguments)
                 // extra args exist - for some reason the saved string != the displayed string
-                if (file_format != 'jpg' && file_format != 'mpg' && file_format != 'mp4')
+                if (file_format === 'jpg' || file_format === 'mpg' || file_format === 'mp4' || file_format === 'fits')
                 {
-                    // error
+                    if (argument_argument_obj[argument_namespace]['unnamed'].length > 0)
+                    {
+                        file_format += ',' + argument_argument_obj[argument_namespace]['unnamed'].join(',');
+                    }
+
+                    file_format_args = argument_argument_obj[argument_namespace];
+                    delete file_format_args['unnamed'];
                 }
                 else
                 {
-                    file_format_args = argument_argument_obj[argument_namespace];
+                    // error
                 }
             }
             else
@@ -6049,7 +5957,7 @@ function ExportButtonOnClickAction()
 
             // no longer a need to provide size ratio to back-end; jsoc_fetch will calculate it using the processing
             // steps as input
-            export_endpoint_arguments = { "access" : access, "package" : export_package, "specification" : export_arguments.ds, "file-format" : file_format, "file-format-args" : file_format_args, "file-name-format" : export_arguments.filenamefmt, "number-records" : RecordLimit, "processing" : ProcessingObj };
+            export_endpoint_arguments = { "access" : access, "package" : export_package, "specification" : export_arguments.ds, "file-format" : file_format, "file-format-args" : file_format_args, "file-name-format" : export_arguments.filenamefmt, "number-records" :get_max_records(), "processing" : ProcessingObj };
         }
 
         if (export_endpoint !== null)
@@ -6088,12 +5996,11 @@ function ExportButtonOnClickAction()
                 },
                 onComplete: function(response)
                 {
-                    $('ExportButton').store({ "ajax-state" : "post-click" });
                 }
             };
 
             $('ExportButton').store({ "ajax-state" : "ajax-running" });
-            update_request_section_ui(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+            update_request_section_ui(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, false);
 
             options['postBody'] = JSON.stringify(export_app_arguments);
             options['contentType'] = 'application/json';
@@ -6272,7 +6179,8 @@ function GetReExport()
 </script>
 <script type="text/javascript">
 
-
+// called after ajax complete, so export button is in post-click state (called only in response to 
+// export-button click); sets export-button state to pre-click upon return
 function ProcessExportResponse(ir_response_obj)
 {
     var endpoint_status = null;
@@ -6292,19 +6200,18 @@ function ProcessExportResponse(ir_response_obj)
     var error_message = null;
     var interval_fn_timer = null;
     var interval_fn_timeout = null;
+    var eb_state = null;
 
     // state gets set to 0 before leaving this function, so this statement has no effect
     Cookie.setData("state", 3);
 
     if (ir_response_obj !== null)
     {
-        alert('got ir obj beg ' + JSON.stringify(ir_response_obj));
         endpoint_status = ir_response_obj.drms_export_status;
         endpoint_status_wordy = ir_response_obj.drms_export_status_description;
 
         if (ir_response_obj.hasOwnProperty('request_id'))
         {
-
             request_id = ir_response_obj.request_id;
         }
 
@@ -6376,7 +6283,7 @@ function ProcessExportResponse(ir_response_obj)
 
     if (endpoint_status === 'ErrorCode.REQUEST_TOO_MANY')
     {
-        update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_reccords, number_files, access, data_package, file_format, keywords_file, export_data, contact);
+        update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_reccords, number_files, access, data_package, file_format, keywords_file, export_data, contact, false);
 
         set_eb_state_disabled(true);
         Cookie.setData('state', 0);
@@ -6394,28 +6301,28 @@ function ProcessExportResponse(ir_response_obj)
     else if (endpoint_status == 'StatusCode.REQUEST_NOT_ONLINE')
     {
         // can only happen for re-export
-        update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_reccords, number_files, access, data_package, file_format, keywords_file, export_data, contact); 
+        update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_reccords, number_files, access, data_package, file_format, keywords_file, export_data, contact, false); 
 
         set_eb_state_disabled(true);
         Cookie.setData('state', 0);
     }
     else if (endpoint_status == 'StatusCode.REQUEST_FATAL_ERROR')
     {
-        update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_reccords, number_files, access, data_package, file_format, keywords_file, export_data, contact); 
+        update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_reccords, number_files, access, data_package, file_format, keywords_file, export_data, contact, false); 
 
         set_eb_state_disabled(true);
         Cookie.setData('state', 0);
     }
     else if (endpoint_status == 'StatusCode.REQUEST_TOO_LARGE')
     {
-        update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_reccords, number_files, access, data_package, file_format, keywords_file, export_data, contact); 
+        update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_reccords, number_files, access, data_package, file_format, keywords_file, export_data, contact, false); 
 
         set_eb_state_disabled(true);
         Cookie.setData('state', 0);
     }
     else if (endpoint_status === 'StatusCode.REQUEST_QUEUED' || endpoint_status === 'StatusCode.REQUEST_QUEUED_DEBUG' || endpoint_status === 'StatusCode.REQUEST_PROCESSING')
     {
-        update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact);
+        update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact, false);
 
         // fill in the request id in $('StatusRequestID') - passing in a request ID will effect this
         update_status_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact);
@@ -6428,7 +6335,6 @@ function ProcessExportResponse(ir_response_obj)
         if ($('ExportButton').retrieve('state', EB_STATE_DISABLED) === EB_STATE_SUBMIT)
         {
             $('ExportButton').store('state', EB_STATE_CANCEL_ENABLED);
-            $('ExportButton').store({ "ajax-state" : "pre-click" });
             update_export_buttons();
 
             interval_fn_timer = $('ExportButton').retrieve('interval', null);
@@ -6457,7 +6363,7 @@ function ProcessExportResponse(ir_response_obj)
         else
         {
             // error
-            alert('unexpected eb state');
+            console.log('unexpected eb state 1');
         }
 
         Cookie.setData('requestid', request_id);
@@ -6472,27 +6378,42 @@ function ProcessExportResponse(ir_response_obj)
     }
     else if (endpoint_status === 'StatusCode.REQUEST_COMPLETE')
     {
-        // implies url_quick format and all online as-is; there should be no request ID
-        update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_reccords, number_files, access, data_package, file_format, keywords_file, export_data, contact);
+        // two cases: 1. url_quick format and all online as-is; there should be no request ID; 2. url (premium) and initiate_request sent an exp 
+        // status request, and got a StatusCode.REQUEST_COMPLETE response
 
         Cookie.setData('state', 0);
         Cookie.setData('requestid', '');
 
+        eb_state = $('ExportButton').retrieve('state', EB_STATE_DISABLED);
+
         // the user has clicked on the "get path" EB button; we need to changed back to disabled state
-        if ($('ExportButton').retrieve('state', EB_STATE_DISABLED) == EB_STATE_PATH)
+        if (eb_state === EB_STATE_PATH)
         {
+            // if the user has clicked on the "get path" EB button; we need to changed back to disabled state; status
+            // could be StatusCode.REQUEST_COMPLETE, but the eb state was not path - this happens when
+            // for a request that serviced without starting a new export
+
             // before we change the state to disabled, we need to ensure that the interval function is no longer running
             // (due to a race condition, it may still be running (interval sets to EB_STATE_PATH, then this code here
             // runs, which changes state to EB_STATE_DISABLED before interval function has a chance to clear itself))
             set_eb_state_disabled(false);
         }
+        else if (eb_state === EB_STATE_SUBMIT)
+        {
+            // request was satified synchronously
+            $('ExportButton').store({ "state" : EB_STATE_PATH });
+            alert('XX changed state to path');
+        }
         else
         {
-            // error
-            alert('unexpected eb state');
-            set_eb_state_disabled(true);
+            console.log('unexpected eb state 2' + eb_state.toString())
         }
-        
+
+        update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact, false);
+
+        // fill in the request ID in the status section
+        update_status_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact);
+
         if ($('FileUploadCheckbox').checked)
         {
             $('FileUploadInfo').innerHTML = 'file upload done; ' + number_records + ' records requested';
@@ -6507,7 +6428,7 @@ function ProcessExportResponse(ir_response_obj)
         error_message = 'unexpected endpoint error ' + endpoint_status;
         endpoint_status = 'ErrorCode.REQUEST_FATAL_ERROR';
 
-        update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_reccords, number_files, access, data_package, file_format, keywords_file, export_data, contact);
+        update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_reccords, number_files, access, data_package, file_format, keywords_file, export_data, contact, false);
 
         set_eb_state_disabled(true);
         Cookie.setData('state', 0);
@@ -6518,11 +6439,14 @@ function ProcessExportResponse(ir_response_obj)
         error_message = 'unexpected endpoint status ' + endpoint_status;
         endpoint_status = 'ErrorCode.REQUEST_FATAL_ERROR';
 
-        update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_reccords, number_files, access, data_package, file_format, keywords_file, export_data, contact); 
+        update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_reccords, number_files, access, data_package, file_format, keywords_file, export_data, contact, false); 
    
         set_eb_state_disabled(true); 
         Cookie.setData('state', 0);
     }
+
+    alert('setting export button to pre click')
+    $('ExportButton').store({ "ajax-state" : "pre-click" });
 }
 // tester success
 </script>
@@ -6540,17 +6464,17 @@ function ClearStatus()
 // update the UI of the upper/request sectioni
 // cannot be the case that both buttons have been clicked simultaneously (they would stomp on each other)
 // both button clicks affect all UI elements
-function update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keyword_fiile, export_data, contact)
+function update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keyword_fiile, export_data, contact, is_streamed)
 {
     // update the UI at the bottom of the uppper/request section; there is a table with three columns (the first column is a header - RequestID, Status, Data Location):
     // first column:
-    //   row 3, column 1 - $('DataLocation'), the header is either 'Data Location' (for non-streamed exports) or 'Download' (for streamed exports)
+    //   row 3, column 1 - $('DataLocation'), the header is 'Download' (for streamed exports); row is visible only for streamed export results
     //   row 4, column 1 $('')
     // second column:
     //   row 1, column 2 - $('RequestIdPlace'), the requestID for an export that was initiated successfully
     //   row 2, column 2 - $('ExportStatus'), information like if the export is being processed, data are ready for download, the size of data exported, error 
     //   messages if the data could not be exported
-    //   row 3, column 2 - $('ExportLocation'), a table with URL paths for data
+    //   row 3, column 2 - $('ExportLocation'), used only for url_direct/streamed export result; row is visible only for streamed export results
     // third column:
     //   row 1, column 3 - $('RequestIDDesc'), instructions how to get export status updates (in the lower/status section)
     //   none - only two columns for the 'Status' row
@@ -6621,19 +6545,26 @@ function update_request_section_ui(endpoint_status, endpoint_status_wordy, error
     }
     else
     {
-        if (request_id !== null && request_id.length > 0)
+        if (is_streamed)
         {
-            request_id_resolved = request_id;
-        }
-        else if (endpoint_status === 'StatusCode.REQUEST_COMPLETE')
-        {
-            // no request id plus a complete request means that the request was satisfied without creating an entry in jsoc.export; this happens
-            // when method is 'url-quick'; it does NOT happen under any other circumstance, not even if format is 'as-is'
-            request_id_resolved = 'N/A';
+            request_id_resolved = 'NA';
         }
         else
         {
-            request_id_resolved = '';
+            if (request_id !== null && request_id.length > 0)
+            {
+                request_id_resolved = request_id;
+            }
+            else if (endpoint_status === 'StatusCode.REQUEST_COMPLETE')
+            {
+                // no request id plus a complete request means that the request was satisfied without creating an entry in jsoc.export; this happens
+                // when method is 'url-quick'; it does NOT happen under any other circumstance, not even if format is 'as-is'
+                request_id_resolved = 'N/A';
+            }
+            else
+            {
+                request_id_resolved = '';
+            }
         }
     }
 
@@ -6646,34 +6577,41 @@ function update_request_section_ui(endpoint_status, endpoint_status_wordy, error
     }
     else
     {
-        // since both an export click and a status click modify $('RequestIDDesc'), we do not need to differentiate
-        if (request_id_resolved === request_id && (endpoint_status === 'StatusCode.REQUEST_COMPLETE' || endpoint_status === 'StatusCode.REQUEST_PROCESSING' || endpoint_status === 'StatusCode.REQUEST_QUEUED' || endpoint_status === 'StatusCode.REQUEST_QUEUED_DEBUG'))
+        if (is_streamed)
         {
-            request_id_instructions = HTML_REQUESTID_DESC;
+            request_id_instructions = '';
         }
-
-        // either ajax is running, or pre-click
-        if (request_id_resolved === null || request_id_resolved.length == 0)
+        else
         {
-            if ((export_button_click && $('ExportButton').retrieve('ajax-state', 'pre-click') === 'ajax-running') || (status_button_click && $('StatusButton').retrieve('ajax-state', 'pre-click') === 'ajax-running'))
+            // since both an export click and a status click modify $('RequestIDDesc'), we do not need to differentiate
+            if (request_id_resolved === request_id && (endpoint_status === 'StatusCode.REQUEST_COMPLETE' || endpoint_status === 'StatusCode.REQUEST_PROCESSING' || endpoint_status === 'StatusCode.REQUEST_QUEUED' || endpoint_status === 'StatusCode.REQUEST_QUEUED_DEBUG'))
             {
-                request_id_instructions = 'obtaining request ID';
+                request_id_instructions = HTML_REQUESTID_DESC;
             }
-            else
+
+            // either ajax is running, or pre-click
+            if (request_id_resolved === null || request_id_resolved.length == 0)
             {
-                if ((export_button_click && export_button_error) || (status_button_click && status_button_error))
+                if ((export_button_click && $('ExportButton').retrieve('ajax-state', 'pre-click') === 'ajax-running') || (status_button_click && $('StatusButton').retrieve('ajax-state', 'pre-click') === 'ajax-running'))
                 {
-                    request_id_instructions = 'error obtaining request ID';
+                    request_id_instructions = 'obtaining request ID';
                 }
                 else
                 {
-                   request_id_instructions = '';
+                    if ((export_button_click && export_button_error) || (status_button_click && status_button_error))
+                    {
+                        request_id_instructions = 'error obtaining request ID';
+                    }
+                    else
+                    {
+                       request_id_instructions = '';
+                    }
                 }
             }
         }
     }
 
-    $('RequestIDDesc').value = request_id_instructions;
+    $('RequestIDDesc').innerHTML = request_id_instructions;
 
     // row 2, column 2
     if (reset)
@@ -6682,72 +6620,81 @@ function update_request_section_ui(endpoint_status, endpoint_status_wordy, error
     }
     else
     {
-        // since both an export click and a status click modify $('ExportStatus'), we do not need to differentiate; if ajax is still
-        // running, then much of the following will be skipped over (export_status === null)
-        export_status = $('ExportStatus').retrieve('message', null);
-        if (export_status === null || export_status.length == 0)
+        if (is_streamed)
         {
-            if (endpoint_status === 'StatusCode.REQUEST_COMPLETE')
+            if (payload_size !== null)
             {
-                export_status = 'complete, size ' + payload_size + ' MB';
+                export_status = 'Download size = ' + (Math.round(10 * payload_size/1024/1024) / 10).toString() + ' MB';
             }
-            else if (endpoint_status === 'StatusCode.REQUEST_PROCESSING' || endpoint_status === 'StatusCode.REQUEST_QUEUED' || endpoint_status === 'StatusCode.REQUEST_QUEUED_DEBUG' || endpoint_status === 'StatusCode.REQUEST_NOT_QUEUED')
+        }
+        else
+        {
+            // since both an export click and a status click modify $('ExportStatus'), we do not need to differentiate; if ajax is still
+            // running, then much of the following will be skipped over (export_status === null)
+            export_status = $('ExportStatus').retrieve('message', null);
+            if (export_status === null || export_status.length == 0)
             {
-                alert('should be here, setting exportstatus string ');
-                if (seconds_elapsed !== null && seconds_elapsed.length > 0)
+                if (endpoint_status === 'StatusCode.REQUEST_COMPLETE')
                 {
-                    export_status = 'in progress; payload size, ' + payload_size + ' MB; seconds since request initiated, ' + seconds_elapsed;
+                    export_status = 'complete, size ' + payload_size + ' MB';
+                }
+                else if (endpoint_status === 'StatusCode.REQUEST_PROCESSING' || endpoint_status === 'StatusCode.REQUEST_QUEUED' || endpoint_status === 'StatusCode.REQUEST_QUEUED_DEBUG' || endpoint_status === 'StatusCode.REQUEST_NOT_QUEUED')
+                {
+                    if (seconds_elapsed !== null && seconds_elapsed.length > 0)
+                    {
+                        export_status = 'in progress; payload size, ' + payload_size + ' MB; seconds since request initiated, ' + seconds_elapsed;
+                    }
+                    else
+                    {
+                        export_status = 'in progress; payload size, ' + payload_size + ' MB';
+                    }
+                }
+                else if (endpoint_status === 'ErrorCode.REQUEST_TOO_LARGE')
+                {
+                    export_status = 'denied (payload too large); size, ' + payload_size + ' MB, contact, ' + contact;
+                }
+                else if (endpoint_status === 'ErrorCode.REQUEST_FATAL_ERROR')
+                {
+                    if (error_message !== null && error_message.length > 0)
+                    {
+                        export_status =  'failed; ' + error_message;
+                    }
+                }
+                else if (endpoint_status === 'ErrorCode.REQUEST_NOT_ONLINE')
+                {
+                    export_status = 'timed out; export no longer online';
+                }
+                else if (endpoint_status === 'ErrorCode.REQUEST_TOO_MANY')
+                {
+                    if (error_message !== null && error_message.length > 0)
+                    {
+                        export_status =  'denied (too many requests); ' + error_message;
+                    }
+                }
+            }
+
+            if (export_status === null || export_status.length == 0)
+            {
+                export_status = endpoint_status_wordy;
+            }
+
+            // either ajax is running, or pre-click
+            if (export_status === null || export_status.length == 0)
+            {
+                if ((export_button_click && $('ExportButton').retrieve('ajax-state', 'pre-click') === 'ajax-running') || (status_button_click && $('StatusButton').retrieve('ajax-state', 'pre-click') === 'ajax-running'))
+                {
+                    export_status = 'obtaining status';
                 }
                 else
                 {
-                    export_status = 'in progress; payload size, ' + payload_size + ' MB';
-                }
-            }
-            else if (endpoint_status === 'ErrorCode.REQUEST_TOO_LARGE')
-            {
-                export_status = 'denied (payload too large); size, ' + payload_size + ' MB, contact, ' + contact;
-            }
-            else if (endpoint_status === 'ErrorCode.REQUEST_FATAL_ERROR')
-            {
-                if (error_message !== null && error_message.length > 0)
-                {
-                    export_status =  'failed; ' + error_message;
-                }
-            }
-            else if (endpoint_status === 'ErrorCode.REQUEST_NOT_ONLINE')
-            {
-                export_status = 'timed out; export no longer online';
-            }
-            else if (endpoint_status === 'ErrorCode.REQUEST_TOO_MANY')
-            {
-                if (error_message !== null && error_message.length > 0)
-                {
-                    export_status =  'denied (too many requests); ' + error_message;
-                }
-            }
-        }
-
-        if (export_status === null || export_status.length == 0)
-        {
-            export_status = endpoint_status_wordy;
-        }
-
-        // either ajax is running, or pre-click
-        if (export_status === null || export_status.length == 0)
-        {
-            if ((export_button_click && $('ExportButton').retrieve('ajax-state', 'pre-click') === 'ajax-running') || (status_button_click && $('StatusButton').retrieve('ajax-state', 'pre-click') === 'ajax-running'))
-            {
-                export_status = 'obtaining status';
-            }
-            else
-            {
-                if ((export_button_click && export_button_error) || (status_button_click && status_button_error))
-                {
-                    export_status = 'error obtaining status';
-                }
-                else
-                {
-                    export_status = '';
+                    if ((export_button_click && export_button_error) || (status_button_click && status_button_error))
+                    {
+                        export_status = 'error obtaining status';
+                    }
+                    else
+                    {
+                        export_status = '';
+                    }
                 }
             }
         }
@@ -6759,35 +6706,26 @@ function update_request_section_ui(endpoint_status, endpoint_status_wordy, error
     // only an export button click should create the url table in the upper/request section
     if (reset)
     {
+        $('DataLocation').innerHTML = '';
         $('ExportLocation').innerHTML = '';
+        $('StreamedLinkRow').disabled = true;
+        
     }
     else
     {
-        if (status_button_click)
+        if (is_streamed)
         {
-            if (sums_directory !== null && sums_directory.length > 0)
-            {
-                if (access !== null && access.toLowerCase() === 'ftp')
-                {
-                    data_base_url = "ftp://pail.stanford.edu/export" + sums_directory + "/";
-                }
-                else
-                {
-                    data_base_url = "http://jsoc.stanford.edu" + sums_directory + "/";
-                }
-
-                link_element = "<a href='" + data_base_url + "' target='_blank'>" + data_base_url + "<\/a>";
-            }
-
-            if (link_element === null)
-            {
-                link_element = '';
-            }
-
-            $('ExportLocation').innerHTML = link_element;
+            $('DataLocation').innerHTML = $('DataLocation').retrieve('header', '');
+            $('ExportLocation').innerHTML = $('ExportLocation').retrieve('link', '');
+            $('StreamedLinkRow').disabled = false;
+        }
+        else
+        {
+            $('DataLocation').innerHTML = '';
+            $('ExportLocation').innerHTML = '';
+            $('StreamedLinkRow').disabled = true;
         }
     }
-
 
     // row 4, column 1 - url table
     if (reset)
@@ -6810,20 +6748,18 @@ function update_request_section_ui(endpoint_status, endpoint_status_wordy, error
     }
 
     // export buttons
+    $('ExportButton').store({ "error" : false, "label" : null });
+    $('ExportButtonMsg').store({ "message" : null });
     if (endpoint_status === 'StatusCode.REQUEST_COMPLETE')
     {
         if (export_button_click)
         {
-            $('ExportButton').store({ "error" : false, "label" : "complete" });
-            $('ExportButtonMsg').store({ "message" : null });
         }
     }
     else if (endpoint_status === 'StatusCode.REQUEST_PROCESSING' || endpoint_status === 'StatusCode.REQUEST_QUEUED' || endpoint_status === 'StatusCode.REQUEST_QUEUED_DEBUG')
     {
         if (export_button_click)
         {
-            $('ExportButton').store({ "error" : false, "label" : "wait..." });
-            $('ExportButtonMsg').store({ "message" : null });
         }
     }
     else if (endpoint_status === 'ErrorCode.REQUEST_TOO_LARGE')
@@ -6856,7 +6792,7 @@ function update_request_section_ui(endpoint_status, endpoint_status_wordy, error
 
         }
     }
-    
+
     update_export_buttons();
 
     if (reset)
@@ -7363,7 +7299,6 @@ function update_status_section_ui(endpoint_status, endpoint_status_wordy, error_
             // only an status button click should create the url table in the lower/status section
             if (export_data !== null)
             {
-                alert('creating url table');
                 $('StatusDataLocation').innerHTML = CreateDataTable(export_data, data_package) + '<br>';
             }
             else
@@ -7386,20 +7321,18 @@ function update_status_section_ui(endpoint_status, endpoint_status_wordy, error_
     }
 
     // export buttons
+    $('ExportButton').store({ "error" : false, "label" : null });
+    $('ExportButtonMsg').store({ "message" : null });
     if (endpoint_status === 'StatusCode.REQUEST_COMPLETE')
     {
         if (export_button_click)
         {
-            $('ExportButton').store({ "error" : false, "label" : "complete" });
-            $('ExportButtonMsg').store({ "message" : null });
         }
     }
     else if (endpoint_status === 'StatusCode.REQUEST_PROCESSING' || endpoint_status === 'StatusCode.REQUEST_QUEUED' || endpoint_status === 'StatusCode.REQUEST_QUEUED_DEBUG')
     {
         if (export_button_click)
         {
-            $('ExportButton').store({ "error" : false, "label" : "wait..." });
-            $('ExportButtonMsg').store({ "message" : null });
         }
     }
     else if (endpoint_status === 'ErrorCode.REQUEST_FATAL_ERROR')
@@ -7428,7 +7361,8 @@ function update_status_section_ui(endpoint_status, endpoint_status_wordy, error_
 </script>
 <script type="text/javascript">
 
-
+// called after ajax call complete, so export/status button will be in post-click state; 
+// can be called after export-button click (EB_STATE_PATH), or status-button click
 function ProcessRequestStatusResponse(mr_response_obj)
 {
     var endpoint_status = null;
@@ -7526,7 +7460,7 @@ function ProcessRequestStatusResponse(mr_response_obj)
         endpoint_status = 'ErrorCode.REQUEST_FATAL_ERROR';
     }
     
-    if ($('ExportButton').retrieve('ajax-state', 'pre-click') !== 'pre-click')
+    if ($('ExportButton').retrieve('ajax-state', 'pre-click') === 'post-click')
     {
         export_button_click = true;
     }
@@ -7543,13 +7477,13 @@ function ProcessRequestStatusResponse(mr_response_obj)
         // error - maybe the user really waited a week to get status on an export
         if (export_button_click)
         {
-            update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact);
+            update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact, false);
             Cookie.setData('state', 0);
         }
         else
         {
             // clear out info from the request section - passing a null request id will do that
-            update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, null, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact);
+            update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, null, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact, false);
 
             update_status_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact);
             Cookie.setData('state', 2);
@@ -7561,7 +7495,7 @@ function ProcessRequestStatusResponse(mr_response_obj)
     {
         if (export_button_click)
         {
-            update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact);
+            update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact, false);
             Cookie.setData('state', 0);
         }
         else
@@ -7579,7 +7513,7 @@ function ProcessRequestStatusResponse(mr_response_obj)
             // updates $('StatusRequestID') too since request_id is not null
             update_status_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_reccords, number_files, access, data_package, file_format, keywords_file, export_data, contact);
             
-            update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact);
+            update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact, false);
             Cookie.setData('requestid', request_id);
             Cookie.setData('state', 3);
 
@@ -7587,7 +7521,7 @@ function ProcessRequestStatusResponse(mr_response_obj)
         }
         else
         {
-            update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact);
+            update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact, false);
             Cookie.setData('state', 1);
         }
     }
@@ -7598,8 +7532,9 @@ function ProcessRequestStatusResponse(mr_response_obj)
             Cookie.setData('requestid', '');
             Cookie.setData('state', 0);
 
+            eb_state = $('ExportButton').retrieve('state', EB_STATE_DISABLED);
             // export-button click changes EB state (but status-button click does not) back to disabled
-            if ($('ExportButton').retrieve('state', EB_STATE_DISABLED) === EB_STATE_PATH)
+            if (eb_state === EB_STATE_PATH)
             {
                 // before we change the state to disabled, we need to ensure that the interval function is no longer running
                 // (due to a race condition, it may still be running (interval sets to EB_STATE_PATH, then this code here
@@ -7609,15 +7544,15 @@ function ProcessRequestStatusResponse(mr_response_obj)
             else
             {
                 // error
-                alert('unexpected eb state');
+                console.log('unexpected eb state 3');
             }
 
-           update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact); 
+           update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact, false); 
         }
         else
         {
             // need to update $('RequestIdPlace'), $('ExportStatus'), but NOT $('ExportLocation')
-            update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact);
+            update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact, false);
 
             update_status_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact);
 
@@ -7632,7 +7567,7 @@ function ProcessRequestStatusResponse(mr_response_obj)
         // error
         if (export_button_click)
         {
-            update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact);
+            update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact, false);
             Cookie.setData('state', 0);
         }
         else
@@ -7651,7 +7586,7 @@ function ProcessRequestStatusResponse(mr_response_obj)
 
         if (export_button_click)
         {
-            update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact);
+            update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact, false);
             Cookie.setData('state', 0);
         }
         else
@@ -7661,6 +7596,15 @@ function ProcessRequestStatusResponse(mr_response_obj)
         }
 
         set_eb_state_disabled(true);
+    }
+
+    if (export_button_click)
+    {
+        $('ExportButton').store({ "ajax-state" : "pre-click" });
+    }
+    else
+    {
+        $('StatusButton').store({ "ajax-state" : "pre-click" });
     }
 }
 
@@ -7776,8 +7720,6 @@ function GetStatus()
         $('StatusButton').store({ "ajax-state" : "ajax-running" });
         update_status_section_ui(null, null, null, request_id, null, null, null, null, null, null, null, null, null, null, null);
 
-        alert('starting ajax');
-
         new Ajax.Request(window.location.origin + PENDING_REQUEST_STATUS_PATH, options);
     }
 }
@@ -7811,7 +7753,7 @@ function GetStatus()
 
 <span id="RecordSetExample">
 &nbsp; &nbsp;
-<a href="exportdata.d/ExportDataErrorHelp.html" target="JSOC_Help">Help with Error Messages</a>
+<a href='error-messages.html' target="JSOC_Help">Help with Error Messages</a>
 &nbsp;
 <a href="http://jsoc.stanford.edu/doc/exports/exportdata_lookdata_release_notes.txt" target="JSOC_Help">Release Notes</a>
 </span>
@@ -7839,8 +7781,8 @@ access the data.
 <table>
   <tr>
     <td style="width:11em">RequestID</td>
-    <td style='width:12em' class='data-cell'><span id='RequestIdPlace' name='RequestIdPlace'></td>
-    <td id='RequestIDDesc' style='width:15em'></td>
+    <td style='width:15em' class='data-cell'><span id='RequestIdPlace' name='RequestIdPlace'></td>
+    <td id='RequestIDDesc' style='width:30em'></td>
   </tr>
 
   <tr>
@@ -7848,7 +7790,7 @@ access the data.
     <td colspan='2' class='data-cell'><span id="ExportStatus" name="ExportStatus"></td>
   </tr>
 
-  <tr>
+  <tr id='StreamedLinkRow', style='display:none;'>
     <td id="DataLocation" style="width:11em">Data Location</td>
     <td colspan='2' class='data-cell'><span id="ExportLocation" name="ExportLocation"></td>
   </tr>
