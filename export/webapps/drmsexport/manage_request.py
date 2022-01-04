@@ -579,7 +579,7 @@ class PendingResponse(ManageRequestResponse):
     @classmethod
     def generate_response(cls, *, status_code=None, address, request_id, start_time, **response_dict):
         response_dict['comment'] = cls._comment.format(address=address, request_id=request_id, start_time=start_time)
-        response_dict['request_id'] = request_id # needed when export.py converts ManageRequestResponse into dict
+        # request_id needed when export.py converts ManageRequestResponse into dict
         return super().generate_response(status_code=status_code, address=address, request_id=request_id, start_time=start_time, **response_dict)
 
 class CancelResponse(ManageRequestResponse):
@@ -589,7 +589,7 @@ class CancelResponse(ManageRequestResponse):
     @classmethod
     def generate_response(cls, *, status_code=None, address, request_id, start_time, **response_dict):
         response_dict['comment'] = cls._comment.format(address=address, request_id=request_id, start_time=start_time)
-        response_dict['request_id'] = request_id # needed when export.py converts ManageRequestResponse into dict
+        # request_id needed when export.py converts ManageRequestResponse into dict
         return super().generate_response(status_code=status_code, address=address, request_id=request_id, start_time=start_time, **response_dict)
 
 class StatusResponse(ManageRequestResponse):
