@@ -256,7 +256,6 @@ var MANAGE_REQUEST_ON_SUCCESS_INTERVAL = function(op, callback_fn)
             }
             else if (op == MR_OPERATION_CHECK)
             {
-                alert('pend req status result ' + JSON.stringify(status));
                 // action depends on state and status
                 if (status == MR_STATUS_NOT_PENDING)
                 {
@@ -277,6 +276,9 @@ var MANAGE_REQUEST_ON_SUCCESS_INTERVAL = function(op, callback_fn)
                     {
                         alert('setting state to path');
                         state = EB_STATE_PATH;
+
+                        // force update-request-ui to update request UI
+                        $('ExportButton').store({ "ajax-state" : "post-click" });
                         GetStatus();
                     }
                     else if (state == EB_STATE_PATH)
@@ -326,7 +328,7 @@ var MANAGE_REQUEST_ON_SUCCESS_INTERVAL = function(op, callback_fn)
                             clearTimeout(interval_fn_timeout);
                         }
 
-                        interval_fn_timeout = setTimeout(function () { $("ExportButton").store('state', EB_STATE_TIMEOUT); set_eb_state_disabled(false);}, 86400000);
+                        interval_fn_timeout = setTimeout(function () { $("ExportButton").store('state', EB_STATE_TIMEOUT); set_eb_state_disabled(true);}, 86400000);
                         $("ExportButton").store('interval_timeout', interval_fn_timeout);
                     }
                     else if (state == EB_STATE_SUBMIT_ENABLED)
@@ -829,6 +831,9 @@ ExportUserOK = 0;
 
     $('StatusButton').store({ "reset" : true });
     update_status_section_ui(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+
+    $('ExportButton').store({ "ajax-state" : "pre-click" });
+    $('StatusButton').store({ "ajax-state" : "pre-click" });
 
     file_upload_on_init();
 }
@@ -1534,6 +1539,7 @@ function CreateAssimilateRecordInfoFn(callback)
         var resolved_error_message = error_message;
         var status = null;
         var aiaScaleCompatibilityChecked = null;
+        var disabled_state = null;
         var compatible = null;
         var online = null;
         var size = null;
@@ -1551,7 +1557,8 @@ function CreateAssimilateRecordInfoFn(callback)
             $('ExportRecordSet').store({ "count" : gri_response_obj.count, "valid" : true });
             $('RSCountPlace').innerHTML = gri_response_obj.count.toString();
 
-            aiaScaleCompatibilityChecked = ($('OptionAiaScale').retrieve('disabled_state', null) !== null);
+            disabled_state = $('OptionAiaScale').retrieve('disabled_state', null);
+            aiaScaleCompatibilityChecked = (disabled_state !== null);
 
             // check for compatibility with aia_scale processing
 
@@ -2786,6 +2793,9 @@ function ExportNewRS()
     $('StatusButton').store({ "reset" : true });
     update_status_section_ui(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
+    $('ExportButton').store({ "ajax-state" : "pre-click" });
+    $('StatusButton').store({ "ajax-state" : "pre-click" });
+
     update_protocol_ui(false);
 
     // a change in RS plus a change in record limit causes a change in the number of records - starts jsoc_info asynchronously
@@ -2815,7 +2825,7 @@ function update_record_set_ui(reset)
 
     if (reset)
     {
-        set_eb_state_disabled(false);
+        set_eb_state_disabled(true);
     }
     else
     {
@@ -2840,7 +2850,7 @@ function update_record_limit_ui(reset)
 
     if (reset)
     {
-        set_eb_state_disabled(false);
+        set_eb_state_disabled(true);
     }
 
     limit = parseInt($('ExportRecordLimit').value);
@@ -2870,7 +2880,7 @@ function update_record_limit_ui(reset)
 function SetRecordLimit()
 {
     // dirty since last time the CP button was clicked
-    set_eb_state_disabled(true);
+    $('ExportCheckButton').store({ "dirty" : true });
     return update_record_limit_ui(False)
 }
 
@@ -2883,7 +2893,7 @@ function update_export_method(reset)
     {
         valid = ($('ExportMethod').options[2].value.trim().toLowerCase() === EXP_METH_FULL);
         $('ExportMethod').store({ "valid" : true });
-        set_eb_state_disabled(false);
+        set_eb_state_disabled(true);
     }
 
     // there is nothing to modify in response to a user pull-down selection
@@ -2916,13 +2926,14 @@ function validate_export_method()
     return valid;
 }
 
-// called only when the user changes the export method pulldown
+// called only when the user changes the export method pulldown (so this in the onChange())
 function SetExportMethod(by_whom)
 {
     // byWhom = 0 for user click, else 1 (vestigial)
 
     // dirty since last time the CP button was clicked
     set_eb_state_disabled(true);
+    $('ExportCheckButton').store({ "dirty" : true });
 
     update_export_method_ui(false);
 }
@@ -3009,9 +3020,10 @@ function update_export_method_ui(reset)
     }
 }
 
-// called when file-name format changes
+// called when file-name format changes (onChange())
 function SetExportFilenameFmt()
 {
+    $('ExportCheckButton').store({ "dirty" : true });
     return validate_filename_format();
 }
 
@@ -3475,10 +3487,7 @@ function GetExportProcessingArguments(spCallback)
 function SetExportProtocol(byWhom)
 {
     // byWhom is 'vestigial'
-
-    // disable address
-    set_eb_state_disabled(true);
-
+    $('ExportCheckButton').store({ "dirty" : true });
     update_protocol_ui(false);
 }
 
@@ -3519,10 +3528,7 @@ function update_protocol_options_ui(reset)
 function ProtocolImageUserSet(opt)
 {
     // `opt` is 'vestigial'
-
-    // dirty since last time the CP button was clicked
-    set_eb_state_disabled(true);
-
+    $('ExportCheckButton').store({ "dirty" : true });
     update_protocol_options_ui(false);
 }
 
@@ -3991,7 +3997,7 @@ function update_protocol(reset)
     {
         // fits
         $('ExportProtocol').selectedIndex = 1;
-        set_eb_state_disabled(false);
+        set_eb_state_disabled(true);
     }
     else
     {
@@ -4040,8 +4046,6 @@ function update_protocol_options(reset)
             $('ExportRecordSet').store({ "wavelength" : null });
             $('ProtocolImageOptions').store({ "initialized" : null });
         }
-
-        set_eb_state_disabled(false);
     }
     else
     {
@@ -4142,7 +4146,7 @@ function update_protocol_ui(reset)
 
 
 
-// This function gets called when the Notify field gets modified [exportdata.html only]
+// This function gets called when the Notify field gets modified [exportdata.html only] (onChange())
 function SetExportNotify(clickedByUser)
 {
     var address = $("ExportNotify").value.trim();;
@@ -4156,8 +4160,7 @@ function SetExportNotify(clickedByUser)
         check_for_cancel_enabled_shortcut();
     };
 
-    // dirty since last time the CP button was clicked
-    set_eb_state_disabled(true);
+    $('ExportCheckButton').store({ "dirty" : true });
 
     // invalidate address
     $("ExportNotify").store('valid', null);
@@ -4190,12 +4193,15 @@ function SetExportNotify(clickedByUser)
 // There is no call made to check the validity of the notification email address provided
 // however. Instead, the user must click on the "Check Params for Export" button.
 // [register_email.html only]
+// onChange()
 function SetExportUser(clickedByUser)
 {
     var requestor = null;
     var address = null;
     var newAddress = null;
     var valid = false;
+
+    $('ExportCheckButton').store({ "dirty" : true });
 
     // invalidate requestor
     $("ExportRequestor").store('valid', null);
@@ -4214,6 +4220,7 @@ function SetExportUser(clickedByUser)
 // the compression row is now hidden
 function SetExportCompress()
 {
+    $('ExportCheckButton').store({ "dirty" : true });
     update_compression_ui(false);
 }
 
@@ -5192,7 +5199,6 @@ function update_export_buttons()
     }
     else if (state == EB_STATE_PATH)
     {
-        alert('XX in path section of update butt');
         $('ExportCheckMsg').innerHTML = '';
 
         if ($('ExportButton').retrieve('error', false))
@@ -5207,7 +5213,6 @@ function update_export_buttons()
             $('ExportButton').value = (button_label !== null) ? button_label : 'new export';
             $('ExportButton').style.backgroundColor = colorGreen;
             $('ExportButtonMsg').innerHTML = (button_message !== null) ? button_message : 'Export is complete; click to initiate new export';
-            alert('XX no error');
         }
 
         $("ExportButton").disabled = false;
@@ -5823,7 +5828,13 @@ function ExportButtonOnClickAction()
     {
         // need to use the PENDING_REQUEST_STATUS_PATH endpoint and ProcessRequestStatusResponse() 
         // as the onSuccess() - we update just the upper/request section's status ui
-        GetStatus();
+        // GetStatus();
+        // set state to disabled (for new export)
+        set_eb_state_disabled(true);
+        $('ExportButton').store({ "ajax-state" : "post-click" });        
+        update_request_section_ui(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, false);
+        $('ExportButton').store({ "ajax-state" : "pre-click" });
+        return;
     }
     else
     {
@@ -5831,8 +5842,7 @@ function ExportButtonOnClickAction()
         $('ExportButtonMsg').store({ "message" : "unexpected-export button state" });
         update_request_section_ui(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, false);
 
-        set_eb_state_disabled(true);
-
+        set_eb_state_disabled(false);
         // do not continue onto calling jsoc_fetch
         return;
     }
@@ -6455,6 +6465,7 @@ function ProcessExportResponse(ir_response_obj)
 
 function ClearStatus()
 {
+    $('StatusButton').store({ "reset" : true });
     update_status_section_ui(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 }
 
@@ -6844,8 +6855,10 @@ function update_status_section_ui(endpoint_status, endpoint_status_wordy, error_
         export_button_click = false;
     }
 
-    if ($('StatusButton').retrieve('ajax-state', 'pre-click') !== 'pre-click')
+    if (!export_button_click && $('StatusButton').retrieve('ajax-state', 'pre-click') !== 'pre-click')
     {
+        // can be called by export-button code; if so, then status-button ajax state will be 'running' if 
+        // get-status endpoint running
         status_button_click = true;
         status_button_error = $('StatusButton').retrieve('error', false);
     }
@@ -7008,71 +7021,74 @@ function update_status_section_ui(endpoint_status, endpoint_status_wordy, error_
         $('StatusButtonMsg').store({ "message" : null, "error" : null });
     }
     else
-    {    
-        message = $('StatusButtonMsg').retrieve('message', null);
-        if (message === null || message.length == 0)
-        {
-            // depends on the disposition of the response
-            if (endpoint_status === 'StatusCode.REQUEST_COMPLETE')
+    {
+        if (status_button_click)
+        { 
+            message = $('StatusButtonMsg').retrieve('message', null);
+            if (message === null || message.length == 0)
             {
-                message = 'Click to display status.';
-                $('StatusButtonMsg').style.color = colorBlack;
-            }
-            else if (endpoint_status === 'StatusCode.REQUEST_PROCESSING' || endpoint_status === 'StatusCode.REQUEST_QUEUED' || endpoint_status === 'StatusCode.REQUEST_QUEUED_DEBUG')
-            {
-                message = 'processing...';
-                $('StatusButtonMsg').style.color = colorRealRed;
-            }
-            else if (endpoint_status === 'ErrorCode.REQUEST_FATAL_ERROR')
-            {
-                if (error_message !== null && error_message.length > 0)
+                // depends on the disposition of the response
+                if (endpoint_status === 'StatusCode.REQUEST_COMPLETE')
                 {
-                    message =  error_message;
+                    message = 'Click to display status.';
+                    $('StatusButtonMsg').style.color = colorBlack;
+                }
+                else if (endpoint_status === 'StatusCode.REQUEST_PROCESSING' || endpoint_status === 'StatusCode.REQUEST_QUEUED' || endpoint_status === 'StatusCode.REQUEST_QUEUED_DEBUG')
+                {
+                    message = 'processing...';
+                    $('StatusButtonMsg').style.color = colorRealRed;
+                }
+                else if (endpoint_status === 'ErrorCode.REQUEST_FATAL_ERROR')
+                {
+                    if (error_message !== null && error_message.length > 0)
+                    {
+                        message =  error_message;
+                        $('StatusButtonMsg').style.color = colorRealRed;
+                    }
+                }
+                else if (endpoint_status === 'ErrorCoce.REQUEST_NOT_ONLINE')
+                {
+                    message = 'timed out; export no longer online';
                     $('StatusButtonMsg').style.color = colorRealRed;
                 }
             }
-            else if (endpoint_status === 'ErrorCoce.REQUEST_NOT_ONLINE')
-            {
-                message = 'timed out; export no longer online';
-                $('StatusButtonMsg').style.color = colorRealRed;
-            }
-        }
 
-        if (message === null || message.length == 0)
-        {
-            if (endpoint_status_wordy !== null && endpoint_status_wordy.length > 0)
+            if (message === null || message.length == 0)
             {
-                message = endpoint_status_wordy;
-                $('StatusButtonMsg').style.color = colorRealRed;
-            }
-        }
-
-        if (message === null || message.length == 0)
-        {
-            if ((status_button_click && $('StatusButton').retrieve('ajax-state', 'pre-click') === 'ajax-running') || (export_button_click && $('ExportButton').retrieve('ajax-state', 'pre-click') === 'ajax-running'))
-            {
-                message = 'processing...';
-                $('StatusButtonMsg').style.color = colorRealRed;
-            }
-            else
-            {
-                if ((export_button_click && export_button_error) || (status_button_click && status_button_error))
+                if (endpoint_status_wordy !== null && endpoint_status_wordy.length > 0)
                 {
-                    message = 'error';
+                    message = endpoint_status_wordy;
+                    $('StatusButtonMsg').style.color = colorRealRed;
+                }
+            }
+
+            if (message === null || message.length == 0)
+            {
+                if ((status_button_click && $('StatusButton').retrieve('ajax-state', 'pre-click') === 'ajax-running') || (export_button_click && $('ExportButton').retrieve('ajax-state', 'pre-click') === 'ajax-running'))
+                {
+                    message = 'processing...';
                     $('StatusButtonMsg').style.color = colorRealRed;
                 }
                 else
                 {
-                    if ($('ExportNotify').retrieve('valid', false) && $('StatusRequestID').value.trim().length > 0)
+                    if ((export_button_click && export_button_error) || (status_button_click && status_button_error))
                     {
-                        message = 'Click for export status.';
+                        message = 'error';
+                        $('StatusButtonMsg').style.color = colorRealRed;
                     }
                     else
                     {
-                        message = 'Enter export ID (RequestID) and registered email address (Notify)'
-                    }
+                        if ($('ExportNotify').retrieve('valid', false) && $('StatusRequestID').value.trim().length > 0)
+                        {
+                            message = 'Click for export status.';
+                        }
+                        else
+                        {
+                            message = 'Enter export ID (RequestID) and registered email address (Notify)'
+                        }
 
-                    $('StatusButtonMsg').style.color = colorBlack;
+                        $('StatusButtonMsg').style.color = colorBlack;
+                    }
                 }
             }
         }
@@ -7539,7 +7555,9 @@ function ProcessRequestStatusResponse(mr_response_obj)
                 // before we change the state to disabled, we need to ensure that the interval function is no longer running
                 // (due to a race condition, it may still be running (interval sets to EB_STATE_PATH, then this code here
                 // runs, which changes state to EB_STATE_DISABLED before interval function has a chance to clear itself))
-                set_eb_state_disabled(false);
+
+                // do not change to disabled EB state
+                // set_eb_state_disabled(false);
             }
             else
             {
@@ -7551,9 +7569,6 @@ function ProcessRequestStatusResponse(mr_response_obj)
         }
         else
         {
-            // need to update $('RequestIdPlace'), $('ExportStatus'), but NOT $('ExportLocation')
-            update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact, false);
-
             update_status_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact);
 
             Cookie.setData('state', 1);
@@ -7622,6 +7637,16 @@ function GetStatus()
     var address = null;
     var request_id = null;
     var on_failure = null;
+    var export_button_click = null;
+
+    if ($('ExportButton').retrieve('ajax-state', 'pre-click') === 'post-click')
+    {
+        export_button_click = true;
+    }
+    else 
+    {
+        export_button_click = false;
+    }
 
     // if a status check is currently running, bail (an onClick() and an onChange() will be called when 
     // a user changes the request ID andajax_ then clicks the `request status` button)
@@ -7686,7 +7711,10 @@ function GetStatus()
             {
                 var mr_response_obj = response.responseJSON;
 
-                $('StatusButton').store({ "ajax-state" : "post-click" });
+                if (!export_button_click)
+                {
+                    $('StatusButton').store({ "ajax-state" : "post-click" });
+                }
 
                 if (mr_response_obj !== null)
                 {
@@ -7697,7 +7725,10 @@ function GetStatus()
             {
                 var error_message = "failuring getting export status: " + JSON.stringify(response.responseJSON.error_message);
 
-                $('StatusButton').store({ "ajax-state" : "post-click" });
+                if (!export_button_click)
+                {
+                    $('StatusButton').store({ "ajax-state" : "post-click" });
+                }
 
                 ProcessRequestStatusResponse({ "drms_export_status" : "ErrorCode.REQUEST_FATAL_ERROR",  "drms_export_status_message" : "fatal error", "error_message" : error_message, "contact" : HELP_ADDRESS });
             },
@@ -7705,13 +7736,15 @@ function GetStatus()
             {
                 var error_message = "invalid arguments to pending-request-status endpoint: " + JSON.stringify(response.responseJSON.error_message);
 
-                $('StatusButton').store({ "ajax-state" : "post-click" });
+                if (!export_button_click)
+                {
+                    $('StatusButton').store({ "ajax-state" : "post-click" });
+                }
 
                 ProcessRequestStatusResponse({ "drms_export_status" : "ErrorCode.REQUEST_FATAL_ERROR",  "drms_export_status_message" : "fatal error", "error_message" : error_message, "contact" : HELP_ADDRESS });
             },
             onComplete: function()
             {
-                $('StatusButton').store({ "ajax-state" : "post-click" });
             }
         };
 
@@ -7781,7 +7814,7 @@ access the data.
 <table>
   <tr>
     <td style="width:11em">RequestID</td>
-    <td style='width:15em' class='data-cell'><span id='RequestIdPlace' name='RequestIdPlace'></td>
+    <td style='width:12em' class='data-cell'><span id='RequestIdPlace' name='RequestIdPlace'></td>
     <td id='RequestIDDesc' style='width:30em'></td>
   </tr>
 
@@ -7809,7 +7842,7 @@ access the data.
   <tr>
     <td style="width:11em">RequestID</td>
     <td style="width:12em" class='data-cell'><input style="width:12em;border:none;font-size:16px" type="text" id="StatusRequestID" name="StatusRequestID" style="background-color:#FFF8DC;" value="" onChange="GetStatus();"></td>
-    <td style='padding-left:2em;padding-right:2em'>Identify your export request with this ID.</td>
+    <td style='width:26em;padding-left:2em;padding-right:2em'>Identify your export request with this ID.</td>
     <td style='padding-left:2em;padding-right:2em'><span id="StatusValue"></span></td>
   </tr>
 
@@ -7818,7 +7851,7 @@ access the data.
     <td style='text-align:right'>
       <input id="StatusButton" type="button" value="get status" style="background-color:#D8D8D8" onClick="GetStatus();">
     </td>
-    <td style='padding-left:2em;padding-right:2em'><span id="StatusButtonMsg"></span </td>
+    <td style='width:26em;padding-left:2em;padding-right:2em'><span id="StatusButtonMsg"></span </td>
     <td style='padding-left:2em;padding-right:2em' rowspan="3"><span id="StatusOther"></span></td>
   </tr>
 
@@ -7827,7 +7860,7 @@ access the data.
     <td style='text-align:right'>
       <input id="ClearButton" type="button" value="clear status" style="background-color:#D8D8D8" onClick="ClearStatus();">
     </td>
-    <td style='padding-left:2em;padding-right:2em'>Click to clear export status.</td>
+    <td style='width:26em;padding-left:2em;padding-right:2em'>Click to clear export status.</td>
   </tr>
 
   <tr>
