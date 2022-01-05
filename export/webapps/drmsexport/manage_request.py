@@ -445,7 +445,7 @@ class StatusOperation(Operation):
             status_code = error_code
         else:
             # no fetch error occurred
-            self._log.write_debug([ f'[ StatusOperation.get_response_dict ] NO error calling fetch, status `{status_code.description()}` for request `{str(request_id)}`'])
+            self._log.write_debug([ f'[ StatusOperation.get_response_dict ] NO error calling fetch, status `{status_code.description(address=self._address)}` for request `{str(request_id)}`'])
 
             if status_code == StatusCode.REQUEST_COMPLETE:
                 self._log.write_debug([ f'[ StatusOperation.get_response_dict ] exported data were generated for request `{request_id}`'])
@@ -788,8 +788,8 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
         elif is_program:
             print(error_message)
 
-    if log:
-        log.write_info([f'[ perform_action ] request complete; status {response.status_code.description()}'])
+    if log is not None:
+        log.write_info([ f'[ perform_action ] request complete; status {response.attributes.drms_export_status_description}' ])
 
     return response
 

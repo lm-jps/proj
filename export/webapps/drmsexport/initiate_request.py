@@ -982,7 +982,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
             print(error_message)
 
     if log is not None:
-        log.write_info([f'[ perform_action ] request complete; status {response.status_code.description()}'])
+        log.write_info([ f'[ perform_action ] request complete; status {response.attributes.drms_export_status_description}' ])
 
     return (response, (destination, generator))
 
