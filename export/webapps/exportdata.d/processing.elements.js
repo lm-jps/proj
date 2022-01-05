@@ -164,6 +164,8 @@ function HmiB2ptrSet(param)
   {
     var checkRes = null;
 
+    $('ExportCheckButton').store({ "dirty" : true });
+
     this.argsReady = false;
     this.paramsValid = null;
 
@@ -262,6 +264,8 @@ var AiaScaleOption;
 function AiaScaleSet(param)
   {
     var checkRes = null;
+
+    $('ExportCheckButton').store({ "dirty" : true });
 
     this.argsReady = false;
     this.paramsValid = null;
@@ -569,6 +573,8 @@ function RebinSet(control)
   {
     var checkRes = null;
 
+    $('ExportCheckButton').store({ "dirty" : true });
+
     this.argsReady = false;
     this.paramsValid = null;
 
@@ -740,6 +746,8 @@ function ResizeSet(control)
   {
     var checkRes = null;
 
+    $('ExportCheckButton').store({ "dirty" : true });
+
     this.argsReady = false;
     this.paramsValid = null;
 
@@ -862,6 +870,8 @@ var newDimY = 0;
 
 function ImPatchGetNoaa()
   {
+    $('ExportCheckButton').store({ "dirty" : true });
+
   if ($("ImNOAA").value.strip().empty()) $("ImNOAA").value = "NotSpecified";
   if ($("ImNOAA").value != "NotSpecified")
     {
@@ -936,6 +946,8 @@ function ImPatchGetNoaa()
 function ImPatchSet(param)
   {
     var checkRes = null;
+
+    $('ExportCheckButton').store({ "dirty" : true });
 
     // Get first and last record info
     this.argsReady = false;
@@ -1394,6 +1406,8 @@ function MaprojSet(param)
     var checkRes = null;
     var fl_record_info = $('ExportRecordSet').retrieve('fl_record_info', null);
 
+    $('ExportCheckButton').store({ "dirty" : true });
+
     this.argsReady = false;
     this.paramsValid = null;
 
@@ -1432,6 +1446,8 @@ function MaprojCheck(fromSetProcessing)
     var args = "Maproj";
     var MaprojLocOption;
     var fl_record_info = $('ExportRecordSet').retrieve('fl_record_info', null);
+
+    $('ExportCheckButton').store({ "dirty" : true });
 
     if (!$("OptionMaproj").checked)
     {
