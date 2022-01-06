@@ -974,8 +974,7 @@ function on_load_init_callback()
     // start periodic function to update active HTTP requests counter
     setInterval(UPDATE_HTTP_REQUEST_COUNT, 500);
 
-    set_eb_state_disabled(false);
-    check_for_cancel_enabled_shortcut();
+    check_for_cancel_enabled_shortcut(function() { set_eb_state_disabled(false); enable_input(true); });
 
     window.focus();
 }
@@ -1651,11 +1650,6 @@ function CreateAssimilateRecordInfoFn(callback)
                         first_record_recnum = gri_response_obj.keywords[index].values[0];
                         last_record_recnum = gri_response_obj.keywords[index].values[gri_response_obj.keywords[index].values.length - 1];
                         $('ExportRecordSet').store({ "first_record_recnum" : first_record_recnum, "last_record_recnum" : last_record_recnum });
-                    }
-
-                    if (ctype1Checked && ctype2Checked && online !== null && size != null)
-                    {
-                        break;
                     }
                 }
             }
@@ -2596,14 +2590,17 @@ function ExportNop()
 
 function ExportRSChanged()
 {
-    // dirty since last time the CP button was clicked
-    set_eb_state_disabled(true);
+    $('ExportCheckButton').store({ "dirty" : true });
 
     $('ExportRecordSet').store({ "count" : null });
 
     // reset the wavelength used for the image options for this record-set
     $('ExportRecordSet').store({ "wavelength" : null });
     $("CountButton").style.backgroundColor = colorYellow;
+
+    // processing code caches first and last record info
+    $('ExportRecordSet').store({ "fl_record_info" : null });
+
     ExportNewRS(); // to fix operator not pressing enter or count
   }
 
@@ -2879,8 +2876,7 @@ function update_record_limit_ui(reset)
 // onChange() of ExportRecordLimit; symbol is in html form, so do not change it
 function SetRecordLimit()
 {
-    // dirty since last time the CP button was clicked
-    $('ExportCheckButton').store({ "dirty" : true });
+    set_eb_state_disabled(true);
     return update_record_limit_ui(False)
 }
 
@@ -2931,9 +2927,7 @@ function SetExportMethod(by_whom)
 {
     // byWhom = 0 for user click, else 1 (vestigial)
 
-    // dirty since last time the CP button was clicked
     set_eb_state_disabled(true);
-    $('ExportCheckButton').store({ "dirty" : true });
 
     update_export_method_ui(false);
 }
@@ -3023,16 +3017,13 @@ function update_export_method_ui(reset)
 // called when file-name format changes (onChange())
 function SetExportFilenameFmt()
 {
-    $('ExportCheckButton').store({ "dirty" : true });
+    set_eb_state_disabled(true);
     return validate_filename_format();
 }
 
 function validate_filename_format()
 {
     format_valid = null;
-
-    // dirty since last time the CP button was clicked
-    set_eb_state_disabled(true);
 
     format_valid = ($('ExportFilenameFmt').value.trim().length > 0);
     $('ExportFilenameFmt').store({ 'valid' : format_valid });
@@ -3374,12 +3365,13 @@ function runSetProcessing(intervalFn, spCallback)
 <script type="text/javascript">
 
 
-// the processing.js code defines SetProcessing as the onChange function for the processing checkboxes
+// the processing.js code defines SetProcessing as the onChange function for the top-level processing checkboxes; this
+// will change export parameters, so we must set the eb dirty flag
 function SetProcessing(ichecked, spCallback)
 {
   	var intervalFn;
 
-    // dirty since last time the CP button was clicked
+    $('ExportCheckButton').store({ "dirty" : true }); 
     set_eb_state_disabled(true);
 
   	setProcessingQueue.push(ichecked)
@@ -3483,11 +3475,11 @@ function GetExportProcessingArguments(spCallback)
     }
 }
 
-// called when user changes protocol (export file format) pulldown
+// called when user changes protocol (export file format) pulldown (onChange())
 function SetExportProtocol(byWhom)
 {
     // byWhom is 'vestigial'
-    $('ExportCheckButton').store({ "dirty" : true });
+    set_eb_state_disabled(true);
     update_protocol_ui(false);
 }
 
@@ -4160,7 +4152,7 @@ function SetExportNotify(clickedByUser)
         check_for_cancel_enabled_shortcut();
     };
 
-    $('ExportCheckButton').store({ "dirty" : true });
+    set_eb_state_disabled(true);
 
     // invalidate address
     $("ExportNotify").store('valid', null);
@@ -4237,7 +4229,7 @@ function update_compression_ui(reset)
         compression_element.selectedIndex = 0; // Rice Compression
         compression_element.store({ "valid" : true });
 
-        set_eb_state_disabled(false);
+        set_eb_state_disabled(true);
     }
     else
     {
@@ -4272,7 +4264,7 @@ function update_compression(reset)
         compression_element.selectedIndex = 0;
         compression_element.store({ 'valid' : true });
 
-        set_eb_state_disabled(false);
+        set_eb_state_disabled(true);
     }
 
     // there is nothing to modify in response to a user UI edit
@@ -4325,7 +4317,7 @@ function update_hidden_protocol(reset)
     if (reset)
     {
         $('ExportProtocolHidden').value = protocol;
-        set_eb_state_disabled(false);
+        set_eb_state_disabled(true);
     }
     else
     {
@@ -4363,6 +4355,11 @@ function update_hidden_protocol(reset)
 
                 set_eb_state_disabled(true);
             }
+        }
+        else if (protocol === 'as-is')
+        {
+            $('ExportProtocolHidden').value = protocol;
+            set_eb_state_disabled(true);
         }
         else
         {
@@ -5332,9 +5329,7 @@ function is_ok_to_submit(element, attribute)
 
     if (is_ok)
     {
-        protocol = $('ExportProtocol').options[$('ExportProtocol').selectedIndex].value.trim().toLowerCase();
-
-        if ((protocol !== 'fits' && protocol !== 'jpeg' && protocol !== 'mpeg' && protocol !== 'mp4') || !$('ExportProtocolHidden').retrieve('valid', false))
+        if (!$('ExportProtocolHidden').retrieve('valid', false))
         {
             message = 'Internal error: hidden protocol string not set';
             is_ok = false;
@@ -5358,7 +5353,7 @@ function is_ok_to_submit(element, attribute)
     return is_ok;
 }
 
-function check_for_cancel_enabled_shortcut()
+function check_for_cancel_enabled_shortcut(callback)
 {
     // this is an asyncrhonous check, so we need to have the CP button "wait..." while the check occurs
     // and then call this function back after completion; on_demand attribute:
@@ -5504,10 +5499,9 @@ function check_for_cancel_enabled_shortcut()
 
                             if (interval_fn_timer !== null)
                             {
-                                interval_fn_timeout = setTimeout(function () { $("ExportButton").store('state', EB_STATE_TIMEOUT); set_eb_state_disabled(false);}, 10000);
+                                interval_fn_timeout = setTimeout(function () { $("ExportButton").store('state', EB_STATE_TIMEOUT); set_eb_state_disabled(true);}, 10000);
                                 $("ExportButton").store('interval_timeout', interval_fn_timeout);
                             }
-
                         }
                         else
                         {
@@ -5516,6 +5510,10 @@ function check_for_cancel_enabled_shortcut()
                         }
 
                         update_export_buttons();
+                        if (callback !== null)
+                        {
+                            callback();
+                        }
                     };
 
                     check_pending_fn(update_state_callback_fn);
@@ -5526,6 +5524,11 @@ function check_for_cancel_enabled_shortcut()
                     $("ExportCheckButton").store({ 'on_demand' : false });
                     update_export_buttons();
                 }
+            }
+
+            if (callback !== null)
+            {
+                callback();
             }
         };
 
@@ -5579,9 +5582,6 @@ function CheckExportButtonOnClickAction()
 
     // we've dealt with record-set specification (and possibly email address registration); now deal with the rest;
     // use is_ok_to_submit() to get an error message to display in the CP button message
-
-    // update the UI and internal variables with values the user has chosen
-    update_protocol_ui(false);
 
     // This is an asynchronous call, so we need to put the following "isOK" check into a
     // callback function. Return isOK == 0 since we do not know if it is OK to do an export
@@ -5696,7 +5696,6 @@ function CheckExportParams()
     }
 
     address_registered = (registration_status !== null && (typeof(registration_status) === 'boolean') && registration_status) ? true : false;
-
     if (address_registered)
     {
         // Up till now, SetProcessing() gets called whenever a processing option checkbox gets clicked.
@@ -5734,7 +5733,6 @@ function cancel_export()
         $("StatusRequestID").value = ''; // remove export request ID from RequestID in lower section
         $("RequestIdPlace").innerHTML = ''; // remove export request ID from RequestID in upper section
 
-        cancel_pending_fn = CANCEL_PENDING_REQUEST();
 
         // null -> do nothing on success; let interval function handle the resulting state changes
         cancel_pending_fn(null);
@@ -5748,7 +5746,7 @@ function cancel_export()
             $("ExportButton").store('interval', interval_fn_timer);
 
             // do not allow the pending-request check to last forever (EB is in EB_STATE_CANCEL)
-            interval_fn_timeout = setTimeout(function () { $("ExportButton").store('state', EB_STATE_TIMEOUT); set_eb_state_disabled(false);}, 30000);
+            interval_fn_timeout = setTimeout(function () { $("ExportButton").store('state', EB_STATE_TIMEOUT); set_eb_state_disabled(true);}, 30000);
             $("ExportButton").store('interval_timeout', interval_fn_timeout);
         }
     }
@@ -5803,7 +5801,7 @@ function ExportButtonOnClickAction()
 
         if (interval_fn_timer !== null)
         {
-            interval_fn_timeout = setTimeout(function () { $('ExportButton').store('state', EB_STATE_TIMEOUT); set_eb_state_disabled(false);}, 15000);
+            interval_fn_timeout = setTimeout(function () { $('ExportButton').store('state', EB_STATE_TIMEOUT); set_eb_state_disabled(true);}, 15000);
             $('ExportButton').store('interval_timeout', interval_fn_timeout);
         }
 
@@ -5819,7 +5817,7 @@ function ExportButtonOnClickAction()
     }
     else if (EB_state === EB_STATE_CANCELED)
     {
-        set_eb_state_disabled(false);
+        set_eb_state_disabled(true);
 
         // do not continue onto calling jsoc_fetch
         return;
@@ -5842,7 +5840,7 @@ function ExportButtonOnClickAction()
         $('ExportButtonMsg').store({ "message" : "unexpected-export button state" });
         update_request_section_ui(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, false);
 
-        set_eb_state_disabled(false);
+        set_eb_state_disabled(true);
         // do not continue onto calling jsoc_fetch
         return;
     }
@@ -6366,7 +6364,7 @@ function ProcessExportResponse(ir_response_obj)
 
             if (interval_fn_timer !== null)
             {
-                interval_fn_timeout = setTimeout(function () { $('ExportButton').store('state', EB_STATE_TIMEOUT); set_eb_state_disabled(false);}, 86400000);
+                interval_fn_timeout = setTimeout(function () { $('ExportButton').store('state', EB_STATE_TIMEOUT); set_eb_state_disabled(true);}, 86400000);
                 $('ExportButton').store('interval_timeout', interval_fn_timeout);
             }
         }
@@ -6406,7 +6404,7 @@ function ProcessExportResponse(ir_response_obj)
             // before we change the state to disabled, we need to ensure that the interval function is no longer running
             // (due to a race condition, it may still be running (interval sets to EB_STATE_PATH, then this code here
             // runs, which changes state to EB_STATE_DISABLED before interval function has a chance to clear itself))
-            set_eb_state_disabled(false);
+            set_eb_state_disabled(true);
         }
         else if (eb_state === EB_STATE_SUBMIT)
         {
