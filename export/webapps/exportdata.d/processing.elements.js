@@ -62,9 +62,24 @@ function processingGetRecInfo(exportOption)
     var series = null;
     var specification = null;
     var on_failure = null;
+    var checkRes = null;
 
     if ($('ExportRecordSet').retrieve('fl_record_info', null) !== null)
     {
+        checkRes = null;
+
+        if (exportOption !== null)
+        {
+            checkRes = exportOption.Check(false);
+
+            if (checkRes === 'error')
+            {
+                // ART - deal with bad parameter change
+            }
+
+            exportOption.argsReady = true;
+        }
+
         return;
     }
 
@@ -89,6 +104,7 @@ function processingGetRecInfo(exportOption)
     if (series !== null && first_record_recnum != null && last_record_recnum != null)
     {
         specification = series + '[:#' + first_record_recnum.toString() + ',#' + last_record_recnum.toString() + ']';
+	// ImRecordSet is ALWAYS ExportRecordSet and it cannot be changed
         $('ImRecordSet').innerHTML = $('ExportRecordSet').value;
 
         export_app_arguments = { "specification" : specification, "db-host" : db_host, "keywords" : keyword_list };
@@ -115,19 +131,7 @@ function processingGetRecInfo(exportOption)
                     else
                     {
                         $('ExportRecordSet').store({ "fl_record_info" : gri_response_obj });
-
-                        if (exportOption)
-                        {
-                            exportOption.argsReady = false;
-                            exportOption.paramsValid = null;
-                            exportOption.Check(false);
-                        }
                     }
-                }
-
-                if (exportOption)
-                {
-                    exportOption.argsReady = true;
                 }
             },
             onFailure: function(response)
@@ -144,6 +148,17 @@ function processingGetRecInfo(exportOption)
             },
             onComplete: function(response)
             {
+                if (exportOption !== null)
+                {
+                    checkRes = exportOption.Check(false);
+
+                    if (checkRes === 'error')
+                    {
+                        // ART - deal with bad parameter change
+                    }
+
+                    exportOption.argsReady = true;
+                }
             }
         };
 
@@ -164,7 +179,7 @@ function HmiB2ptrSet(param)
   {
     var checkRes = null;
 
-    $('ExportCheckButton').store({ "dirty" : true });
+    set_eb_state_disabled(true);
 
     this.argsReady = false;
     this.paramsValid = null;
@@ -176,15 +191,9 @@ function HmiB2ptrSet(param)
 
     checkRes = this.Check(false);
 
-    if (checkRes === null)
+    if (checkRes === 'error')
     {
-        this.argsReady = true;
-        return 1;
-    }
-    else if (checkRes.length == 0)
-    {
-        this.argsReady = true;
-        return 0;
+	// ART - deal with bad parameter change
     }
 
     this.argsReady = true;
@@ -262,10 +271,10 @@ function HmiB2ptrCheck(fromSetProcessing)
 var AiaScaleOption;
 
 function AiaScaleSet(param)
-  {
+{
     var checkRes = null;
 
-    $('ExportCheckButton').store({ "dirty" : true });
+    set_eb_state_disabled(true);
 
     this.argsReady = false;
     this.paramsValid = null;
@@ -354,22 +363,14 @@ function AiaScaleSet(param)
 
     checkRes = this.Check(false);
 
-    if (checkRes === null)
+    if (checkRes === 'error')
     {
-        // Error - uncheck the processing step.
-        this.argsReady = true;
-        return 1;
-    }
-    else if (checkRes.length == 0)
-    {
-        // The arguments are invalid, but do not uncheck the processing step.
-        this.argsReady = true;
-        return 0;
+        // ART - deal with bad parameter change
     }
 
     this.argsReady = true;
     return 0;
-  }
+}
 
 function AiaScaleInit(onLoad)
 {
@@ -570,10 +571,10 @@ function RebinInit(onLoad)
   }
 
 function RebinSet(control)
-  {
+{
     var checkRes = null;
 
-    $('ExportCheckButton').store({ "dirty" : true });
+    set_eb_state_disabled(true);
 
     this.argsReady = false;
     this.paramsValid = null;
@@ -616,20 +617,14 @@ function RebinSet(control)
 
     checkRes = this.Check(false);
 
-    if (checkRes === null)
+    if (checkRes === 'error')
     {
-        this.argsReady = true;
-        return 1;
-    }
-    else if (checkRes.length == 0)
-    {
-        this.argsReady = true;
-        return 0;
+        // ART - deal with bad parameter change
     }
 
     this.argsReady = true;
     return 0;
-  }
+}
 
 function RebinCheck(fromSetProcessing)
   {
@@ -743,30 +738,45 @@ function ResizeInit(onLoad)
   }
 
 function ResizeSet(control)
-  {
+{
     var checkRes = null;
+    var fl_record_info = $('ExportRecordSet').retrieve('fl_record_info', null);
 
-    $('ExportCheckButton').store({ "dirty" : true });
+    set_eb_state_disabled(true);
 
     this.argsReady = false;
     this.paramsValid = null;
 
-  if (control == "do_scale")
+    if (control == "do_scale")
     {
-    if ($("ResizeDoScale").checked)
-      {
-      $("ResizeScaleRow").style.display = "table-row";
-      }
-    else
-      {
-      $("ResizeScaleRow").style.display = "none";
-      }
+        if ($("ResizeDoScale").checked)
+        {
+            $("ResizeScaleRow").style.display = "table-row";
+        }
+        else
+        {
+            $("ResizeScaleRow").style.display = "none";
+        }
     }
-  else if (control == "scale")
+    else if (control == "scale")
     {
-    $("ResizeCdelt").style.backgroundColor = colorWhite;
+        $("ResizeCdelt").style.backgroundColor = colorWhite;
     }
-  // no specific action needed for "method", "register_to", "crop", or "replicate"
+  
+    // no specific action needed for "method", "register_to", "crop", or "replicate"
+
+    if (fl_record_info !== null)
+    {
+        checkRes = this.Check(false);
+
+        if (checkRes === 'error')
+        {
+            // ART - deal with bad parameter change
+        }
+
+        this.argsReady = true;
+        return 0;
+    }
 
     processingGetRecInfo(this);
     return 0;
@@ -870,7 +880,7 @@ var newDimY = 0;
 
 function ImPatchGetNoaa()
   {
-    $('ExportCheckButton').store({ "dirty" : true });
+    set_eb_state_disabled(true);
 
   if ($("ImNOAA").value.strip().empty()) $("ImNOAA").value = "NotSpecified";
   if ($("ImNOAA").value != "NotSpecified")
@@ -944,20 +954,20 @@ function ImPatchGetNoaa()
 // be fetched asynchronously. Then ImPatchCheck() will be run. If no first/last record information is fetched, then only
 // ImPatchCheck() is run.
 function ImPatchSet(param)
-  {
+{
     var checkRes = null;
 
-    $('ExportCheckButton').store({ "dirty" : true });
+    set_eb_state_disabled(true);
 
     // Get first and last record info
     this.argsReady = false;
     this.paramsValid = null;
+
     if (param == 1) defaultStartUsed = 0;
     if (param == 2) defaultStopUsed = 0;
 
     if ($("ImRecordSet").innerHTML !== $("ExportRecordSet").value)
     {
-        $('ExportRecordSet').store({ "fl_record_info" : null });
         $("ImTDelta").value = "NotSpecified";
     }
 
@@ -984,15 +994,9 @@ function ImPatchSet(param)
     {
         checkRes = this.Check(false);
 
-        if (checkRes === null)
+        if (checkRes === 'error')
         {
-            this.argsReady = true;
-            return 1;
-        }
-        else if (checkRes.length == 0)
-        {
-            this.argsReady = true;
-            return 0;
+            // ART - deal with bad parameter change
         }
 
         this.argsReady = true;
@@ -1000,9 +1004,8 @@ function ImPatchSet(param)
     }
 
     processingGetRecInfo(this);
-
     return 0;
-  }
+}
 
 // ImResetParams values:
 //  0 set in ImPatchCheck (do not reset parameters)
@@ -1308,16 +1311,12 @@ function ImPatchInit(onLoad)
         $("ImWide").style.backgroundColor = requireColor; $("ImWide").value = "NotSpecified";
         $("ImHigh").style.backgroundColor = requireColor; $("ImHigh").value = "NotSpecified";
         ImTracked = 1;
-        $('ExportRecordSet').store({ "fl_record_info" : null });
         defaultStartUsed = 1;
         defaultStopUsed = 1;
     }
     else
     {
         // set first and last record for impatch
-
-        // blow away arguments cache since we are changing the values of processingFirstRecord and processingLastRecord
-        $('ExportRecordSet').store({ "fl_record_info" : null })
         processingGetRecInfo(this); // changes this.argsReady to true
     }
   }
@@ -1406,7 +1405,7 @@ function MaprojSet(param)
     var checkRes = null;
     var fl_record_info = $('ExportRecordSet').retrieve('fl_record_info', null);
 
-    $('ExportCheckButton').store({ "dirty" : true });
+    set_eb_state_disabled(true);
 
     this.argsReady = false;
     this.paramsValid = null;
@@ -1419,15 +1418,9 @@ function MaprojSet(param)
     {
         checkRes = this.Check(false);
 
-        if (checkRes === null)
+        if (checkRes === 'error')
         {
-            this.argsReady = true;
-            return 1;
-        }
-        else if (checkRes.length == 0)
-        {
-            this.argsReady = true;
-            return 0;
+            // ART - deal with bad parameter change
         }
 
         this.argsReady = true;
@@ -1435,7 +1428,6 @@ function MaprojSet(param)
     }
 
     processingGetRecInfo(this);
-
     return 0;
   }
 
@@ -1447,7 +1439,7 @@ function MaprojCheck(fromSetProcessing)
     var MaprojLocOption;
     var fl_record_info = $('ExportRecordSet').retrieve('fl_record_info', null);
 
-    $('ExportCheckButton').store({ "dirty" : true });
+    set_eb_state_disabled(true);
 
     if (!$("OptionMaproj").checked)
     {
@@ -1607,7 +1599,6 @@ function MaprojInit(onLoad)
         $("MaprojY").style.backgroundColor = requireColor; $("MaprojY").value = "NotSpecified";
         $("MaprojWide").style.backgroundColor = requireColor; $("MaprojWide").value = "NotSpecified";
         $("MaprojHigh").style.backgroundColor = requireColor; $("MaprojHigh").value = "NotSpecified";
-        $('ExportRecordSet').store({ "fl_record_info" : null });
         defaultStartUsed = 1;
         defaultStopUsed = 1;
     }
