@@ -31,27 +31,26 @@ from drms_utils import Formatter as DrmsLogFormatter, Log as DrmsLog, LogLevel a
 # the drmsexport web application HTML and JavaScript files are in proj/export/webapps
 #   + the static web pages are exportdata.html and export_request_form.html; they contain in-line JavaScript, as
 #     well as references to JavaScript contained in separate files
-#     - exportdata.html: this file contains JavaScript only; it includes a JavaScript script that contains a single string variable
+#     - export.html: this file contains JavaScript only; it includes a JavaScript script that contains a single string variable
 #       that contains a text representation of the export_request_form.html
-#     - export_request_form.html: this file contains the definitions of the HTML elements that compose the export web page
+#     - request-form.html: this file contains the definitions of the HTML elements that compose the export web page; its contents
+#       are loaded with an HTTP GET request
+#     - registration.html: the HTML elements for the email-address registration page
+#     - error-messages.html: at the top of
 #   + the export JavaScript files are:
-#     - export_request_form.htmlesc: this is a version of export_request_form.html that has been converted into a single JavaScript string
-#       variable, where whitespace has been removed and characters have been percent-escaped if necessary; exportdata.html
-#       'includes' this file as a JavaScript script
-#     - export_email_verify.js: this file contains code that makes HTTP requests that access the email-registration system
-#     - no_processing.js: this file contains a single array JavaScript variable that lists all DRMS data series for which
+#     - processing.exclusions.js: this file contains a single array JavaScript variable that lists all DRMS data series for which
 #       export-processing is prohibited
-#     - processing.js: this file contains code that makes HTTP requests that cause export processing to occur during the export
+#     - processing.elements.js: this file contains code that makes HTTP requests that cause export processing to occur during the export
 #       process
-#     - protocols.js: this file contains code that makes HTTP requests that gets image-protocol (export file type) parameters
-#     - prototype.js: this is a JavaScript framework that provides additional functionality, such as the ability to make AJAX requests;
+#     - processing.protocols.js: obsolete; no longer used; code was moved to export.html
+#     - tooltips.definitions.js: definition of tooltips; uses prototip.js
+#     - user.registration.js: this file contains code that makes HTTP requests that access the email-registration system
+#     - cookies.js (third party): this is a JavaScript microframework that provides cookie support; it requires prototype js
+#     - prototip.js (third party): this is a JavaScript microframework that provides "tooltip" functionality - when the user clicks on a
+#       tooltip element a text bubble appears
+#     - prototype.js (third party): this is a JavaScript framework that provides additional functionality, such as the ability to make AJAX requests;
 #       we probably are using version 1.7
-#     - prototip.js: this is a JavaScript microframework that provides "tooltip" functionality - when the user clicks on a tooltip element
-#       a text bubble appears
-#     - cookies.js: this is a JavaScript microframework that provides cookie support; it requires prototype js
-#     - addOnTips.js:
-#     - prototip.css: css sheet for prototip microframework
-
+#     - prototip.css (third party): css sheet for prototip microframework
 
 #########################
 # browser/network tool  #
