@@ -2194,7 +2194,8 @@ function CreateAssimilateSeriesInfoFn(callback)
                 // GenerateFileFormatString does the following:
                 //    file format string, first segment, first time-prime key
                 GenerateFileFormatString(gsi_response_obj);
-                var ii = 1;
+
+                update_protocol_ui(false);
             }
         }
 
@@ -2404,7 +2405,6 @@ function CreateAssimilateParsedSpecFn()
 
                 // if we have skipped the requestRSInfo callback, then we need to do that later
 
-
                 enable_processing_options_fn = CreateEnableProcessingOptionsFn();
 
                 assimilate_record_info_fn = CreateAssimilateRecordInfoFn(enable_processing_options_fn);
@@ -2423,7 +2423,6 @@ function CreateAssimilateParsedSpecFn()
 
                 // ajax callback is assimilate_series_info_fn, which calls the function that enables/disables processing items
                 DownloadSeriesInfo(assimilate_series_info_fn);
-                
             }
         };
 
