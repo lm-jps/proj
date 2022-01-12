@@ -31,7 +31,7 @@
     <tr id="RecordLimitRow">
       <td>Record Limit</td><td><span id="RecordLimitHelp" class="tip">?</span></td>
       <td><input id="ExportRecordLimit" type="text" name="ExportReccordLimit" value="none" style="width:15em" onChange="SetRecordLimit();" ></td>
-      <td>Optional manual limit to number of records to export.</td>
+      <td>Maximum number of records to export (optional).</td>
     </tr>
 
     <tr id="RecordCountRow">
@@ -52,7 +52,7 @@
         <option value="url-tar">url-tar
         <option value="ftp-tar">ftp-tar
         </select> </td>
-      <td>Choose method, url_quick or url for now. url_quick implies protocol of "as-is"</td>
+      <td>Data-access method; url_quick implies protocol of "as-is".</td>
     </tr>
 
     <tr id="FilenameFmtRow">
@@ -580,7 +580,7 @@
           <option value="MPEG">MPEG
           <option value="MP4">MP4
         </select> </td>
-      <td>Choose protocol, "FITS", "JPEG", "MPG", "MP4", or "as-is".  Note uncompressed FITS not an option</td>
+      <td>Data-file format; FITS files are always compressed.</td>
     </tr>
 
     <!-- File protocol options -->
@@ -655,7 +655,7 @@
         <span id="ExportNotifyMsg">&nbsp;</span>
       </td>
       <td>
-        Provide your email address to identify yourself as an export user and to receive notifications.
+        An email address that has been registered for use with the export system.
       </td>
     </tr>
 
@@ -663,7 +663,7 @@
       <td>Requestor</td>
       <td><span id="RequestorHelp" class="tip">?</span></td>
       <td><input id="ExportRequestor" type="text" name="requestor" value="" style="width:15em" onChange="SetExportUser(true);" ></td>
-      <td><span id="RequestorMessage">Provide an optional user identifier.</span></td>
+      <td><span id="RequestorMessage">A user profile name (optional).</span></td>
     </tr>
 
     <tr>
