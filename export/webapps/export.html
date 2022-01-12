@@ -91,6 +91,8 @@ var EXTERNAL_WEBSERVER = 'solarweb2';
 var EXTERNAL_WEBSERVER_PORT = '8080';
 var STANFORD_DOMAIN = 'stanford.edu';
 
+var DATA_BASE_URL = 'https://jsoc1.stanford.edu';
+
 // EB states
 var EB_STATE_DISABLED = 'disabled';
 var EB_STATE_ENABLED = 'enabled';
@@ -705,7 +707,6 @@ var TipsCreated = 0;
 var args;
 var state=0;
 var ExportProcessingArgs = "";
-var ProcessingObj = null;
 var ProcessingAllowed = 1;
 
 // Export processing globals.
@@ -843,7 +844,7 @@ ExportUserOK = 0;
 function getargs()
 {
     // as far as I can tell, state never equals anything but 0 here; it gets set to 2 in GetExport() - called when user clicks 'submit',
-    // it gets set to 2 in GetReExport, it gets touched in ProcessExportResponse() - that function first sets to 3 then to 0, setting to
+    // it gets set to 2 in GetReExport, it gets touched in AssimilateSubmissionResponse() - that function first sets to 3 then to 0, setting to
     // 0 always, and it gets set to either 2 (error jsoc_fetch status) or 1 (non-error jsoc_fetch status) after jsoc_fetch op=status returns
     // but that state never gets used anywhere; the state is only read here, and it is always 0
     //
@@ -1282,7 +1283,7 @@ function create_export_endpoint_arguments(method)
     }
     else
     {
-        export_endpoint_arguments = { "access" : access, "package" : export_package, "specification" : $('ExportRecordSet').value, "file-format" : file_format, "file-format-args" : file_format_args, "file-name-format" : $('ExportFilenameFmt').value, "number-records" : get_max_records(), "processing" : ProcessingObj };
+        export_endpoint_arguments = { "access" : access, "package" : export_package, "specification" : $('ExportRecordSet').value, "file-format" : file_format, "file-format-args" : file_format_args, "file-name-format" : $('ExportFilenameFmt').value, "number-records" : get_max_records(), "processing" : $('ExportProcessing').procesing_obj };
     }
 
     alert('exp args ' + JSON.stringify(export_endpoint_arguments));
@@ -1359,7 +1360,7 @@ function process_file_upload_response()
     if (iframe_html.length > 0)
     {
         response = iframe_html.responseJSON;
-        ProcessExportResponse(response);
+        AssimilateSubmissionResponse(response);
     }    
 }
 
@@ -2809,8 +2810,8 @@ function update_processing_us(reset)
 
 }
 
-</script>                                                                                                                                                                                            <script type="text/javascript">
-
+</script>
+<script type="text/javascript">
 
 // respond to change in record-set value
 function update_record_set_ui(reset)
@@ -3193,9 +3194,6 @@ function runSetProcessing(intervalFn, spCallback)
     // Add recordLimit FIRST always. Could change when user changes RecordSet specification.
     ExportProcessingArgs = "n=" + get_max_records().toString();
 
-    // do not put RecordLimit in ProcessingObj
-    ProcessingObj = {};
-
     var isok = 1;
     var nchecked = 0;
     var iProc = 0;
@@ -3391,6 +3389,7 @@ function GetExportProcessingArguments(spCallback)
     var oneChecked = false;
     var argument_argument_obj = null;
     var argument_namespace = null;
+    var processing_obj = null;
 
     if (!ExportProcessingArgsReady())
     {
@@ -3426,11 +3425,26 @@ function GetExportProcessingArguments(spCallback)
             // ignore that processing step, and uncheck its checkbox.
             if (args.length > 0)
             {
+                if (processing_obj === null)
+                {
+                    processing_obj = {};
+                }
+
                 // args contains all the processing args. ExportProcessingArgs will have n=X already.
                 ExportProcessingArgs += "|" + args;
                 argument_argument_obj = unserialize_arguments(args);
                 argument_namespace = Object.keys(argument_argument_obj)[0];
-                ProcessingObj[argument_namespace] = argument_argument_obj[argument_namespace];
+                processing_obj[argument_namespace] = argument_argument_obj[argument_namespace];
+
+                if (processing_obj[argument_namespace]['unnamed'].length > 0)
+                {
+                    console.log('unexpected unnamed argument processing argument provided');
+                }
+
+                delete processing_obj[argument_namespace]['unnamed'];
+
+                $('ExportProcessing').store({ "processing_obj" : processing_obj });
+
                 SizeRatio *= ExpOpt.Size;
             }
         }
@@ -4923,6 +4937,7 @@ function update_export_buttons()
     var eb_dirty = $("ExportCheckButton").retrieve('dirty', false); // dirty == false ==> page was reset
     var button_label = null;
     var button_message = null;
+    var disabled_check_button_color = null;
 
     button_label = $('ExportButton').retrieve('label', null);
     button_message = $('ExportButtonMsg').retrieve('message', null);
@@ -4965,9 +4980,8 @@ function update_export_buttons()
         {
             // on_demand pending-request check happening
             // auto-checking for pending-request to allow user to cancel it before entering a new record-set
-            $("ExportCheckButton").style.backgroundColor = colorRed;
-            $("ExportCheckButton").value = 'wait...';
-            $("ExportCheckButton").disabled = true;
+            disabled_check_button_color = colorYellow;
+
             $("ExportCheckMsg").style.color = colorRealRed;
             $("ExportNotify").disabled = true;
             $("ExportRequestor").disabled = true;
@@ -4981,25 +4995,24 @@ function update_export_buttons()
         else
         {
             // no on-demand registration check happening; a user-requested export could be happening, or no address registration/check
-            // happening at all (could have completed already, or there never has been  one)
-            $("ExportCheckButton").style.backgroundColor = colorYellow;
-            // ART
+            // happening at all (could have completed already, or there never has been one)
+            $("ExportCheckButton").style.backgroundColor = colorPreset;
             $("ExportCheckButton").value = address_registered ? 'check parameters' : 'register address';
 
             if (!address_valid && address.length > 0)
             {
-                $("ExportCheckButton").disabled = true;
+                disabled_check_button_color = colorPreset;
                 $("ExportNotify").disabled = false;
             }
             else if (!requestor_valid && requestor.length > 0)
             {
-                $("ExportCheckButton").disabled = true;
+                disabled_check_button_color = colorPreset;
                 $("ExportRequestor").disabled = false;
             }
             else if ((registration_status !== null && (typeof(registration_status) != 'boolean')) || (error_msg !== null && error_msg.length > 0))
             {
                 // an error other than invalid address or requestor syntax
-                $("ExportCheckButton").disabled = true;
+                disabled_check_button_color = colorPreset;
                 $("ExportNotify").disabled = true;
                 $("ExportRequestor").disabled = true;
 
@@ -5014,7 +5027,7 @@ function update_export_buttons()
                 // no error
                 if (registration_pending || checking_registration)
                 {
-                    $("ExportCheckButton").disabled = true;
+                    disabled_check_button_color = colorYellow;
                     $("ExportNotify").disabled = true;
                     $("ExportRequestor").disabled = true;
                     $("ExportNotifyMsg").style.color = colorDarkBlue;
@@ -5030,7 +5043,14 @@ function update_export_buttons()
                 }
                 else
                 {
-                    $("ExportCheckButton").disabled = false;
+                    if ($('ExportRecordSet').value.length == 0 || $('ExportRecordSet').retrieve('count', null) === null)
+                    {
+                        disabled_check_button_color = colorPreset;
+                    }
+                    else
+                    {
+                        disabled_check_button_color = null;
+                    }
 
                     if (address_registered)
                     {
@@ -5043,6 +5063,21 @@ function update_export_buttons()
                       $("ExportRequestor").disabled = false;
                     }
                 }
+            }
+
+            if (disabled_check_button_color !== null)
+            {
+                $('ExportCheckButton').disabled = true;
+                $('ExportCheckButton').style.value = disabled_check_button_color === colorYellow ? 'wait...' : (address_registered ? 'check parameters' : 'register address');
+                $('ExportCheckButton').style.color = null;
+                $('ExportCheckButton').style.backgroundColor = disabled_check_button_color;
+            }
+            else
+            {
+                $('ExportCheckButton').disabled = false;
+                $('ExportCheckButton').style.value = address_registered ? 'check parameters' : 'register address';
+                $('ExportCheckButton').style.backgroundColor = colorDarkGreen;
+                $('ExportCheckButton').style.color = colorWhite;
             }
 
             $("ExportCheckMsg").style.color = colorRealRed;
@@ -5071,12 +5106,13 @@ function update_export_buttons()
             $("ExportCheckMsg").innerHTML = check_message;
         }
 
-        $("ExportButton").style.backgroundColor = colorRed;
-        $("ExportButton").value = "not ready"
-        $("ExportButton").disabled = true;
-        $("ExportButtonMsg").style.color = colorBlack;
+        $('ExportButton').style.color = null;
+        $('ExportButton').style.backgroundColor = colorPreset;
+        $('ExportButton').value = 'submit';
+        $('ExportButton').disabled = true;
+        $('ExportButtonMsg').style.color = colorBlack;
 
-        if ($("StatusRequestID").value.length == 0)
+        if ($('RequestIdPlace').innerHTML.length == 0)
         {
             $("ExportButtonMsg").innerHTML = 'Click on "check parameters" first';
         }
@@ -5120,6 +5156,8 @@ function update_export_buttons()
     }
     else if (state == EB_STATE_ENABLED)
     {
+        $('ExportCheckButton').style.backgroundColor = colorPreset;
+        $('ExportCheckButton').style.color = null;
         $('ExportCheckButton').disabled = true;
 
         $('ExportCheckMsg').style.color = colorBlack;
@@ -5137,11 +5175,10 @@ function update_export_buttons()
     }
     else if (state == EB_STATE_SUBMIT_ENABLED)
     {
-        $('ExportCheckMsg').innerHTML = '';
-
-        $("ExportButton").style.backgroundColor = colorGreen;
-        $("ExportButton").value = "submit";
-        $("ExportButton").disabled = false;
+        $('ExportButton').style.backgroundColor = colorDarkGreen;
+        $('ExportButton').style.color = colorWhite;
+        $('ExportButton').value = 'submit';
+        $('ExportButton').disabled = false;
         $("ExportButtonMsg").style.color = colorRealRed;
         $("ExportButtonMsg").innerHTML = 'Click to submit export request (or modify input to cancel submission)';
 
@@ -5150,12 +5187,11 @@ function update_export_buttons()
     }
     else if (state == EB_STATE_SUBMIT)
     {
-        $('ExportCheckMsg').innerHTML = '';
-
         if ($('ExportButton').retrieve('error', false))
         {
-            $('ExportButton').value = (button_label !== null) ? button_label : 'FAILURE...';
-            $('ExportButton').style.backgroundColor = colorDarkPink;
+            $('ExportButton').value = (button_label !== null) ? button_label : 'submit';
+            $('ExportButton').style.backgroundColor = colorPreset;
+
             $('ExportButtonMsg').innerHTML = (button_message !== null) ? button_message : 'Failure initiating export request';
         }
         else
@@ -5165,70 +5201,77 @@ function update_export_buttons()
             $('ExportButtonMsg').innerHTML = (button_message !== null) ? button_message : '';
         }
 
+        $('ExportButton').style.color = null;
+        $('ExportButton').disabled = true;
+
         disable_input();
     }
     else if (state == EB_STATE_CANCEL_ENABLED)
     {
-        $("ExportCheckButton").disabled = true;
-        $("ExportCheckMsg").style.color = colorBlack;
-        $("ExportCheckMsg").innerHTML = '';
-
         $('ExportButton').style.backgroundColor = colorGreen;
 
         if ($('ExportButton').retrieve('error', false))
         {
-            $('ExportButton').value = (button_label !== null) ? button_label : 'FAILURE...';
-            $('ExportButton').style.backgroundColor = colorDarkPink;
+            $('ExportButton').value = (button_label !== null) ? button_label : 'submit';
+            $('ExportButton').style.backgroundColor = colorPreset;
+            $('ExportButton').style.color = null;
+            $('ExportButton').disabled = true;
+
             $('ExportButtonMsg').innerHTML = (button_message !== null) ? button_message : 'Failure initiating export request';
         }
         else
         {
             $('ExportButton').value = (button_label !== null) ? button_label : 'cancel';
-            $('ExportButton').style.backgroundColor = colorGreen;
+            $('ExportButton').style.backgroundColor = colorDarkGreen;
+            $('ExportButton').style.color = colorWhite;
+            $('ExportButton').disabled = false;
+
             $('ExportButtonMsg').innerHTML = (button_message !== null) ? button_message : 'Click to cancel pending export';
         }
 
-        $("ExportButton").disabled = false;
         $("ExportButtonMsg").style.color = colorRealRed;
 
         disable_input();
     }
     else if (state == EB_STATE_PATH)
     {
-        $('ExportCheckMsg').innerHTML = '';
-
         if ($('ExportButton').retrieve('error', false))
         {
-            $('ExportButton').value = (button_label !== null) ? button_label : 'FAILURE...';
-            $('ExportButton').style.backgroundColor = colorDarkPink;
+            $('ExportButton').value = (button_label !== null) ? button_label : 'submit';
+            $('ExportButton').style.backgroundColor = colorPreset;
+            $('ExportButton').style.color = null;
+            $('ExportButton').disabled = true;
+
             $('ExportButtonMsg').innerHTML = (button_message !== null) ? button_message : 'Failure exporting data';
-            alert('XX error');
         }
         else
         {
             $('ExportButton').value = (button_label !== null) ? button_label : 'new export';
-            $('ExportButton').style.backgroundColor = colorGreen;
+            $('ExportButton').style.backgroundColor = colorDarkGreen;
+            $('ExportButton').style.color = colorWhite;
+            $('ExportButton').disabled = false;
+
             $('ExportButtonMsg').innerHTML = (button_message !== null) ? button_message : 'Export is complete; click to initiate new export';
         }
-
-        $("ExportButton").disabled = false;
 
         disable_input();
     }
     else if (state == EB_STATE_CANCEL)
     {
-        $('ExportCheckMsg').innerHTML = '';
-
+        // user clicked cancel
         if ($('ExportButton').retrieve('error', false))
         {
-            $('ExportButton').value = (button_label !== null) ? button_label : 'FAILURE...';
-            $('ExportButton').style.backgroundColor = colorDarkPink;
+            $('ExportButton').value = (button_label !== null) ? button_label : 'cancel';
+            $('ExportButton').style.backgroundColor = colorPreset;
+            $('ExportButton').style.color = null;
+
             $('ExportButtonMsg').innerHTML = (button_message !== null) ? button_message : 'Failure canceling export';
         }
         else
         {
             $('ExportButton').value = (button_label !== null) ? button_label : 'wait...';
-            $('ExportButton').style.backgroundColor = colorGreen;
+            $('ExportButton').style.backgroundColor = colorYellow;
+
             $('ExportButtonMsg').innerHTML = (button_message !== null) ? button_message : 'cancelling export';
         }
 
@@ -5238,22 +5281,20 @@ function update_export_buttons()
     }
     else if (state == EB_STATE_CANCELED)
     {
-        $('ExportCheckMsg').innerHTML = '';
+        // export was successfully canceled
+        $('ExportButton').value = (button_label !== null) ? button_label : 'new export';
+        $('ExportButton').style.backgroundColor = colorDarkGreen;
+        $('ExportButton').style.color = colorWhite;
+        $('ExportButton').disabled = false;
 
         if ($('ExportButton').retrieve('error', false))
         {
-            $('ExportButton').value = (button_label !== null) ? button_label : 'FAILURE...';
-            $('ExportButton').style.backgroundColor = colorDarkPink;
             $('ExportButtonMsg').innerHTML = (button_message !== null) ? button_message : 'Unable to proceed';
         }
         else
         {
-            $('ExportButton').value = (button_label !== null) ? button_label : 'canceled';
-            $('ExportButton').style.backgroundColor = colorRed;
             $('ExportButtonMsg').innerHTML = (button_message !== null) ? button_message : 'Export request canceled; click to continue';
         }
-
-        $('ExportButton').disabled = false;
     }
 }
 
@@ -5550,7 +5591,6 @@ function CheckExportButtonOnClickAction()
     var record_count = null;
     var file_upload = null;
 
-
     record_count = $('ExportRecordSet').retrieve('count', null);
     file_upload = $('ExportRecordSet').retrieve('file_upload', false);
 
@@ -5649,6 +5689,7 @@ function CheckExportButtonOnClickAction()
             args.filenamefmt = $('ExportFilenameFmt').value;
             args.format = "json";
             args.protocol = $('ExportProtocolHidden').value;
+            args.processing = $('ExportProcessing').retrieve('processing_obj', {});
         }
 
         $('ExportRecordSet').store({ "exportArgs" : args });
@@ -5823,7 +5864,7 @@ function ExportButtonOnClickAction()
     }
     else if (EB_state === EB_STATE_PATH)
     {
-        // need to use the PENDING_REQUEST_STATUS_PATH endpoint and ProcessRequestStatusResponse() 
+        // need to use the PENDING_REQUEST_STATUS_PATH endpoint and AssimilateInquiryResponse() 
         // as the onSuccess() - we update just the upper/request section's status ui
         // GetStatus();
         // set state to disabled (for new export)
@@ -5964,7 +6005,7 @@ function ExportButtonOnClickAction()
 
             // no longer a need to provide size ratio to back-end; jsoc_fetch will calculate it using the processing
             // steps as input
-            export_endpoint_arguments = { "access" : access, "package" : export_package, "specification" : export_arguments.ds, "file-format" : file_format, "file-format-args" : file_format_args, "file-name-format" : export_arguments.filenamefmt, "number-records" :get_max_records(), "processing" : ProcessingObj };
+            export_endpoint_arguments = { "access" : access, "package" : export_package, "specification" : export_arguments.ds, "file-format" : file_format, "file-format-args" : file_format_args, "file-name-format" : export_arguments.filenamefmt, "number-records" :get_max_records(), "processing" : export_arguments.processing };
         }
 
         if (export_endpoint !== null)
@@ -5982,7 +6023,7 @@ function ExportButtonOnClickAction()
 
                     if (ir_response_obj !== null)
                     {
-                        ProcessExportResponse(ir_response_obj);
+                        AssimilateSubmissionResponse(ir_response_obj);
                     }
                 },
                 onFailure: function(response)
@@ -5991,7 +6032,7 @@ function ExportButtonOnClickAction()
 
                     $('ExportButton').store({ "ajax-state" : "post-click" });
 
-                    ProcessExportResponse({ "error_message" : error_message });
+                    AssimilateSubmissionResponse({ "error_message" : error_message });
                 },
                 on428: function(response)
                 {
@@ -5999,7 +6040,7 @@ function ExportButtonOnClickAction()
 
                     $('ExportButton').store({ "ajax-state" : "post-click" });
                     
-                    ProcessExportResponse({ "error_message" : error_message });
+                    AssimilateSubmissionResponse({ "error_message" : error_message });
                 },
                 onComplete: function(response)
                 {
@@ -6156,20 +6197,20 @@ function GetReExport()
 
             if (ir_response_obj !== null)
             {
-                ProcessExportResponse(ir_response_obj);
+                AssimilateSubmissionResponse(ir_response_obj);
             }
         },
         onFailure: function(response)
         {
             var error_message = "failuring re-exporting data: " + JSON.stringify(response.responseJSON.error_message);
 
-            ProcessExportResponse({ "error_message" : error_message });
+            AssimilateSubmissionResponse({ "error_message" : error_message });
         },
         on428: function(response)
         {
             var error_message = "invalid arguments to re-export endpoint: " + JSON.stringify(response.responseJSON.error_message);
 
-            ProcessExportResponse({ "error_message" : error_message });
+            AssimilateSubmissionResponse({ "error_message" : error_message });
         },
         onComplete: function(response)
         {
@@ -6188,7 +6229,7 @@ function GetReExport()
 
 // called after ajax complete, so export button is in post-click state (called only in response to 
 // export-button click); sets export-button state to pre-click upon return
-function ProcessExportResponse(ir_response_obj)
+function AssimilateSubmissionResponse(ir_response_obj)
 {
     var endpoint_status = null;
     var endpoint_status_wordy = null;
@@ -6409,7 +6450,6 @@ function ProcessExportResponse(ir_response_obj)
         {
             // request was satified synchronously
             $('ExportButton').store({ "state" : EB_STATE_PATH });
-            alert('XX changed state to path');
         }
         else
         {
@@ -6452,7 +6492,6 @@ function ProcessExportResponse(ir_response_obj)
         Cookie.setData('state', 0);
     }
 
-    alert('setting export button to pre click')
     $('ExportButton').store({ "ajax-state" : "pre-click" });
 }
 // tester success
@@ -7236,7 +7275,7 @@ function update_status_section_ui(endpoint_status, endpoint_status_wordy, error_
                 }
                 else
                 {
-                    data_base_url = "http://jsoc.stanford.edu" + sums_directory + "/";
+                    data_base_url = DATA_BASE_URL + sums_directory + "/";
                 }
 
                 link_element = "<a href='" + data_base_url + "' target='_blank'>" + data_base_url + "<\/a>";
@@ -7376,7 +7415,7 @@ function update_status_section_ui(endpoint_status, endpoint_status_wordy, error_
 
 // called after ajax call complete, so export/status button will be in post-click state; 
 // can be called after export-button click (EB_STATE_PATH), or status-button click
-function ProcessRequestStatusResponse(mr_response_obj)
+function AssimilateInquiryResponse(mr_response_obj)
 {
     var endpoint_status = null;
     var endpoint_status_wordy = null;
@@ -7534,7 +7573,7 @@ function ProcessRequestStatusResponse(mr_response_obj)
         }
         else
         {
-            update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact, false);
+            update_status_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact);
             Cookie.setData('state', 1);
         }
     }
@@ -7715,7 +7754,7 @@ function GetStatus()
 
                 if (mr_response_obj !== null)
                 {
-                    ProcessRequestStatusResponse(mr_response_obj);
+                    AssimilateInquiryResponse(mr_response_obj);
                 }
             },
             onFailure: function(response)
@@ -7727,7 +7766,7 @@ function GetStatus()
                     $('StatusButton').store({ "ajax-state" : "post-click" });
                 }
 
-                ProcessRequestStatusResponse({ "drms_export_status" : "ErrorCode.REQUEST_FATAL_ERROR",  "drms_export_status_message" : "fatal error", "error_message" : error_message, "contact" : HELP_ADDRESS });
+                AssimilateInquiryResponse({ "drms_export_status" : "ErrorCode.REQUEST_FATAL_ERROR",  "drms_export_status_message" : "fatal error", "error_message" : error_message, "contact" : HELP_ADDRESS });
             },
             on428: function(response)
             {
@@ -7738,7 +7777,7 @@ function GetStatus()
                     $('StatusButton').store({ "ajax-state" : "post-click" });
                 }
 
-                ProcessRequestStatusResponse({ "drms_export_status" : "ErrorCode.REQUEST_FATAL_ERROR",  "drms_export_status_message" : "fatal error", "error_message" : error_message, "contact" : HELP_ADDRESS });
+                AssimilateInquiryResponse({ "drms_export_status" : "ErrorCode.REQUEST_FATAL_ERROR",  "drms_export_status_message" : "fatal error", "error_message" : error_message, "contact" : HELP_ADDRESS });
             },
             onComplete: function()
             {
