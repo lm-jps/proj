@@ -6968,6 +6968,7 @@ function update_status_section_ui(endpoint_status, endpoint_status_wordy, error_
     if (reset)
     {
         $('StatusButton').value = 'get status';
+        $('StatusButton').style.color = null;
         $('StatusButton').style.backgroundColor = colorPreset;
         $('StatusButton').disabled = true;
     }
@@ -6977,9 +6978,14 @@ function update_status_section_ui(endpoint_status, endpoint_status_wordy, error_
         if (address_is_registered() && $('StatusRequestID').value.trim().length > 0)
         {
             $('StatusButton').disabled = false;
+            $('StatusButton').style.color = colorWhite;
+            $('StatusButton').style.backgroundColor = colorDarkGreen;
         }
         else
         {
+            $('StatusButton').disabled = true;
+            $('StatusButton').style.color = null;
+            $('StatusButton').style.backgroundColor = colorPreset;
             $('StatusButton').disabled = true;
         }
 
@@ -7008,12 +7014,12 @@ function update_status_section_ui(endpoint_status, endpoint_status_wordy, error_
                 {
                     if (button_label === null || button_label.length == 0)
                     {
-                        button_label = 'FAILURE...';
+                        button_label = 'get status';
                     }
 
                     if (button_color === null || button_color.length == 0)
                     {
-                        button_color = colorDarkPink;
+                        button_color = null;
                     }
 
                     button_disabled = true;
@@ -7027,7 +7033,7 @@ function update_status_section_ui(endpoint_status, endpoint_status_wordy, error_
 
                     if (button_color === null || button_color.length == 0)
                     {
-                        button_color = colorGreen;
+                        button_color = colorDarkGreen;
                     }
 
                     button_disabled = false;
@@ -7035,6 +7041,7 @@ function update_status_section_ui(endpoint_status, endpoint_status_wordy, error_
             }
             
             $('StatusButton').value = button_label;
+            $('StatusButton').style.color = button_disabled ? null : colorWhite;
             $('StatusButton').style.backgroundColor = button_color;
             $('StatusButton').disabled = button_disabled;
         }
@@ -7190,6 +7197,32 @@ function update_status_section_ui(endpoint_status, endpoint_status_wordy, error_
         }
     }
 
+    // row 3, col 1 - clear button
+    if (reset)
+    {
+        $('ClearButton').value = 'clear status';
+        $('ClearButton').style.color = null;
+        $('ClearButton').style.backgroundColor = colorPreset;
+        $('ClearButton').disabled = true;
+    }
+    else
+    {
+        if ($('StatusStatus').innerHTML.length == 0)
+        {
+            $('ClearButton').value = 'clear status';
+            $('ClearButton').style.color = null;
+            $('ClearButton').style.backgroundColor = colorPreset;
+            $('ClearButton').disabled = true;
+        }
+        else
+        {
+            $('ClearButton').value = 'clear status';
+            $('ClearButton').style.color = colorWhite;
+            $('ClearButton').style.backgroundColor = colorDarkGreen;
+            $('ClearButton').disabled = false;
+        }
+    }
+
     // row 4, col 2 (yet again more disposition info, data ready, etc.) - affeced by status click only
     if (reset)
     {
@@ -7253,6 +7286,22 @@ function update_status_section_ui(endpoint_status, endpoint_status_wordy, error_
             }
 
             $('StatusStatus').innerHTML = message;
+
+            // dependency between StatusStatus and the clear button
+            if ($('StatusStatus').innerHTML.length == 0)
+            {
+                $('ClearButton').value = 'clear status';
+                $('ClearButton').style.color = null;
+                $('ClearButton').style.backgroundColor = colorPreset;
+                $('ClearButton').disabled = true;
+            }
+            else
+            {
+                $('ClearButton').value = 'clear status';
+                $('ClearButton').style.color = colorWhite;
+                $('ClearButton').style.backgroundColor = colorDarkGreen;
+                $('ClearButton').disabled = false;
+            }
         }
     }
 
