@@ -5,7 +5,7 @@
 from drms_parameters import DRMSParams
 
 # import the flask app from export.py
-from export import export, APP_DEBUG, APP_LOG
+from export import export, APP_LOG, APP_LOG_LEVEL
 
 if __name__ == "__main__":
     drms_params = DRMSParams()
