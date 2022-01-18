@@ -31,26 +31,40 @@ from drms_utils import Formatter as DrmsLogFormatter, Log as DrmsLog, LogLevel a
 # the drmsexport web application HTML and JavaScript files are in proj/export/webapps
 #   + the static web pages are exportdata.html and export_request_form.html; they contain in-line JavaScript, as
 #     well as references to JavaScript contained in separate files
-#     - export.html: this file contains JavaScript only; it includes a JavaScript script that contains a single string variable
+#     - dataview.html [dataview]:
+#     - export.html [export]: this file contains JavaScript only; it includes a JavaScript script that contains a single string variable
 #       that contains a text representation of the export_request_form.html
-#     - request-form.html: this file contains the definitions of the HTML elements that compose the export web page; its contents
+#     - registration.html [registration]: the HTML elements for the email-address registration page
+#     - request-form.html [export]: this file contains the definitions of the HTML elements that compose the export web page; its contents
 #       are loaded with an HTTP GET request
-#     - registration.html: the HTML elements for the email-address registration page
 #     - error-messages.html: at the top of
-#   + the export JavaScript files are:
-#     - processing.exclusions.js: this file contains a single array JavaScript variable that lists all DRMS data series for which
-#       export-processing is prohibited
-#     - processing.elements.js: this file contains code that makes HTTP requests that cause export processing to occur during the export
-#       process
+#   + the JavaScript files are:
+#     - ActiveWidgets (third party) [dataview]: a js framework for creating user interfaces
+#     - amCharts (third party) [dataview]: a js framework that makes charts with which a user can interact
+#     - processing.elements.js [export]: this file contains code that makes HTTP requests that cause export processing
+#       to occur during the export process
+#     - processing.exclusions.js [export]: this file contains a single array JavaScript variable that lists all DRMS data series
+#       for which export-processing is prohibited
 #     - processing.protocols.js: obsolete; no longer used; code was moved to export.html
-#     - tooltips.definitions.js: definition of tooltips; uses prototip.js
-#     - user.registration.js: this file contains code that makes HTTP requests that access the email-registration system
-#     - cookies.js (third party): this is a JavaScript microframework that provides cookie support; it requires prototype js
-#     - prototip.js (third party): this is a JavaScript microframework that provides "tooltip" functionality - when the user clicks on a
-#       tooltip element a text bubble appears
-#     - prototype.js (third party): this is a JavaScript framework that provides additional functionality, such as the ability to make AJAX requests;
-#       we probably are using version 1.7
-#     - prototip.css (third party): css sheet for prototip microframework
+#     - tooltips.definitions.js [export]: definition of tooltips; uses prototip.js
+#     - cookies.js (third party) [export, registration, dataview]: this is a JavaScript microframework that provides cookie support;
+#       it requires prototype.js
+#     - prototip.js (third party) [export, registration, dataview]: this is a JavaScript microframework that provides
+#       "tooltip" functionality - when the user clicks on a tooltip element a text bubble appears
+#     - prototype.js (third party) [export, registration, dataview]: this is a JavaScript framework that provides additional
+#       functionality, such as the ability to make AJAX requests; we probably use version 1.7
+#     - user.registration.js [export, registration]: this file contains code that makes HTTP requests that access
+#       the email-registration system
+#   + the css files are:
+#     - ActiveWidgets (third party) [dataview]: a js framework for creating user interfaces
+#     - amCharts (third party) [dataview]: a js framework that makes charts with which a user can interact
+#     - prototip.css (third party) [export, registration, dataview]: css sheet for prototip microframework
+#   + images:
+#     - JSOC_120.gif [export, registration, dataview]
+#     - favicon.png [export, registration, dataview]
+#   + static files (see config.local)
+#     - whitelist.txt [export, dataview]: contains a list of private DRMS data series that are accessible
+#       via the public sites (config.local parameter WL_FILE)
 
 #########################
 # browser/network tool  #
