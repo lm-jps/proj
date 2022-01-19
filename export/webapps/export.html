@@ -8,7 +8,7 @@
 <script type="text/javascript" src="tp/js/cookies.js"></script>
 <script type="text/javascript" src="tp/js/prototip.js"></script>
 <link rel="stylesheet" type="text/css" href="tp/css/prototip.css">
-<link rel='icon' type='image/png' href='icons/favicon.png'>
+<link rel='icon' type='image/png' href='assets/icons/favicon.png'>
 
 <style type='text/css'>
 .data-cell {
@@ -26,7 +26,35 @@ body {
 </style>
 
 <script type="text/javascript">
-function include_html(callback)
+function private_host_callback()
+{
+    var is_private = null;
+     
+    is_private = $('PrivateHostElement').innerHTML.length > 0;
+    $('PrivateHostElement').store({ "is_private" : is_private });
+}
+
+function create_include_html_on_success(callback_name)
+{
+    var on_success_fn = function(response)
+    {
+        var callback = null;
+
+        if (callback_name !== null)
+        {
+            callback = window[callback_name];
+        }
+
+        if (callback !== null)
+        {
+            callback();
+        }
+    };
+
+    return on_success_fn;
+}
+
+function include_html()
 {
     var div_list = null;
     var div_index = null;
@@ -35,13 +63,15 @@ function include_html(callback)
     var target_element = null;
     var options = null;
     var resource = null;
+    var get_callback = null;
 
-    div_list = $$(".export-include-html");
+    div_list = $$(".include-html");
     for (div_index = 0; div_index < div_list.length; div_index++)
     {
         include_element = div_list[div_index];
-        file_resource = include_element.readAttribute("file-resource");
-        target_element = $(include_element.readAttribute("target-element"));
+        file_resource = include_element.readAttribute('file-resource');
+        target_element = $(include_element.readAttribute('target-element'));
+        callback_name = include_element.readAttribute('callback');
 
         options =
         {
@@ -49,22 +79,20 @@ function include_html(callback)
             parameters: {},
             onSuccess: function(response)
             {
-                var form_html = response.responseText;
+                var html_text = response.responseText;
 
-                target_element.innerHTML = form_html;
-
-                if (callback !== null)
-                {
-                    callback();
-                }
+                target_element.innerHTML = html_text;
             },
             onFailure: function(response)
             {
-                alert("unable to locate request form page");
+                target_element.innerHTML = '';
             },
-            onComplete: function(response)
+            on404: function(response)
             {
-            }
+                target_element.innerHTML = '';
+                console.log(file_resouce + ' not found');
+            },
+            onComplete: create_include_html_on_success(callback_name)
         };
 
         resource = window.location.origin + "/" + file_resource;
@@ -517,20 +545,17 @@ var MANAGE_REQUEST_XHR = function(address, op, interval, callback_fn)
     // we have to deal with the db-server pass-through stuff
     var export_app_arguments = null;
     var options = null;
-    var origin = null;
     var db_host = null;
     var on_success = null;
     var method = null;
 
-    origin = ExportOrigin(null);
-
-    if (origin[0] == 'extServer')
+    if ($('PrivateHostElement').retrieve('is_private', false))
     {
-        db_host = EXTERNAL_SERVER;
+        db_host = INTERNAL_SERVER;
     }
     else
     {
-        db_host = INTERNAL_SERVER;
+        db_host = EXTERNAL_SERVER;
     }
 
     export_app_arguments = { "address" : address, "db-host" : db_host };
@@ -982,7 +1007,7 @@ function on_load_init_callback()
 
 function OnLoadInit()
 {
-    include_html(on_load_init_callback);
+    include_html();
 }
 
 function ReInitPage()
@@ -1295,7 +1320,6 @@ function create_export_endpoint_arguments(method)
 function MakeFileUploadRequest()
 {
     var method = $('ExportMethod').options[$('ExportMethod').selectedIndex].value.toLowerCase();
-    var origin = null;
     var db_host = null;
     var export_endpoint_arguments = null;
     var action = null;
@@ -1307,15 +1331,13 @@ function MakeFileUploadRequest()
         return;
     }
 
-    origin = ExportOrigin(null);
-
-    if (origin[0] == 'extServer')
+    if ($('PrivateHostElement').retrieve('is_private', false))
     {
-        db_host = EXTERNAL_SERVER;
+        db_host = INTERNAL_SERVER;
     }
     else
     {
-        db_host = INTERNAL_SERVER;
+        db_host = EXTERNAL_SERVER;
     }
 
     export_endpoint_arguments = create_export_endpoint_arguments(method);
@@ -1467,19 +1489,16 @@ function ParseSpec(callback)
     var export_app_arguments = null;
     var db_host = null;
     var on_success = null;
-    var origin = null;
     var options = null;
     var on_failure = null;
 
-    origin = ExportOrigin(null);
-
-    if (origin[0] == 'extServer')
+    if ($('PrivateHostElement').retrieve('is_private', false))
     {
-        db_host = EXTERNAL_SERVER;
+        db_host = INTERNAL_SERVER;
     }
     else
     {
-        db_host = INTERNAL_SERVER;
+        db_host = EXTERNAL_SERVER;
     }
 
     export_app_arguments = { "specification" : $('ExportRecordSet').value, "db-host" : db_host, "parse-only" : true };
@@ -1869,7 +1888,6 @@ function ObtainFastRecordCount(errMsg, spec, callback)
 {
     var export_app_arguments = null;
     var options = null;
-    var origin = null;
     var db_host = null;
     var on_success = null;
     var on_failure = null;
@@ -1883,18 +1901,13 @@ function ObtainFastRecordCount(errMsg, spec, callback)
     }
     else
     {
-        // if this is the external host, then use jsocinfointext; this CGI will choose the correct db server to handle the series;
-        // if this is the internal host, then use jsoc_info, which will use the internal db server; Host, RecordLimit and EXTERNAL_SERVER
-        // are globals
-        origin = ExportOrigin(null);
-
-        if (origin[0] == 'extServer')
+        if ($('PrivateHostElement').retrieve('is_private', false))
         {
-            db_host = EXTERNAL_SERVER;
+            db_host = INTERNAL_SERVER;
         }
         else
         {
-            db_host = INTERNAL_SERVER;
+            db_host = EXTERNAL_SERVER;
         }
 
         export_app_arguments = { "specification" : spec, "db-host" : db_host, "number-records" : get_max_records() };
@@ -1954,23 +1967,17 @@ function DownloadRecordInfo(callback)
 {
     var export_app_arguments = null;
     var options = null;
-    var origin = null;
     var db_host = null;
     var on_success = null;
     var on_failure = null;
 
-    // if this is the external host, then use jsocinfointext; this CGI will choose the correct db server to handle the series;
-    // if this is the internal host, then use jsoc_info, which will use the internal db server; Host, RecordLimit and EXTERNAL_SERVER
-    // are globals
-    origin = ExportOrigin(null);
-
-    if (origin[0] == 'extServer')
+    if ($('PrivateHostElement').retrieve('is_private', false))
     {
-        db_host = EXTERNAL_SERVER;
+        db_host = INTERNAL_SERVER;
     }
     else
     {
-        db_host = INTERNAL_SERVER;
+        db_host = EXTERNAL_SERVER;
     }
 
     export_app_arguments = { "specification" : $('ExportRecordSet').value, "db-host" : db_host, "number-records" : get_max_records(), "keywords" : [ KEYWORD_CTYPE1 + ',' + KEYWORD_CTYPE2 + ',' + KEYWORD_LVL_NUM + ',' + KEYWORD_SPEC + ',' + KEYWORD_ONLINE + ',' + KEYWORD_SIZE + ',' + KEYWORD_RECNUM ] };
@@ -2249,20 +2256,17 @@ function DownloadSeriesInfo(callback)
 {
     var export_app_arguments = null;
     var options = null;
-    var origin = null;
     var db_host = null;
     var on_success = null;
     var on_failure = null;
 
-    origin = ExportOrigin(null);
-
-    if (origin[0] == 'extServer')
+    if ($('PrivateHostElement').retrieve('is_private', false))
     {
-        db_host = EXTERNAL_SERVER;
+        db_host = INTERNAL_SERVER;
     }
     else
     {
-        db_host = INTERNAL_SERVER;
+        db_host = EXTERNAL_SERVER;
     }
 
     export_app_arguments = { "series" : [ $('ExportRecordSet').retrieve('series', null) ], "db-host" : db_host, "links" : [] };
@@ -3709,19 +3713,16 @@ function initialize_image_protocol_options(update_options_callback)
         var specification = $('ExportRecordSet').value.trim();
         var export_app_arguments = null;
         var options = null;
-        var origin = null;
         var db_host = null;
         var on_failure = null;
 
-        origin = ExportOrigin(null);
-
-        if (origin[0] == 'extServer')
+        if ($('PrivateHostElement').retrieve('is_private', false))
         {
-            db_host = EXTERNAL_SERVER;
+            db_host = INTERNAL_SERVER;
         }
         else
         {
-            db_host = INTERNAL_SERVER;
+            db_host = EXTERNAL_SERVER;
         }
 
         // uses internal DB - that is where the color table series are stored
@@ -3790,19 +3791,16 @@ function initialize_image_protocol_options(update_options_callback)
     {
         var export_app_arguments = null;
         var options = null;
-        var origin = null;
         var db_host = null;
         var on_failure = null;
 
-        origin = ExportOrigin(null);
-
-        if (origin[0] == 'extServer')
+        if ($('PrivateHostElement').retrieve('is_private', false))
         {
-            db_host = EXTERNAL_SERVER;
+            db_host = INTERNAL_SERVER;
         }
         else
         {
-            db_host = INTERNAL_SERVER;
+            db_host = EXTERNAL_SERVER;
         }
 
         // uses internal DB - that is where the color table series are stored
@@ -5904,7 +5902,6 @@ function ExportButtonOnClickAction()
     {
         var export_app_arguments = null;
         var options = null;
-        var origin = null;
         var db_host = null;
         var export_endpoint = null;
         var export_arguments = null;
@@ -5917,15 +5914,13 @@ function ExportButtonOnClickAction()
         var file_format_args = null;
         var method = null;
 
-        origin = ExportOrigin(null);
-
-        if (origin[0] == 'extServer')
+        if ($('PrivateHostElement').retrieve('is_private', false))
         {
-            db_host = EXTERNAL_SERVER;
+            db_host = INTERNAL_SERVER;
         }
         else
         {
-            db_host = INTERNAL_SERVER;
+            db_host = EXTERNAL_SERVER;
         }
 
         // arguments from URL form
@@ -6150,13 +6145,13 @@ function GetReExport()
 
     origin = ExportOrigin(null);
 
-    if (origin[0] == 'extServer')
+    if ($('PrivateHostElement').retrieve('is_private', false))
     {
-        db_host = EXTERNAL_SERVER;
+        db_host = INTERNAL_SERVER;
     }
     else
     {
-        db_host = INTERNAL_SERVER;
+        db_host = EXTERNAL_SERVER;
     }
 
     if (origin[1] == 'invalidRequestID')
@@ -7747,13 +7742,13 @@ function GetStatus()
 
         origin = ExportOrigin(request_id);
 
-        if (origin[0] == 'extServer')
+        if ($('PrivateHostElement').retrieve('is_private', false))
         {
-            db_host = EXTERNAL_SERVER;
+            db_host = INTERNAL_SERVER;
         }
         else
         {
-            db_host = INTERNAL_SERVER;
+            db_host = EXTERNAL_SERVER;
         }
 
         // An external user can check status on certain internal requests. These requests originated from the external site,
@@ -8018,7 +8013,10 @@ $("ExportRequestForm").innerHTML = "";
 // The onload function is called after this. It calls ProcessingInit() and ProcessingEnabled(). Don't do that here as well.
 </script>
 
-<div class="export-include-html" file-resource="request-form.html" target-element="ExportRequestForm"></div>
+<div class='include-html' file-resource='private-host.html' target-element='PrivateHostElement' callback=private_host_callback>
+    <p id='PrivateHostElement' style='display:none'></p>
+</div>
+<div class='include-html' file-resource='request-form.html' target-element='ExportRequestForm' callback=on_load_init_callback></div>
 
 </body>
 </html>
