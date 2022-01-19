@@ -34,9 +34,24 @@ function private_host_callback()
     $('PrivateHostElement').store({ "is_private" : is_private });
 }
 
-function create_include_html_on_success(callback_name)
+function create_include_html_on_success(target_element)
 {
     var on_success_fn = function(response)
+    {
+        var html_text = response.responseText;
+
+        if (target_element !== null)
+        {
+            target_element.innerHTML = html_text;
+        }
+    };
+
+    return on_success_fn;
+}
+
+function create_include_html_on_complete(callback_name)
+{
+    var on_complete_fn = function(response)
     {
         var callback = null;
 
@@ -51,7 +66,7 @@ function create_include_html_on_success(callback_name)
         }
     };
 
-    return on_success_fn;
+    return on_complete_fn;
 }
 
 function include_html()
@@ -77,12 +92,7 @@ function include_html()
         {
             method: "get",
             parameters: {},
-            onSuccess: function(response)
-            {
-                var html_text = response.responseText;
-
-                target_element.innerHTML = html_text;
-            },
+            onSuccess: create_include_html_on_success(target_element),
             onFailure: function(response)
             {
                 target_element.innerHTML = '';
@@ -90,9 +100,8 @@ function include_html()
             on404: function(response)
             {
                 target_element.innerHTML = '';
-                console.log(file_resouce + ' not found');
             },
-            onComplete: create_include_html_on_success(callback_name)
+            onComplete: create_include_html_on_complete(callback_name)
         };
 
         resource = window.location.origin + "/" + file_resource;
@@ -7733,9 +7742,7 @@ function GetStatus()
 <br><b>JSOC Data Export Request Generation</b>
 
 <!-- Start Message of the Day -->
-<div id="MOTD">
-<!--#include virtual="JSOC_MOTD.html" -->
-</div> <!-- end MOTD div -->
+<div class='include-html' file-resource='motd.html' target-element='MOTD' id='MOTD'></div>
 <!-- END MODT DIV -->
 
 <span id="RecordSetExample">
