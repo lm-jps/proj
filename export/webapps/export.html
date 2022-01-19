@@ -119,8 +119,6 @@ var EXTERNAL_WEBSERVER = 'solarweb2';
 var EXTERNAL_WEBSERVER_PORT = '8080';
 var STANFORD_DOMAIN = 'stanford.edu';
 
-var DATA_BASE_URL = 'https://jsoc1.stanford.edu';
-
 // EB states
 var EB_STATE_DISABLED = 'disabled';
 var EB_STATE_ENABLED = 'enabled';
@@ -203,7 +201,7 @@ var MR_STATUS_REQUEST_CANCELED = 'StatusCode.REQUEST_CANCELED';
 
 var HTML_REQUESTID_DESC = 'Enter this ID in RequestID (below) to obtain export status';
 
-var HELP_ADDRESS = 'jsoc_help@jsoc.stanford.edu';
+var HELP_LOCAL_NAME = 'jsoc_help';
 </script>
 
 <!-- Add functions for export processing (no more protocols js)  -->
@@ -722,7 +720,6 @@ function NotifyProcessingCode()
 
 // Global vars
 var Host = location.host;
-var Internal = 0;
 var SeriesInfo;
 var RequestID;
 var ExportProcessingOptions;
@@ -770,12 +767,9 @@ var colorYellow = "#FFF8DC";
 
 function initVars()
 {
-  Host = location.host;
-  if (Host == "jsoc2.stanford.edu")
-    Internal = 1;
-  else
-    Internal = 0;
-  RequestID = "";
+    Host = location.host;
+  
+    RequestID = "";
     $('ExportRecordSet').store({ "count" : null, "series" : null, "valid" : null });
     update_record_set_ui(true);
     $('ExportRecordLimit').value = 'none';
@@ -953,11 +947,8 @@ function on_load_init_callback()
     initVars(); // This call runs code that requires RecordSet to be set. However, that is not true
               // before it is set below [ $('ExportRecordSet').value = args.ds ]
 
-    if (Internal)
-    {
-        $("header_logo").href="http://jsoc2.stanford.edu";
-        $("footer_link").href="http://jsoc2.stanford.edu";
-    }
+    $('HeaderLink').href = window.location.origin;
+    $('FooterLink').href = window.location.origin;
 
     state = 0;
     Cookie.setData("state", state);
@@ -1020,11 +1011,15 @@ function ReInitPage()
 
 function MainTips(tipstyle)
   {
-  if (TipsCreated == 0)
+    var wiki_page = null;
+
+    if (TipsCreated == 0)
     {
+        wiki_page = window.location.origin + '/jsocwiki/AllAboutJsocNames';
+
     new Tip('RecordFromFileHelp','Allows user to provide a RecordSet list in a file.  ' +
         'The file should contain recordSet specifiers in the format allowed by drms_open_records include files.  ' +
-        'See http://jsoc.stanford.edu/jsocwiki/AllAboutJsocNames.',tipstyle);
+        'See ' + wiki_page + '.',tipstyle);
     new Tip('RecordSetHelp','RecordSet to be exported. May be imported on call and/or may be entered directly here. ' +
         'May be filled in by series select in Im_patch processing option.',tipstyle);
     new Tip('CallLookdataHelp','Start lookdata.html in a different tab/window with RecordSet given.  ' +
@@ -1834,130 +1829,6 @@ function CreateDownloadRecordInfoOnSuccess(callback)
     return on_success_fn;
 }
 
-// tester success
-</script>
-<script type="text/javascript">
-// tester success
-
-// callback is processRecordCount
-function CreateObtainFastRecordCountCallback(callback)
-{
-    // assuming that we have not already gotten the record count
-    var obtainFastRecordCount =
-        function(response)
-        {
-            var gri_response_obj = response.responseJSON;
-            var status = null;
-            var number_records = null;
-            var error_message = null;
-
-            if (gri_response_obj !== null)
-            {
-                status = gri_response_obj.drms_export_status;
-
-                if (status.search(/errorcode/i) == 0)
-                {
-                    error_message = 'failure counting records: ' + JSON.stringify(gri_response_obj.error_message);
-                    $('RSCountPlace').innerHTML = error_message;
-                }
-                else
-                {
-                    // 'StatusCode.SUCCESS' is the only other possible status
-                    number_records = gri_response_obj.count;
-                    $('RSCountPlace').innerHTML = number_records;
-                }
-
-                $('ExportRecordSet').store({ "count" : number_records, "valid" : (error_message === null) })
-
-                if (callback !== null)
-                {
-                    callback(error_message);
-                }
-            }
-        };
-
-    return obtainFastRecordCount;
-}
-
-</script>
-<script type="text/javascript">
-
-
-// if errMsg, then do not call jsoc_info, but we still have to call the callback (which is processRecordCount)
-function ObtainFastRecordCount(errMsg, spec, callback)
-{
-    var export_app_arguments = null;
-    var options = null;
-    var db_host = null;
-    var on_success = null;
-    var on_failure = null;
-
-    if (errMsg && errMsg.length != 0)
-    {
-        if (callback !== null)
-        {
-            callback(errMsg);
-        }
-    }
-    else
-    {
-        if ($('PrivateHostElement').retrieve('is_private', false))
-        {
-            db_host = INTERNAL_SERVER;
-        }
-        else
-        {
-            db_host = EXTERNAL_SERVER;
-        }
-
-        export_app_arguments = { "specification" : spec, "db-host" : db_host, "number-records" : get_max_records() };
-
-        // callback is processRecordCount; response.count has record count
-        on_success = CreateObtainFastRecordCountCallback(callback);
-
-        on_failure = function(error_message)
-        {
-            var callback = callback;
-
-            $('ExportRecordSet').store({ "count" : null, "series" : null, "valid" : false });
-            $('RSCountPlace').innerHTML = error_message;
-            $('ExportRecordSet').disabled = false;
-            set_eb_state_disabled(true);
-
-            if (callback !== null)
-            {
-                callback(error_message);
-            }
-        };
-
-        options =
-        {
-            method: 'get',
-            onSuccess: on_success,
-            onFailure: function(response)
-            {
-                var error_message = 'failure counting records: ' + JSON.stringfy(response.responseJSON.error_message);
-
-                return on_failure(error_message);
-            },
-            on428: function(response)
-            {
-                var error_message = 'invalid arguments to record-set endpoint: ' + JSON.stringfy(response.responseJSON.error_message);
-
-                return on_failure(error_message);
-            },
-            onComplete: function(response)
-            {
-            }
-        };
-
-        options['parameters'] = export_app_arguments;
-
-        new Ajax.Request(window.location.origin + RECORD_SET_PATH, options);
-    }
-}
-
-// tester success
 </script>
 <script type="text/javascript">
 
@@ -7319,7 +7190,7 @@ function update_status_section_ui(endpoint_status, endpoint_status_wordy, error_
                 }
                 else
                 {
-                    data_base_url = DATA_BASE_URL + sums_directory + "/";
+                    data_base_url = window.location.origin + '/' + sums_directory + '/';
                 }
 
                 link_element = "<a href='" + data_base_url + "' target='_blank'>" + data_base_url + "<\/a>";
@@ -7718,6 +7589,7 @@ function GetStatus()
     var request_id = null;
     var on_failure = null;
     var export_button_click = null;
+    var help_address = null;
 
     if ($('ExportButton').retrieve('ajax-state', 'pre-click') === 'post-click')
     {
@@ -7782,6 +7654,8 @@ function GetStatus()
             }
         }
 
+        help_address = HELP_LOCAL_NAME + '@' + location.host;
+
         export_app_arguments = { "address" : address, "db-host" : db_host, "request-id" : request_id };
 
         options =
@@ -7810,7 +7684,7 @@ function GetStatus()
                     $('StatusButton').store({ "ajax-state" : "post-click" });
                 }
 
-                AssimilateInquiryResponse({ "drms_export_status" : "ErrorCode.REQUEST_FATAL_ERROR",  "drms_export_status_message" : "fatal error", "error_message" : error_message, "contact" : HELP_ADDRESS });
+                AssimilateInquiryResponse({ "drms_export_status" : "ErrorCode.REQUEST_FATAL_ERROR",  "drms_export_status_message" : "fatal error", "error_message" : error_message, "contact" : help_address });
             },
             on428: function(response)
             {
@@ -7821,7 +7695,7 @@ function GetStatus()
                     $('StatusButton').store({ "ajax-state" : "post-click" });
                 }
 
-                AssimilateInquiryResponse({ "drms_export_status" : "ErrorCode.REQUEST_FATAL_ERROR",  "drms_export_status_message" : "fatal error", "error_message" : error_message, "contact" : HELP_ADDRESS });
+                AssimilateInquiryResponse({ "drms_export_status" : "ErrorCode.REQUEST_FATAL_ERROR",  "drms_export_status_message" : "fatal error", "error_message" : error_message, "contact" : help_local_name });
             },
             onComplete: function()
             {
@@ -7842,7 +7716,7 @@ function GetStatus()
 </head>
 <body bgcolor="#E0F0FF" onload="OnLoadInit();" >
 <div id="header">
-  <a href ="http://jsoc.stanford.edu" id="header_logo"><img src="http://hmi.stanford.edu/images/web/JSOC_120.gif"
+  <a href='' id='HeaderLink'><img src='/assets/images/JSOC_120.gif'
     style="vertical-align:middle;height:60px;border:0" alt="JSOC logo"></a>
 &nbsp;&nbsp;&nbsp;
 <b><big style="vertical-align:middle">&nbsp;&nbsp;JSOC Data Export</big></b>
@@ -7868,7 +7742,7 @@ function GetStatus()
 &nbsp; &nbsp;
 <a href='error-messages.html' target="JSOC_Help">Help with Error Messages</a>
 &nbsp;
-<a href="http://jsoc.stanford.edu/doc/exports/exportdata_lookdata_release_notes.txt" target="JSOC_Help">Release Notes</a>
+<a href="/doc/exports/exportdata_lookdata_release_notes.txt" target="JSOC_Help">Release Notes</a>
 </span>
 <p>
 If the Method is changed from "url_quick" or "url_direct" you will have additional options to specify.
@@ -8005,7 +7879,7 @@ Use this section to request a renewal/repeat of a prior export for which the dat
 <P style="height:1px">
 <div id="footer" style="vertical-align:bottom;text-align:center;">
 <I>Home page for:</I>
-<a href = "http://jsoc.stanford.edu/" id="footer_link"><b>SDO-JSOC</b></a>
+<a href = '' id='FooterLink'><b>SDO-JSOC</b></a>
 </div>
 
 <script type="text/javascript">
