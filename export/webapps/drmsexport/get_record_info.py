@@ -268,7 +268,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
                 record_set_info_dict = json_loads(response)
 
                 if record_set_info_dict.get('export_server_status') == 'export_server_error':
-                    raise ExportServerError(error_message=f'{response_dict["error_message"]}')
+                    raise ExportServerError(error_message=f'{record_set_info_dict["error_message"]}')
 
                 message = { 'request_type' : 'quit' }
                 send_request(message, connection, log)
