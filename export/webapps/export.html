@@ -4,11 +4,11 @@
 <meta HTTP-EQUIV="Content-Type" content="text/html; charset=iso-8859-1">
 <title>JSOC Export Data</title>
 
-<script type="text/javascript" src="tp/js/prototype.js"></script>
-<script type="text/javascript" src="tp/js/cookies.js"></script>
-<script type="text/javascript" src="tp/js/prototip.js"></script>
+<script type="text/javascript" src="/tp/js/prototype.js"></script>
+<script type="text/javascript" src="/tp/js/cookies.js"></script>
+<script type="text/javascript" src="/tp/js/prototip.js"></script>
 <link rel="stylesheet" type="text/css" href="tp/css/prototip.css">
-<link rel='icon' type='image/png' href='assets/icons/favicon.png'>
+<link rel='icon' type='image/png' href='/assets/icons/favicon.png'>
 
 <style type='text/css'>
 .data-cell {
@@ -194,7 +194,6 @@ var RE_EXPORT_REQUEST_PATH = [ EXPORT_PATH, RE_EXPORT_REQUEST_RESOURCE ].join('/
 var PENDING_REQUEST_STATUS_RESOURCE = 'pending-request-status';
 var PENDING_REQUEST_STATUS_PATH = [ EXPORT_PATH, PENDING_REQUEST_STATUS_RESOURCE ].join('/');
 
-var JSOC_FETCH = 'jsoc_fetch';
 var DRMS_EXPORT = 'drms-export.sh';
 var LOOKDATA = "lookdata";
 
@@ -282,7 +281,6 @@ var MANAGE_REQUEST_ON_SUCCESS_INTERVAL = function(op, callback_fn)
 
             if (status.search(/errorcode/i) == 0)
             {
-                alert('error calling pend req status ' + str(status));
                 // error calling MR - do nothing (don't change state)
                 $("ExportButtonMsg").innerHTML = mr_response_obj.error_message;
                 error = true;
@@ -311,7 +309,6 @@ var MANAGE_REQUEST_ON_SUCCESS_INTERVAL = function(op, callback_fn)
                     }
                     else if (state == EB_STATE_CANCEL_ENABLED)
                     {
-                        alert('setting state to path');
                         state = EB_STATE_PATH;
 
                         // force update-request-ui to update request UI
@@ -730,9 +727,7 @@ function NotifyProcessingCode()
 // Global vars
 var Host = location.host;
 var SeriesInfo;
-var RequestID;
 var ExportProcessingOptions;
-var ExportUserOK;
 var TipsEnabled;
 var TipsCreated = 0;
 var args;
@@ -745,7 +740,6 @@ var ExportProcessingArgsPoll = null;
 var ExportProcessingOK = null;
 
 // Protocol global vars
-var ExportCompressOK;
 var ExportCompressValue = "";
 var ProtocolOptionsSet = 0;
 
@@ -755,7 +749,7 @@ var expURL;
 
 // Colors
 var colorNeutral = "#D4D0C8";
-var colorPreset = "D8D8D8";
+var colorPreset = "#D8D8D8";
 var colorOptionSet = "#FFCC66";
 var colorPink = "#FFD8D8";
 var colorDarkPink = "#FFB0B0";
@@ -777,13 +771,12 @@ var colorYellow = "#FFF8DC";
 function initVars()
 {
     Host = location.host;
-  
-    RequestID = "";
+ 
+    $('RequestIdPlace').innerHTML = ''; 
     $('ExportRecordSet').store({ "count" : null, "series" : null, "valid" : null });
     update_record_set_ui(true);
     $('ExportRecordLimit').value = 'none';
     $('ExportRecordLimit').store({ "limit" : null })  
-ExportUserOK = 0;
   TipsEnabled = 1;
   firstTimePrime = "";
   ProcessingAllowed = 1;
@@ -794,7 +787,6 @@ ExportUserOK = 0;
   ExportProcessingArgsPoll = null;
 
   // Init protocols
-  ExportCompressOK = 1;
   ProtocolOptionsSet = 0;
 
     // If the page is being loaded, then exportdataLoaded is true. If the reset page button was clicked, then
@@ -971,7 +963,7 @@ function on_load_init_callback()
 
     if (args.id)
     {
-        RequestID = args.id;
+        $('RequestIdPlace').innerHTML = args.id;
     }
 
     if (args.limit)
@@ -1232,26 +1224,6 @@ function FileUploadWanted()
 </script>
 <script type="text/javascript">
 
-
-function insertOption(list,text,note)
-  {
-  var y=document.createElement('option');
-  y.value=text;
-  if (note.length)
-    y.text = text + "  --- " + note;
-  else
-    y.text = text;
-  var x = $(list);
-  try
-    {
-    x.add(y,null); // standards compliant
-    }
-  catch(ex)
-    {
-    x.add(y); // IE only
-    }
-  }
-
 function create_export_endpoint_arguments(method)
 {
     var access = null;
@@ -1315,11 +1287,8 @@ function create_export_endpoint_arguments(method)
         export_endpoint_arguments = { "access" : access, "package" : export_package, "specification" : $('ExportRecordSet').value, "file-format" : file_format, "file-format-args" : file_format_args, "file-name-format" : $('ExportFilenameFmt').value, "number-records" : get_max_records(), "processing" : $('ExportProcessing').procesing_obj };
     }
 
-    alert('exp args ' + JSON.stringify(export_endpoint_arguments));
-
     return export_endpoint_arguments;
 }
-
 
 function MakeFileUploadRequest()
 {
@@ -2761,7 +2730,7 @@ function update_record_limit_ui(reset)
 function SetRecordLimit()
 {
     set_eb_state_disabled(true);
-    return update_record_limit_ui(False)
+    return update_record_limit_ui(false)
 }
 
 // reset ==> called in response to RS change, so disabled state is clean
@@ -3556,7 +3525,6 @@ function validate_image_protocol_options(series, wavelength, color_table_metadat
         }
         else
         {
-            alert('invalid  ' + JSON.stringify(image_zoom) + ' ' + JSON.stringify(image_min) + ' ' + JSON.stringify(image_max));
             valid = false;
         }
 
@@ -4442,7 +4410,6 @@ function validate_hidden_protocol()
                         {
                             if (compression_list[index].trim() != protocol_list[index].trim())
                             {
-                                alert('problem ' + JSON.stringify(compression_list[index].trim()) + ' ' + JSON.stringify(protocol_list[index].trim()));
                                 valid = false;
                                 break;
                             }
@@ -4528,7 +4495,6 @@ function validate_hidden_protocol()
                     {
                         if (image_list[index].trim() != protocol_list[index].trim())
                         {
-                            alert('problem ' + JSON.stringify(image_list[index].trim()) + ' ' + JSON.stringify(protocol_list[index].trim()));
                             valid = false;
                             break;
                         }
@@ -5950,20 +5916,14 @@ function GetExport()
 function ExportOrigin(requestID)
 {
     var retVal = [];
-    var hostname = location.hostname.toLowerCase();
-    var port = location.port; // string
 
-    if ((hostname === EXTERNAL_WEBSERVER || hostname === EXTERNAL_WEBSERVER + '.' + STANFORD_DOMAIN) && port === EXTERNAL_WEBSERVER_PORT)
-    {
-        retVal.push('extServer');
-    }
-    else if ((hostname === INTERNAL_WEBSERVER || hostname === INTERNAL_WEBSERVER + '.' + STANFORD_DOMAIN) && port === INTERNAL_WEBSERVER_PORT)
+    if ($('PrivateHostElement').retrieve('is_private', false))
     {
         retVal.push('intServer');
     }
     else
     {
-        retVal.push('invalidServer');
+        retVal.push('extServer');
     }
 
     if (requestID)
@@ -7888,10 +7848,10 @@ $("ExportRequestForm").innerHTML = "";
 // The onload function is called after this. It calls ProcessingInit() and ProcessingEnabled(). Don't do that here as well.
 </script>
 
-<div class='include-html' file-resource='private-host.html' target-element='PrivateHostElement' callback=private_host_callback>
+<div class='include-html' file-resource='private-host.html' target-element='PrivateHostElement' callback='private_host_callback'>
     <p id='PrivateHostElement' style='display:none'></p>
 </div>
-<div class='include-html' file-resource='request-form.html' target-element='ExportRequestForm' callback=on_load_init_callback></div>
+<div class='include-html' file-resource='request-form.html' target-element='ExportRequestForm' callback='on_load_init_callback'></div>
 
 </body>
 </html>
