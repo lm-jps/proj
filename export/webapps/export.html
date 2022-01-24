@@ -7656,10 +7656,19 @@ function GetStatus()
 
     // if a status check is currently running, bail (an onClick() and an onChange() will be called when 
     // a user changes the request ID andajax_ then clicks the `request status` button)
-    if ($('StatusButton').retrieve('ajax_state', 'pre-click') != 'ajax-running')
+    if ($('StatusButton').retrieve('ajax_state', 'pre-click') !== 'ajax-running')
     {
         address = $('ExportNotify').value.trim();
-        request_id = $('StatusRequestID').value.trim();
+
+        if (export_button_click)
+        {
+            request_id = $('RequestIdPlace').innerHTML.trim();
+        }
+        else
+        {
+            request_id = $('StatusRequestID').value.trim();
+        }
+
         if (request_id.length == 0)
         {
             alert("You must provide a RequestID");
