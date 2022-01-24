@@ -111,6 +111,90 @@ function include_html()
 }
 </script>
 
+<script type="text/javascript">
+function stringify_obj(obj)
+{
+    var keys = null;
+    var values = null;
+    var index = null;
+    var attribute = null;
+    var value = null;
+    var response = null;
+
+    if (obj === null && obj === undefined)
+    {
+        response = 'null';
+    }
+    else if (typeof(obj) === 'number' || typeof(obj) === 'string' || typeof(obj) === 'boolean')
+    {
+        response = obj.toString();
+    }
+    else if (Array.isArray(obj))
+    {
+        values = new Array();
+
+        for (index = 0; index < obj.length; index++)
+        {
+            value = obj[index];
+            values.push(stringify_obj(value));
+        }
+
+        response = '[ ' + values.join(',') + ' ]';
+    }
+    else
+    {
+        keys = Object.keys(obj);
+        values = new Array();
+        index = null;
+        attribute = null;
+        value = null;
+        
+        for (index = 0; index < keys.length; index++)
+        {
+            attribute = keys[index];
+            value = obj[attribute];
+            values.push('"' + attribute + '": ' + stringify_obj(value));
+        }
+
+        response = '{ ' + values.join(',') + ' }';
+    }
+
+    return response;
+}
+
+function stringify_obj_old(obj)
+{
+    var keys = Object.keys(obj);
+    var values = new Array();
+    var index = null;
+    var attribute = null;
+    var value = null;
+
+    for (index = 0; index < keys.length; index++)
+    {
+        attribute = keys[index];
+        value = obj[attribute];
+
+        if (value !== null && value !== undefined)
+        {
+            if (typeof(value) === 'number' || typeof(value) === 'string' || typeof(value) === 'boolean' || Array.isArray(value))
+            {
+                values.push('"' + attribute + '": ' + JSON.stringify(value));
+            }
+            else
+            {
+                values.push('"' + attribute + '": ' + stringify_obj(value));
+            }
+        }
+        else
+        {
+            values.push('"' + attribute + '": null');
+        }
+    }
+
+    return '{' + values.join(',') + '}';
+}
+</script>
 
 <script type="text/javascript">
 
@@ -1435,7 +1519,7 @@ function CreateParseSpecOnSuccess(callback)
 
             if (status.search(/errorcode/i) == 0)
             {
-                error_message = 'failure parsing record-set specification: ' + JSON.stringify(gri_response_obj.error_message);
+                error_message = 'failure parsing record-set specification: ' + stringify_obj(gri_response_obj.error_message);
             }
 
             // gri_response_obj contains parsed spec data; use it
@@ -1497,14 +1581,14 @@ function ParseSpec(callback)
         onFailure: function(response)
         {
             var gri_response_obj = response.responseJSON;
-            var error_message = 'failure parsing record-set specification: ' + JSON.stringfy(gri_response_obj.error_message);
+            var error_message = 'failure parsing record-set specification: ' + stringify_obj(gri_response_obj.error_message);
 
             on_failure(error_message);
         },
         on428: function(response)
         {
             var gri_response_obj = response.responseJSON;
-            var error_message = 'invalid arguments to record-set endpoint: ' + JSON.stringfy(gri_response_obj.error_message);
+            var error_message = 'invalid arguments to record-set endpoint: ' + stringify_obj(gri_response_obj.error_message);
 
             on_failure(error_message);
         },
@@ -1787,7 +1871,7 @@ function CreateDownloadRecordInfoOnSuccess(callback)
 
             if (status.search(/errorcode/i) == 0)
             {
-                error_message = 'failure getting record-set information: ' + status.error_message;
+                error_message = 'failure getting record-set information: ' + stringify_obj(status.error_message);
                 $('ExportRecordSet').store({ "count" : null, "valid" : false });
                 $("RSCountPlace").innerHTML = error_message;
 
@@ -1854,13 +1938,13 @@ function DownloadRecordInfo(callback)
         onSuccess: on_success,
         onFailure: function(response)
         {
-            var error_message = 'failure getting record-set information: ' + JSON.stringify(response.responseJSON.error_message);
+            var error_message = 'failure getting record-set information: ' + stringify_obj(response.responseJSON.error_message);
 
             return on_failure(error_message);
         },
         on428: function(response)
         {
-            var error_message = 'invalid arguments to record-set endpoint: ' + JSON.stringify(response.responseJSON.error_message);
+            var error_message = 'invalid arguments to record-set endpoint: ' + stringify_obj(response.responseJSON.error_message);
 
             return on_failure(error_message);
         },
@@ -2083,7 +2167,7 @@ function CreateDownloadSeriesInfoOnSuccess(callback)
 
             if (status.search(/errorcode/i) == 0)
             {
-                error_message = 'failure getting series information: ' + JSON.stringify(gsi_response_obj.error_message);
+                error_message = 'failure getting series information: ' + stringify_obj(gsi_response_obj.error_message);
                 $('ExportRecordSet').store({ "count" : null, "series" : null, "series_ns" : null, "valid" : false});
                 $("RSCountPlace").innerHTML = error_message;
             }
@@ -2142,13 +2226,13 @@ function DownloadSeriesInfo(callback)
         onSuccess: on_success,
         onFailure: function(response)
         {
-            var error_message = 'failure getting series information: ' + JSON.stringify(response.responseJSON.error_message);
+            var error_message = 'failure getting series information: ' + stringify_obj(response.responseJSON.error_message);
 
             on_failure(error_message);
         },
         on428: function(response)
         {
-            var error_message = 'invalid arguments to series endpoint: ' + JSON.stringify(response.responseJSON.error_message);
+            var error_message = 'invalid arguments to series endpoint: ' + stringify_obj(response.responseJSON.error_message);
 
             on_failure(error_message);
         },
@@ -3604,7 +3688,7 @@ function initialize_image_protocol_options(update_options_callback)
                     status = gri_response_obj.drms_export_status;
                     if (status.search(/errorcode/i) == 0)
                     {
-                        error_message = 'failure obtaining record-set information: ' + JSON.stringify(gri_response_obj.error_message);
+                        error_message = 'failure obtaining record-set information: ' + stringify_obj(gri_response_obj.error_message);
                     }
                     else
                     {
@@ -3616,14 +3700,14 @@ function initialize_image_protocol_options(update_options_callback)
             },
             onFailure : function(response)
             {
-                var error_message = 'failure getting record-set information: ' + JSON.stringify(response.responseJSON.error_message);
+                var error_message = 'failure getting record-set information: ' + stringify_obj(response.responseJSON.error_message);
                 var color_table_metadata = $('ImageCT').retrieve('metadata', null);
 
                 on_failure(error_message, color_table_metadata);
             },
             on428 : function(response)
             {
-                var error_message = 'invalid arguments to record-set endpoint: ' + JSON.stringify(response.responseJSON.error_message);
+                var error_message = 'invalid arguments to record-set endpoint: ' + stringify_obj(response.responseJSON.error_message);
                 var color_table_metadata = $('ImageCT').retrieve('metadata', null);
 
                 on_failure(error_message, color_table_metadata);
@@ -3801,13 +3885,13 @@ function initialize_image_protocol_options(update_options_callback)
             },
             onFailure: function(response)
             {
-                var error_message = 'failure obtaining record-set information: ' + JSON.stringify(response.responseJSON.error_message);
+                var error_message = 'failure obtaining record-set information: ' + stringify_obj(response.responseJSON.error_message);
 
                 on_failure(update_options_callback);
             },
             on428: function(response)
             {
-                var error_message = 'invalid arguments to record-set endpoint: ' + JSON.stringify(response.responseJSON.error_message);
+                var error_message = 'invalid arguments to record-set endpoint: ' + stringify_obj(response.responseJSON.error_message);
  
                 on_failure(update_options_callback);
             }
@@ -5617,6 +5701,7 @@ function cancel_export()
         $("StatusRequestID").value = ''; // remove export request ID from RequestID in lower section
         $("RequestIdPlace").innerHTML = ''; // remove export request ID from RequestID in upper section
 
+        cancel_pending_fn = CANCEL_PENDING_REQUEST();
 
         // null -> do nothing on success; let interval function handle the resulting state changes
         cancel_pending_fn(null);
@@ -5869,7 +5954,7 @@ function ExportButtonOnClickAction()
                 },
                 onFailure: function(response)
                 {
-                    var error_message = 'failure initiating export: ' + JSON.stringify(response.responseJSON.error_message);
+                    var error_message = 'failure initiating export: ' + stringify_obj(response.responseJSON.error_message);
 
                     $('ExportButton').store({ "ajax-state" : "post-click" });
 
@@ -5877,7 +5962,7 @@ function ExportButtonOnClickAction()
                 },
                 on428: function(response)
                 {
-                    var error_message = 'invalid arguments to ' + export_endpoint + ' endpoint: '+ JSON.stringify(response.responseJSON.error_message);
+                    var error_message = 'invalid arguments to ' + export_endpoint + ' endpoint: '+ stringify_obj(response.responseJSON.error_message);
 
                     $('ExportButton').store({ "ajax-state" : "post-click" });
                     
@@ -6037,13 +6122,13 @@ function GetReExport()
         },
         onFailure: function(response)
         {
-            var error_message = "failuring re-exporting data: " + JSON.stringify(response.responseJSON.error_message);
+            var error_message = "failuring re-exporting data: " + stringify_obj(response.responseJSON.error_message);
 
             AssimilateSubmissionResponse({ "error_message" : error_message });
         },
         on428: function(response)
         {
-            var error_message = "invalid arguments to re-export endpoint: " + JSON.stringify(response.responseJSON.error_message);
+            var error_message = "invalid arguments to re-export endpoint: " + stringify_obj(response.responseJSON.error_message);
 
             AssimilateSubmissionResponse({ "error_message" : error_message });
         },
@@ -6150,7 +6235,7 @@ function AssimilateSubmissionResponse(ir_response_obj)
 
         if (ir_response_obj.hasOwnProperty('error_message'))
         {
-            error_message = 'failure initiating export: ' + JSON.stringify(ir_response_obj.error_message);
+            error_message = 'failure initiating export: ' + stringify_obj(ir_response_obj.error_message);
         }
 
         if (ir_response_obj.hasOwnProperty('contact'))
@@ -6171,7 +6256,7 @@ function AssimilateSubmissionResponse(ir_response_obj)
         set_eb_state_disabled(true);
         Cookie.setData('state', 0);
     }
-    else if (endpoint_status == 'StatusCode.REQUEST_NOT_QUEUED')
+    else if (endpoint_status === 'StatusCode.REQUEST_NOT_QUEUED')
     {
         // request has not been inserted into jsoc.export_new - cannot happen when clicking export submit since
         // that click will ensure the export is inserted into jsoc.export_new, or there will be an export failure
@@ -6181,7 +6266,7 @@ function AssimilateSubmissionResponse(ir_response_obj)
         set_eb_state_disabled(true);
         Cookie.setData('state', 0);
     }
-    else if (endpoint_status == 'StatusCode.REQUEST_NOT_ONLINE')
+    else if (endpoint_status == 'ErrorCode.REQUEST_NOT_ONLINE')
     {
         // can only happen for re-export
         update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_reccords, number_files, access, data_package, file_format, keywords_file, export_data, contact, false); 
@@ -6189,14 +6274,14 @@ function AssimilateSubmissionResponse(ir_response_obj)
         set_eb_state_disabled(true);
         Cookie.setData('state', 0);
     }
-    else if (endpoint_status == 'StatusCode.REQUEST_FATAL_ERROR')
+    else if (endpoint_status == 'ErrorCode.REQUEST_FATAL_ERROR')
     {
         update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_reccords, number_files, access, data_package, file_format, keywords_file, export_data, contact, false); 
 
         set_eb_state_disabled(true);
         Cookie.setData('state', 0);
     }
-    else if (endpoint_status == 'StatusCode.REQUEST_TOO_LARGE')
+    else if (endpoint_status == 'ErrorCode.REQUEST_TOO_LARGE')
     {
         update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_reccords, number_files, access, data_package, file_format, keywords_file, export_data, contact, false); 
 
@@ -6969,10 +7054,10 @@ function update_status_section_ui(endpoint_status, endpoint_status_wordy, error_
                     }
                 }
             }
+
+            $('StatusButtonMsg').innerHTML = message;
         }
     }
-
-    $('StatusButtonMsg').innerHTML = message;
 
     // row 2, col 3 (more info, 'List formats...') - affected by status click only 
     if (reset)
@@ -7382,7 +7467,7 @@ function AssimilateInquiryResponse(mr_response_obj)
 
         if (mr_response_obj.hasOwnProperty('error_message') && mr_response_obj.error_message !== null && mr_response_obj.error_message.length > 0)
         {
-            error_message = JSON.stringify(mr_response_obj.error_message);
+            error_message = stringify_obj(mr_response_obj.error_message);
         }
 
         if (mr_response_obj.hasOwnProperty('contact'))
@@ -7408,7 +7493,7 @@ function AssimilateInquiryResponse(mr_response_obj)
 
     Cookie.setData("state", 2);
 
-    if (endpoint_status === 'StatusCode.REQUEST_NOT_ONLINE')
+    if (endpoint_status === 'ErrorCode.REQUEST_NOT_ONLINE')
     {
         // error - maybe the user really waited a week to get status on an export
         if (export_button_click)
@@ -7427,7 +7512,7 @@ function AssimilateInquiryResponse(mr_response_obj)
 
         set_eb_state_disabled(true);
     }
-    else if (endpoint_status === 'StatusCode.REQUEST_FATAL_ERROR')
+    else if (endpoint_status === 'ErrorCode.REQUEST_FATAL_ERROR')
     {
         if (export_button_click)
         {
@@ -7646,25 +7731,25 @@ function GetStatus()
             },
             onFailure: function(response)
             {
-                var error_message = "failuring getting export status: " + JSON.stringify(response.responseJSON.error_message);
+                var error_message = "failuring getting export status: " + stringify_obj(response.responseJSON.error_message);
 
                 if (!export_button_click)
                 {
                     $('StatusButton').store({ "ajax-state" : "post-click" });
                 }
 
-                AssimilateInquiryResponse({ "drms_export_status" : "ErrorCode.REQUEST_FATAL_ERROR",  "drms_export_status_message" : "fatal error", "error_message" : error_message, "contact" : help_address });
+                AssimilateInquiryResponse({ "request_id" : request_id.toString(), "drms_export_status" : "ErrorCode.REQUEST_FATAL_ERROR", "drms_export_status_message" : "fatal error", "error_message" : error_message, "contact" : help_address });
             },
             on428: function(response)
             {
-                var error_message = "invalid arguments to pending-request-status endpoint: " + JSON.stringify(response.responseJSON.error_message);
+                var error_message = "invalid arguments to pending-request-status endpoint: " + stringify_obj(response.responseJSON.error_message);
 
                 if (!export_button_click)
                 {
                     $('StatusButton').store({ "ajax-state" : "post-click" });
                 }
 
-                AssimilateInquiryResponse({ "drms_export_status" : "ErrorCode.REQUEST_FATAL_ERROR",  "drms_export_status_message" : "fatal error", "error_message" : error_message, "contact" : help_local_name });
+                AssimilateInquiryResponse({ "request_id" : request_id.toString(), "drms_export_status" : "ErrorCode.REQUEST_FATAL_ERROR", "drms_export_status_message" : "fatal error", "error_message" : error_message, "contact" : help_address });
             },
             onComplete: function()
             {
@@ -7707,9 +7792,9 @@ function GetStatus()
 
 <span id="RecordSetExample">
 &nbsp; &nbsp;
-<a href='error-messages.html' target="JSOC_Help">Help with Error Messages</a>
+<a href='error-messages.html' target="Help">Help with Error Messages</a>
 &nbsp;
-<a href="/doc/exports/exportdata_lookdata_release_notes.txt" target="JSOC_Help">Release Notes</a>
+<a href="release-notes.html" target="Release_Notes">Release Notes</a>
 </span>
 <p>
 If the Method is neither "url_quick" nor "url_direct", additional options will need to be specified.
@@ -7756,7 +7841,7 @@ section to obtain the processing-status of the export. It can also be used to ob
 <table>
   <tr>
     <td style="width:11em">RequestID</td>
-    <td style="width:12em" class='data-cell'><input style="width:12em;border:none;font-size:16px" type="text" id="StatusRequestID" name="StatusRequestID" style="background-color:#FFF8DC;" value="" onChange="GetStatus();"></td>
+    <td style="width:12em" class='data-cell'><input style="width:12em;border:none;font-size:16px" type="text" id="StatusRequestID" name="StatusRequestID" style="background-color:#FFF8DC;" value="" onChange="GetStatus();" oninput='update_status_section_ui(null, null, null, $("StatusRequestID").value, null, null, null, null, null, null, null, null, null, null, null);'></td>
     <td style='width:26em;padding-left:2em;padding-right:2em'>Identify your export request with this ID.</td>
     <td style='padding-left:2em;padding-right:2em'><span id="StatusValue"></span></td>
   </tr>
