@@ -6980,8 +6980,8 @@ function update_status_section_ui(endpoint_status, endpoint_status_wordy, error_
         }
 
         $('StatusButtonMsg').style.color = colorBlack;
-
         $('StatusButtonMsg').store({ "message" : null, "error" : null });
+        $('StatusButtonMsg').innerHTML = message;
     }
     else
     {
