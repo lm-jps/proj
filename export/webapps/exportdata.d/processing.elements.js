@@ -107,7 +107,7 @@ function processingGetRecInfo(exportOption)
 	// ImRecordSet is ALWAYS ExportRecordSet and it cannot be changed
         $('ImRecordSet').innerHTML = $('ExportRecordSet').value;
 
-        export_app_arguments = { "specification" : specification, "db-host" : db_host, "keywords" : keyword_list };
+        export_app_arguments = { "specification" : specification, "db-host" : db_host, "keywords" : keyword_list, "segments" : segment_list };
 
         on_failure = function(error_message)
         {
