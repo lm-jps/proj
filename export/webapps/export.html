@@ -816,8 +816,6 @@ var TipsEnabled;
 var TipsCreated = 0;
 var args;
 var state=0;
-var ExportProcessingArgs = "";
-var ProcessingAllowed = 1;
 
 // Export processing globals.
 var ExportProcessingArgsPoll = null;
@@ -863,21 +861,17 @@ function initVars()
     $('ExportRecordLimit').store({ "limit" : null })  
   TipsEnabled = 1;
   firstTimePrime = "";
-  ProcessingAllowed = 1;
 
-  // Init processing
-  ExportProcessingArgs = "";
-  ExportProcessingOK = null;
-  ExportProcessingArgsPoll = null;
+    // initialize processing
+    ProcessingInit();
+    update_processing_ui(true);
+    ExportProcessingOK = null;
+    ExportProcessingArgsPoll = null;
 
   // Init protocols
   ProtocolOptionsSet = 0;
 
-    // If the page is being loaded, then exportdataLoaded is true. If the reset page button was clicked, then
-    // exportdataLoaded is true as well. So, there is no need to check for a true value for exportdataLoaded.
-    ProcessingInit();
 
-    ProcessingEnabled();
     update_protocol_ui(true);
 
     // Enable the reset button, now that the page has completed loaded.
@@ -895,8 +889,6 @@ function initVars()
     $("ExportCheckMsg").style.color = colorRealRed;
     // Processing
     $("ProcessRow").style.display="none";
-    $("ExportProcessingHidden").value = "no_op";
-    $("ProcessingCheckbox").checked = 0;
     // Protocols
     $("ProtocolRow").style.display="none";
     $("ExportCompress").selectedIndex = 0;
@@ -1232,25 +1224,25 @@ function ToggleHelp()
 
 // Check list of series for which processing options are not available
 function CheckNoProcessingList()
-  {
-  var n = NoProcessingList.length;
-  var i;
-  var result = 1;
-  var prior = ProcessingAllowed;
+{
+    var series_index = null;
+    var disable_processing = null;
     var series = $('ExportRecordSet').retrieve('series', null)
 
-  for (i=0; i<n; i++)
+    disable_processing = false;
+    for (series_index = 0; series_index < NoProcessingList.length; series_index++)
     {
-        if (series == NoProcessingList[i])
+        if (series === NoProcessingList[series_index])
         {
-            result = 0;
+            disable_processing = true;
             break;
         }
     }
-  ProcessingAllowed = result;
-  if (ProcessingAllowed != prior)
-    ProcessingEnabled();
-  }
+
+    $('ProcessingShowCheckbox').store({ "enabled" : !disable_processing}); 
+
+    update_processing_ui(false);
+}
 
 // tester success
 </script>
@@ -1316,6 +1308,7 @@ function create_export_endpoint_arguments(method)
     var argument_namespace = null;
     var file_format = null;
     var file_format_args = null;
+    var ignore_processing = null;
     var export_endpoint_arguments = null;
 
     if (method.indexOf('ftp') != -1)
@@ -1368,7 +1361,9 @@ function create_export_endpoint_arguments(method)
     }
     else
     {
-        export_endpoint_arguments = { "access" : access, "package" : export_package, "specification" : $('ExportRecordSet').value, "file-format" : file_format, "file-format-args" : file_format_args, "file-name-format" : $('ExportFilenameFmt').value, "number-records" : get_max_records(), "processing" : $('ExportProcessing').procesing_obj };
+        ignore_processing = !$('ExportProcessing').retrieve('apply_processing', false);
+
+        export_endpoint_arguments = { "access" : access, "package" : export_package, "specification" : $('ExportRecordSet').value, "file-format" : file_format, "file-format-args" : file_format_args, "file-name-format" : $('ExportFilenameFmt').value, "number-records" : get_max_records(), "processing" : ignore_processing ? '{}' : $('ExportProcessing').procesing_obj };
     }
 
     return export_endpoint_arguments;
@@ -2691,8 +2686,8 @@ function ExportNewRS()
     $('ProcessingCheckboxLabel').style.color = 'grey';
 
     // close the processing checkboxes
-    $("ProcessingCheckbox").checked = false;
-    ProcessingEnabled();
+    $('ProcessingCheckbox').checked = false;
+    update_processing_ui(false);
 
     // display a message notifying user that we are working on enabling processing options (must examine all records)
     $('ProcessingWaitMessage').style.color = colorBrightOrange;
@@ -2736,15 +2731,6 @@ function ExportNewRS()
     update_record_set_ui(false);
 
     set_eb_state_disabled(true);
-}
-
-</script>
-<script type="text/javascript">
-
-
-function update_processing_us(reset)
-{
-
 }
 
 </script>
@@ -2966,66 +2952,129 @@ function validate_filename_format()
     $('ExportFilenameFmt').store({ 'valid' : format_valid });
 }
 
-// Called after user clicks on 'Enable Processing' checkbox; check the disabledState for all processing steps that
-// use the disabledState property
-function ProcessingEnabled()
+// onChange() for 2 checkboxes: ProcessingCheckbox and ProcessingCheckboxHide
+// 
+function ProcessingEnabled(element)
 {
-    var option_index = 0;
-    var processing_option = null;
-    var disabled_state = null;
-
-    if ($("ProcessingCheckboxHide").checked)
+    // the user cannot uncheck ether checkbox, so the checked attribute must be true
+    if (element == $('ProcessingCheckbox'))
     {
-        $("ProcessingCheckbox").checked = false;
-    }
-
-    if ($("ProcessingCheckbox").checked)
-    {
-        // The user enabled processing
-        if ($('ExportRecordSet').value == "" || $('ExportRecordSet').value == "[$]")
-        {
-            $("ProcessingWaitMessage").style.display = "table-row";
-            $("ProcessingCheckbox").checked = false;
-            return;
-        }
-
-        $("ProcessingWaitMessage").style.display = "none";
-        $("ProcessingCheckboxHide").checked = false;
-        $("ProcessingShowCheckbox").style.display = "none";
-        $("ExportProcessing").style.display = "table-row";
-
-        // enable the processing step checkboxes that should be enabled
-        for (option_index = 0; option_index < ExportProcessingOptions.length; option_index++)
-        {
-            processing_option_id = ExportProcessingOptions[option_index].id;
-
-            // if disabled-state metadata do not exist, then set disabled to false (the second arg to retrieve() is the default)
-            $(processing_option_id).disabled = $(processing_option_id).retrieve('disabled_state', false);
-        }
-
+        $('ProcessingCheckboxHide').checked = false;
     }
     else
     {
-        // The user disabled processing.
-    $(ExportProcessingOptions[0].id).checked = true; // Enable the none processing option.
-    $("ExportProcessing").style.display = "none";
-    if (ProcessingAllowed == 0)
-      {
-      $("ProcessingWaitMessage").style.display = "table-row";
-      $("ProcessingWaitMessage").innerHTML = "Processing not available for series " + $('ExportRecordSet').retrieve('series', '');
-      $("ProcessingCheckboxHide").checked = true;
-      $("ProcessingShowCheckbox").style.display = "none";
-      }
-    else
-      {
-      $("ProcessingWaitMessage").style.display = "none";
-      $("ProcessingCheckboxHide").checked = false;
-      $("ProcessingShowCheckbox").style.display = "table-row";
-      }
-
-    SetProcessing(0, null); // Pretend the user clicked on the none processing option.
+        $('ProcessingCheckbox').checked = false;
     }
-  }
+
+    update_processing_ui(false);
+}
+
+function update_processing_ui(reset)
+{
+    var processing_is_enabled = $('ProcessingShowCheckbox').retrieve('enabled', false);
+    var apply_processing = $('ProcessingCheckbox').checked;
+    var series = null;
+    var option_index = null;
+    var processing_option_id = null;
+    var processing_option_row_id = null;
+
+    if (reset)
+    {
+        // processing availability not yet determined
+        $('ProcessingWaitMessage').style.display = 'table-row';
+        $('ProcessingWaitMessage').innerHTML = 'Applicable processing steps not yet determined';
+
+        // hide show processing checkbox altogether
+        $('ProcessingShowCheckbox').style.display = 'none';
+
+        $('ProcessingShowCheckbox').checked = false;
+        $('ProcessingCheckboxHide').checked = true;
+    }
+    else
+    {
+
+    }
+
+    if (processing_is_enabled)
+    {
+        // hide the not-ready-for-processing message
+        $('ProcessingWaitMessage').style.display = 'none';
+
+        if (apply_processing)
+        {
+            // The user clicked on the show processing checkbox (ProcessingShowCheckbox)
+            if ($('ExportRecordSet').value == "" || $('ExportRecordSet').value == "[$]")
+            {
+                $("ProcessingWaitMessage").style.display = "table-row";
+                $('ProcessingCheckbox').checked = false;
+                return;
+            }
+
+            // the Enable Processing checkbox element disappears...
+            $('ProcessingShowCheckbox').style.display = 'none';
+
+            // and gets replaced by the list of processing-step checkboxes, including no_op and hide checkboxes
+            $('ExportProcessing').style.display = 'table-row';
+
+            // enable the processing step checkboxes that should be enabled
+            for (option_index = 0; option_index < ExportProcessingOptions.length; option_index++)
+            {
+                processing_option_id = ExportProcessingOptions[option_index].id;
+
+                if ($(processing_option_id).checked && processing_option_id !== 'OptionNone')
+                {
+                    processing_option_row_id = ExportProcessingOptions[option_index].rowid;
+                    $(processing_option_row_id).style.display = 'table-row';
+                }
+
+                // if disabled-state metadata do not exist, then set disabled to false (the second arg to retrieve() is the default)
+                $(processing_option_id).disabled = $(processing_option_id).retrieve('disabled_state', false);
+            }
+
+            // restore processing options
+            $('ExportProcessing').store({ "apply_processing" : true });
+        }
+        else
+        {
+            // ignore processing
+            // the user clicked on the hide (processing) checkbox (ProcessingCheckboxHide); 
+            $('ProcessingShowCheckbox').style.display = 'table-row';
+            $('ExportProcessing').style.display = 'none';
+
+            // need to hide each processing step row too - there is no HTML element that contains all of them
+            for (option_index = 1; option_index < ExportProcessingOptions.length; option_index++)
+            {
+                processing_option_row_id = ExportProcessingOptions[option_index].rowid;
+
+                // if disabled-state metadata do not exist, then set disabled to false (the second arg to retrieve() is the default)
+                $(processing_option_row_id).style.display = 'none'; 
+            }
+
+            // ignore current set of processing options (but do not unset them)
+            $('ExportProcessing').store({ "apply_processing" : false });
+        }
+    }
+    else
+    {
+        // processing is disabled
+        $('ProcessingWaitMessage').style.display = 'table-row';
+
+        series = $('ExportRecordSet').retrieve('series', null);
+
+        if (series !== null)
+        {
+            $('ProcessingWaitMessage').innerHTML = 'Processing not available for series ' + series;
+        }
+        else
+        {
+            $('ProcessingWaitMessage').innerHTML = 'Applicable processing steps not yet determined';
+        }
+
+        // hide show processing checkbox altogether
+        $('ProcessingShowCheckbox').style.display = 'none';
+    }
+}
+
 
 var SizeRatio;
 
@@ -3117,19 +3166,12 @@ function runSetProcessing(intervalFn, spCallback)
 		return;
 	}
 
-    if (ProcessingAllowed == 0)
-    {
-        $(ExportProcessingOptions[0].id).checked = true;
-    }
     if (ichecked > 0)
     {
         $(ExportProcessingOptions[0].id).checked = false; // Disable the 'none' processing step.
     }
 
     ExportProcessingOK = null;
-
-    // Add recordLimit FIRST always. Could change when user changes RecordSet specification.
-    ExportProcessingArgs = "n=" + get_max_records().toString();
 
     var isok = 1;
     var nchecked = 0;
@@ -3145,15 +3187,13 @@ function runSetProcessing(intervalFn, spCallback)
         {
             var ExpOpt = ExportProcessingOptions[iProc];
             $(ExpOpt.id).checked = false;
-            $(ExpOpt.rowid).style.display = "none";
+            $(ExpOpt.rowid).style.display = 'none';
 
             if (ExpOpt.id != "OptionImPatch")
             {
                 ExpOpt.Init(1);
             }
         }
-
-        ExportProcessingArgs += "|no_op";
     }
     else
     {
@@ -3199,8 +3239,10 @@ function runSetProcessing(intervalFn, spCallback)
                 {
                     $(ExpOpt.rowid).style.display="table-row";
                     // This is the case where we do not want to reset the processing parameters to the default.
-                    ExpOpt.Init(0); // 0 initializes globals needed by Check() functions; initialization is asynchronous, so
-                                    // we run a setInterval function below, waiting for completion; the Check() functions can modify the UI
+
+                    // initialize Check() function globals when the user clicks on a processing option checkbox
+                    // 0 --> do not reset page, initialization could be asynchronous, Check() can modify UI
+                    ExpOpt.Init(0); 
                 }
             }
             else
@@ -3250,22 +3292,19 @@ function runSetProcessing(intervalFn, spCallback)
         ExportProcessingOptions[AiaScaleOption].paramsValid = null;
     }
 
-  if (nchecked == 0)
+    if (nchecked == 0)
     {
-    $(ExportProcessingOptions[0].id).checked = true; // Set no-op processing step.
+        $(ExportProcessingOptions[0].id).checked = true; // Set no-op processing step.
 
-    // Hide the non-no-op steps.
-    for (iProc=1; iProc<nProcs; iProc++)
-    {
-        var ExpOpt = ExportProcessingOptions[iProc];
-        $(ExpOpt.rowid).style.display = "none";
+        // Hide the non-no-op steps.
+        for (iProc=1; iProc<nProcs; iProc++)
+        {
+            var ExpOpt = ExportProcessingOptions[iProc];
+            $(ExpOpt.rowid).style.display = "none";
+        }
     }
 
-    ExportProcessingArgs += "|no_op";
-    }
   $("ExportSizeRatio").value = SizeRatio;
-
-  $("ExportProcessingHidden").value = ExportProcessingArgs;
 
     clearInterval(intervalFn);
 
@@ -3323,16 +3362,19 @@ function GetExportProcessingArguments(spCallback)
     var args = null;
     var iProc = 0;
     var SizeRatio = 1.0;
-    var oneChecked = false;
     var argument_argument_obj = null;
     var argument_namespace = null;
     var processing_obj = null;
+    var processing_argument_str = null;
 
     if (!ExportProcessingArgsReady())
     {
         // Wait till all the Set() procs for each processing step have completed their asynchronous processing.
         return;
     }
+
+    processing_obj = {};
+    processing_argument_str = 'n=' + get_max_records().toString();
 
     for (iProc = 1; iProc < ExportProcessingOptions.length; iProc++)
     {
@@ -3356,19 +3398,12 @@ function GetExportProcessingArguments(spCallback)
                 continue;
             }
 
-            oneChecked = true;
-
             // At this point, we know for sure if there is an error with the export options chosen. If so,
             // ignore that processing step, and uncheck its checkbox.
             if (args.length > 0)
             {
-                if (processing_obj === null)
-                {
-                    processing_obj = {};
-                }
-
-                // args contains all the processing args. ExportProcessingArgs will have n=X already.
-                ExportProcessingArgs += "|" + args;
+                processing_argument_str += '|' + args;
+                
                 argument_argument_obj = unserialize_arguments(args);
                 argument_namespace = Object.keys(argument_argument_obj)[0];
                 processing_obj[argument_namespace] = argument_argument_obj[argument_namespace];
@@ -3380,26 +3415,20 @@ function GetExportProcessingArguments(spCallback)
 
                 delete processing_obj[argument_namespace]['unnamed'];
 
-                $('ExportProcessing').store({ "processing_obj" : processing_obj });
-
                 SizeRatio *= ExpOpt.Size;
             }
         }
+
     }
 
-    if (!oneChecked)
+    $('ExportProcessing').store({ "processing_obj" : processing_obj });
+
+    if (Object.keys(processing_obj).length == 0)
     {
-        $(ExportProcessingOptions[0].id).checked = true; // Set no-op processing step.
-
-        // Hide the non-no-op steps.
-        for (iProc = 1; iProc < ExportProcessingOptions.length; iProc++)
-        {
-            var ExpOpt = ExportProcessingOptions[iProc];
-            $(ExpOpt.rowid).style.display = "none";
-        }
-
-        ExportProcessingArgs += "|no_op";
+        processing_argument_str += '|no_op';
     }
+
+    $('ExportProcessing').store({ "processing_argument_str" : processing_argument_str });
 
     // Re-enable all processing-step checkboxes, until GetExportProcessingArguments() resolves.
     for (iProc = 0; iProc < ExportProcessingOptions.length; iProc++)
@@ -3410,7 +3439,6 @@ function GetExportProcessingArguments(spCallback)
     }
 
     $("ExportSizeRatio").value = SizeRatio;
-    $("ExportProcessingHidden").value = ExportProcessingArgs; // Not used.
 
     clearInterval(ExportProcessingArgsPoll);
     ExportProcessingArgsPoll = null;
@@ -4718,10 +4746,19 @@ function ExportShowQuery()
 {
     var args = null;
     var paramString = null;
+    var ignore_processing = !$('ExportProcessing').retrieve('apply_processing', false);
+    var processing_as_obj = null;
 
     if ($("ShowQueryCheckbox").checked)
     {
         args = $('ExportRecordSet').retrieve('exportArgs', null);
+
+        if (ignore_processing)
+        {
+            processing_as_obj = new Hash(args);
+            processing_as_obj.update({ "process" : 'n=' + get_max_records().toString() + '|no_op' });
+            args = processing_as_obj.toObject();
+        }
 
         if (args != null)
         {
@@ -4750,7 +4787,7 @@ function disable_input()
     $("CountButton").disabled = true;
     $("ExportMethod").disabled = true;
     $('ExportFilenameFmt').disabled = true;
-    $("ProcessingCheckbox").disabled = true;
+    $('ProcessingCheckbox').disabled = true;
     $('ExportProtocol').disabled = true;
     $("ExportNotify").disabled = true;
 }
@@ -4763,7 +4800,7 @@ function enable_input(address_too)
     $("CountButton").disabled = false;
     $("ExportMethod").disabled = false;
     $('ExportFilenameFmt').disabled = false;
-    $("ProcessingCheckbox").disabled = false;
+    $('ProcessingCheckbox').disabled = false;
     $('ExportProtocol').disabled = false;
     if (address_too)
     {
@@ -5306,7 +5343,7 @@ function is_ok_to_submit(element, attribute)
 
     if (is_ok)
     {
-        if ($("ProcessingCheckbox").checked && (!ExportProcessingOK || !ProcessingOK()))
+        if ($('ProcessingCheckbox').checked && (!ExportProcessingOK || !ProcessingOK()))
         {
             message = 'Processing details not correct, fix and retry export request';
             is_ok = false;
@@ -5610,7 +5647,7 @@ function CheckExportButtonOnClickAction()
             args.op = $("ExportOpID").value;
             args.ds = $('ExportRecordSet').value;
             args.sizeratio = $("ExportSizeRatio").value;
-            args.process = ExportProcessingArgs;
+            args.process = $('ExportProcessing').retrieve('processing_argument_str', '');
             args.requestor = $("ExportRequestor").value;
             args.notify = $("ExportNotify").value;
             args.method = $('ExportMethod').options[$('ExportMethod').selectedIndex].value.trim();
@@ -5836,6 +5873,7 @@ function ExportButtonOnClickAction()
         var db_host = null;
         var export_endpoint = null;
         var export_arguments = null;
+        var ignore_processing = null;
         var export_endpoint_arguments = null;
         var on_failure = null;
 
@@ -5929,9 +5967,11 @@ function ExportButtonOnClickAction()
                 file_format = export_arguments.protocol.toLowerCase();
             }
 
+            ignore_processing = !$('ExportProcessing').retrieve('apply_processing', false);
+
             // no longer a need to provide size ratio to back-end; jsoc_fetch will calculate it using the processing
             // steps as input
-            export_endpoint_arguments = { "access" : access, "package" : export_package, "specification" : export_arguments.ds, "file-format" : file_format, "file-format-args" : file_format_args, "file-name-format" : export_arguments.filenamefmt, "number-records" :get_max_records(), "processing" : export_arguments.processing };
+            export_endpoint_arguments = { "access" : access, "package" : export_package, "specification" : export_arguments.ds, "file-format" : file_format, "file-format-args" : file_format_args, "file-name-format" : export_arguments.filenamefmt, "number-records" : get_max_records(), "processing" : ignore_processing ? '{}' : export_arguments.processing };
         }
 
         if (export_endpoint !== null)
