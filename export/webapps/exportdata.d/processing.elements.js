@@ -1626,9 +1626,9 @@ function ProcessingInit()
   // Add Select options for each processing type, in order that they may be used.
   iOpt = 0;
   ProcessingOptionsHTML +=
-    '<input type="checkbox" checked="true" value="no_op" id="OptionNone" onChange="SetProcessing('+iOpt+');" />' +
+    '<input type="checkbox" checked value="no_op" id="OptionNone" onChange="SetProcessing('+iOpt+');" />' +
     'no_op - none&nbsp;' +
-    '<input id="ProcessingCheckboxHide" type="checkbox" checked="false" onChange="ProcessingEnabled();" />&nbsp;hide<br>';
+    '<input id="ProcessingCheckboxHide" type="checkbox" onChange="ProcessingEnabled(this);" />&nbsp;hide<br>';
   ExpOpt = new Object();
   ExpOpt.id="OptionNone";
   ExpOpt.rowid = "ExpSel_none";
@@ -1639,7 +1639,7 @@ function ProcessingInit()
 
   iOpt++;
   ProcessingOptionsHTML +=
-    '<input type="checkbox" checked="false" value="aia_scale" id="OptionAiaScale" onChange="SetProcessing('+iOpt+');" /> ' +
+    '<input type="checkbox" value="aia_scale" id="OptionAiaScale" onChange="SetProcessing('+iOpt+');" /> ' +
     '<label id="OptionAiaScaleLabel" for="OptionAiaScale">aia_scale - Scale image to 0.6 arcsec/pixel</label><br>';
   ExpOpt = new Object();
   ExpOpt.id = "OptionAiaScale";
@@ -1657,7 +1657,7 @@ function ProcessingInit()
 
   iOpt++;
   ProcessingOptionsHTML +=
-    '<input type="checkbox" checked="false" value="HmiB2ptr" id="OptionHmiB2ptr" onChange="SetProcessing('+iOpt+');" /> ' +
+    '<input type="checkbox" value="HmiB2ptr" id="OptionHmiB2ptr" onChange="SetProcessing('+iOpt+');" /> ' +
     'HmiB2ptr - Convert HMI B_720s to Phi,Theta,R coordinates<br>'
   ExpOpt = new Object();
   ExpOpt.id = "OptionHmiB2ptr";
@@ -1673,7 +1673,7 @@ function ProcessingInit()
 
   iOpt++;
   ProcessingOptionsHTML +=
-    '<input type="checkbox" checked="false" value="resize" id="OptionResize" onChange="SetProcessing('+iOpt+');" /> ' +
+    '<input type="checkbox" value="resize" id="OptionResize" onChange="SetProcessing('+iOpt+');" /> ' +
     'resize - Resize and rotate if needed, use sub-pixel registration<br>';
   ExpOpt = new Object();
   ExpOpt.id = "OptionResize";
@@ -1689,7 +1689,7 @@ function ProcessingInit()
 
   iOpt++;
   ProcessingOptionsHTML +=
-    '<input type="checkbox" checked="false" value="im_patch" id="OptionImPatch" onChange="SetProcessing('+iOpt+');" /> ' +
+    '<input type="checkbox" value="im_patch" id="OptionImPatch" onChange="SetProcessing('+iOpt+');" /> ' +
     'im_patch - Extract sub-frame<br>';
   ExpOpt = new Object();
   ExpOpt.id = "OptionImPatch";
@@ -1709,7 +1709,7 @@ function ProcessingInit()
 
   iOpt++;
   ProcessingOptionsHTML +=
-    '<input type="checkbox" checked="false" value="maproj" id="OptionMaproj" onChange="SetProcessing('+iOpt+');" /> ' +
+    '<input type="checkbox" value="maproj" id="OptionMaproj" onChange="SetProcessing('+iOpt+');" /> ' +
     'maproj - Extract a sub-frame and remap to a chosen projection.<br>';
   ExpOpt = new Object();
   ExpOpt.id = "OptionMaproj";
@@ -1725,7 +1725,7 @@ function ProcessingInit()
 
   iOpt++;
   ProcessingOptionsHTML +=
-    '<input type="checkbox" checked="false" value="rebin" id="OptionRebin" onChange="SetProcessing('+iOpt+');" /> ' +
+    '<input type="checkbox" value="rebin" id="OptionRebin" onChange="SetProcessing('+iOpt+');" /> ' +
     'rebin - Rebin with boxcar or gaussian smoothing<br>';
   ExpOpt = new Object();
   ExpOpt.id = "OptionRebin";
