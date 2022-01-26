@@ -70,7 +70,7 @@
       <td><span id="ProcessingHelp" class="tip">?</span></td>
       <td style="max-width:32em">
         <span id="ProcessingShowCheckbox">
-          <input id="ProcessingCheckbox" type="checkbox" checked="0" onChange="ProcessingEnabled();" >
+          <input id="ProcessingCheckbox" type="checkbox" onChange="ProcessingEnabled(this);" >
           <label id='ProcessingCheckboxLabel' for='ProcessingCheckbox'>&nbsp; Enable Processing</label>
         </span>
         <span id="ExportProcessing" style="display:none" ></span>
@@ -82,7 +82,7 @@
     <!-- Processing HTML -->
 
     <!-- BEGIN HMI B to ptr -->
-    <tr id="ProcessHmiB2ptr">
+    <tr id="ProcessHmiB2ptr" style='display:none'>
       <td>&nbsp;&nbsp;&nbsp;&nbsp;HmiB2ptr</td>
       <td><span id="HmiB2ptrHelp" class="tip">?</span></td>
       <td colspan="2">
@@ -106,7 +106,7 @@
     <!-- END HMI B to ptr -->
 
     <!-- BEGIN AIA_SCALE -->
-    <tr id="ProcessAiaScale">
+    <tr id="ProcessAiaScale" style='display:none'>
       <td>&nbsp;&nbsp;&nbsp;&nbsp;AIA_Scale</td>
       <td><span id="AiaScaleHelp" class="tip">?</span></td>
       <td colspan="2">
@@ -176,7 +176,7 @@
     <!-- END AIA_SCALE -->
 
     <!-- BEGIN RESIZE -->
-    <tr id="ProcessResize" style="display:none">
+    <tr id="ProcessResize" style='display:none'>
       <td>&nbsp;&nbsp;&nbsp;&nbsp;Resize</td>
       <td><span id="ResizeHelp" class="tip">?</span></td>
       <td colspan="2">
@@ -230,7 +230,7 @@
     <!-- END RESIZE -->
 
     <!-- BEGIN IM_PATCH -->
-    <tr id="ProcessImPatch">
+    <tr id="ProcessImPatch" style='display:none'>
       <td>&nbsp;&nbsp;&nbsp;&nbsp;IM_Patch</td>
       <td><span id="ImPatchHelp" class="tip">?</span></td>
       <td colspan="2">
@@ -392,7 +392,7 @@
     <!-- END IM_PATCH -->
 
     <!-- BEGIN MAPROJ -->
-    <tr id="ProcessMaproj">
+    <tr id="ProcessMaproj" style='display:none'>
       <td>&nbsp;&nbsp;&nbsp;&nbsp;Maproj</td>
       <td><span id="MaprojHelp" class="tip">?</span></td>
       <td colspan="2">
@@ -504,7 +504,7 @@
     <!-- END MAPROJ -->
 
     <!-- BEGIN REBIN -->
-    <tr id="ProcessRebin" style="display:none">
+    <tr id="ProcessRebin" style='display:none'>
       <td>&nbsp;&nbsp;&nbsp;&nbsp;Rebin</td>
       <td><span id="RebinHelp" class="tip">?</span></td>
       <td colspan="2">
@@ -594,7 +594,7 @@
     </tr>
 
     <!-- Image protocol options -->
-    <tr id="ProtocolImageOptions">
+    <tr id="ProtocolImageOptions" style='display:none'>
       <td>Choose Image Attributes</td>
       <td><span id="ImagesHelp" class="tip">?</span></td>
       <td colspan="2">
@@ -708,7 +708,7 @@
     <tr>
       <td colspan="4">
         <span id="FetchCheckboxHelp" class="tip">?</span>&nbsp;
-        <input id="ShowQueryCheckbox" type="checkbox" checked="0" onChange="ExportShowQuery();"> check to show export params.&nbsp;
+        <input id="ShowQueryCheckbox" type="checkbox" onChange="ExportShowQuery();"> check to show export params.&nbsp;
         <span id="ExportParameters"></span>
     </tr>
   </table>
