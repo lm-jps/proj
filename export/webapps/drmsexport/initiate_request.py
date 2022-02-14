@@ -39,6 +39,7 @@ class ErrorCode(ExportErrorCode):
     REQUEST_FATAL_ERROR = (4, 'a fatal error occurred during processing')
     REQUEST_NOT_ONLINE = (5, 'exported files are no longer online')
     REQUEST_TOO_MANY = (7, 'too many simulatneous exports') # can only happen with jsoc_fetch op=exp_request call
+    REQUEST_SEGMENT_OFFLINE = (25, 'one or more segment files are offline; contact the JSOC for assistance')
 
     # other IR errors
     PARAMETERS = (101, 'failure locating DRMS parameters')
@@ -320,7 +321,8 @@ def get_response_dict(export_status_dict, log):
     else:
         request_id = None
 
-    request_id = request_id if len(request_id) > 0 else None
+    # on error, there is no request ID
+    request_id = request_id if request_id and (len(request_id) > 0) else None
 
     if 'protocol' in export_status_dict:
         file_format = export_status_dict['protocol'].lower()
@@ -510,21 +512,14 @@ def export_premium(*, address, requestor=None, db_host, download_web_domain, log
 
                 status_code = get_request_status_code(export_status_dict)
 
-                if isinstance(status_code, ErrorCode):
-                    # GRRRRR! if an error occurred, then export_status_dict contains almost no info, not even the request ID; add
-                    # property that does contain the request id value
-                    export_status_dict[REQUEST_ID] = request_id
-
                 # to make URLs for the downloadables
                 export_status_dict['DOWNLOAD_WEB_DOMAIN'] = download_web_domain
 
-                log.write_debug([ f'[ export_premium ] request {str(export_status_dict["requestid"])} status is `{status_code.description()}`' ])
-
                 if request_is_complete(export_status_dict):
-                    log.write_info([ f'[ export_premium ] request {str(export_status_dict["requestid"])} was processed synchronously and is complete' ])
+                    log.write_info([ f'[ export_premium ] request {str(export_status_dict["requestid"])} was processed synchronously and is complete (description `{status_code.description()}`)' ])
                 elif request_is_pending(export_status_dict):
                     # jsoc_fetch executed the `url` branch of code, so the request is now asynchronous
-                    log.write_info([ f'[ export_premium ] request {str(export_status_dict["requestid"])} is being processed asynchronously' ])
+                    log.write_info([ f'[ export_premium ] request {str(export_status_dict["requestid"])} is being processed asynchronously (description `{status_code.description()}`)' ])
 
                     # this loop is to ensure that the status code is not REQUEST_NOT_QUEUED; originally, this meant
                     # in jsoc.export_new, but not jsoc.export - but now jsoc_fetch will not return this code; jsoc_fetch
@@ -547,7 +542,7 @@ def export_premium(*, address, requestor=None, db_host, download_web_domain, log
                         if isinstance(status_code, ErrorCode):
                             # GRRRRR! if an error occurred, then export_status_dict contains almost no info, not even the request ID; add
                             # property that does contain the request id value
-                            export_status_dict[REQUEST_ID] = request_id
+                            export_status_dict[REQUEST_ID] = export_status_dict['requestid']
 
                         export_status_dict['DOWNLOAD_WEB_DOMAIN'] = download_web_domain
 
@@ -560,7 +555,7 @@ def export_premium(*, address, requestor=None, db_host, download_web_domain, log
                         sleep(1)
                 else:
                     # must be an error - get_response() will pass the error code backt to the client
-                    pass
+                    log.write_debug([ f'[ export_premium ] export request failed (description `{status_code.description()}`)' ])
             except ExportServerError:
                 skip_quit = True
                 raise
@@ -636,11 +631,6 @@ def export_mini(*, address, requestor=None, db_host, download_web_domain, log, e
 
                 status_code = get_request_status_code(export_status_dict)
 
-                if isinstance(status_code, ErrorCode):
-                    # GRRRRR! if an error occurred, then export_status_dict contains almost no info, not even the request ID; add
-                    # property that does contain the request id value
-                    export_status_dict[REQUEST_ID] = request_id
-
                 # to make URLs for the downloadables
                 export_status_dict['DOWNLOAD_WEB_DOMAIN'] = download_web_domain
 
@@ -679,7 +669,7 @@ def export_mini(*, address, requestor=None, db_host, download_web_domain, log, e
                         if isinstance(status_code, ErrorCode):
                             # GRRRRR! if an error occurred, then export_status_dict contains almost no info, not even the request ID; add
                             # property that does contain the request id value
-                            export_status_dict[REQUEST_ID] = request_id
+                            export_status_dict[REQUEST_ID] = export_status_dict['requestid']
 
                         # to make URLs for the downloadables
                         export_status_dict['DOWNLOAD_WEB_DOMAIN'] = download_web_domain
