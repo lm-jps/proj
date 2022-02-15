@@ -1,6 +1,6 @@
-# 
+#
 # Makefile for numerical utilities
-# 
+#
 # requires MEXEXT set: via the environment, or by make MEXEXT=mexFOO
 # this will done from top-level makes
 
@@ -15,17 +15,17 @@ else
 endif
 # suppress Makefile re-make
 # need -fexceptions to support C++ error handling when called from Matlab
-CFLAGS = -m$(MODE) -fPIC -Wall -O -fexceptions 
+CFLAGS = -m$(MODE) -fPIC -Wall -O -fexceptions
 # CFLAGS = -m$(MODE) -fPIC -Wall -g -fexceptions
 # need "mxArray" definitions for mextool.c
 CPPFLAGS = -I../mex2c
 # but for mex, do *not* want our own mxArray defs
-CMEXPPFLAGS = 
+CMEXPPFLAGS =
 
 # turmon -- I built this, and it works with Matlab r14 (old matlab)
 # CC = $(HOME)/unix/gcc-3.3.1/bin/gcc
 # turmon -- this might work with Matlab r2010
-CC = /usr/local/gcc43/bin/gcc
+CC = $(MEX_CC)
 
 # installation locations
 MISCLIBDIR = $(TOP)/lib/$(MEXEXT)  # arch-dependent libs
@@ -82,7 +82,7 @@ $(GCCCOMP_OBJ) :	$(notdir $(GCCCOMP_OBJ:%.o=%.c))
 # this is a little raw, but it works for the purpose of making
 # a pure-mex library set.
 # The mex'ing lines below must not pick up my own mex.h!
-# In my mathworks mexfiles, I presently use: 
+# In my mathworks mexfiles, I presently use:
 #   -lmexrng -lmextools -lmex2matl
 # -lmextoolsMW should -lmextools in mex compilations
 # -lmexrng is 100% selfcontained, so does not need special handling
@@ -90,15 +90,15 @@ $(GCCCOMP_OBJ) :	$(notdir $(GCCCOMP_OBJ:%.o=%.c))
 # -lmex2matl must include mex.h, but does not rely on it.
 
 #mextoolMW.o: mextool.c
-#	mex $(CMEXPPFLAGS) -c $< 
+#	mex $(CMEXPPFLAGS) -c $<
 #	@ mv `echo $< | sed 's/\.c/.o/'` $@
 
 #mexargcheckMW.o: mexargcheck.c
-#	mex $(CMEXPPFLAGS) -c $< 
+#	mex $(CMEXPPFLAGS) -c $<
 #	@ mv `echo $< | sed 's/\.c/.o/'` $@
 
 #num_stringsMW.o: num_strings.c
-#	mex $(CMEXPPFLAGS) -c $< 
+#	mex $(CMEXPPFLAGS) -c $<
 #	@ mv `echo $< | sed 's/\.c/.o/'` $@
 
 $(MEXCOMP_OBJ): %MW.o:	%.o

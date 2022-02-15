@@ -1,6 +1,6 @@
-# 
+#
 # Makefile for mex2c libraries
-# 
+#
 # requires MEXEXT set: via the environment, or by make MEXEXT=mexFOO
 # this will done from top-level makes
 
@@ -27,7 +27,7 @@ CFLAGS = -m$(MODE) -fPIC -Wall -O -fexceptions
 # turmon -- I built this, and it works with Matlab r14 (old matlab)
 # CC = $(HOME)/unix/gcc-3.3.1/bin/gcc
 # turmon -- this might work with Matlab r2010
-CC = /usr/local/gcc43/bin/gcc
+CC = $(MEX_CC)
 
 # installation locations
 MISCLIBDIR = $(TOP)/lib/$(MEXEXT)  # arch-dependent libs
@@ -85,4 +85,3 @@ clean:
 distclean:   clean
 	( cd $(MISCLIBDIR); rm -f $(LIBRARY) )
 	( cd $(MISCINCDIR); rm -f $(INCLUDE) )
-
