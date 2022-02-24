@@ -194,192 +194,258 @@ To ingest a single fitsfile into a not-yet created series, all in one command:
 
 
 #include "jsoc_main.h"
+#include "fitsexport.h"
 
 char *module_name = "ingest_from_fits";
 
 #define DIE(msg) {fflush(stdout);fprintf(stderr,"%s, status=%d\n",msg,status); return(status);}
 
+/* parameters */
+#define IFF_ARGUMENT_INPUT_FILE "in"
+#define IFF_ARGUMENT_SERIES "ds"
+#define IFF_ARGUMENT_MAP_FILE "map"
+#define IFF_ARGUMENT_PRIME_KEY "primekey"
+#define IFF_ARGUMENT_CREATE_SERIES "c"
+#define IFF_ARGUMENT_PRINT_JSD "j"
+#define IFF_ARGUMENT_MISSING "0"
+
 ModuleArgs_t module_args[] =
 {
-     {ARG_STRING, "in", "NOT_SPECIFIED",  "Input FITS file."},
-     {ARG_STRING, "ds", "NOT_SPECIFIED",  "Target DRMS data series."},
-     {ARG_STRING, "map", "NOT_SPECIFIED",  "Map file for newname from oldname."},
-     {ARG_STRING, "primekey", "NOT_SPECIFIED",  "keyword name to use as a prime key in the JSD created"},
-     {ARG_FLAG, "c", "0",  "Use generated jsd to create a series. Requires both ds and primekey args."},
-     {ARG_FLAG, "j", "0",  "Print jsd."},
-     {ARG_END}
+    { ARG_STRING, IFF_ARGUMENT_INPUT_FILE, NULL, "path to FITS file to ingest" },
+    { ARG_STRING, IFF_ARGUMENT_SERIES, NULL, "DRMS data series into which FITS file will be ingested" },
+    { ARG_STRING, IFF_ARGUMENT_MAP_FILE, IFF_ARGUMENT_MISSING, "path to map file (maps FITS keyword name to DRMS keyword name)" },
+    { ARG_STRINGS, IFF_ARGUMENT_PRIME_KEY, IFF_ARGUMENT_MISSING, "comma-separated list of keywords to be used as the prime key when generating a JSD" },
+    { ARG_FLAG, IFF_ARGUMENT_CREATE_SERIES, NULL, "create a DRMS data series from the ingested FITS file; requires both ds and primekey arguments" },
+    { ARG_FLAG, IFF_ARGUMENT_PRINT_JSD, NULL, "generate a series JSD from the input FITS file; print the JSD to stdout" },
+    { ARG_END}
 };
 
-# define MAXJSDLEN 100000
-# define MAXMAPLEN 10000
+#define MAXJSDLEN 100000
+#define MAXMAPLEN 10000
 
 int DoIt(void)
-  {
-  const char *in = params_get_str(&cmdparams, "in");
-  const char *ds = params_get_str(&cmdparams, "ds");
-  const char *map = params_get_str(&cmdparams, "map");
-  const char *primekey = params_get_str(&cmdparams, "primekey");
-  int printjsd = params_isflagset(&cmdparams, "j");
-  int wantcreate = params_isflagset(&cmdparams, "c");
-  int haveseriesname =  strcmp(ds, "NOT_SPECIFIED") != 0;
-  int haveprime =  strcmp(primekey, "NOT_SPECIFIED") != 0;
-  int havemap = strcmp(map, "NOT_SPECIFIED") != 0;
-  int wantjsd = printjsd || wantcreate;
-  int insertrec = haveseriesname  && !printjsd;
-  int status = DRMS_SUCCESS;
-  DRMS_Array_t *data = NULL;
-  DRMS_Keyword_t *key=NULL;
-  HContainer_t *keywords = NULL;
-  HIterator_t hit;
-  int readraw = 1;
-  char jsd[MAXJSDLEN];
-  char *newnames[MAXMAPLEN];
-  char *oldnames[MAXMAPLEN];
-  char *actions[MAXMAPLEN];
-  int imap, nmap = 0;
+{
+    const char *input_file = NULL;
+    const char *series = NULL;
+    const char *map_file_path = NULL;
+    const char *prime_key_str = NULL;
+    int create_series = 0;
+    int print_jsd = 0;
+    int status = DRMS_SUCCESS;
+    DRMS_Array_t *data = NULL;
+    DRMS_Keyword_t *key=NULL;
+    HContainer_t *keywords = NULL;
+    HIterator_t hit;
+    char *jsd = NULL;
+    size_t sz_jsd = 16384;
+    char *newnames[MAXMAPLEN];
+    char *oldnames[MAXMAPLEN];
+    char *actions[MAXMAPLEN];
+    int imap, nmap = 0;
 
-  if (strcmp(in, "NOT_SPECIFIED") == 0)
+    input_file = params_get_str(&cmdparams, IFF_ARGUMENT_INPUT_FILE);
+    series = params_get_str(&cmdparams, IFF_ARGUMENT_SERIES);
+    map_file_path = params_get_str(&cmdparams, IFF_ARGUMENT_MAP_FILE);
+    prime_key_str = params_get_str(&cmdparams, IFF_ARGUMENT_PRIME_KEY);
+    create_series = params_isflagset(&cmdparams, IFF_ARGUMENT_CREATE_SERIES);
+    print_jsd = params_isflagset(&cmdparams, IFF_ARGUMENT_PRINT_JSD);
+
+    /* check for optional arguments */
+    if (strcmp(map_file_path, IFF_ARGUMENT_MISSING) == 0)
     {
-    if (cmdparams_numargs(&cmdparams) < 1 || !(in = cmdparams_getarg(&cmdparams, 1)))
-      DIE("No input data found");
+        map_file_path = NULL;
     }
 
-  data = drms_fitsrw_read(drms_env, in, readraw, &keywords, &status);
-  if (status || !keywords)
-  {
-     DIE("No keywords found");
-  }
-
-  if (wantjsd)
+    if (strcmp(prime_key_str, IFF_ARGUMENT_MISSING) == 0)
     {
-    char *pjsd = jsd;
-    char keyname[DRMS_MAXNAMELEN];
-    char *colon;
-    DRMS_Type_t datatype;
-    int iaxis, naxis, dims[10];
-    double bzero, bscale;
+        prime_key_str = NULL;
+    }
 
-    // build jsd in internal string
-    pjsd += sprintf(pjsd, "#=====General Series Information=====\n");
-    pjsd += sprintf(pjsd, "Seriesname:  %s\n", (haveseriesname ? ds : "<NAME HERE>"));
-    pjsd += sprintf(pjsd, "Author:      %s\n", getenv("USER"));
-    pjsd += sprintf(pjsd, "Owner:       nobody_yet\n");
-    pjsd += sprintf(pjsd, "Unitsize:    1\n");
-    pjsd += sprintf(pjsd, "Archive:     0\n");
-    pjsd += sprintf(pjsd, "Retention:   10\n");
-    pjsd += sprintf(pjsd, "Tapegroup:   0\n");
-    pjsd += sprintf(pjsd, "PrimeKeys:   %s\n", (haveprime ? primekey : "<PRIME KEYS HERE OR DELETE LINE>"));
-    pjsd += sprintf(pjsd, "DBIndex:     %s\n", (haveprime ? primekey : "<PRIME KEYS HERE OR DELETE LINE>"));
-    pjsd += sprintf(pjsd, "Description: \"From: %s\"\n", in);
-
-    pjsd += sprintf(pjsd, "#===== Keywords\n");
-
-    // drms_fitsrw_read() does not place reserved fits keywords in the keywords container.
-    // The BITPIX, NAXIS, BLANK, BZERO, BSCALE, SIMPLE, EXTEND values are copied or
-    // set in various fields in the in the DRMS_Array_t struct returned. END is dropped.
-    // Another function, fitsrw_read(), WILL put every FITS keyword into the keywords
-    // container, but it does not convert their names into DRMS-compatible keyword names,
-    // unlike drms_fitsrw_read().
-    datatype = data->type;
-    naxis = data->naxis;
-    memcpy(dims, data->axis, sizeof(int) * naxis);
-    bzero = data->bzero;
-    bscale = data->bscale;
-
-    hiter_new_sort(&hit, keywords, drms_keyword_ranksort);
-    while ( key = (DRMS_Keyword_t *)hiter_getnext(&hit) )
-      {
-      strcpy(keyname, key->info->name);
-
-      colon = index(key->info->description, ':');
-      // check for lllegal or reserved DRMS names
-      // In this case the FITS Keyword structure note section will contain the
-      // original FITS keyword.
-      if (*(key->info->description) == '[')
+    /* if printing a JSD, or creating a series, then the prime key must be specified */
+    if (print_jsd || create_series)
+    {
+        if (!prime_key_str)
         {
-        char *c;
-	char originalname[80];
-        strcpy(originalname, key->info->description+1);
-        c = index(originalname, ':');
-        if (c)
-          *c = '\0';
-        c = index(originalname, ']');
-        if (c)
-          *c = '\0';
-        newnames[nmap] = strdup(keyname);
-        oldnames[nmap] = strdup(originalname);
-        actions[nmap] = strdup("copy");
-        nmap++;
+            DIE("when generating a JSD, the prime-key must be specified also");
+        }
+    }
+
+    data = drms_fitsrw_read(drms_env, input_file, 1, &keywords, &status);
+    if (status || !keywords)
+    {
+       DIE("No keywords found");
+    }
+
+    if (print_jsd || create_series)
+    {
+        char keyname[DRMS_MAXNAMELEN];
+        char *colon = NULL;
+        DRMS_Type_t datatype;
+        int iaxis = 0;
+        int naxis = 0;
+        int dims[10];
+        double bzero = 0;
+        double bscale = 0;
+        char naxis_str[16] = {0};
+        char dimension_str[32] = {0};
+        char bzero_bscale_str[64] = {0};
+
+        jsd = calloc(sz_jsd, sizeof(char));
+        jsd = base_strcatalloc(jsd, "#=====General Series Information=====\n", &sz_jsd);
+        jsd = base_strcatalloc(jsd, "Seriesname:  ", &sz_jsd);
+        jsd = base_strcatalloc(jsd, series, &sz_jsd);
+        jsd = base_strcatalloc(jsd, "\n", &sz_jsd);
+        jsd = base_strcatalloc(jsd, "Author:      ", &sz_jsd);
+        jsd = base_strcatalloc(jsd, getenv("USER"), &sz_jsd);
+        jsd = base_strcatalloc(jsd, "\n", &sz_jsd);
+        jsd = base_strcatalloc(jsd, "Owner:      ", &sz_jsd);
+        jsd = base_strcatalloc(jsd, getenv("USER"), &sz_jsd);
+        jsd = base_strcatalloc(jsd, "\n", &sz_jsd);
+        jsd = base_strcatalloc(jsd, "Unitsize:    1\nArchive:     0\nRetention:   10\nTapegroup:   0\n", &sz_jsd);
+        jsd = base_strcatalloc(jsd, "PrimeKeys:   ", &sz_jsd);
+        jsd = base_strcatalloc(jsd, prime_key_str, &sz_jsd);
+        jsd = base_strcatalloc(jsd, "\n", &sz_jsd);
+        jsd = base_strcatalloc(jsd, "DBIndex:     ", &sz_jsd);
+        jsd = base_strcatalloc(jsd, prime_key_str, &sz_jsd);
+        jsd = base_strcatalloc(jsd, "\n", &sz_jsd);
+        jsd = base_strcatalloc(jsd, "Description: \"From: ", &sz_jsd);
+        jsd = base_strcatalloc(jsd, input_file, &sz_jsd);
+        jsd = base_strcatalloc(jsd, "\"\n", &sz_jsd);
+        jsd = base_strcatalloc(jsd, "#===== Keywords\n", &sz_jsd);
+
+        // drms_fitsrw_read() does not place reserved fits keywords in the keywords container.
+        // The BITPIX, NAXIS, BLANK, BZERO, BSCALE, SIMPLE, EXTEND values are copied or
+        // set in various fields in the in the DRMS_Array_t struct returned. END is dropped.
+        // Another function, fitsrw_read(), WILL put every FITS keyword into the keywords
+        // container, but it does not convert their names into DRMS-compatible keyword names,
+        // unlike drms_fitsrw_read().
+        datatype = data->type;
+        naxis = data->naxis;
+        memcpy(dims, data->axis, sizeof(int) * naxis);
+        bzero = data->bzero;
+        bscale = data->bscale;
+
+        hiter_new_sort(&hit, keywords, drms_keyword_ranksort);
+        while ( key = (DRMS_Keyword_t *)hiter_getnext(&hit) )
+        {
+            // fitsexport_getintkeyname(key->info->name, key->info->description, keyname, sizeof(keyname));
+            snprintf(keyname, sizeof(keyname), "%s", key->info->name);
+
+            colon = index(key->info->description, ':');
+            // check for lllegal or reserved DRMS names
+            // In this case the FITS Keyword structure note section will contain the
+            // original FITS keyword.
+            if (*(key->info->description) == '[')
+            {
+                char *c;
+                char originalname[80];
+
+                strcpy(originalname, key->info->description+1);
+              c = index(originalname, ':');
+              if (c)
+                *c = '\0';
+              c = index(originalname, ']');
+              if (c)
+                *c = '\0';
+              newnames[nmap] = strdup(keyname);
+              oldnames[nmap] = strdup(originalname);
+              actions[nmap] = strdup("copy");
+              nmap++;
+              }
+
+            jsd = base_strcatalloc(jsd, "Keyword: ", &sz_jsd);
+            jsd = base_strcatalloc(jsd, keyname, &sz_jsd);
+            jsd = base_strcatalloc(jsd, ", ", &sz_jsd);
+            // make all but note section of jsd.
+            switch (key->info->type)
+            {
+                case DRMS_TYPE_CHAR:
+                    if (colon) // probably type logical, leave as DRMS CHAR
+                    {
+                        jsd = base_strcatalloc(jsd, "char, variable, record, DRMS_MISSING_VALUE, \"%d\", \"none\", ", &sz_jsd);
+                    }
+                    else
+                    {
+                        jsd = base_strcatalloc(jsd, "int, variable, record, DRMS_MISSING_VALUE, \"%d\", \"none\", ", &sz_jsd);
+                    }
+                	  break;
+                case DRMS_TYPE_SHORT:
+                case DRMS_TYPE_INT:
+                    jsd = base_strcatalloc(jsd, "int, variable, record, DRMS_MISSING_VALUE, \"%d\", \"none\", ", &sz_jsd);
+                    break;
+                case DRMS_TYPE_LONGLONG:
+                    jsd = base_strcatalloc(jsd, "longlong, variable, record, DRMS_MISSING_VALUE, \"%lld\", \"none\", ", &sz_jsd);
+                    break;
+                case DRMS_TYPE_FLOAT:
+                case DRMS_TYPE_DOUBLE:
+                    jsd = base_strcatalloc(jsd, "double, variable, record, DRMS_MISSING_VALUE, \"%f\", \"none\", ", &sz_jsd);
+                    break;
+                case DRMS_TYPE_TIME:
+                    jsd = base_strcatalloc(jsd, "time, variable, record, DRMS_MISSING_VALUE, 0, \"UTC\", ", &sz_jsd);
+                    break;
+                case DRMS_TYPE_STRING:
+                    jsd = base_strcatalloc(jsd, "string, variable, record, \"\", \"%s\", \"none\", ", &sz_jsd);
+                    break;
+                default:
+                    DIE("bad key type");
+            }
+
+            jsd = base_strcatalloc(jsd, "\"", &sz_jsd);
+            jsd = base_strcatalloc(jsd, key->info->description, &sz_jsd);
+            jsd = base_strcatalloc(jsd, "\"\n", &sz_jsd);
         }
 
-      pjsd += sprintf(pjsd, "Keyword: %s, ", keyname);
-      // make all but note section of jsd.
-      switch (key->info->type)
+        hiter_free(&hit);
+
+        jsd = base_strcatalloc(jsd, "#======= Segments =======\n", &sz_jsd);
+        jsd = base_strcatalloc(jsd, "Data: array, variable, ", &sz_jsd);
+        jsd = base_strcatalloc(jsd, drms_type2str(datatype), &sz_jsd);
+        jsd = base_strcatalloc(jsd, ", ", &sz_jsd);
+        snprintf(naxis_str, sizeof(naxis_str), "%d", naxis);
+        jsd = base_strcatalloc(jsd, naxis_str, &sz_jsd);
+        jsd = base_strcatalloc(jsd, ", ", &sz_jsd);
+
+        for (iaxis = 0; iaxis < naxis; iaxis++)
         {
-        case DRMS_TYPE_CHAR:
-          if (colon) // probably type logical, leave as DRMS CHAR
-  	    pjsd += sprintf(pjsd, "char, variable, record, DRMS_MISSING_VALUE, \"%%d\", \"none\", ");
-          else
-  	    pjsd += sprintf(pjsd, "int, variable, record, DRMS_MISSING_VALUE, \"%%d\", \"none\", ");
-  	  break;
-        case DRMS_TYPE_SHORT:
-        case DRMS_TYPE_INT:
-  	  pjsd += sprintf(pjsd, "int, variable, record, DRMS_MISSING_VALUE, \"%%d\", \"none\", ");
-  	  break;
-        case DRMS_TYPE_LONGLONG:
-  	  pjsd += sprintf(pjsd, "longlong, variable, record, DRMS_MISSING_VALUE, \"%%lld\", \"none\", ");
-  	  break;
-        case DRMS_TYPE_FLOAT:
-        case DRMS_TYPE_DOUBLE:
-  	  pjsd += sprintf(pjsd, "double, variable, record, DRMS_MISSING_VALUE, \"%%f\", \"none\", ");
-  	  break;
-        case DRMS_TYPE_TIME:
-  	  pjsd += sprintf(pjsd, "time, variable, record, DRMS_MISSING_VALUE, 0, \"UTC\", ");
-  	  break;
-        case DRMS_TYPE_STRING:
-  	  pjsd += sprintf(pjsd, "string, variable, record, \"\", \"%%s\", \"none\", ");
-  	  break;
-        default:
-  	  DIE("bad key type");
+            snprintf(dimension_str, sizeof(dimension_str), "%d", dims[iaxis]);
+            jsd = base_strcatalloc(jsd, dimension_str, &sz_jsd);
+            jsd = base_strcatalloc(jsd, ", ", &sz_jsd);
+
         }
-      pjsd += sprintf(pjsd, "\"%s\"\n", key->info->description);
-      }
 
-    hiter_free(&hit);
+        /* empty string for units */
+        jsd = base_strcatalloc(jsd, "\"\", fits, \"", &sz_jsd);
+        jsd = base_strcatalloc(jsd, (datatype != DRMS_TYPE_FLOAT && datatype != DRMS_TYPE_DOUBLE && datatype != DRMS_TYPE_LONGLONG) ? "compress Rice" : "",  &sz_jsd);
+        snprintf(bzero_bscale_str, sizeof(bzero_bscale_str), "\", %f, %f", bzero, bscale);
+        jsd = base_strcatalloc(jsd, bzero_bscale_str, &sz_jsd);
+        jsd = base_strcatalloc(jsd, ", \"", &sz_jsd);
+        jsd = base_strcatalloc(jsd, input_file, &sz_jsd);
+        jsd = base_strcatalloc(jsd, "\"\n", &sz_jsd);
+        jsd = base_strcatalloc(jsd, "#======= End JSD =======\n", &sz_jsd);
 
-    pjsd += sprintf(pjsd, "#======= Segments =======\n");
-    pjsd += sprintf(pjsd, "Data: array, variable, %s, %d, ", drms_type2str(datatype), naxis);
+        if (print_jsd)
+        {
+            printf("%s\n", jsd);
+            // print keymap info
+            printf("#====== BEGIN KEYNAME MAP =======\n");
+            printf("# REMOVE these keyname map lines from the JSD\n");
+            printf("# place the keyname map into a file for later use\n");
+            printf("# mapfile has structure: wantedDRMSname namefromFITSfile action\n");
+            printf("# but the second column needs to be the auto-converted name to provoke substitution\n");
+            printf("# use \"copy\" for default action - without quotes\n");
+            for (imap=0; imap<nmap; imap++)
+            {
+                printf("# FITS name %s is converted to %s on input.\n%s\t%s\t%s\n", oldnames[imap], newnames[imap], newnames[imap], newnames[imap], actions[imap]);
+            }
 
-    for (iaxis = 0; iaxis < naxis; iaxis++)
-      pjsd += sprintf(pjsd, "%d, ", dims[iaxis]);
-    pjsd += sprintf(pjsd, "\"\", fits, \"%s\", %f, %f, \"%s\"\n",
-                    (datatype != DRMS_TYPE_FLOAT &&
-                     datatype != DRMS_TYPE_DOUBLE &&
-                     datatype != DRMS_TYPE_LONGLONG) ? "compress Rice" : "",
-                    bzero, bscale, in);
-    pjsd += sprintf(pjsd, "#======= End JSD =======\n");
-
-    if (printjsd)
-      {
-      printf("%s\n", jsd);
-      // print keymap info
-      printf("#====== BEGIN KEYNAME MAP =======\n");
-      printf("# REMOVE these keyname map lines from the JSD\n");
-      printf("# place the keyname map into a file for later use\n");
-      printf("# mapfile has structure: wantedDRMSname namefromFITSfile action\n");
-      printf("# but the second column needs to be the auto-converted name to provoke substitution\n");
-      printf("# use \"copy\" for default action - without quotes\n");
-      for (imap=0; imap<nmap; imap++)
-          printf("# FITS name %s is converted to %s on input.\n%s\t%s\t%s\n",
-            oldnames[imap], newnames[imap], newnames[imap], newnames[imap], actions[imap]);
-      printf("#======END KEYNAME MAP =======\n");
-      }
+            printf("#======END KEYNAME MAP =======\n");
+        }
     }
 
   // if keyname mapfile is given, append to or replace names in map list
-  if (havemap)
+    if (map_file_path)
     {
-    FILE *mapfile = fopen(map, "r");
+    FILE *mapfile = fopen(map_file_path, "r");
     char line[10000];
     char newname[DRMS_MAXNAMELEN];
     char oldname[DRMS_MAXNAMELEN];
@@ -416,42 +482,49 @@ int DoIt(void)
     fclose(mapfile);
     }
 
-  if (wantcreate)
+    if (create_series)
     {
-    DRMS_Record_t *template;
-    if (!haveseriesname || !haveprime)
-    {
-       DIE("Cant create series without ds and primekey args.\n");
-    }
-    if (drms_series_exists(drms_env , ds, &status))
-    {
-       DIE("Cant create existing series\n");
-    }
-    template = drms_parse_description(drms_env, jsd);
-    if (template==NULL)
-    {
-       DIE("Failed to parse\n");
-    }
-    if (drms_create_series(template, 0))
-    {
-       DIE("Failed to create series.\n");
-    }
-    drms_free_record_struct(template);
-    free(template);
-    fprintf(stderr,"Series %s created.\n", ds);
+        DRMS_Record_t *template;
+
+        if (!series || !prime_key_str)
+        {
+           DIE("Cant create series without ds and primekey args.\n");
+        }
+        if (drms_series_exists(drms_env, series, &status))
+        {
+           DIE("Cant create existing series\n");
+        }
+        template = drms_parse_description(drms_env, jsd);
+        if (template==NULL)
+        {
+           DIE("Failed to parse\n");
+        }
+        if (drms_create_series(template, 0))
+        {
+           DIE("Failed to create series.\n");
+        }
+        drms_free_record_struct(template);
+        free(template);
+        fprintf(stderr,"Series %s created.\n", series);
     }
 
-  if (insertrec)
+    if (jsd)
+    {
+        free(jsd);
+        jsd = NULL;
+    }
+
+  if (series && !print_jsd)
     {
     char *usename;
     char *action;
     DRMS_RecordSet_t *rs;
     DRMS_Record_t *rec;
-    if (!drms_series_exists(drms_env , ds, &status))
+    if (!drms_series_exists(drms_env, series, &status))
     {
        DIE("Series does not exist, cant insert record\n");
     }
-    rs = drms_create_records(drms_env, 1, ds, DRMS_PERMANENT, &status);
+    rs = drms_create_records(drms_env, 1, series, DRMS_PERMANENT, &status);
     if (status)
     {
        DIE("Could not create new records in series");
