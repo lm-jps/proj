@@ -109,7 +109,7 @@ class AttributeListAction(ListAction):
             self.dest = values
         except ValueError:
             # not a boolean; should be a list
-            super.__call__(parser, namespace, values, option_string)
+            super().__call__(parser, namespace, values, option_string)
 
 class Arguments(Args):
     _arguments = None
@@ -259,12 +259,12 @@ def get_series_info_from_db(*, series, cursor, keywords=None, links=None, segmen
             if type(keywords) == bool:
                 if keywords:
                     # all keywords
-                    sql = f"SELECT series, keyword, datatype, keyworddefault AS constantvalue, unit, isconstant, (flags >> 16)::integer AS rank, description FROM drms_followkeywordlink('{series.lower()}', NULL)"
+                    sql = f"SELECT series, keyword, datatype, keyworddefault AS constantvalue, unit, scope_type, (flags >> 16)::integer AS rank, description FROM drms_followkeywordlink2('{series.lower()}', NULL)"
             else:
                 # keywords specified in list
                 sql_elements = []
                 for keyword in keywords:
-                    sql_elements.append(f"SELECT series, keyword, datatype, keyworddefault AS constantvalue, unit, isconstant, (flags >> 16)::integer AS rank, description FROM drms_followkeywordlink('{series.lower()}', '{keyword.lower()}')")
+                    sql_elements.append(f"SELECT series, keyword, datatype, keyworddefault AS constantvalue, unit, scope_type, (flags >> 16)::integer AS rank, description FROM drms_followkeywordlink2('{series.lower()}', '{keyword.lower()}')")
 
                 sql = '\nUNION\n'.join(sql_elements)
 
@@ -277,7 +277,7 @@ def get_series_info_from_db(*, series, cursor, keywords=None, links=None, segmen
 
                     for row in rows:
                         if row[1].lower() not in keywords_with_info:
-                            series_info[series.lower()]['keywords'][row[1].lower()] = { 'data-type' : row[2], 'constant-value': row[3] if row[5] else 'na', 'physical-unit' : row[4], 'rank' : row[6], 'description' : row[7] }
+                            series_info[series.lower()]['keywords'][row[1].lower()] = { 'data-type' : row[2], 'constant-value': row[3] if row[5] == 1 else 'na', 'physical-unit' : row[4], 'is-slotted' : (row[5] >= 1000), 'rank' : row[6], 'description' : row[7] }
 
                             keywords_with_info.add(row[1].lower())
 
