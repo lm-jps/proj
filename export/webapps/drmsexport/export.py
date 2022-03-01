@@ -230,22 +230,27 @@ from drms_utils import Formatter as DrmsLogFormatter, Log as DrmsLog, LogLevel a
 #   + the WSGI server creates a uwsgi response from the arguments provided to the `start_response` callable, and sends the
 #     response to the reverse-proxy server
 #
-# to configure the WSGI server, uWSGI, create a n .ini configuration file:
+# to configure the WSGI server, uWSGI, create an .ini configuration file:
 #   + each parameter of the configuration file has the format <parameter> = <value>:
 #     [uwsgi]
 #     # the location where uWSGI will search for the entry point (ensure the project directory exists)
-#     chdir = /home/netdrms_production/export
+#     chdir = /home/drms-production/export
 #     module = export_wsgi:export
 #
 #     # run in master mode, spawning processes to handle requests
 #     master = true
 #     processes = 5
+#     enable-threads = true
 #
 #     # listen for requests on a unix socket; ideal for configurations where the reverse-proxy server and uWSGI run on the
 #     # same host
-#     socket = /tmp/export.sock
-#     chmod-socket = 664
+#     # must create /var/run/export each time the system is rebooted; make it owned by drms-production
+#     socket = /var/run/export/export.sock
+#     chmod-socket = 777
+#     gid = nginx
 #     vacuum = true
+#
+#     logger = file:/home/drms-production/log/DRMS/export.log
 
 #########################
 #   WSGI entry point    #
@@ -333,15 +338,43 @@ from drms_utils import Formatter as DrmsLogFormatter, Log as DrmsLog, LogLevel a
 #     $ cp *.py /home/netdrms_production/export
 #   + start the web service
 
-############################
-# starting the web service #
-############################
+#############################
+# starting the web services #
+#############################
 # starting the export web service entails starting the WSGI service (uWSGI), and starting the reverse-proxy
 # service (nginx)
-#   + to start uWSGI, run the uwsgi executable, providing export.ini as an argument:
-#     uwsgi --ini=/home/netdrms_production/export/export.ini
+#   + to start uWSGI from the command line run the uwsgi executable, providing export.ini as an argument:
+#     uwsgi --ini=/home/drms-production/export/export.ini
+#   + to start uWSGI as a systemd service:
+#       1. create the following unit file (/etc/systemd/system/uwsgi.service):
+#          [Unit]
+#          Description=uWSGI instance to serve export WSGI app
+#
+#          [Service]
+#          # do not set User/Group to drms-production because that user cannot mkdir /var/run/export; but also do not run
+#          # script commands as root since root cannot activate the conda env (only drms-production can do that)
+#          ExecStartPre=-/usr/bin/bash -c 'mkdir -p /var/run/export; chown drms-production:drms-production /var/run/export; chmod 0755 /var/run/export'
+#          ExecStart=/usr/bin/su -l drms-production -c 'cd /home-local/drms-production/export; conda activate netdrms; uwsgi --ini=/home-local/drms-production/export/export.ini'
+#
+#          [Install]
+#          WantedBy=multi-user.target
+#
+#       2. start the service
+#          sudo systemctl start uwsgi
+#
+#       3. make the service start on system startup
+#          systemctl enable uwsgi
+#
+#       * NOTE: uwsgi will create a unix domain socket as specified in export.ini:
+#         socket = /var/run/export/export.sock
+#         the nginx directive uwsgi_pass must be set to this exact path; the path must be writeable by nginx, but uwsgi will make it
+#         world-writeable; the ExecStartPre parameter of the systemd unit file assures that the nginx user can access the socket file
+#
 #   + to start the nginx service:
-#     sudo service nginx start
+#     1. sudo service nginx start
+#
+#     2. make the service start on system startup
+#        systemctl enable uwsgi
 
 ############################
 # stopping the web service #
