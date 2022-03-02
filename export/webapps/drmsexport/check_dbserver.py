@@ -140,13 +140,14 @@ class Arguments(Args):
                 parser.add_argument('-P', '--dbport', help='the port on the machine hosting DRMS data series names', metavar='<db host port>', dest='db_port', default=db_port)
                 parser.add_argument('-N', '--dbname', help='the name of the database serving DRMS series names', metavar='<db name>', dest='db_name', default=db_name)
                 parser.add_argument('-U', '--dbuser', help='the user to log-in to the serving database as', metavar='<db user>', dest='db_user', default=db_user)
+                parser.add_argument('-r', '--use-regex', help='if set, then `series` contains a regular expression that identifies a set of series', dest='use_regex', action='store_true')
                 parser.add_argument('-w', '--wlfile', help='the text file containing the definitive list of internal series accessible via the external web site', metavar='<white-list file>', dest='wl_file', action=ValidateArgumentAction, default=wl_file)
 
                 arguments = Arguments(parser=parser, args=args)
             else:
                 # `program_args` has all `arguments` values, in final form; validate them
                 # `series` is py list of DRMS data series
-                def extract_module_args(*, public_db_host, series, log=None, db_port=db_port, db_name=db_name, db_user=db_user, wl_file=wl_file):
+                def extract_module_args(*, public_db_host, series, log=None, db_port=db_port, db_name=db_name, db_user=db_user, use_regex=False, wl_file=wl_file):
                     arguments = {}
 
                     arguments['public_db_host'] = public_db_host
@@ -154,6 +155,7 @@ class Arguments(Args):
                     arguments['db_port'] = db_port
                     arguments['db_name'] = db_name
                     arguments['db_user'] = db_user
+                    arguments['use_regex'] = use_regex
                     arguments['wl_file'] = wl_file
 
                     DetermineDbServerAction.set_log(log)
@@ -180,7 +182,7 @@ class DetermineDbServerAction(Action):
 
     _log = None
 
-    def __init__(self, *, method, public_db_host, series, log=None, db_port=None, db_name=None, db_user=None):
+    def __init__(self, *, method, public_db_host, series, log=None, db_port=None, db_name=None, db_user=None, use_regex=False):
         self._method = getattr(self, method)
         self._public_db_host = public_db_host
         self._series = series # py list
@@ -189,6 +191,7 @@ class DetermineDbServerAction(Action):
         self._options['db_port'] = db_port
         self._options['db_name'] = db_name
         self._options['db_user'] = db_user
+        self._options['use_regex'] = use_regex
 
     def determine_db_server(self):
         # returns dict
@@ -255,6 +258,54 @@ def send_request(request, connection, log):
 
     return message
 
+# the user has provided a regex
+# returns:
+#   # { "hmi.m_720s" : [ "hmi.M_720s", "magnetograms with a cadence of 720 seconds." ],
+    #   "hmi.m_45s" : [ "hmi.M_45s", "magnetograms with a cadence of 45 seconds." ]
+    # }
+#   #
+def determine_series(regex, public_db_host, private_db_host, has_wl, wl_file):
+    nested_arguments = ss_get_arguments(is_program=False, module_args={})
+    log = DetermineDbServerAction.get_log()
+
+    series_obj = {} # { "hmi.m_720s" : [ "hmi.M_720s", "magnetograms with a cadence of 720 seconds." ] }
+
+    with Connection(server=nested_arguments.server, listen_port=nested_arguments.listen_port, timeout=nested_arguments.message_timeout, log=log) as connection:
+        log.write_info([ f'[ determine_series] connection to socket server successful' ])
+
+        sanitized_regex = regex.strip().lower().replace(".", "[.]")
+
+        # check both public and private server, and merge
+        message = { 'request_type' : 'series_list', 'series_regex' : sanitized_regex, 'db_host' : public_db_host }
+        response = json_loads(send_request(message, connection, log))
+
+        if response.get('export_server_status') == 'export_server_error':
+            raise ExportServerError(error_message=f'{response["error_message"]}')
+
+        if len(response['names']) != 0:
+            for series_info in response['names']:
+                series_lower = series_info['name'].strip().lower()
+                series_obj[series_lower] = [ series_info['name'], series_info['note'] ]
+
+        if has_wl:
+            message = { 'request_type' : 'series_list', 'series_regex' : sanitized_regex, 'db_host' : private_db_host }
+            response = json_loads(send_request(message, connection, log))
+
+            if len(response['names']) != 0:
+                white_list = get_whitelist(wl_file) # if no whitelist exists, then this is the empty set
+
+                for series_info in response['names']:
+                    series_lower = series_info['name'].strip().lower()
+                    if series_lower in white_list and series_lower not in series_obj:
+                        # this series is visible to the public, and not yet already in the series_obj
+                        series_obj[series_lower] = [ series_info['name'], series_info['note'] ]
+
+        message = { 'request_type' : 'quit' }
+        send_request(message, connection, log)
+
+        return series_obj
+
+# the user has provided a list of series
 @lru_cache
 def determine_server(series, public_db_host, private_db_host, has_wl, wl_file):
     nested_arguments = ss_get_arguments(is_program=False, module_args={})
@@ -339,22 +390,25 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
             response_dict = {}
 
             if len(arguments.series) > 0:
-
-                response_dict['series'] = []
-                use_public_server = True
-                white_list = None
-                supporting_server = True
-
-                for series in arguments.series:
-                    is_supported, is_public, series_obj = determine_server(series, arguments.public_db_host, arguments.private_db_host, arguments.has_wl, arguments.wl_file)
-                    response_dict['series'].append(series_obj)
-                    use_public_server &= is_public
-                    supporting_server &= is_supported
-
-                if supporting_server:
-                    response_dict['server'] = arguments.public_db_host if use_public_server else arguments.private_db_host
+                if (arguments.use_regex):
+                    series_obj = determine_series(arguments.series[0], arguments.public_db_host, arguments.private_db_host, arguments.has_wl, arguments.wl_file)
+                    response_dict['series'] = series_obj
                 else:
-                    response_dict['server'] = None
+                    response_dict['series'] = []
+                    use_public_server = True
+                    white_list = None
+                    supporting_server = True
+
+                    for series in arguments.series:
+                        is_supported, is_public, series_obj = determine_server(series, arguments.public_db_host, arguments.private_db_host, arguments.has_wl, arguments.wl_file)
+                        response_dict['series'].append(series_obj)
+                        use_public_server &= is_public
+                        supporting_server &= is_supported
+
+                    if supporting_server:
+                        response_dict['server'] = arguments.public_db_host if use_public_server else arguments.private_db_host
+                    else:
+                        response_dict['server'] = None
             else:
                 response_dict['server'] = None
                 response_dict['series'] = []
