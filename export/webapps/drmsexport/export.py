@@ -354,7 +354,8 @@ from drms_utils import Formatter as DrmsLogFormatter, Log as DrmsLog, LogLevel a
 #          # do not set User/Group to drms-production because that user cannot mkdir /var/run/export; but also do not run
 #          # script commands as root since root cannot activate the conda env (only drms-production can do that)
 #          ExecStartPre=-/usr/bin/bash -c 'mkdir -p /var/run/export; chown drms-production:drms-production /var/run/export; chmod 0755 /var/run/export'
-#          ExecStart=/usr/bin/su -l drms-production -c 'cd /home-local/drms-production/export; conda activate netdrms; uwsgi --ini=/home-local/drms-production/export/export.ini'
+#          ExecStart=/usr/bin/bash -c '/usr/bin/sudo -u drms-production /usr/bin/bash -c "'"source /home-local/drms-production/.bashrc; conda activate netdrms; cd /home-local/drms-production/export; uwsgi --ini=/home-local/drms-production/export/export.ini"'"'
+#          ExecStop=/usr/bin/kill -SIGINT -- -${MAINPID}
 #
 #          [Install]
 #          WantedBy=multi-user.target
@@ -439,6 +440,17 @@ class ServerResource(Resource):
     @use_kwargs(_arguments, location='querystring')
     def get(self, public_db_host, series, db_name=None, db_port=None, db_user=None):
         arguments = { 'public_db_host' : public_db_host, 'series' : series, 'db_name' : db_name, 'db_port' : db_port, 'db_user' : db_user, 'log' : APP_LOG }
+
+        action = Action.action(action_type='determine_db_server', args=arguments)
+        return action().generate_serializable_dict()
+
+class SeriesListResource(Resource):
+    _arguments = { 'public_db_host' : fields.Str(required=True, data_key='public-db-host'), 'series_regex' : fields.Str(required=True, data_key='series-regex'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'db_user' : fields.Str(required=False, data_key='db-user') }
+
+    @use_kwargs(_arguments, location='querystring')
+    def get(self, public_db_host, series_regex, db_name=None, db_port=None, db_user=None):
+        # underyling API expects `series` to be a list with a single string element that is the series regex 
+        arguments = { 'public_db_host' : public_db_host, 'series' : [ series_regex ], 'db_name' : db_name, 'db_port' : db_port, 'db_user' : db_user, 'use_regex' : True, 'log' : APP_LOG }
 
         action = Action.action(action_type='determine_db_server', args=arguments)
         return action().generate_serializable_dict()
@@ -589,6 +601,7 @@ class RootResource(Resource):
 
 export_api.add_resource(AddressRegistrationResource, '/export/address-registration')
 export_api.add_resource(ServerResource, '/export/series-server')
+export_api.add_resource(SeriesListResource, '/export/series-list')
 export_api.add_resource(RecordSetResource, '/export/record-set')
 export_api.add_resource(SeriesResource, '/export/series')
 
