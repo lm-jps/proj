@@ -7,11 +7,12 @@ d		:= $(dir)
 # Builds on icc/x86_64 only
 #ifeq ($(JSOC_MACHINE), linux_x86_64)
 #ifeq ($(COMPILER), icc)
-VFISV_$(d)	:= $(addprefix $(d)/, vfisv vfisv_harp vfisv_fd10_old vfisv_fd10_harp_old)
+VFISV_NOT2COMP$(d)	:= $(addprefix $(d)/, vfisv vfisv_harp vfisv_fd10_old vfisv_fd10_harp_old)
+VFISV_2COMP$(d)		:= $(addprefix $(d)/, vfisv_2comp)
 #endif
 #endif
 
-VFISV_COBJ_$(d)	:= $(VFISV_$(d):%=%.o)
+VFISV_COBJ_$(d)	:= $(VFISV_NOT2COMP$(d):%=%.o) $(VFISV_2COMP$(d):%=%.o)
 
 # VFISV_$(d) depends on Fortran code. 
 # Here's the skinny on Fortran 90 modules. If a Fortran 90 file 
@@ -48,11 +49,11 @@ VFISV_COBJ_$(d)	:= $(VFISV_$(d):%=%.o)
 #   wave_init.o
 #   voigt.o
 #   voigt_taylor.o
-#   forward.o
+#   forward_2comp.o
 #   free_init.o
 #   free_memory.o
 #   inv_utils.o
-#   invert.o
+#   invert_2comp.o
 
 # Just list all the Fortran files since we have to build them in a specific order (see note below).
 # They will be built in the order they appear in this list.
@@ -73,17 +74,18 @@ VFISV_FOBJ_$(d) := $(addprefix $(d)/, cons_param.o \
     wave_init.o \
     voigt.o \
     voigt_taylor.o \
-    forward.o \
     free_init.o \
     free_memory.o \
-    inv_utils.o \
-    invert.o)
+    inv_utils.o)
 
-MODEXE_USEF_$(d):= $(VFISV_$(d))
+VFISV_FOBJ_NOT2COMP$(d) := $(addprefix $(d)/, forward.o invert.o)
+VFISV_FOBJ_2COMP$(d) := $(addprefix $(d)/, forward_2comp.o invert_2comp.o)
+
+MODEXE_USEF_$(d):= $(VFISV_NOT2COMP$(d)) $(VFISV_2COMP$(d))
 MODEXE_USEF	:= $(MODEXE_USEF) $(MODEXE_USEF_$(d))
 
 EXE_$(d)        := $(MODEXE_USEF_$(d))
-OBJ_$(d)	:= $(VFISV_COBJ_$(d)) $(VFISV_FOBJ_$(d))
+OBJ_$(d)	:= $(VFISV_COBJ_$(d)) $(VFISV_FOBJ_$(d)) $(VFISV_FOBJ_NOT2COMP$(d)) $(VFISV_FOBJ_2COMP$(d))
 DEP_$(d)	:= $(OBJ_$(d):%=%.d)
 CLEAN		:= $(CLEAN) \
 		   $(OBJ_$(d)) \
@@ -102,10 +104,14 @@ $(EXE_$(d)):		LL_TGT := $(LL_TGT) -lmkl_em64t
 # Use a non-standard Fortran compiler for LINKING the modules of this make file.
 $(EXE_$(d)):		FCOMPILER := $(MPIFCOMPILER)
 # The line above should NOT affect the compilation of the object files, but it does!
-$(VFISV_FOBJ_$(d)):	FCOMPILER := ifort
-$(VFISV_COBJ_$(d)):	ICC_CMPLR := $(MPICOMPILER)
+$(VFISV_FOBJ_$(d)):		FCOMPILER := ifort
+$(VFISV_FOBJ_NOT2COMP$(d)):     FCOMPILER := ifort
+$(VFISV_FOBJ_2COMP$(d)):     	FCOMPILER := ifort
+$(VFISV_COBJ_$(d)):		ICC_CMPLR := $(MPICOMPILER)
 
-$(VFISV_$(d)):		$(VFISV_FOBJ_$(d))
+$(VFISV_NOT2COMP$(d)):		$(VFISV_FOBJ_$(d)) $(VFISV_FOBJ_NOT2COMP$(d))
+$(VFISV_2COMP$(d)):		$(VFISV_FOBJ_$(d)) $(VFISV_FOBJ_2COMP$(d))
+
 
 # Shortcuts
 .PHONY:	$(S_$(d))
