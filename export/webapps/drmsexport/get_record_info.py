@@ -30,6 +30,8 @@ class ErrorCode(ExportErrorCode):
     UNHANDLED_EXCEPTION = (107, 'unhandled exception')
 
 class GriBaseError(ExportError):
+    text_response = False
+
     def __init__(self, *, exc_info=None, error_message=None):
         if exc_info is not None:
             import traceback
@@ -47,6 +49,14 @@ class GriBaseError(ExportError):
                 error_message = f'{error_message} [ {file_name}:{line_number}: {e_type.__name__}: {str(e_obj)} ]'
 
         super().__init__(error_message=error_message)
+
+    @property
+    def response(self):
+        if self.text_response:
+            # need to generate a text response, not regular json; return a response that has a generate_text() method
+            return GetRecordTableAction.generate_error_response(self)
+        else:
+            return super().response
 
 class ParametersError(GriBaseError):
     _error_code = ErrorCode.PARAMETERS
@@ -68,6 +78,16 @@ class ExportServerError(GriBaseError):
 
 class UnhandledExceptionError(GriBaseError):
     _error_code = ErrorCode.UNHANDLED_EXCEPTION
+
+class TableFlagsAction(ArgsAction):
+    def __call__(self, parser, namespace, value, option_string=None):
+        # convert json arguments to dict
+        table_flags_dict = self.json_to_dict(value)
+        setattr(namespace, self.dest, table_flags_dict)
+
+    @classmethod
+    def json_to_dict(cls, json_text):
+        return json_loads(json_text)
 
 def name_to_ws_obj(name, drms_params):
     webserver_dict = {}
@@ -140,13 +160,14 @@ class Arguments(Args):
                 parser.add_argument('-n', '--number-records', help='the maximum number of records for which information is returned', metavar='<maximum number of records>', dest='number_records', type=int, default=None)
                 parser.add_argument('-P', '--dbport', help='the port on the host machine that is accepting connections for the database', metavar='<db host port>', dest='db_port', type=int, default=db_port)
                 parser.add_argument('-s', '--segments', help='list of segments for which information is returned', action=ListAction, dest='segments', default=None)
+                parser.add_argument('-t', '--table-flags', help='json string containing boolean flags used to filter in table columns', action=TableFlagsAction, dest='table_flags', default=None) # converted to dict
                 parser.add_argument('-U', '--dbuser', help='the name of the database user account', metavar='<db user>', dest='db_user', default=db_user)
                 parser.add_argument('-w', '--webserver', help='the webserver invoking this script', metavar='<webserver>', action=create_webserver_action(drms_params), dest='webserver', default=name_to_ws_obj(None, drms_params))
 
                 arguments = Arguments(parser=parser, args=args)
             else:
                 # `program_args` has all `arguments` values, in final form; validate them
-                def extract_module_args(*, specification, db_host, keywords=None, links=None, db_name=db_name, number_records=None, db_port=db_port, segments=None, db_user=db_user, webserver=None, log=None):
+                def extract_module_args(*, specification, table_flags=None, db_host, keywords=None, links=None, db_name=db_name, number_records=None, db_port=db_port, segments=None, db_user=db_user, webserver=None, log=None):
                     arguments = {}
 
                     arguments['specification'] = specification
@@ -157,6 +178,7 @@ class Arguments(Args):
                     arguments['number_records'] = number_records
                     arguments['db_port'] = db_port
                     arguments['segments'] = segments # list
+                    arguments['table_flags'] = table_flags # dict, if set
                     arguments['db_user'] = db_user
                     arguments['webserver'] = name_to_ws_obj(webserver, drms_params) # sets webserver.public = True if webserver is None
 
@@ -178,7 +200,7 @@ class Arguments(Args):
 
         return cls._arguments
 
-def get_response(client_response_dict, log):
+def get_response(client_response_dict, requesting_table, log):
     log.write_debug([ f'[ get_response ]' ])
 
     response_dict = deepcopy(client_response_dict)
@@ -192,7 +214,13 @@ def get_response(client_response_dict, log):
         # there should be no other status possible
         response_dict['status_code'] = StatusCode.FAILURE
 
-    return Response.generate_response(**response_dict)
+    if requesting_table:
+        # special response that has generate_text() method (which returns a table of text)
+        response = GetRecordTableAction.generate_response(**response_dict)
+    else:
+        response = Response.generate_response(**response_dict)
+
+    return response
 
 def send_request(request, connection, log):
     json_message = json_dumps(request)
@@ -229,8 +257,11 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
                 GetRecordInfoAction._log = log
             except Exception as exc:
                 raise LoggingError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+
+            requesting_table = arguments.table_flags is not None
         else:
             log = action_obj.log
+            requesting_table = isinstance(action_obj, GetRecordTableAction)
 
         if is_program:
             log.write_debug([ f'[ perform_action ] program invocation' ])
@@ -262,8 +293,14 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
             nested_arguments = ss_get_arguments(is_program=False, module_args={})
 
             with Connection(server=nested_arguments.server, listen_port=nested_arguments.listen_port, timeout=nested_arguments.message_timeout, log=log) as connection:
-                message = { 'request_type' : 'record_info', 'specification' : arguments.specification, 'keywords' : arguments.keywords, 'segments' : arguments.segments, 'links' : arguments.links, 'number_records' : arguments.number_records, 'db_host' : resolved_db_host }
+                if requesting_table:
+                    # `table_flags` is a dict
+                    message = { 'request_type' : 'record_info_table', 'specification' : arguments.specification, 'keywords' : arguments.keywords, 'segments' : arguments.segments, 'links' : arguments.links, 'number_records' : arguments.number_records, 'table_flags' : arguments.table_flags, 'db_host' : resolved_db_host }
+                else:
+                    message = { 'request_type' : 'record_info', 'specification' : arguments.specification, 'keywords' : arguments.keywords, 'segments' : arguments.segments, 'links' : arguments.links, 'number_records' : arguments.number_records, 'db_host' : resolved_db_host }
+
                 response = send_request(message, connection, log)
+
                 # message is raw JSON from jsoc_info
                 record_set_info_dict = json_loads(response)
 
@@ -272,7 +309,8 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
 
                 message = { 'request_type' : 'quit' }
                 send_request(message, connection, log)
-            response = get_response(record_set_info_dict, log)
+
+            response = get_response(record_set_info_dict, requesting_table, log)
         except ExpServerBaseError as exc:
             raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
         except Exception as exc:
@@ -323,7 +361,7 @@ class GetRecordInfoAction(Action):
         self._options['webserver'] = webserver # host name - gets converted to object in `get_arguments()`
 
     def get_record_set_info(self):
-        response = perform_action(action_obj=self, is_program=False, specification=self._specification, db_host=self._db_host, options=self._options)
+        response = perform_action(action_obj=self, is_program=False, specification=self._specification, table_flags=None, db_host=self._db_host, options=self._options)
         return response
 
     @property
@@ -383,6 +421,50 @@ class GetRecordInfoAction(Action):
             is_valid = False
 
         return is_valid
+
+class GetRecordTableActionResponse(Response):
+    def __init__(self, *, status_code, **kwargs):
+        super().__init__(status_code=status_code, **kwargs)
+
+    def generate_text(self):
+        if self._text_response is None:
+            self.generate_serializable_dict()
+            # the `table` attribute has the table text
+            self._text_response = self._serializable_dict_response.attributes.table
+
+        return self._text_response
+
+class GetRecordTableActionErrorResponse(GetRecordTableActionResponse):
+    def __init__(self, *, error_code, error_message=None, **kwargs):
+        super().__init__(status_code=error_code, error_message=error_message, **kwargs)
+
+    def generate_text(self):
+        if self._text_response is None:
+            # use self._error_message for an error message
+            self._text_response = self._error_message
+
+        return self._text_response
+
+class GetRecordTableAction(GetRecordInfoAction):
+    actions = [ 'get_record_set_table' ]
+
+    def __init__(self, *, method, specification, table_flags, db_host, keywords=None, links=None, log=None, db_name=None, number_records=None, db_port=None, segments=None, db_user=None, webserver=None):
+        super().__init__(specification=specification, db_host=db_host, keywords=keywords, links=links, log=log, db_name=db_name, number_records=number_records, db_port=db_port, segments=segments, db_user=db_user, webserver=webserver)
+
+        self._table_flags = table_flags # dict
+
+    def get_record_set_table(self):
+        response = perform_action(action_obj=self, is_program=False, specification=self._specification, table_flags=self._table_flags, db_host=self._db_host, options=self._options)
+        return response
+
+    @classmethod
+    def generate_response(cls, *, status_code=None, **kwargs):
+        return GetRecordTableActionResponse.generate_response(status_code=status_code, **kwargs)
+
+    @classmethod
+    def generate_error_response(cls, *, error_code=None, gri_error, **kwargs):
+        # gri_error._error_message has appropriate error message
+        return GetRecordTableActionErrorResponse.generate_response(status_code=error_code, error_message=gri_error._error_message, **kwargs)
 
 if __name__ == "__main__":
     response = perform_action(action_obj=None, is_program=True)
