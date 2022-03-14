@@ -635,12 +635,20 @@ int do_ingest(long long bbrec, long long eerec, const char *dpath)
 	// FSN range 145600147 - 145616603, WAVELNTH 1700 only
 	// Any pixel with value 16329 should be changed to 714
 
-	int lutid = drms_getkey_int(rs0, "LUTID", &rstatus);
-	if (fsnx >= 145600147 && fsnx <=145616603 && lutid == 18) {
+	int wavlen = drms_getkey_int(rs0, "WAVELNTH", &rstatus);
+	if (fsnx >= 145600147 && fsnx <= 145616603 && wavlen == 1700) {
 	    for (int i=0; i<4096*4096; ++i)
 		if (l0l1->adata0[i] == 16329) l0l1->adata0[i] = 714;
 	}
 
+	// Lookup table corruption 2022.03.12
+	// FSN range 252178889-252216197, WAVELNTH 193,211 only
+	// Any pixel with value 16379 should be changed to 368
+
+	if (fsnx >= 252178889 && fsnx <= 252216197 && (wavlen == 193 || wavlen == 211)) {
+	    for (int i=0; i<4096*4096; ++i)
+		if (l0l1->adata0[i] == 16379) l0l1->adata0[i] = 368;
+	}
         l0l1->dat1.adata1 = &data1[0];
         //l0l1->himgcfid = drms_getkey_int(rs0, "AIFDBID", &rstatus);
 	l0l1->himgcfid = 90;	//!!TEMP force uncropped, no overscan
