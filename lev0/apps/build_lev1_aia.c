@@ -642,10 +642,10 @@ int do_ingest(long long bbrec, long long eerec, const char *dpath)
 	}
 
 	// Lookup table corruption 2022.03.12
-	// FSN range 252178889-252216197, WAVELNTH 193,211 only
+	// FSN range 252178889-252216197, WAVELNTH 193,211,131,335 only
 	// Any pixel with value 16379 should be changed to 368
 
-	if (fsnx >= 252178889 && fsnx <= 252216197 && (wavlen == 193 || wavlen == 211)) {
+	if (fsnx >= 252178889 && fsnx <= 252216197 && (wavlen == 193 || wavlen == 211 || wavlen == 131 || wavlen == 335)) {
 	    for (int i=0; i<4096*4096; ++i)
 		if (l0l1->adata0[i] == 16379) l0l1->adata0[i] = 368;
 	}
