@@ -4,6 +4,7 @@ from argparse import Action as ArgsAction
 from copy import deepcopy
 from distutils.util import strtobool
 from collections import OrderedDict
+from enum import Enum
 from os.path import join as path_join
 from psycopg2 import Error as PGError, connect as pg_connect
 from sys import exc_info as sys_exc_info, exit as sys_exit
@@ -31,6 +32,37 @@ class ErrorCode(ExportErrorCode):
     DB_CONNECTION = (106, 'failure connecting to database')
     DB_COMMAND = (107, 'failure executing database command')
     UNHANDLED_EXCEPTION = (108, 'unhandled exception')
+
+class RecordScope(Enum):
+    VARIABLE = (0, 'variable')
+    CONSTANT = (1, 'constant')
+    INDEX = (100, 'index')
+    TS_EQ = (1000, 'ts_eq')
+    SLOT = (1001, 'slot')
+    ENUM = (1002, 'enum')
+    CARR = (1003, 'carr')
+    TS_SLOT = (1004, 'ts_slot')
+
+    def __new__(cls, int_value, str_value):
+        member = object.__new__(cls)
+        member._int_value = int_value
+        member._str_value = str_value
+
+        if not hasattr(cls, '_all_members'):
+            cls._all_members = {}
+        cls._all_members[str(int_value)] = member
+
+        return member
+
+    def __int__(self):
+        return self._int_value
+
+    def __str__(self):
+        return self._str_value
+
+    @classmethod
+    def _missing_(cls, int_value):
+        return cls._all_members[str(int_value)]
 
 class GsiBaseError(ExportError):
     def __init__(self, *, exc_info=None, error_message=None):
@@ -242,8 +274,12 @@ def get_series_info_from_db(*, series, cursor, keywords=None, links=None, segmen
 
             keys = ('series', 'author', 'owner', 'unitsize', 'archive', 'retention', 'tapegroup', 'drmsprimekey', 'dbindex', 'created', 'description')
             vals = list(row[0:7])
-            vals.append([ key.strip() for key in row[7].split(',') ])
-            vals.append([ key.strip() for key in row[8].split(',') ])
+
+            # we really should first check to see if a keyword is an index keyword, but that would require another DB query to get
+            # keyword information; but we know that if a prime-key keyword ends in '_index' that it is an index keyword that has
+            # an external name that is the original name with the '_index' lopped off
+            vals.append([ key.strip()[0:key.strip().rfind('_index')] if (key.strip().rfind('_index') + len('_index') == len(key.strip())) else key.strip() for key in row[7].split(',') ])
+            vals.append([ key.strip()[0:key.strip().rfind('_index')] if (key.strip().rfind('_index') + len('_index') == len(key.strip())) else key.strip() for key in row[8].split(',') ])
             vals.append(row[9].strftime('%Y-%m-%d %H:%M:%S UTC'))
             vals.append(row[10])
 
@@ -259,16 +295,22 @@ def get_series_info_from_db(*, series, cursor, keywords=None, links=None, segmen
             if type(keywords) == bool:
                 if keywords:
                     # all keywords
-                    sql = f"SELECT series, keyword, datatype, keyworddefault AS constantvalue, unit, scope_type, (flags >> 16)::integer AS rank, description FROM drms_followkeywordlink2('{series.lower()}', NULL)"
+                    sql = f"SELECT series, keyword, link, datatype, keyworddefault AS constantvalue, unit, scope_type, (flags >> 16)::integer AS rank, description FROM drms_followkeywordlink2('{series.lower()}', NULL) ORDER BY rank ASC"
+
+                    sql2 = f"SELECT keyword, linkedkeyword FROM drms_linkedkeyword('{series.lower()}', NULL)"
             else:
                 # keywords specified in list
                 sql_elements = []
+                sql_elements2 = []
                 for keyword in keywords:
-                    sql_elements.append(f"SELECT series, keyword, datatype, keyworddefault AS constantvalue, unit, scope_type, (flags >> 16)::integer AS rank, description FROM drms_followkeywordlink2('{series.lower()}', '{keyword.lower()}')")
+                    sql_elements.append(f"SELECT series, keyword, link, datatype, keyworddefault AS constantvalue, unit, scope_type, (flags >> 16)::integer AS rank, description FROM drms_followkeywordlink2('{series.lower()}', '{keyword.lower()}')")
+
+                    sql_elements2.append(f"SELECT keyword, linkedkeyword FROM drms_linkedkeyword('{series.lower()}', '{keyword.lower()}')")
 
                 sql = '\nUNION\n'.join(sql_elements)
+                sql2 = '\nUNION\n'.join(sql_elements2) + 'ORDER BY rank ASC\n'
 
-            if len(sql) > 0:
+            if len(sql) > 0 and len(sql2) > 0:
                 try:
                     log.write_debug([ f'[ get_series_info_from_db ] executing sql: {sql}' ])
                     cursor.execute(sql)
@@ -276,17 +318,42 @@ def get_series_info_from_db(*, series, cursor, keywords=None, links=None, segmen
                     rows = cursor.fetchall()
 
                     for row in rows:
-                        if row[1].lower() not in keywords_with_info:
-                            series_info[series.lower()]['keywords'][row[1].lower()] = { 'data-type' : row[2], 'constant-value': row[3] if row[5] == 1 else 'na', 'physical-unit' : row[4], 'is-slotted' : (row[5] >= 1000), 'rank' : row[6], 'description' : row[7] }
+                        keyword = row[1]
+                        link = row[2]
+                        data_type = row[3]
+                        default_value = row[4]
+                        unit = row[5]
+                        scope = RecordScope(int(row[6]))
+                        rank = row[7]
+                        description = row[8]
 
-                            keywords_with_info.add(row[1].lower())
+                        if keyword.lower() not in keywords_with_info:
+                            series_info[series.lower()]['keywords'][keyword.lower()] = { 'name' : keyword, 'linked-keyword' : f'{str(link)}->' if link is not None and len(str(link)) > 0 else None, 'data-type' : data_type, 'scope' : str(scope), 'default-value' : default_value, 'constant-value': default_value if scope == RecordScope.CONSTANT else None, 'physical-unit' : unit, 'is-slotted' : (int(scope) >= int(RecordScope.TS_EQ)), 'rank' : rank, 'description' : description }
+
+                            keywords_with_info.add(keyword.lower())
+
+                    log.write_debug([ f'[ get_series_info_from_db ] executing sql: {sql2}' ])
+                    cursor.execute(sql2)
+                    keywords_with_info2 = set()
+                    rows = cursor.fetchall()
+
+                    for row in rows:
+                        keyword = row[0]
+                        linked_keyword = row[1]
+
+                        if keyword.lower() not in keywords_with_info2 and keyword.lower() in keywords_with_info:
+                            linked_keyword_str = series_info[series.lower()]['keywords'][keyword.lower()].get('linked-keyword', None)
+                            if linked_keyword_str is not None:
+                                series_info[series.lower()]['keywords'][keyword.lower()]['linked-keyword'] = f'{linked_keyword_str}{linked_keyword}'
+
+                            keywords_with_info2.add(keyword.lower())
 
                     # add elements for keywords in list but not in series
                     try:
                         iterator = iter(keywords)
                         for keyword in iterator:
                             if keyword.lower() not in keywords_with_info:
-                                series_info[series.lower()]['keywords'][keyword.lower()] = { 'data-type' : 'na', 'constant-value': 'na', 'physical-unit' : 'na', 'rank' : -1, 'description' : 'unknown keyword' }
+                                series_info[series.lower()]['keywords'][keyword.lower()] = { 'name' : keyword, 'linked-keyword' : None, 'data-type' : None, 'scope' : None, 'default-value' : None, 'constant-value': None, 'physical-unit' : None, 'rank' : None, 'description' : None }
                     except:
                         pass
                 except PGError as exc:
@@ -300,11 +367,11 @@ def get_series_info_from_db(*, series, cursor, keywords=None, links=None, segmen
             if type(links) == bool:
                 if links:
                     # all links
-                    sql = f"SELECT seriesname AS series, linkname AS link, target_seriesname AS tail_series, type, description FROM {name_space}.drms_link WHERE lower(seriesname) = '{series.lower()}'"
+                    sql = f"SELECT seriesname AS series, linkname AS link, target_seriesname AS child_series, type, description FROM {name_space}.drms_link WHERE lower(seriesname) = '{series.lower()}'"
             else:
                 # links specified in list
                 links_list = ','.join([ f"'{link.lower()}'" for link in links ])
-                sql = f"SELECT seriesname AS series, linkname AS link, target_seriesname AS tail_series, type, description FROM {name_space}.drms_link WHERE lower(seriesname) = '{series.lower()}' AND lower(linkname) IN ({links_list})"
+                sql = f"SELECT seriesname AS series, linkname AS link, target_seriesname AS child_series, type, description FROM {name_space}.drms_link WHERE lower(seriesname) = '{series.lower()}' AND lower(linkname) IN ({links_list})"
 
             if len(sql) > 0:
                 try:
@@ -314,16 +381,21 @@ def get_series_info_from_db(*, series, cursor, keywords=None, links=None, segmen
                     rows = cursor.fetchall()
 
                     for row in rows:
-                        if row[1].lower() not in links_with_info:
-                            series_info[series.lower()]['links'][row[1].lower()] = { 'tail-series' : row[2], 'type': row[2], 'description' : row[3] }
-                            links_with_info.add(row[1].lower())
+                        link = row[1]
+                        child_series = row[2]
+                        link_type = row[3]
+                        description = row[4]
+
+                        if link.lower() not in links_with_info:
+                            series_info[series.lower()]['links'][link.lower()] = { 'name' : link, 'child-series' : child_series, 'type': link_type, 'description' : description }
+                            links_with_info.add(link.lower())
 
                     # add elements for links in list but not in series
                     try:
                         iterator = iter(links)
                         for link in iterator:
                             if link.lower() not in links_with_info:
-                                series_info[series.lower()]['links'][link.lower()] = { 'tail-series' : 'na', 'type': 'na', 'description' : 'unknown link' }
+                                series_info[series.lower()]['links'][link.lower()] = { 'name' : link, 'child-series' : None, 'type': None, 'description' : None }
                     except:
                         pass
                 except PGError as exc:
@@ -354,17 +426,27 @@ def get_series_info_from_db(*, series, cursor, keywords=None, links=None, segmen
                     rows = cursor.fetchall()
 
                     for row in rows:
-                        if row[1].lower() not in segments_with_info:
-                            series_info[series.lower()]['segments'][row[1].lower()] = { 'data-type' : row[2], 'segment-number': row[3], 'scope' : row[4], 'number-axes' : row[5], 'dimensions' : row[6], 'physical-unit' : row[7], 'protocol' : row[8],'description' : row[9] }
+                        segment = row[1]
+                        data_type = row[2]
+                        segment_number = row[3]
+                        scope = row[4]
+                        number_axes = row[5]
+                        dimensions = row[6]
+                        unit = row[7]
+                        protocol = row[8]
+                        description = row[9]
 
-                            segments_with_info.add(row[1].lower())
+                        if segment.lower() not in segments_with_info:
+                            series_info[series.lower()]['segments'][segment.lower()] = { 'name' : segment, 'data-type' : data_type, 'segment-number': segment_number, 'scope' : scope, 'number-axes' : number_axes, 'dimensions' : dimensions, 'physical-unit' : unit, 'protocol' : protocol,'description' : description }
+
+                            segments_with_info.add(segment.lower())
 
                     # add elements for segments in list but not in series
                     try:
                         iterator = iter(segments)
                         for segment in iterator:
                             if segment.lower() not in segments_with_info:
-                                series_info[series.lower()]['segments'][segment.lower()] = { 'data-type' : 'na', 'segment-number': -1, 'scope' : 'na', 'number-axes' : -1, 'dimensions' : 'na', 'physical-unit' : 'na', 'protocol' : 'na','description' : 'unknown segment' }
+                                series_info[series.lower()]['segments'][segment.lower()] = { 'name' : segment, 'data-type' : None, 'segment-number': None, 'scope' : None, 'number-axes' : None, 'dimensions' : None, 'physical-unit' : None, 'protocol' : None,'description' : None }
                     except:
                         pass
                 except PGError as exc:
