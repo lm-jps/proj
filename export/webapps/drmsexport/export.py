@@ -390,7 +390,7 @@ from drms_utils import Formatter as DrmsLogFormatter, Log as DrmsLog, LogLevel a
 export = Flask(__name__)
 export_api = Api(export)
 APP_LOG = None
-APP_LOG_LEVEL = 'info'
+APP_LOG_LEVEL = 'debug'
 export.logger.setLevel(LOGGING_LEVEL_DEBUG)
 
 class ErrorCode(ExportErrorCode):
@@ -449,7 +449,7 @@ class SeriesListResource(Resource):
 
     @use_kwargs(_arguments, location='querystring')
     def get(self, public_db_host, series_regex, db_name=None, db_port=None, db_user=None):
-        # underyling API expects `series` to be a list with a single string element that is the series regex 
+        # underyling API expects `series` to be a list with a single string element that is the series regex
         arguments = { 'public_db_host' : public_db_host, 'series' : [ series_regex ], 'db_name' : db_name, 'db_port' : db_port, 'db_user' : db_user, 'use_regex' : True, 'log' : APP_LOG }
 
         action = Action.action(action_type='determine_db_server', args=arguments)
@@ -467,10 +467,39 @@ class RecordSetResource(Resource):
             action = Action.action(action_type='parse_specification', args=arguments)
             return action().generate_serializable_dict()
         else:
-            arguments = { 'specification' : specification, 'db_host' : db_host, 'webserver' : urlparse(request.base_url).hostname, 'keywords' : keywords, 'segments' : segments, 'links' : links, 'db_name' : db_name, 'number_records' : number_records, 'db_port' : db_port, 'db_user' : db_user, 'log' : APP_LOG }
+            arguments = { 'specification' : specification, 'db_host' : db_host, 'keywords' : keywords, 'segments' : segments, 'links' : links, 'db_name' : db_name, 'number_records' : number_records, 'db_port' : db_port, 'db_user' : db_user, 'log' : APP_LOG, 'webserver' : urlparse(request.base_url).hostname }
 
             action = Action.action(action_type='get_record_set_info', args=arguments)
             return action().generate_serializable_dict()
+
+from get_record_info import GetRecordTableAction
+class RecordSetTableResource(Resource):
+    _arguments = { 'specification' : fields.Str(required=True, validate=lambda a: GetRecordInfoAction.is_valid_specification(a, None, urlparse(request.base_url).hostname, APP_LOG)), 'db_host' : fields.Str(required=True, data_key='db-host'), 'keywords' : fields.List(fields.Str, required=False), 'segments' : fields.List(fields.Str, required=False), 'links' : fields.List(fields.Str, required=False), 'data_types' : fields.Boolean(required=False, data_key='data-types'), 'specifications' : fields.Boolean(required=False, data_key='specifications'), 'linked_records' : fields.Boolean(required=False, data_key='linked-records'), 'all_keywords' : fields.Boolean(required=False, data_key='all-keywords'), 'all_segments' : fields.Boolean(required=False, data_key='all-segments'), 'online_segment_paths' : fields.Boolean(required=False, data_key='online-segment-paths'), 'recnums' : fields.Boolean(required=False), 'sunums' : fields.Boolean(required=False), 'storage_unit_sizes' : fields.Boolean(required=False, data_key='storage-unit-sizes'), 'storage_unit_statuses' : fields.Boolean(required=False, data_key='storage-unit-statuses'), 'storage_unit_expiration_dates' : fields.Boolean(required=False, data_key='storage-unit-expiration-dates'), 'storage_unit_archive_statuses' : fields.Boolean(required=False, data_key='storage-unit-archive-statuses'),'db_name' : fields.Str(required=False, data_key='db-name'), 'number_records' : fields.Int(required=False, data_key='number-records'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'db_user' : fields.Str(required=False, data_key='db-user') }
+
+    @use_kwargs(_arguments, location='querystring')
+    def get(self, specification, db_host, keywords=None, segments=None, links=None, data_types=False, specifications=False, linked_records=False, all_keywords=False, all_segments=False, online_segment_paths=False, recnums=False, sunums=False, storage_unit_sizes=False, storage_unit_statuses=False, storage_unit_expiration_dates=False, storage_unit_archive_statuses=False, db_name=None, number_records=None, db_port=None, db_user=None):
+        table_flags = { 'data_types' : data_types, 'specifications' : specifications, 'linked_records' : linked_records, 'all_keywords' : all_keywords, 'all_segments' : all_segments, 'online_segment_paths' : online_segment_paths, 'recnums' : recnums, 'sunums' : sunums, 'storage_unit_sizes' : storage_unit_sizes, 'storage_unit_statuses' : storage_unit_statuses, 'storage_unit_expiration_dates' : storage_unit_expiration_dates, 'storage_unit_archive_statuses' : storage_unit_archive_statuses }
+
+        arguments = { 'specification' : specification, 'db_host' : db_host, 'keywords' : keywords, 'segments' : segments, 'links' : links, 'db_name' : db_name, 'number_records' : number_records, 'table_flags' = table_flags, 'db_port' : db_port, 'db_user' : db_user, 'log' : APP_LOG, 'webserver' : urlparse(request.base_url).hostname }
+
+        self._action_arguments = arguments
+
+        return self.call_action()
+
+    def call_action(self):
+        action = Action.action(action_type='get_record_set_table', args=self._action_arguments)
+        return action().generate_text()
+
+class RecordSetTableFromFormResource(RecordSetTableResource):
+@use_kwargs(RecordSetTableResource._arguments, location='form')
+    def get(self, specification, db_host, keywords=None, segments=None, data_types=False, specifications=False, linked_records=False, all_keywords=False, all_segments=False, online_segment_paths=False, recnums=False, sunums=False, storage_unit_sizes=False, storage_unit_statuses=False, storage_unit_expiration_dates=False, storage_unit_archive_statuses=False, db_name=None, number_records=None, db_port=None, db_user=None):
+        table_flags = { 'data_types' : data_types, 'specifications' : specifications, 'linked_records' : linked_records, 'all_keywords' : all_keywords, 'all_segments' : all_segments, 'online_segment_paths' : online_segment_paths, 'recnums' : recnums, 'sunums' : sunums, 'storage_unit_sizes' : storage_unit_sizes, 'storage_unit_statuses' : storage_unit_statuses, 'storage_unit_expiration_dates' : storage_unit_expiration_dates, 'storage_unit_archive_statuses' : storage_unit_archive_statuses }
+
+        arguments = { 'specification' : specification, 'db_host' : db_host, 'keywords' : keywords, 'segments' : segments, 'links' : links, 'db_name' : db_name, 'number_records' : number_records, 'table_flags' = table_flags, 'db_port' : db_port, 'db_user' : db_user, 'log' : APP_LOG, 'webserver' : urlparse(request.base_url).hostname }
+
+        self._action_arguments = arguments
+
+        return self.call_action()
 
 from get_series_info import GetSeriesInfoAction
 class SeriesResource(Resource):
@@ -603,6 +632,7 @@ export_api.add_resource(AddressRegistrationResource, '/export/address-registrati
 export_api.add_resource(ServerResource, '/export/series-server')
 export_api.add_resource(SeriesListResource, '/export/series-list')
 export_api.add_resource(RecordSetResource, '/export/record-set')
+export_api.add_resource(RecordSetTableResource, '/export/record-set-table')
 export_api.add_resource(SeriesResource, '/export/series')
 
 export_api.add_resource(PremiumExportRequestResource, '/export/new-premium-request')
