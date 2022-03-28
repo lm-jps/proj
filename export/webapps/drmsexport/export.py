@@ -391,6 +391,7 @@ export = Flask(__name__)
 export_api = Api(export)
 APP_LOG = None
 APP_LOG_LEVEL = 'debug'
+PRIVATE_DB_HOST = None
 export.logger.setLevel(LOGGING_LEVEL_DEBUG)
 
 class ErrorCode(ExportErrorCode):
@@ -480,7 +481,7 @@ class RecordSetTableResource(Resource):
     def get(self, specification, db_host, keywords=None, segments=None, links=None, data_types=False, specifications=False, linked_records=False, all_keywords=False, all_segments=False, online_segment_paths=False, recnums=False, sunums=False, storage_unit_sizes=False, storage_unit_statuses=False, storage_unit_expiration_dates=False, storage_unit_archive_statuses=False, db_name=None, number_records=None, db_port=None, db_user=None):
         table_flags = { 'data_types' : data_types, 'specifications' : specifications, 'linked_records' : linked_records, 'all_keywords' : all_keywords, 'all_segments' : all_segments, 'online_segment_paths' : online_segment_paths, 'recnums' : recnums, 'sunums' : sunums, 'storage_unit_sizes' : storage_unit_sizes, 'storage_unit_statuses' : storage_unit_statuses, 'storage_unit_expiration_dates' : storage_unit_expiration_dates, 'storage_unit_archive_statuses' : storage_unit_archive_statuses }
 
-        arguments = { 'specification' : specification, 'db_host' : db_host, 'keywords' : keywords, 'segments' : segments, 'links' : links, 'db_name' : db_name, 'number_records' : number_records, 'table_flags' = table_flags, 'db_port' : db_port, 'db_user' : db_user, 'log' : APP_LOG, 'webserver' : urlparse(request.base_url).hostname }
+        arguments = { 'specification' : specification, 'db_host' : db_host, 'keywords' : keywords, 'segments' : segments, 'links' : links, 'db_name' : db_name, 'number_records' : number_records, 'table_flags' : table_flags, 'db_port' : db_port, 'db_user' : db_user, 'log' : APP_LOG, 'webserver' : urlparse(request.base_url).hostname }
 
         self._action_arguments = arguments
 
@@ -488,14 +489,16 @@ class RecordSetTableResource(Resource):
 
     def call_action(self):
         action = Action.action(action_type='get_record_set_table', args=self._action_arguments)
-        return action().generate_text()
+
+        # there is a flask resful way to do this, but that might take a while to figure out - do this for now
+        return export.response_class(action().generate_text(), content_type='text/plain')
 
 class RecordSetTableFromFormResource(RecordSetTableResource):
-@use_kwargs(RecordSetTableResource._arguments, location='form')
+    @use_kwargs(RecordSetTableResource._arguments, location='form')
     def get(self, specification, db_host, keywords=None, segments=None, data_types=False, specifications=False, linked_records=False, all_keywords=False, all_segments=False, online_segment_paths=False, recnums=False, sunums=False, storage_unit_sizes=False, storage_unit_statuses=False, storage_unit_expiration_dates=False, storage_unit_archive_statuses=False, db_name=None, number_records=None, db_port=None, db_user=None):
         table_flags = { 'data_types' : data_types, 'specifications' : specifications, 'linked_records' : linked_records, 'all_keywords' : all_keywords, 'all_segments' : all_segments, 'online_segment_paths' : online_segment_paths, 'recnums' : recnums, 'sunums' : sunums, 'storage_unit_sizes' : storage_unit_sizes, 'storage_unit_statuses' : storage_unit_statuses, 'storage_unit_expiration_dates' : storage_unit_expiration_dates, 'storage_unit_archive_statuses' : storage_unit_archive_statuses }
 
-        arguments = { 'specification' : specification, 'db_host' : db_host, 'keywords' : keywords, 'segments' : segments, 'links' : links, 'db_name' : db_name, 'number_records' : number_records, 'table_flags' = table_flags, 'db_port' : db_port, 'db_user' : db_user, 'log' : APP_LOG, 'webserver' : urlparse(request.base_url).hostname }
+        arguments = { 'specification' : specification, 'db_host' : db_host, 'keywords' : keywords, 'segments' : segments, 'links' : links, 'db_name' : db_name, 'number_records' : number_records, 'table_flags' : table_flags, 'db_port' : db_port, 'db_user' : db_user, 'log' : APP_LOG, 'webserver' : urlparse(request.base_url).hostname }
 
         self._action_arguments = arguments
 
@@ -624,15 +627,97 @@ class PendingRequestStatusResource(Resource):
         action = Action.action(action_type='get_export_status', args=arguments)
         return action().generate_serializable_dict()
 
+from check_address import CheckAddressLegacyAction
+class CheckAddressLegacyResource(Resource):
+    _arguments = { 'address' : fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'name' : fields.Str(required=False), 'snail' : fields.Str(required=False), 'checkonly' : fields.Boolean(required=False, load_default=False) }
+
+    @use_kwargs(_arguments, location='querystring')
+    def get(self, address, **kwargs):
+        arguments = { 'address' : address, 'db_host' : request.environ.get('DB_HOST', DEFAULT_DB_HOST), 'log' : APP_LOG }
+        arguments.update(kwargs)
+        # the legacy code requires checkonly to be an integer
+        arguments['checkonly'] = 1 if kwargs['checkonly'] else 0
+        action = Action.action(action_type='legacy_check_address', args=arguments)
+        return action().generate_serializable_dict()
+
+from initiate_request import JsocFetchStatusLegacyAction, JsocFetchExportLegacyAction
+class JsocFetchLegacyResource(Resource):
+    _arguments_get = { 'address' : fields.Email(required=True, data_key='notify'), 'request_id' : fields.Str(required=True, data_key='requestid') }
+
+    _arguments_post = { 'address' : fields.Email(required=True, data_key='notify'), 'operation' : fields.Str(required=True, validate=lambda a: a.strip().lower() == 'exp_request' or a.strip().lower() == 'exp_status' or a.strip().lower() == 'exp_su', data_key='op'), 'specification' : fields.Str(required=True, validate=lambda a: GetRecordInfoAction.is_valid_specification(a, None, urlparse(request.base_url).hostname, APP_LOG), data_key='ds'), 'seg' : fields.DelimitedList(fields.Str, delimiter=',', required=False), 'sunum' : fields.DelimitedList(fields.Str, delimiter=',', required=False), 'process' : fields.Str(required=False), 'processing' : fields.Str(required=False, validate=lambda a: JsocInfoAction.is_valid_processing(a, None, urlparse(request.base_url).hostname, APP_LOG)), 'n' : fields.Int(required=False), 'requestor' : fields.Str(required=False), 'shipto' : fields.Str(required=False), 'protocol' : fields.Str(required=False, validate=lambda a: a.strip().lower() == 'as-is' or a.strip().lower() == 'su-as-is' or a.strip().lower() == 'fits' or a.strip().lower() == 'mpg' or a.strip().lower() == 'jpg' or a.strip().lower() == 'png' or a.strip().lower() == 'mp4', load_default='as-is'), 'filenamefmt' : fields.Str(required=False, load_default='{seriesname}.{recnum:%d}.{segment}'), 'format' : fields.Str(required=False, default='json'), 'formatvar' : fields.Str(required=False), 'method' : fields.Str(required=False, validate=lambda a: a.strip().lower() == 'url' or a.strip().lower() == 'url_quick' or a.strip().lower() == 'url_direct' or a.strip().lower() == 'ftp' or a.strip().lower() == 'url-tar' or a.strip().lower() == 'ftp-tar', load_default='url'), 'file' : fields.Str(required=False), 'sizeratio' : fields.Float(required=False, load_default=1.0), 't' : fields.Boolean(required=False, load_default=False), 'p' : fields.Boolean(required=False, load_default=False), 'W' : fields.Boolean(required=False, load_default=False), 'o' : fields.Boolean(required=False, load_default=True), 'q' : fields.Boolean(required=False, load_default=False) }
+
+    @use_kwargs(_arguments_get, location='querystring')
+    def get(self, address, request_id, **kwargs):
+        # look for private flag - this is set in nginx with:
+        #   uwsgi_param DB_HOST <blah>
+        # this is available via the request.environ dict
+        arguments = { 'address' : address, 'request_id' : request_id, 'db_host' : request.environ.get('DB_HOST', DEFAULT_DB_HOST), 'log' : APP_LOG }
+        action = Action.action(action_type='legacy_get_export_status', args=arguments)
+        return action().generate_serializable_dict()
+
+    @use_kwargs(_arguments_post, location='querystring')
+    def post(self, address, operation, specification, **kwargs):
+        arguments = { 'address' : address, 'operation' : operation, 'specification' : specification, 'db_host' : request.environ.get('DB_HOST', DEFAULT_DB_HOST), 'log' : APP_LOG }
+        arguments.update(kwargs)
+        action = Action.action(action_type='legacy_start_export', args=arguments)
+        return action().generate_serializable_dict()
+
+from get_record_info import JsocInfoLegacyAction
+class JsocInfoLegacyResource(Resource):
+    _arguments = { 'operation' : fields.Str(required=True, validate=lambda a: a.strip().lower() == 'rs_list' or a.strip().lower() == 'rs_summary' or a.strip().lower() == 'series_struct', data_key='op'), 'specification' : fields.Str(required=False, validate=lambda a: GetRecordInfoAction.is_valid_specification(a, None, urlparse(request.base_url).hostname, APP_LOG), data_key='ds'), 'key' : fields.List(fields.Str, required=False), 'link' : fields.List(fields.Str, required=False), 'seg' : fields.List(fields.Str, required=False), 'processing' : fields.Str(required=False, validate=lambda a: JsocInfoAction.is_valid_processing(a, None, urlparse(request.base_url).hostname, APP_LOG)), 'B' : fields.Boolean(required=False, load_default=False), 'l' : fields.Boolean(required=False, load_default=False), 'M' : fields.Boolean(required=False, load_default=False), 'n' : fields.Int(required=False, load_default=0), 'R' : fields.Boolean(required=False, load_default=False), 'o' : fields.Boolean(required=False, load_default=False), 'f' : fields.Boolean(required=False, load_default=False), 'r' : fields.Boolean(required=False, load_default=False), 's' : fields.Boolean(required=False, load_default=False) }
+
+    @use_kwargs(_arguments, location='querystring')
+    def get(self, operation, specification, **kwargs):
+        arguments = { 'operation' : operation, 'specification' : specification, 'db_host' : request.environ.get('DB_HOST', DEFAULT_DB_HOST), 'log' : APP_LOG }
+        arguments.update(kwargs)
+        action = Action.action(action_type='legacy_get_record_set_info', args=arguments)
+        return action().generate_serializable_dict()
+
+from get_record_info import ShowInfoLegacyAction
+class ShowInfoLegacyResource(Resource):
+    _arguments = { 'specification' : fields.Str(required=True, validate=lambda a: GetRecordInfoAction.is_valid_specification(a, None, urlparse(request.base_url).hostname, APP_LOG), data_key='ds'), 'key' : fields.List(fields.Str, required=False), 'link' : fields.List(fields.Str, required=False), 'seg' : fields.List(fields.Str, required=False), 'l' : fields.Boolean(required=False, load_default=False), 'l' : fields.Boolean(required=False, load_default=False), 'a' : fields.Boolean(required=False, load_default=False), 'A' : fields.Boolean(required=False, load_default=False), 'b' : fields.Boolean(required=False, load_default=False), 'B' : fields.Boolean(required=False, load_default=False), 'c' : fields.Boolean(required=False, load_default=False), 'C' : fields.Boolean(required=False, load_default=False), 'd' : fields.Boolean(required=False, load_default=False), 'e' : fields.Boolean(required=False, load_default=False), 'i' : fields.Boolean(required=False, load_default=False), 'I' : fields.Boolean(required=False, load_default=False), 'j' : fields.Boolean(required=False, load_default=False), 'k' : fields.Boolean(required=False, load_default=False), 'K' : fields.Boolean(required=False, load_default=False), 'l' : fields.Boolean(required=False, load_default=False), 'K' : fields.Boolean(required=False, load_default=False), 'l' : fields.Boolean(required=False, load_default=False), 'M' : fields.Boolean(required=False, load_default=False), 'n' : fields.Int(required=False, load_default=0), 'o' : fields.Boolean(required=False, load_default=False), 'O' : fields.Boolean(required=False, load_default=False), 'p' : fields.Boolean(required=False, load_default=False), 'P' : fields.Boolean(required=False, load_default=False), 'q' : fields.Boolean(required=False, load_default=False), 'r' : fields.Boolean(required=False, load_default=False), 'R' : fields.Boolean(required=False, load_default=False), 's' : fields.Boolean(required=False, load_default=False), 'sunum' : fields.DelimitedList(fields.Str, delimiter=',', required=False), 'S' : fields.Boolean(required=False, load_default=False), 't' : fields.Boolean(required=False, load_default=False), 'T' : fields.Boolean(required=False, load_default=False), 'v' : fields.Boolean(required=False, load_default=False), 'x' : fields.Boolean(required=False, load_default=False), 'z' : fields.Boolean(required=False, load_default=False) }
+
+    @use_kwargs(_arguments, location='querystring')
+    def get(self, specification, **kwargs):
+        arguments = { 'specification' : specification, 'db_host' : request.environ.get('DB_HOST', DEFAULT_DB_HOST), 'log' : APP_LOG }
+        arguments.update(kwargs)
+        action = Action.action(action_type='legacy_get_record_set_table', args=self._action_arguments)
+        return action().generate_serializable_dict()
+
+from get_series_info import ShowSeriesLegacyAction
+class ShowSeriesLegacyResource(Resource):
+    _arguments = { 'series_regex' : fields.Str(required=True, data_key='series-regex') }
+
+    @use_args(_arguments, location='querystring')
+    def get(self, args):
+        # args is a dict where the order of arguments in _arguments corresponds to the order in the query string
+        arguments = { 'series_regex' : args['series_regex'], 'db_host' : request.environ.get('DB_HOST', DEFAULT_DB_HOST), 'log' : APP_LOG }
+        action = Action.action(action_type='legacy_get_private_series_list', args=arguments)
+        return action().generate_serializable_dict()
+
+# public site only!
+from get_series_info import ShowExtSeriesLegacyAction
+class ShowExtSeriesLegacyResource(Resource):
+    _arguments = { 'series_regex' : fields.Str(required=False, load_default=None, data_key='filter'), 'series_regex_short' : fields.Boolean(required=False, load_default=None, data_key='f'), 'full_info' : fields.Boolean(required=False, load_default=None, data_key='info'), 'full_info_short' : fields.Boolean(required=False, load_default=False, data_key='i') }
+
+    @use_kwargs(_arguments, location='querystring')
+    def get(self, series_regex, series_regex_short, full_info, full_info_short):
+        show_info = full_info if full_info is not None else full_info_short
+        arguments = { 'series_regex' : series_regex if series_regex is not None else series_regex_short, 'info' : int(show_info), 'dbhost' : request.environ.get('DB_HOST', DEFAULT_DB_HOST), 'log' : APP_LOG }
+        action = Action.action(action_type='legacy_get_public_series_list', args=arguments)
+        return action().generate_serializable_dict()
+
 class RootResource(Resource):
     def get(self):
         return "<h1 style='color:blue'>Hello There!</h1>"
 
+# WSGI interface
 export_api.add_resource(AddressRegistrationResource, '/export/address-registration')
 export_api.add_resource(ServerResource, '/export/series-server')
 export_api.add_resource(SeriesListResource, '/export/series-list')
 export_api.add_resource(RecordSetResource, '/export/record-set')
 export_api.add_resource(RecordSetTableResource, '/export/record-set-table')
+export_api.add_resource(RecordSetTableFromFormResource, '/export/record-set-table-from-form')
 export_api.add_resource(SeriesResource, '/export/series')
 
 export_api.add_resource(PremiumExportRequestResource, '/export/new-premium-request')
@@ -645,6 +730,15 @@ export_api.add_resource(PendingRequestResource, '/export/pending-request')
 export_api.add_resource(PendingRequestStatusResource, '/export/pending-request-status')
 export_api.add_resource(RootResource, '/export')
 
+# original CGI interface (implemented with WSGI)
+export_api.add_resource(CheckAddressLegacyResource, '/export/legacy/checkAddress.sh')
+export_api.add_resource(JsocFetchLegacyResource, '/export/legacy/jsoc_fetch')
+export_api.add_resource(JsocInfoLegacyResource, '/export/legacy/jsoc_info')
+export_api.add_resource(ShowInfoLegacyResource, '/export/legacy/show_info')
+export_api.add_resource(ShowSeriesLegacyResource, '/export/legacy/show_series')
+# public website only!
+export_api.add_resource(ShowExtSeriesLegacyResource, '/export/legacy/showextseries')
+
 if __name__ == '__main__':
     drms_params = DRMSParams()
     app.run(host=drms_params.EXPORT_WEB_SERVER, port=drms_parms.EXPORT_WEB_SERVER_PORT, debug=True)
@@ -653,3 +747,5 @@ else:
     drms_params = DRMSParams()
     formatter = DrmsLogFormatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
     APP_LOG = DrmsLog(drms_params.EXP_APP_LOG, DrmsLogLevelAction.string_to_level(APP_LOG_LEVEL), formatter)
+    PRIVATE_DB_HOST = drms_params.SERVER
+    DEFAULT_DB_HOST = drms_params.EXPORT_DB_HOST_DEFAULT
