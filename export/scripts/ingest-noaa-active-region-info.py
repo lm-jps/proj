@@ -6,7 +6,7 @@ from json import loads as json_loads, decoder
 from pytz import timezone
 import re
 from subprocess import run
-from sys import stderr as sys_stderr
+from sys import exit as sys_exit, stderr as sys_stderr
 
 from drms_utils import Arguments as Args, ArgumentsError as ArgsError, Choices, CmdlParser, Formatter as DrmsLogFormatter, Log as DrmsLog, LogLevel as DrmsLogLevel, LogLevelAction as DrmsLogLevelAction
 
@@ -24,13 +24,21 @@ ACTIVE_REGION_SERIES_FILE = 'swpc_file'
 ACTIVE_REGION_SERIES_FILE_MOD = 'swpc_file_mod_time'
 
 class ErrorCode(Enum):
-    ARGUMENTS = (0, 'bad argument')
+    NONE = (0, 'no error - success!')
+    ARGUMENTS = (1, 'bad arguments')
 
     def __new__(cls, code, description):
         member = object.__new__(cls)
         member._code = code
         member._description = description
         return member
+
+    def __int__(self):
+        return self._code
+
+    @property
+    def description(self, **kwargs):
+        return self._description.format(**kwargs)
 
 class ParseState(Enum):
     # info failure error codes
@@ -49,8 +57,9 @@ class NoaaBaseException(Exception):
     def __str__(self):
         return self._message
 
-    def __int__(self):
-        return self._code
+    @property
+    def error_code(self):
+        return self.__class__._error_code
 
 class ArgumentsError(NoaaBaseException):
     _error_code = ErrorCode.ARGUMENTS
@@ -287,129 +296,153 @@ def process_content(*, state, line_content, state_data):
 
     return return_state
 
-if __name__ == "__main__":
-    arguments = Arguments.get_arguments()
+def fetch_mod_times():
+    mod_times = None
 
-    with FTP(SWPC_FTP_HOST) as ftp_client:
-        ftp_client.login()
-        ftp_client.cwd(SWPC_FTP_DIRECTORY)
-        files = ftp_client.mlsd()
+    # check all files
+    # midnight_today = datetime.strptime(datetime.today().strftime('%Y%m%d'), '%Y%m%d')
+    command = [ JSOC_INFO_BIN, f'ds={ACTIVE_REGION_SERIES}[][]', f'op=rs_list', f's=1', f'key={ACTIVE_REGION_SERIES_FILE},{ACTIVE_REGION_SERIES_FILE_MOD}', f'DRMS_DBUTF8CLIENTENCODING=1', f'JSOC_DBHOST=hmidb2' ]
 
-        mod_times = None
+    try:
+        # print(f'running {" ".join(command)}')
+        completed_proc = run(command, encoding='utf8', capture_output=True)
+        if completed_proc.returncode != 0:
+            print(f'return code: {str(completed_proc.returncode)}', file=sys.stderr)
+            raise
 
-        # check all files
-        # midnight_today = datetime.strptime(datetime.today().strftime('%Y%m%d'), '%Y%m%d')
-        command = [ JSOC_INFO_BIN, f'ds={ACTIVE_REGION_SERIES}[][]', f'op=rs_list', f's=1', f'key={ACTIVE_REGION_SERIES_FILE},{ACTIVE_REGION_SERIES_FILE_MOD}', f'DRMS_DBUTF8CLIENTENCODING=1', f'JSOC_DBHOST=hmidb2' ]
+        response = json_loads(completed_proc.stdout)
+        if response.get('keywords', None) is not None:
+            mod_times = dict(zip(response['keywords'][0]['values'], response['keywords'][1]['values']))
+    except decoder.JSONDecodeError as exc:
+        print(f'{str(exc)}', file=sys_stderr)
+    except Exception as exc:
+        print(f'{str(exc)}', file=sys_stderr)
 
-        try:
-            # print(f'running {" ".join(command)}')
-            completed_proc = run(command, encoding='utf8', capture_output=True)
-            if completed_proc.returncode != 0:
-                print(f'return code: {str(completed_proc.returncode)}', file=sys.stderr)
+    return mod_times
+
+def get_new_files(files, mod_times):
+    file_name_regex = re.compile(SWPC_FILE_NAME_PATTERN)
+
+    files_to_process = {}
+    for file in files:
+        file_name = file[0]
+
+        if file_name_regex.search(file_name) == None:
+            continue
+
+        file_mod_time = datetime.strptime(file[1]["modify"], "%Y%m%d%H%M%S") #YYYMMDDHHMMSS
+
+        # exclude files that have already been ingested (using file name and timestamp)
+        last_mod_time = mod_times.get(file_name, None) if mod_times is not None else None
+        if last_mod_time is None or file_mod_time > last_mod_time:
+            files_to_process[file_name] = file_mod_time
+
+    return files_to_process
+
+def set_observation_time():
+    # call time_convert to get proper DRMS time string
+    command = [ TIME_CONVERT_BIN, f'time={state_data["swpc_observation_time_str"]}', f'o=cal']
+
+    try:
+        # print(f'running {" ".join(command)}')
+        completed_proc = run(command, encoding='utf8', capture_output=True)
+        if completed_proc.returncode != 0:
+            print(f'return code: {str(completed_proc.returncode)}', file=sys.stderr)
+            raise
+
+        # state_data['observation_time'] = datetime.strptime(completed_proc.stdout.strip(), '%Y.%m.%d_%H:%M:%S')
+
+        # python does not have a way to parse time zone from a non-standardized time string (like a DRMS time string)
+        match_obj = drms_time_string_regex.search(completed_proc.stdout.strip())
+        if match_obj is not None:
+            matches = match_obj.groups()
+
+            if len(matches) == 14:
+                year_str, month_str, day_str = matches[0:3]
+                hour_str = matches[5] if matches[5] is not None else '0'
+                minute_str = matches[7] if matches[7] is not None else '0'
+                second_str = matches[10] if matches[10] is not None else '0'
+                microsecond = float(matches[11]) * 1000000 if matches[11] is not None else 0
+                time_zone_str = matches[13] if matches[13] else None
+            else:
+                print('bad 1', file=sys_stderr)
                 raise
+        else:
+            print('bad 2', file=sys_stderr)
+            raise
 
-            response = json_loads(completed_proc.stdout)
-            if response.get('keywords', None) is not None:
-                mod_times = dict(zip(response['keywords'][0]['values'], response['keywords'][1]['values']))
-        except decoder.JSONDecodeError as exc:
-            print(f'{str(exc)}', file=sys_stderr)
-        except Exception as exc:
-            print(f'{str(exc)}', file=sys_stderr)
+        state_data['observation_time'] = datetime(int(year_str), int(month_str), int(day_str), hour=int(hour_str), minute=int(minute_str), second=int(second_str), microsecond=microsecond, tzinfo=timezone(time_zone_str) if time_zone_str is not None else None)
+    except Exception as exc:
+        print(f'{str(exc)}', file=sys_stderr)
 
-        file_name_regex = re.compile(SWPC_FILE_NAME_PATTERN)
+if __name__ == "__main__":
+    exit_code = None
 
-        files_to_process = {}
-        for file in files:
-            file_name = file[0]
+    try:
+        arguments = Arguments.get_arguments()
 
-            if file_name_regex.search(file_name) == None:
-                continue
+        with FTP(SWPC_FTP_HOST) as ftp_client:
+            ftp_client.login()
+            ftp_client.cwd(SWPC_FTP_DIRECTORY)
+            files = ftp_client.mlsd()
 
-            file_mod_time = datetime.strptime(file[1]["modify"], "%Y%m%d%H%M%S") #YYYMMDDHHMMSS
-            #if file_mod_time >= midnight_today:
-            # exclude files that have already been ingested (using file name and timestamp)
-            last_mod_time = mod_times.get(file_name, None) if mod_times is not None else None
-            if last_mod_time is None or file_mod_time > last_mod_time:
-                files_to_process[file_name] = file_mod_time
+            mod_times = fetch_mod_times()
+            files_to_process = get_new_files(files, mod_times)
 
-        for file_name, file_mod_time in files_to_process.items():
-            state = ParseState.START
-            with BytesIO() as stream:
-                state_data = { "swpc_file" : file_name, "swpc_file_mod_time" : file_mod_time }
+            for file_name, file_mod_time in files_to_process.items():
+                state = ParseState.START
+                with BytesIO() as stream:
+                    state_data = { "swpc_file" : file_name, "swpc_file_mod_time" : file_mod_time }
 
-                print(f'downloading {file_name}')
-                ftp_client.retrbinary(f'RETR {file_name}', stream.write)
+                    print(f'downloading {file_name}')
+                    ftp_client.retrbinary(f'RETR {file_name}', stream.write)
 
-                stream.seek(0)
-                while True:
-                    line_content = stream.readline().decode().strip()
-                    # print(f'processing line {line_content}')
+                    stream.seek(0)
+                    while True:
+                        line_content = stream.readline().decode().strip()
+                        # print(f'processing line {line_content}')
 
-                    if line_content != b'':
-                        # print(f'state is {str(state)}')
-                        next_state = process_content(state=state, line_content=line_content, state_data=state_data)
-                        # print(f'next state is {str(next_state)}')
+                        if line_content != b'':
+                            # print(f'state is {str(state)}')
+                            next_state = process_content(state=state, line_content=line_content, state_data=state_data)
+                            # print(f'next state is {str(next_state)}')
 
-                        if state == ParseState.HEADER_2:
-                            # call time_convert to get proper DRMS time string
-                            command = [ TIME_CONVERT_BIN, f'time={state_data["swpc_observation_time_str"]}', f'o=cal']
+                            if state == ParseState.HEADER_2:
+                                set_observation_time()
 
-                            try:
-                                # print(f'running {" ".join(command)}')
-                                completed_proc = run(command, encoding='utf8', capture_output=True)
-                                if completed_proc.returncode != 0:
-                                    print(f'return code: {str(completed_proc.returncode)}', file=sys.stderr)
-                                    raise
+                                # observation time must be set before checking time window
+                                if arguments.start_day is not None:
+                                    set_time_window_endpoint(state_data, 'start_day', arguments.start_day)
 
-                                drms_time_string = completed_proc.stdout.strip()
-                                # state_data['observation_time'] = datetime.strptime(completed_proc.stdout.strip(), '%Y.%m.%d_%H:%M:%S')
+                                if arguments.end_day is not None:
+                                    set_time_window_endpoint(state_data, 'end_day', arguments.end_day)
 
-                                # python does not have a way to parse time zone from a non-standardized time string (like a DRMS time string)
-                                match_obj = drms_time_string_regex.search(completed_proc.stdout.strip())
-                                if match_obj is not None:
-                                    matches = match_obj.groups()
+                                if state_data['start_day'] > state_data['end_day']:
+                                    raise ArgumentsError(f'start day argument `{state_data["start_day"].strftime("%b %d")}` is AFTER end day argument `{state_data["end_day"].strftime("%b %d")}`')
 
-                                    if len(matches) == 14:
-                                        year_str, month_str, day_str = matches[0:3]
-                                        hour_str = matches[5] if matches[5] is not None else '0'
-                                        minute_str = matches[7] if matches[7] is not None else '0'
-                                        second_str = matches[10] if matches[10] is not None else '0'
-                                        microsecond = float(matches[11]) * 1000000 if matches[11] is not None else 0
-                                        time_zone_str = matches[13] if matches[13] else None
-                                    else:
-                                        print('bad 1', file=sys_stderr)
-                                        raise
-                                else:
-                                    print('bad 2', file=sys_stderr)
-                                    raise
+                            elif state == ParseState.PART_1 or state == ParseState.PART_1A:
+                                # call set_info with key=val pairs
+                                keyword_dict = state_data.get('keyword_dict', None)
 
-                                state_data['observation_time'] = datetime(int(year_str), int(month_str), int(day_str), hour=int(hour_str), minute=int(minute_str), second=int(second_str), microsecond=microsecond, tzinfo=timezone(time_zone_str) if time_zone_str is not None else None)
-                            except Exception as exc:
-                                print(f'{str(exc)}', file=sys_stderr)
+                                if keyword_dict is not None:
+                                    command = [ SET_INFO_BIN, '-c', f'ds=ACTIVE_REGION_SERIES' ]
+                                    command.extend([ f'{element[0]}={str(element[1])}' for element in keyword_dict.items() ])
+                                    print(f'running {" ".join(command)}')
+                            elif state == ParseState.END:
+                                break
 
-                            if arguments.start_day is not None:
-                                set_time_window_endpoint(state_data, 'start_day', arguments.start_day)
-
-                            if arguments.end_day is not None:
-                                set_time_window_endpoint(state_data, 'end_day', arguments.end_day)
-
-                            if state_data['start_day'] > state_data['end_day']:
-                                raise ArgumentsError(f'start day argument `{state_data["start_day"].strftime("%b %d")}` is AFTER end day argument `{state_data["end_day"].strftime("%b %d")}`')
-
-                        elif state == ParseState.PART_1 or state == ParseState.PART_1A:
-                            # call set_info with key=val pairs
-                            keyword_dict = state_data.get('keyword_dict', None)
-
-                            if keyword_dict is not None:
-                                command = [ SET_INFO_BIN, '-c', f'ds=ACTIVE_REGION_SERIES' ]
-                                command.extend([ f'{element[0]}={str(element[1])}' for element in keyword_dict.items() ])
-                                print(f'running {" ".join(command)}')
-                        elif state == ParseState.END:
+                            state = next_state
+                        else:
                             break
 
-                        state = next_state
-                    else:
-                        break
+        exit_code = ErrorCode.NONE
+        print(f'{exit_code.description}')
+    except NoaaBaseException as exc:
+        exit_code = exc.error_code
+
+        print(f'failure : "{exit_code.description}", : error message "{str(exc)}"')
+
+    sys_exit(int(exit_code))
 
         # algorithm for obs time
         # - get 1-based month index and year from SRS Number XXX line (the report month and year)
