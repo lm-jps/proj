@@ -3,14 +3,18 @@ from enum import Enum
 from ftplib import FTP
 from io import BytesIO
 from json import loads as json_loads, decoder
+from pytz import timezone
 import re
 from subprocess import run
 from sys import stderr as sys_stderr
+
+from drms_utils import Arguments as Args, ArgumentsError as ArgsError, Choices, CmdlParser, Formatter as DrmsLogFormatter, Log as DrmsLog, LogLevel as DrmsLogLevel, LogLevelAction as DrmsLogLevelAction
 
 # connect
 SWPC_FTP_HOST = 'ftp.swpc.noaa.gov'
 SWPC_FTP_DIRECTORY = 'pub/forecasts/SRS'
 SWPC_FILE_NAME_PATTERN = r'^\s*\d\d\d\dSRS.txt\s*$'
+DRMS_TIME_STRING_PATTERN = r'^\s*(\d+)[.](\d+)[.](\d+)(_((\d+)(:(\d+)(:((\d+)([.]\d+)?))?)?)?)?(_([a-z]+))?\s*$'
 
 JSOC_INFO_BIN = '/home/jsoc/cvs/Development/JSOC/bin/linux_avx/jsoc_info'
 SET_INFO_BIN = '/home/jsoc/cvs/Development/JSOC/bin/linux_avx/set_info'
@@ -18,6 +22,15 @@ TIME_CONVERT_BIN = '/home/jsoc/cvs/Development/JSOC/bin/linux_avx/time_convert'
 ACTIVE_REGION_SERIES = 'jsoc.noaa_active_regions'
 ACTIVE_REGION_SERIES_FILE = 'swpc_file'
 ACTIVE_REGION_SERIES_FILE_MOD = 'swpc_file_mod_time'
+
+class ErrorCode(Enum):
+    ARGUMENTS = (0, 'bad argument')
+
+    def __new__(cls, code, description):
+        member = object.__new__(cls)
+        member._code = code
+        member._description = description
+        return member
 
 class ParseState(Enum):
     # info failure error codes
@@ -29,13 +42,25 @@ class ParseState(Enum):
     PART_2 = (3, 'part 2')
     END = (4, 'end')
 
+class NoaaBaseException(Exception):
+    def __init__(self, message):
+        self._message = message
+
+    def __str__(self):
+        return self._message
+
+    def __int__(self):
+        return self._code
+
+class ArgumentsError(NoaaBaseException):
+    _error_code = ErrorCode.ARGUMENTS
+
 
 PART_IA_DEFAULT_ZURICH_CLASSIFICATION = '?'
 PART_IA_DEFAULT_MAGNETIC_CLASSIFICATION = '?'
 PART_IA_DEFAULT_NUMBER_SPOTS = 0
 PART_IA_DEFAULT_AREA = 0
 PART_IA_DEFAULT_EXTENT = -1
-
 
 HEADER_1_PATTERN = r'^\s*srs number\s+[0-9a-z ]+?\d+\s+([a-z]+)\s+(\d\d\d\d)\s*$'
 HEADER_2_PATTERN = r'^\s*report compiled\s+[a-z ]+?\d+\s+([a-z]+)\s*$'
@@ -46,6 +71,7 @@ PART_IA_PATTERN = r'\s*(\d+)\s+([ns])(\d+)([ew])(\d+)\s+(\d+)\s*$'
 PART_II_START_PATTERN = r'^\s*II[.]\s+.+?\s*$'
 
 # discard other parts (part II)
+drms_time_string_regex = re.compile(DRMS_TIME_STRING_PATTERN, re.IGNORECASE)
 
 header_1_regex = re.compile(HEADER_1_PATTERN, re.IGNORECASE)
 header_2_regex = re.compile(HEADER_2_PATTERN, re.IGNORECASE)
@@ -55,12 +81,71 @@ part_ia_start_regex = re.compile(PART_IA_START_PATTERN, re.IGNORECASE)
 part_ia_regex = re.compile(PART_IA_PATTERN, re.IGNORECASE)
 part_2_start_regex = re.compile(PART_II_START_PATTERN, re.IGNORECASE)
 
+class Arguments(Args):
+    _arguments = None
+
+    @classmethod
+    def get_arguments(cls):
+        try:
+            # db_user = drms_params.get_required('WEB_DBUSER')
+            pass
+        except DPMissingParameterError as exc:
+            raise ParametersError(exc_info=sys_exc_info(), error_message=str(exc))
+
+        parser_args = { 'usage' : '%(prog)s  [ -e/--end-day=<end observation day> ] [ -s/--start-day=<start observation day> ] [ -L/--logging-level=<critical/error/warning/info/debug> ]' }
+
+        parser = CmdlParser(**parser_args)
+
+        # optional
+        parser.add_argument('-e', '--end-day', help='end observation day (%m%d)', metavar='<end day>', dest='end_day', default=None)
+        parser.add_argument('-s', '--start-day', help='start observation day (%m%d)', metavar='<start day>', dest='start_day', default=None)
+
+        cls._arguments = Arguments(parser=parser, args=None)
+        return cls._arguments
+
 def uniquify_id(id, observation_time):
-    if observation_time > datetime.strptime('20000101', '%Y%m%d') and int(id) < 5000:
+    dt = datetime(2000, 1, 1, tzinfo=observation_time.tzinfo)
+    if observation_time > dt and int(id) < 5000:
         unique_id = str(int(id) + 10000)
     else:
         unique_id = id
     return unique_id
+
+def check_time_interval(state_data):
+    start_day = state_data.get('start_day', None)
+    end_day = state_data.get('end_day', None)
+    process_data = True
+
+    # print(f'{str(start_day)}, {str(end_day)}')
+
+    if (start_day is not None and state_data['observation_time'] < start_day) or (end_day is not None and state_data['observation_time'] > end_day):
+        if start_day is not None and end_day is not None:
+            time_interval = f't >= {start_day.strftime("%b %d")} and t <= {end_day.strftime("%b %d")}'
+        elif start_day is not None:
+            time_interval = f't >= {start_day.strftime("%b %d")}'
+        elif end_day is not None:
+            time_interval = f't <= {end_day.strftime("%b %d")}'
+
+        print(f'observation time {state_data["observation_time"].strftime("%b %d")} outside of requested time interval {time_interval}')
+        process_data = False
+
+    return process_data
+
+def set_time_window_endpoint(state_data, endpoint, endpoint_day):
+    dt = None
+    try:
+        dt = datetime.strptime(f'{state_data["observation_time"].strftime("%Y")}{endpoint_day}', '%Y%b%d')
+    except:
+        try:
+            dt = datetime.strptime(f'{state_data["observation_time"].strftime("%Y")}{endpoint_day}', '%Y%m%d')
+        except:
+            try:
+                dt = datetime.strptime(f'{state_data["observation_time"].strftime("%Y")}{endpoint_day}', '%Y%B%d')
+            except:
+                print(f'WARNING: invalid time window endpoint {state_data[endpoint]}; ignoring', sys_stderr)
+
+    if dt is not None:
+        state_data[endpoint] = datetime(dt.year, dt.month, dt.day, tzinfo=state_data["observation_time"].tzinfo)
 
 def process_content(*, state, line_content, state_data):
     return_state = state
@@ -109,82 +194,89 @@ def process_content(*, state, line_content, state_data):
 
             return_state = ParseState.PART_1
     elif state == ParseState.PART_1:
-        match_obj = part_i_regex.search(line_content)
-        if match_obj is not None:
-            print('XX1')
-            matches = match_obj.groups()
-            if len(matches) != 11:
-                raise
+        process_data = check_time_interval(state_data)
 
-            part_i_id = matches[0]
-            part_i_location = []
-            part_i_location.append(f'-{matches[2]}' if matches[1].lower() == 'e' else f'{matches[2]}')
-            part_i_location.append(f'-{matches[4]}' if matches[3].lower() == 's' else f'{matches[4]}')
-            part_i_carrington_lon, part_i_area = matches[5:7]
-            part_i_zurich_classification = f'{matches[7][0].upper()}{matches[7][1:].replace("-", "").lower()}'
-            part_i_extent, part_i_number_spots, = matches[8:10]
-            part_i_magnetic_classification = f'{matches[10][0].upper()}{matches[10][1:].replace("-", "").lower()}'
-
-            # call set_info with key=val pairs
-            keyword_dict = {}
-            keyword_dict['regionnumber'] = uniquify_id(part_i_id, state_data['observation_time'])
-            keyword_dict['observationtime'] = state_data['observation_time'].strftime('%Y.%m.%d_%H:%M:%S_%Z')
-            keyword_dict['area'] = part_i_area
-            keyword_dict['latitudehg'] = part_i_location[0]
-            keyword_dict['longitudehg'] = part_i_carrington_lon
-            keyword_dict['longitudecm'] = part_i_location[1]
-            keyword_dict['longitudnalextent'] = part_i_extent
-            keyword_dict['zurichclass'] = part_i_zurich_classification
-            keyword_dict['magnetictype'] = part_i_magnetic_classification
-            keyword_dict['swpc_file'] = state_data['swpc_file']
-            keyword_dict['swpc_file_mod_time'] = state_data['swpc_file_mod_time'].strftime('%Y%m%d_%H%M%S')
-
-            print(f'setting keyword dict')
-            state_data['keyword_dict'] = keyword_dict
-        else:
-            print('XX2')
-            state_data['keyword_dict'] = None
-            match_obj = part_ia_start_regex.search(line_content)
+        if process_data:
+            match_obj = part_i_regex.search(line_content)
             if match_obj is not None:
-                return_state = ParseState.PART_1A
+                matches = match_obj.groups()
+                if len(matches) != 11:
+                    raise
+
+                part_i_id = matches[0]
+                part_i_location = []
+                part_i_location.append(f'-{matches[2]}' if matches[1].lower() == 'e' else f'{matches[2]}')
+                part_i_location.append(f'-{matches[4]}' if matches[3].lower() == 's' else f'{matches[4]}')
+                part_i_carrington_lon, part_i_area = matches[5:7]
+                part_i_zurich_classification = f'{matches[7][0].upper()}{matches[7][1:].replace("-", "").lower()}'
+                part_i_extent, part_i_number_spots, = matches[8:10]
+                part_i_magnetic_classification = f'{matches[10][0].upper()}{matches[10][1:].replace("-", "").lower()}'
+
+                # call set_info with key=val pairs
+                keyword_dict = {}
+                keyword_dict['regionnumber'] = uniquify_id(part_i_id, state_data['observation_time'])
+                keyword_dict['observationtime'] = state_data['observation_time'].strftime('%Y.%m.%d_%H:%M:%S_%Z')
+                keyword_dict['area'] = part_i_area
+                keyword_dict['latitudehg'] = part_i_location[0]
+                keyword_dict['longitudehg'] = part_i_carrington_lon
+                keyword_dict['longitudecm'] = part_i_location[1]
+                keyword_dict['longitudnalextent'] = part_i_extent
+                keyword_dict['zurichclass'] = part_i_zurich_classification
+                keyword_dict['magnetictype'] = part_i_magnetic_classification
+                keyword_dict['swpc_file'] = state_data['swpc_file']
+                keyword_dict['swpc_file_mod_time'] = state_data['swpc_file_mod_time'].strftime('%Y%m%d_%H%M%S')
+
+                state_data['keyword_dict'] = keyword_dict
+            else:
+                state_data['keyword_dict'] = None
+                match_obj = part_ia_start_regex.search(line_content)
+                if match_obj is not None:
+                    return_state = ParseState.PART_1A
+        else:
+            return_state = ParseState.END
     elif state == ParseState.PART_1A:
-        match_obj = part_ia_regex.search(line_content)
-        if match_obj is not None:
-            matches = match_obj.groups()
-            if len(matches) != 6:
-                raise
+        process_data = check_time_interval(state_data)
 
-            part_ia_id = matches[0]
-            part_ia_location = []
-            part_ia_location.append(f'-{matches[2]}' if matches[1].lower() == 'e' else f'{matches[2]}')
-            part_ia_location.append(f'-{matches[4]}' if matches[3].lower() == 's' else f'{matches[4]}')
-            part_ia_carrington_lon = matches[5]
-            part_ia_area = PART_IA_DEFAULT_AREA
-            part_ia_zurich_classification = f'{PART_IA_DEFAULT_ZURICH_CLASSIFICATION[0].upper()}{PART_IA_DEFAULT_ZURICH_CLASSIFICATION[1:].replace("-", "").lower()}'
-            part_ia_extent = PART_IA_DEFAULT_EXTENT
-            part_ia_number_spots = PART_IA_DEFAULT_NUMBER_SPOTS
-            part_ia_magnetic_classification = f'{PART_IA_DEFAULT_MAGNETIC_CLASSIFICATION[0].upper()}{PART_IA_DEFAULT_MAGNETIC_CLASSIFICATION[1:].replace("-", "").lower()}'
-
-            keyword_dict = {}
-            keyword_dict['regionnumber'] = uniquify_id(part_ia_id, state_data['observation_time'])
-            keyword_dict['observationtime'] = state_data['observation_time'].strftime('%Y.%m.%d_%H:%M:%S_%Z')
-            keyword_dict['area'] = part_ia_area
-            keyword_dict['latitudehg'] = part_ia_location[0]
-            keyword_dict['longitudehg'] = part_ia_carrington_lon
-            keyword_dict['longitudecm'] = part_ia_location[1]
-            keyword_dict['longitudnalextent'] = part_ia_extent
-            keyword_dict['zurichclass'] = part_ia_zurich_classification
-            keyword_dict['magnetictype'] = part_ia_magnetic_classification
-            keyword_dict['swpc_file'] = state_data['swpc_file']
-            keyword_dict['swpc_file_mod_time'] = state_data['swpc_file_mod_time'].strftime('%Y%m%d_%H%M%S')
-
-            print(f'setting keyword dict')
-            state_data['keyword_dict'] = keyword_dict
-        else:
-            state_data['keyword_dict'] = None
-            match_obj = part_2_start_regex.search(line_content)
+        if process_data:
+            match_obj = part_ia_regex.search(line_content)
             if match_obj is not None:
-                return_state = ParseState.PART_2
+                matches = match_obj.groups()
+                if len(matches) != 6:
+                    raise
+
+                part_ia_id = matches[0]
+                part_ia_location = []
+                part_ia_location.append(f'-{matches[2]}' if matches[1].lower() == 'e' else f'{matches[2]}')
+                part_ia_location.append(f'-{matches[4]}' if matches[3].lower() == 's' else f'{matches[4]}')
+                part_ia_carrington_lon = matches[5]
+                part_ia_area = PART_IA_DEFAULT_AREA
+                part_ia_zurich_classification = f'{PART_IA_DEFAULT_ZURICH_CLASSIFICATION[0].upper()}{PART_IA_DEFAULT_ZURICH_CLASSIFICATION[1:].replace("-", "").lower()}'
+                part_ia_extent = PART_IA_DEFAULT_EXTENT
+                part_ia_number_spots = PART_IA_DEFAULT_NUMBER_SPOTS
+                part_ia_magnetic_classification = f'{PART_IA_DEFAULT_MAGNETIC_CLASSIFICATION[0].upper()}{PART_IA_DEFAULT_MAGNETIC_CLASSIFICATION[1:].replace("-", "").lower()}'
+
+                keyword_dict = {}
+                keyword_dict['regionnumber'] = uniquify_id(part_ia_id, state_data['observation_time'])
+                keyword_dict['observationtime'] = state_data['observation_time'].strftime('%Y.%m.%d_%H:%M:%S_%Z')
+                keyword_dict['area'] = part_ia_area
+                keyword_dict['latitudehg'] = part_ia_location[0]
+                keyword_dict['longitudehg'] = part_ia_carrington_lon
+                keyword_dict['longitudecm'] = part_ia_location[1]
+                keyword_dict['longitudnalextent'] = part_ia_extent
+                keyword_dict['zurichclass'] = part_ia_zurich_classification
+                keyword_dict['magnetictype'] = part_ia_magnetic_classification
+                keyword_dict['swpc_file'] = state_data['swpc_file']
+                keyword_dict['swpc_file_mod_time'] = state_data['swpc_file_mod_time'].strftime('%Y%m%d_%H%M%S')
+
+                print(f'setting keyword dict')
+                state_data['keyword_dict'] = keyword_dict
+            else:
+                state_data['keyword_dict'] = None
+                match_obj = part_2_start_regex.search(line_content)
+                if match_obj is not None:
+                    return_state = ParseState.PART_2
+        else:
+            return_state = ParseState.END
     elif state == ParseState.PART_2:
         return_state = ParseState.END
     elif state ==  ParseState.END:
@@ -196,6 +288,8 @@ def process_content(*, state, line_content, state_data):
     return return_state
 
 if __name__ == "__main__":
+    arguments = Arguments.get_arguments()
+
     with FTP(SWPC_FTP_HOST) as ftp_client:
         ftp_client.login()
         ftp_client.cwd(SWPC_FTP_DIRECTORY)
@@ -208,7 +302,7 @@ if __name__ == "__main__":
         command = [ JSOC_INFO_BIN, f'ds={ACTIVE_REGION_SERIES}[][]', f'op=rs_list', f's=1', f'key={ACTIVE_REGION_SERIES_FILE},{ACTIVE_REGION_SERIES_FILE_MOD}', f'DRMS_DBUTF8CLIENTENCODING=1', f'JSOC_DBHOST=hmidb2' ]
 
         try:
-            print(f'running {" ".join(command)}')
+            # print(f'running {" ".join(command)}')
             completed_proc = run(command, encoding='utf8', capture_output=True)
             if completed_proc.returncode != 0:
                 print(f'return code: {str(completed_proc.returncode)}', file=sys.stderr)
@@ -242,32 +336,66 @@ if __name__ == "__main__":
             state = ParseState.START
             with BytesIO() as stream:
                 state_data = { "swpc_file" : file_name, "swpc_file_mod_time" : file_mod_time }
+
                 print(f'downloading {file_name}')
                 ftp_client.retrbinary(f'RETR {file_name}', stream.write)
 
                 stream.seek(0)
                 while True:
                     line_content = stream.readline().decode().strip()
-                    print(f'processing line {line_content}')
+                    # print(f'processing line {line_content}')
 
                     if line_content != b'':
-                        print(f'state is {str(state)}')
+                        # print(f'state is {str(state)}')
                         next_state = process_content(state=state, line_content=line_content, state_data=state_data)
-                        print(f'next state is {str(next_state)}')
+                        # print(f'next state is {str(next_state)}')
 
                         if state == ParseState.HEADER_2:
                             # call time_convert to get proper DRMS time string
                             command = [ TIME_CONVERT_BIN, f'time={state_data["swpc_observation_time_str"]}', f'o=cal']
 
                             try:
-                                print(f'running {" ".join(command)}')
+                                # print(f'running {" ".join(command)}')
                                 completed_proc = run(command, encoding='utf8', capture_output=True)
                                 if completed_proc.returncode != 0:
                                     print(f'return code: {str(completed_proc.returncode)}', file=sys.stderr)
                                     raise
-                                state_data['observation_time'] = datetime.strptime(completed_proc.stdout.strip(), '%Y.%m.%d_%H:%M:%S_%Z')
+
+                                drms_time_string = completed_proc.stdout.strip()
+                                # state_data['observation_time'] = datetime.strptime(completed_proc.stdout.strip(), '%Y.%m.%d_%H:%M:%S')
+
+                                # python does not have a way to parse time zone from a non-standardized time string (like a DRMS time string)
+                                match_obj = drms_time_string_regex.search(completed_proc.stdout.strip())
+                                if match_obj is not None:
+                                    matches = match_obj.groups()
+
+                                    if len(matches) == 14:
+                                        year_str, month_str, day_str = matches[0:3]
+                                        hour_str = matches[5] if matches[5] is not None else '0'
+                                        minute_str = matches[7] if matches[7] is not None else '0'
+                                        second_str = matches[10] if matches[10] is not None else '0'
+                                        microsecond = float(matches[11]) * 1000000 if matches[11] is not None else 0
+                                        time_zone_str = matches[13] if matches[13] else None
+                                    else:
+                                        print('bad 1', file=sys_stderr)
+                                        raise
+                                else:
+                                    print('bad 2', file=sys_stderr)
+                                    raise
+
+                                state_data['observation_time'] = datetime(int(year_str), int(month_str), int(day_str), hour=int(hour_str), minute=int(minute_str), second=int(second_str), microsecond=microsecond, tzinfo=timezone(time_zone_str) if time_zone_str is not None else None)
                             except Exception as exc:
                                 print(f'{str(exc)}', file=sys_stderr)
+
+                            if arguments.start_day is not None:
+                                set_time_window_endpoint(state_data, 'start_day', arguments.start_day)
+
+                            if arguments.end_day is not None:
+                                set_time_window_endpoint(state_data, 'end_day', arguments.end_day)
+
+                            if state_data['start_day'] > state_data['end_day']:
+                                raise ArgumentsError(f'start day argument `{state_data["start_day"].strftime("%b %d")}` is AFTER end day argument `{state_data["end_day"].strftime("%b %d")}`')
+
                         elif state == ParseState.PART_1 or state == ParseState.PART_1A:
                             # call set_info with key=val pairs
                             keyword_dict = state_data.get('keyword_dict', None)
@@ -275,7 +403,6 @@ if __name__ == "__main__":
                             if keyword_dict is not None:
                                 command = [ SET_INFO_BIN, '-c', f'ds=ACTIVE_REGION_SERIES' ]
                                 command.extend([ f'{element[0]}={str(element[1])}' for element in keyword_dict.items() ])
-                                print(f'command type is {type(command)}')
                                 print(f'running {" ".join(command)}')
                         elif state == ParseState.END:
                             break
@@ -283,8 +410,6 @@ if __name__ == "__main__":
                         state = next_state
                     else:
                         break
-
-                break
 
         # algorithm for obs time
         # - get 1-based month index and year from SRS Number XXX line (the report month and year)
