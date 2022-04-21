@@ -8,7 +8,7 @@ import re
 from subprocess import run
 from sys import exit as sys_exit, stderr as sys_stderr
 
-from drms_utils import Arguments as Args, ArgumentsError as ArgsError, Choices, CmdlParser, Formatter as DrmsLogFormatter, Log as DrmsLog, LogLevel as DrmsLogLevel, LogLevelAction as DrmsLogLevelAction
+from drms_utils import Arguments as Args, ArgumentsError as ArgsError, CmdlParser, Formatter as DrmsLogFormatter, Log as DrmsLog, LogLevel as DrmsLogLevel, LogLevelAction as DrmsLogLevelAction
 
 # connect
 SWPC_FTP_HOST = 'ftp.swpc.noaa.gov'
@@ -23,6 +23,20 @@ ACTIVE_REGION_SERIES = 'jsoc.noaa_active_regions'
 ACTIVE_REGION_SERIES_FILE = 'swpc_file'
 ACTIVE_REGION_SERIES_FILE_MOD = 'swpc_file_mod_time'
 
+PART_IA_DEFAULT_ZURICH_CLASSIFICATION = '?'
+PART_IA_DEFAULT_MAGNETIC_CLASSIFICATION = '?'
+PART_IA_DEFAULT_NUMBER_SPOTS = 0
+PART_IA_DEFAULT_AREA = 0
+PART_IA_DEFAULT_EXTENT = -1
+
+HEADER_1_PATTERN = r'^\s*srs number\s+[0-9a-z ]+?\d+\s+([a-z]+)\s+(\d\d\d\d)\s*$'
+HEADER_2_PATTERN = r'^\s*report compiled\s+[a-z ]+?\d+\s+([a-z]+)\s*$'
+PART_I_START_PATTERN = r'^\s*I[.]\s+.+?(\d+)[/](\d\d)(\d\d)[zZ]\s*$'
+PART_I_PATTERN = r'^\s*(\d+)\s+([ns])(\d+)([ew])(\d+)\s+(\d+)\s+(\d+)\s+([a-z]+)\s+(\d+)\s+(\d+)\s+([a-z]+)\s*$'
+PART_IA_START_PATTERN = r'^\s*IA[.]\s+.+?\s*$'
+PART_IA_PATTERN = r'\s*(\d+)\s+([ns])(\d+)([ew])(\d+)\s+(\d+)\s*$'
+PART_II_START_PATTERN = r'^\s*II[.]\s+.+?\s*$'
+
 class ErrorCode(Enum):
     NONE = (0, 'no error - success!')
     ARGUMENTS = (1, 'bad arguments')
@@ -34,6 +48,7 @@ class ErrorCode(Enum):
     PROCESSING_STATE = (7, 'unknown processing state')
     CHILD_PROCESS = (8, 'failure running child process')
     TIME_STRING_FORMAT = (9, 'invalid DRMS time string')
+    REGEX_API = (10, 'failure creating regular-expression API')
 
     def __new__(cls, code, description):
         member = object.__new__(cls)
@@ -96,31 +111,57 @@ class ChildProcessError(NoaaBaseException):
 class DrmsTimeStringFormatError(NoaaBaseException):
     _error_code = ErrorCode.TIME_STRING_FORMAT
 
+class RegExApiError(NoaaBaseException):
+    _error_code = ErrorCode.REGEX_API
 
-PART_IA_DEFAULT_ZURICH_CLASSIFICATION = '?'
-PART_IA_DEFAULT_MAGNETIC_CLASSIFICATION = '?'
-PART_IA_DEFAULT_NUMBER_SPOTS = 0
-PART_IA_DEFAULT_AREA = 0
-PART_IA_DEFAULT_EXTENT = -1
+class RegExType(type):
+    _reg_exes_classes = {}
+    _required_attributes = [ 'regex_pattern', 'regex' ]
 
-HEADER_1_PATTERN = r'^\s*srs number\s+[0-9a-z ]+?\d+\s+([a-z]+)\s+(\d\d\d\d)\s*$'
-HEADER_2_PATTERN = r'^\s*report compiled\s+[a-z ]+?\d+\s+([a-z]+)\s*$'
-PART_I_START_PATTERN = r'^\s*I[.]\s+.+?(\d+)[/](\d\d)(\d\d)[zZ]\s*$'
-PART_I_PATTERN = r'^\s*(\d+)\s+([ns])(\d+)([ew])(\d+)\s+(\d+)\s+(\d+)\s+([a-z]+)\s+(\d+)\s+(\d+)\s+([a-z]+)\s*$'
-PART_IA_START_PATTERN = r'^\s*IA[.]\s+.+?\s*$'
-PART_IA_PATTERN = r'\s*(\d+)\s+([ns])(\d+)([ew])(\d+)\s+(\d+)\s*$'
-PART_II_START_PATTERN = r'^\s*II[.]\s+.+?\s*$'
+    def __new__(cls, name, bases, attributes):
+        for required_att in cls._required_attributes:
+            if required_att not in attributes:
+                raise RegExApiError(f'missing required attribute {required_att} in RegExType class {str(cls)}')
 
-# discard other parts (part II)
-drms_time_string_regex = re.compile(DRMS_TIME_STRING_PATTERN, re.IGNORECASE)
+        if name in cls._reg_exes_classes:
+            raise RegExApiError(f'duplicate RegExType class {name}')
 
-header_1_regex = re.compile(HEADER_1_PATTERN, re.IGNORECASE)
-header_2_regex = re.compile(HEADER_2_PATTERN, re.IGNORECASE)
-part_1_start_regex = re.compile(PART_I_START_PATTERN)
-part_i_regex = re.compile(PART_I_PATTERN, re.IGNORECASE)
-part_ia_start_regex = re.compile(PART_IA_START_PATTERN, re.IGNORECASE)
-part_ia_regex = re.compile(PART_IA_PATTERN, re.IGNORECASE)
-part_2_start_regex = re.compile(PART_II_START_PATTERN, re.IGNORECASE)
+        return super(RegExType, cls).__new__(cls, name, bases, attributes)
+
+    def __init__(cls, name, bases, attributes):
+        RegExType._reg_exes_classes[name] = cls
+
+def regex_search(self, text):
+    # print(f'[regex_search] {text}')
+    return self.regex.search(text)
+
+def create_regexes(regex_patterns):
+    for regex_name, regex_pattern, ignore_case in regex_patterns:
+        if ignore_case:
+            regex = re.compile(regex_pattern, re.IGNORECASE)
+        else:
+            regex = re.compile(regex_pattern)
+
+        regex_cls = RegExType(f'{regex_name}Meta', (object,),
+        {
+            'regex_pattern' : regex_pattern,
+            'regex' : regex,
+            'search' : regex_search
+        })
+
+        globals()[regex_name] = regex_cls()
+
+REGEX_PATTERNS = (
+    ('SwpcFileNameRegex', SWPC_FILE_NAME_PATTERN, False),
+    ('DrmsTimeStringRegex', DRMS_TIME_STRING_PATTERN, True),
+    ('Header1Regex', HEADER_1_PATTERN, True),
+    ('Header2Regex', HEADER_2_PATTERN, True),
+    ('PartIStartRegex', PART_I_START_PATTERN, False),
+    ('PartIRegex', PART_I_PATTERN, True),
+    ('PartIAStartRegex', PART_IA_START_PATTERN, True),
+    ('PartIARegex', PART_IA_PATTERN, True),
+    ('PartIIStartRegex', PART_II_START_PATTERN, True),
+)
 
 class Arguments(Args):
     _arguments = None
@@ -192,7 +233,7 @@ def process_content(*, state, line_content, state_data):
     return_state = state
 
     if state == ParseState.START:
-        match_obj = header_1_regex.search(line_content)
+        match_obj = Header1Regex.search(line_content)
         if match_obj is not None:
             matches = match_obj.groups()
             if len(matches) != 2:
@@ -204,7 +245,7 @@ def process_content(*, state, line_content, state_data):
 
             return_state = ParseState.HEADER_1
     elif state == ParseState.HEADER_1:
-        match_obj = header_2_regex.search(line_content)
+        match_obj = Header2Regex.search(line_content)
         if match_obj is not None:
             matches = match_obj.groups()
             if len(matches) != 1:
@@ -216,7 +257,7 @@ def process_content(*, state, line_content, state_data):
 
             return_state = ParseState.HEADER_2
     elif state == ParseState.HEADER_2:
-        match_obj = part_1_start_regex.search(line_content)
+        match_obj = PartIStartRegex.search(line_content)
         if match_obj is not None:
             matches = match_obj.groups()
             if match_obj is not None:
@@ -238,7 +279,7 @@ def process_content(*, state, line_content, state_data):
         process_data = check_time_interval(state_data)
 
         if process_data:
-            match_obj = part_i_regex.search(line_content)
+            match_obj = PartIRegex.search(line_content)
             if match_obj is not None:
                 matches = match_obj.groups()
                 if len(matches) != 11:
@@ -270,7 +311,7 @@ def process_content(*, state, line_content, state_data):
                 state_data['keyword_dict'] = keyword_dict
             else:
                 state_data['keyword_dict'] = None
-                match_obj = part_ia_start_regex.search(line_content)
+                match_obj = PartIAStartRegex.search(line_content)
                 if match_obj is not None:
                     return_state = ParseState.PART_1A
         else:
@@ -279,7 +320,7 @@ def process_content(*, state, line_content, state_data):
         process_data = check_time_interval(state_data)
 
         if process_data:
-            match_obj = part_ia_regex.search(line_content)
+            match_obj = PartIARegex.search(line_content)
             if match_obj is not None:
                 matches = match_obj.groups()
                 if len(matches) != 6:
@@ -309,11 +350,10 @@ def process_content(*, state, line_content, state_data):
                 keyword_dict['swpc_file'] = state_data['swpc_file']
                 keyword_dict['swpc_file_mod_time'] = state_data['swpc_file_mod_time'].strftime('%Y%m%d_%H%M%S')
 
-                print(f'setting keyword dict')
                 state_data['keyword_dict'] = keyword_dict
             else:
                 state_data['keyword_dict'] = None
-                match_obj = part_2_start_regex.search(line_content)
+                match_obj = PartIIStartRegex.search(line_content)
                 if match_obj is not None:
                     return_state = ParseState.PART_2
         else:
@@ -352,13 +392,11 @@ def fetch_mod_times():
     return mod_times
 
 def get_new_files(files, mod_times):
-    file_name_regex = re.compile(SWPC_FILE_NAME_PATTERN)
-
     files_to_process = {}
     for file in files:
         file_name = file[0]
 
-        if file_name_regex.search(file_name) == None:
+        if SwpcFileNameRegex.search(file_name) == None:
             continue
 
         file_mod_time = datetime.strptime(file[1]["modify"], "%Y%m%d%H%M%S") #YYYMMDDHHMMSS
@@ -384,7 +422,7 @@ def set_observation_time():
 
         # python does not have a way to parse time zone from a non-standardized time string (like a DRMS time string)
         drms_time_string = completed_proc.stdout.strip()
-        match_obj = drms_time_string_regex.search(drms_time_string)
+        match_obj = DrmsTimeStringRegex.search(drms_time_string)
         if match_obj is not None:
             matches = match_obj.groups()
 
@@ -409,6 +447,8 @@ if __name__ == "__main__":
 
     try:
         arguments = Arguments.get_arguments()
+        create_regexes(REGEX_PATTERNS)
+        # print('created regexes')
 
         with FTP(SWPC_FTP_HOST) as ftp_client:
             ftp_client.login()
@@ -417,6 +457,7 @@ if __name__ == "__main__":
 
             mod_times = fetch_mod_times()
             files_to_process = get_new_files(files, mod_times)
+            print(f'got files to process {str(len(files_to_process))}')
 
             for file_name, file_mod_time in files_to_process.items():
                 state = ParseState.START
