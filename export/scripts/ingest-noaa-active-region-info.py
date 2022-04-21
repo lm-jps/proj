@@ -26,6 +26,14 @@ ACTIVE_REGION_SERIES_FILE_MOD = 'swpc_file_mod_time'
 class ErrorCode(Enum):
     NONE = (0, 'no error - success!')
     ARGUMENTS = (1, 'bad arguments')
+    PARAMETERS = (2, 'failure obtaining DRMS parameters')
+    HEADER_FORMAT = (3, 'header content does not conform to expected format')
+    PART_I_TITLE_FORMAT = (4, 'part I title does not conform to expected format')
+    PART_I_DATA_FORMAT = (5, 'part I data line does not conform to expected format')
+    PART_IA_DATA_FORMAT = (6, 'part IA data line does not conform to expected format')
+    PROCESSING_STATE = (7, 'unknown processing state')
+    CHILD_PROCESS = (8, 'failure running child process')
+    TIME_STRING_FORMAT = (9, 'invalid DRMS time string')
 
     def __new__(cls, code, description):
         member = object.__new__(cls)
@@ -63,6 +71,30 @@ class NoaaBaseException(Exception):
 
 class ArgumentsError(NoaaBaseException):
     _error_code = ErrorCode.ARGUMENTS
+
+class ParametersError(NoaaBaseException):
+    _error_code = ErrorCode.PARAMETERS
+
+class HeaderFormatError(NoaaBaseException):
+    _error_code = ErrorCode.HEADER_FORMAT
+
+class PartITitleFormatError(NoaaBaseException):
+    _error_code = ErrorCode.PART_I_TITLE_FORMAT
+
+class PartIDataFormatError(NoaaBaseException):
+    _error_code = ErrorCode.PART_I_DATA_FORMAT
+
+class PartIADataFormatError(NoaaBaseException):
+    _error_code = ErrorCode.PART_IA_DATA_FORMAT
+
+class ProcessingStateError(NoaaBaseException):
+    _error_code = ErrorCode.PROCESSING_STATE
+
+class ChildProcessError(NoaaBaseException):
+    _error_code = ErrorCode.CHILD_PROCESS
+
+class DrmsTimeStringFormatError(NoaaBaseException):
+    _error_code = ErrorCode.TIME_STRING_FORMAT
 
 
 PART_IA_DEFAULT_ZURICH_CLASSIFICATION = '?'
@@ -164,7 +196,7 @@ def process_content(*, state, line_content, state_data):
         if match_obj is not None:
             matches = match_obj.groups()
             if len(matches) != 2:
-                raise
+                raise HeaderFormatError(f'unexpected header format: {line_content}')
 
             report_month, report_year = matches
             state_data['report_month'] = datetime.strptime(f'{report_month}{report_year}', '%b%Y').strftime('%m')
@@ -176,7 +208,7 @@ def process_content(*, state, line_content, state_data):
         if match_obj is not None:
             matches = match_obj.groups()
             if len(matches) != 1:
-                raise
+                raise HeaderFormatError(f'unexpected header format: {line_content}')
 
             observation_month, = matches
             observation_month = datetime.strptime(f'{observation_month}', '%b').strftime('%m')
@@ -189,7 +221,7 @@ def process_content(*, state, line_content, state_data):
             matches = match_obj.groups()
             if match_obj is not None:
                 if len(matches) != 3:
-                    raise
+                    raise PartITitleFormatError(f'unexpected part-I title format: {line_content}')
 
             observation_day, observation_hour, observation_minute = matches
 
@@ -210,7 +242,7 @@ def process_content(*, state, line_content, state_data):
             if match_obj is not None:
                 matches = match_obj.groups()
                 if len(matches) != 11:
-                    raise
+                    raise PartIDataFormatError(f'unexpected part-I data format: {line_content}')
 
                 part_i_id = matches[0]
                 part_i_location = []
@@ -251,7 +283,7 @@ def process_content(*, state, line_content, state_data):
             if match_obj is not None:
                 matches = match_obj.groups()
                 if len(matches) != 6:
-                    raise
+                    raise PartIADataFormatError(f'unexpected part-IA data format: {line_content}')
 
                 part_ia_id = matches[0]
                 part_ia_location = []
@@ -292,7 +324,7 @@ def process_content(*, state, line_content, state_data):
         return_state = ParseState.END
     else:
         # bad state
-        raise ValueError(f'bad state {str(state)}')
+        raise ProcessingStateError(f'unexpected file-processing state {str(state)}')
 
     return return_state
 
@@ -307,16 +339,15 @@ def fetch_mod_times():
         # print(f'running {" ".join(command)}')
         completed_proc = run(command, encoding='utf8', capture_output=True)
         if completed_proc.returncode != 0:
-            print(f'return code: {str(completed_proc.returncode)}', file=sys.stderr)
-            raise
+            raise ChildProcessError(f'return code: {str(completed_proc.returncode)}')
 
         response = json_loads(completed_proc.stdout)
         if response.get('keywords', None) is not None:
             mod_times = dict(zip(response['keywords'][0]['values'], response['keywords'][1]['values']))
     except decoder.JSONDecodeError as exc:
-        print(f'{str(exc)}', file=sys_stderr)
+        raise ChildProcessError(f'child process did not return valid JSON response (command was `{" ".join(command)}``)')
     except Exception as exc:
-        print(f'{str(exc)}', file=sys_stderr)
+        raise ChildProcessError(f'failure obtaining modification times of previously ingested data files (command was `{" ".join(command)}``)')
 
     return mod_times
 
@@ -347,13 +378,13 @@ def set_observation_time():
         # print(f'running {" ".join(command)}')
         completed_proc = run(command, encoding='utf8', capture_output=True)
         if completed_proc.returncode != 0:
-            print(f'return code: {str(completed_proc.returncode)}', file=sys.stderr)
-            raise
+            raise ChildProcessError(f'return code: {str(completed_proc.returncode)}')
 
         # state_data['observation_time'] = datetime.strptime(completed_proc.stdout.strip(), '%Y.%m.%d_%H:%M:%S')
 
         # python does not have a way to parse time zone from a non-standardized time string (like a DRMS time string)
-        match_obj = drms_time_string_regex.search(completed_proc.stdout.strip())
+        drms_time_string = completed_proc.stdout.strip()
+        match_obj = drms_time_string_regex.search(drms_time_string)
         if match_obj is not None:
             matches = match_obj.groups()
 
@@ -365,11 +396,9 @@ def set_observation_time():
                 microsecond = float(matches[11]) * 1000000 if matches[11] is not None else 0
                 time_zone_str = matches[13] if matches[13] else None
             else:
-                print('bad 1', file=sys_stderr)
-                raise
+                raise DrmsTimeStringFormatError(f'invalid DRMS time string `{drms_time_string}`')
         else:
-            print('bad 2', file=sys_stderr)
-            raise
+            raise DrmsTimeStringFormatError(f'invalid DRMS time string `{drms_time_string}`')
 
         state_data['observation_time'] = datetime(int(year_str), int(month_str), int(day_str), hour=int(hour_str), minute=int(minute_str), second=int(second_str), microsecond=microsecond, tzinfo=timezone(time_zone_str) if time_zone_str is not None else None)
     except Exception as exc:
