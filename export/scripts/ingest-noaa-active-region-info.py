@@ -35,7 +35,7 @@ PART_IA_DEFAULT_EXTENT = -1
 HEADER_1_PATTERN = r'^\s*srs number\s+[0-9a-z ]+?\d+\s+([a-z]+)\s+(\d\d\d\d)\s*$'
 HEADER_2_PATTERN = r'^\s*report compiled\s+[a-z ]+?\d+\s+([a-z]+)\s*$'
 PART_I_START_PATTERN = r'^\s*I[.]\s+.+?(\d+)[/](\d\d)(\d\d)[zZ]\s*$'
-PART_I_PATTERN = r'^\s*(\d+)\s+([ns])(\d+)([ew])(\d+)\s+(\d+)\s+(\d+)\s+([a-z]+)\s+(\d+)\s+(\d+)\s+([a-z]+)\s*$'
+PART_I_PATTERN = r'^\s*(\d+)\s+([ns])(\d+)([ew])(\d+)\s+(\d+)\s+(\d+)\s+([a-z]+)\s+(\d+)\s+(\d+)\s+([a-z_\-]+)\s*$'
 PART_IA_START_PATTERN = r'^\s*IA[.]\s+.+?\s*$'
 PART_IA_PATTERN = r'\s*(\d+)\s+([ns])(\d+)([ew])(\d+)\s+(\d+)\s*$'
 PART_II_START_PATTERN = r'^\s*II[.]\s+.+?\s*$'
@@ -257,6 +257,27 @@ def set_time_window_endpoint(time_window, endpoint, endpoint_day):
         time_window[endpoint] = dt
         log.write_debug([ f'[ set_time_window_endpoint ] window endpoint time {time_window[endpoint].strftime("%b %d")}' ])
 
+def massage_case(text):
+    massaged_text = None
+    buffer_outer = []
+
+    if len(text) > 0:
+        pieces = text.split('-')
+        for piece in pieces:
+            buffer = []
+            buffer.append(piece[0])
+            try:
+                buffer.append(piece[1:].lower())
+            except IndexError:
+                pass
+            buffer_outer.append(''.join(buffer))
+
+        massaged_text = '-'.join(buffer_outer)
+    else:
+        massaged_text = text
+
+    return massaged_text
+
 def process_content(*, state, line_content, state_data):
     return_state = state
 
@@ -319,9 +340,9 @@ def process_content(*, state, line_content, state_data):
                 part_i_location.append(f'-{matches[2]}' if matches[1].lower() == 's' else f'{matches[2]}')
                 part_i_location.append(f'-{matches[4]}' if matches[3].lower() == 'e' else f'{matches[4]}')
                 part_i_carrington_lon, part_i_area = matches[5:7]
-                part_i_zurich_classification = f'{matches[7][0].upper()}{matches[7][1:].replace("-", "").lower()}'
+                part_i_zurich_classification = f'{massage_case(matches[7])}'
                 part_i_extent, part_i_number_spots, = matches[8:10]
-                part_i_magnetic_classification = f'{matches[10][0].upper()}{matches[10][1:].replace("-", "").lower()}'
+                part_i_magnetic_classification = f'{massage_case(matches[10])}'
 
                 # call set_info with key=val pairs
                 keyword_dict = {}
@@ -363,10 +384,10 @@ def process_content(*, state, line_content, state_data):
                 part_ia_location.append(f'-{matches[4]}' if matches[3].lower() == 'e' else f'{matches[4]}')
                 part_ia_carrington_lon = matches[5]
                 part_ia_area = PART_IA_DEFAULT_AREA
-                part_ia_zurich_classification = f'{PART_IA_DEFAULT_ZURICH_CLASSIFICATION[0].upper()}{PART_IA_DEFAULT_ZURICH_CLASSIFICATION[1:].replace("-", "").lower()}'
+                part_ia_zurich_classification = f'{massage_case(PART_IA_DEFAULT_ZURICH_CLASSIFICATION)}'
                 part_ia_extent = PART_IA_DEFAULT_EXTENT
                 part_ia_number_spots = PART_IA_DEFAULT_NUMBER_SPOTS
-                part_ia_magnetic_classification = f'{PART_IA_DEFAULT_MAGNETIC_CLASSIFICATION[0].upper()}{PART_IA_DEFAULT_MAGNETIC_CLASSIFICATION[1:].replace("-", "").lower()}'
+                part_ia_magnetic_classification = f'{massage_case(PART_IA_DEFAULT_MAGNETIC_CLASSIFICATION)}'
 
                 keyword_dict = {}
                 keyword_dict['regionnumber'] = uniquify_id(part_ia_id, state_data['observation_time'])
@@ -514,7 +535,7 @@ if __name__ == "__main__":
         if 'start_day' in time_window and 'end_day' in time_window and time_window['start_day'] > time_window['end_day']:
             raise ArgumentsError(f'start day argument `{time_window["start_day"].strftime("%b %d")}` is AFTER end day argument `{time_window["end_day"].strftime("%b %d")}`')
 
-        log.write_info([ f'[ __main__ ] requested time interval {time_window["start_day"].strftime("%b %d") if time_window["start_day"] is not None else "*"} <-> {time_window["end_day"].strftime("%b %d") if time_window["end_day"] is not None else "*"}' ])
+        log.write_info([ f'[ __main__ ] requested time interval {time_window["start_day"].strftime("%b %d") if "start_day" in time_window and time_window["start_day"] is not None else "*"} <-> {time_window["end_day"].strftime("%b %d") if "end_day" in time_window and time_window["end_day"] is not None else "*"}' ])
 
         with FTP(SWPC_FTP_HOST) as ftp_client:
             log.write_info([ f'[ __main__ ] connected to {SWPC_FTP_HOST}' ])
