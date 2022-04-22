@@ -3,14 +3,17 @@ from enum import Enum
 from ftplib import FTP
 from io import BytesIO
 from json import loads as json_loads, decoder
+from os.path import join as path_join
 from pytz import timezone
 import re
 from subprocess import run
 from sys import exit as sys_exit, stderr as sys_stderr
 
+from drms_parameters import DRMSParams, DPMissingParameterError
 from drms_utils import Arguments as Args, ArgumentsError as ArgsError, CmdlParser, Formatter as DrmsLogFormatter, Log as DrmsLog, LogLevel as DrmsLogLevel, LogLevelAction as DrmsLogLevelAction
 
-# connect
+DEFAULT_LOG_FILE = 'inar_log.txt'
+
 SWPC_FTP_HOST = 'ftp.swpc.noaa.gov'
 SWPC_FTP_DIRECTORY = 'pub/forecasts/SRS'
 SWPC_FILE_NAME_PATTERN = r'^\s*\d\d\d\dSRS.txt\s*$'
@@ -41,14 +44,15 @@ class ErrorCode(Enum):
     NONE = (0, 'no error - success!')
     ARGUMENTS = (1, 'bad arguments')
     PARAMETERS = (2, 'failure obtaining DRMS parameters')
-    HEADER_FORMAT = (3, 'header content does not conform to expected format')
-    PART_I_TITLE_FORMAT = (4, 'part I title does not conform to expected format')
-    PART_I_DATA_FORMAT = (5, 'part I data line does not conform to expected format')
-    PART_IA_DATA_FORMAT = (6, 'part IA data line does not conform to expected format')
-    PROCESSING_STATE = (7, 'unknown processing state')
-    CHILD_PROCESS = (8, 'failure running child process')
-    TIME_STRING_FORMAT = (9, 'invalid DRMS time string')
-    REGEX_API = (10, 'failure creating regular-expression API')
+    LOGGING = (3, 'failure creating or writing to log')
+    HEADER_FORMAT = (4, 'header content does not conform to expected format')
+    PART_I_TITLE_FORMAT = (5, 'part I title does not conform to expected format')
+    PART_I_DATA_FORMAT = (6, 'part I data line does not conform to expected format')
+    PART_IA_DATA_FORMAT = (7, 'part IA data line does not conform to expected format')
+    PROCESSING_STATE = (8, 'unknown processing state')
+    CHILD_PROCESS = (9, 'failure running child process')
+    TIME_STRING_FORMAT = (10, 'invalid DRMS time string')
+    REGEX_API = (11, 'failure creating regular-expression API')
 
     def __new__(cls, code, description):
         member = object.__new__(cls)
@@ -115,7 +119,7 @@ class RegExApiError(NoaaBaseException):
     _error_code = ErrorCode.REGEX_API
 
 class RegExType(type):
-    _reg_exes_classes = {}
+    _regex_classes = {}
     _required_attributes = [ 'regex_pattern', 'regex' ]
 
     def __new__(cls, name, bases, attributes):
@@ -123,17 +127,36 @@ class RegExType(type):
             if required_att not in attributes:
                 raise RegExApiError(f'missing required attribute {required_att} in RegExType class {str(cls)}')
 
-        if name in cls._reg_exes_classes:
+        if name in cls._regex_classes:
             raise RegExApiError(f'duplicate RegExType class {name}')
 
         return super(RegExType, cls).__new__(cls, name, bases, attributes)
 
     def __init__(cls, name, bases, attributes):
-        RegExType._reg_exes_classes[name] = cls
+        RegExType._regex_classes[name] = cls
+
+    @classmethod
+    def get_regex_classes(cls):
+        regex_classes = []
+        for name, regex_class in cls._regex_classes.items():
+            regex_classes.append(regex_class)
+
+        return regex_classes
+
+    @classmethod
+    def get_regex_names(cls):
+        regex_names = []
+        for name, regex_class in cls._regex_classes.items():
+            regex_names.append(regex_class.regex_name)
+
+        return regex_names
 
 def regex_search(self, text):
     # print(f'[regex_search] {text}')
     return self.regex.search(text)
+
+def regex_str(self):
+    return self.__name__
 
 def create_regexes(regex_patterns):
     for regex_name, regex_pattern, ignore_case in regex_patterns:
@@ -146,7 +169,9 @@ def create_regexes(regex_patterns):
         {
             'regex_pattern' : regex_pattern,
             'regex' : regex,
-            'search' : regex_search
+            'search' : regex_search,
+            'regex_name' : regex_name,
+            '__str__' : regex_str,
         })
 
         globals()[regex_name] = regex_cls()
@@ -167,10 +192,10 @@ class Arguments(Args):
     _arguments = None
 
     @classmethod
-    def get_arguments(cls):
+    def get_arguments(cls, drms_params):
         try:
             # db_user = drms_params.get_required('WEB_DBUSER')
-            pass
+            log_file = path_join(drms_params.get_required('DRMS_LOG_DIR'), DEFAULT_LOG_FILE)
         except DPMissingParameterError as exc:
             raise ParametersError(exc_info=sys_exc_info(), error_message=str(exc))
 
@@ -180,6 +205,8 @@ class Arguments(Args):
 
         # optional
         parser.add_argument('-e', '--end-day', help='end observation day (%m%d)', metavar='<end day>', dest='end_day', default=None)
+        parser.add_argument('-l', '--log-file', help='the path to the log file', metavar='<log file>', dest='log_file', default=log_file)
+        parser.add_argument('-L', '--logging-level', help='the amount of logging to perform; in order of increasing verbosity: critical, error, warning, info, debug', metavar='<logging level>', dest='logging_level', action=DrmsLogLevelAction, default=DrmsLogLevel.ERROR)
         parser.add_argument('-s', '--start-day', help='start observation day (%m%d)', metavar='<start day>', dest='start_day', default=None)
 
         cls._arguments = Arguments(parser=parser, args=None)
@@ -446,9 +473,17 @@ if __name__ == "__main__":
     exit_code = None
 
     try:
-        arguments = Arguments.get_arguments()
+        drms_params = DRMSParams()
+        arguments = Arguments.get_arguments(drms_params)
+
+        try:
+            formatter = DrmsLogFormatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+            log = DrmsLog(arguments.log_file, arguments.logging_level, formatter)
+        except Exception as exc:
+            raise LoggingError(f'{str(exc)}')
+
         create_regexes(REGEX_PATTERNS)
-        # print('created regexes')
+        log.write_debug([f'successfully created regular expression metaclasses {str(RegExType.get_regex_names())}'])
 
         with FTP(SWPC_FTP_HOST) as ftp_client:
             ftp_client.login()
