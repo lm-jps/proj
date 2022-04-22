@@ -152,7 +152,6 @@ class RegExType(type):
         return regex_names
 
 def regex_search(self, text):
-    # print(f'[regex_search] {text}')
     return self.regex.search(text)
 
 def regex_str(self):
@@ -221,13 +220,14 @@ def uniquify_id(id, observation_time):
     return unique_id
 
 def check_time_interval(state_data):
-    start_day = state_data.get('start_day', None)
-    end_day = state_data.get('end_day', None)
+    start_day = state_data['time_window'].get('start_day', None) # no year (1900)
+    end_day = state_data['time_window'].get('end_day', None) # no year (1900)
     process_data = True
 
-    # print(f'{str(start_day)}, {str(end_day)}')
+    # remove year
+    observation_month_and_day = datetime.strptime(state_data['observation_time'].strftime('%m%d'), '%m%d')
 
-    if (start_day is not None and state_data['observation_time'] < start_day) or (end_day is not None and state_data['observation_time'] > end_day):
+    if (start_day is not None and observation_month_and_day < start_day) or (end_day is not None and observation_month_and_day > end_day):
         if start_day is not None and end_day is not None:
             time_interval = f't >= {start_day.strftime("%b %d")} and t <= {end_day.strftime("%b %d")}'
         elif start_day is not None:
@@ -235,26 +235,27 @@ def check_time_interval(state_data):
         elif end_day is not None:
             time_interval = f't <= {end_day.strftime("%b %d")}'
 
-        print(f'observation time {state_data["observation_time"].strftime("%b %d")} outside of requested time interval {time_interval}')
+        log.write_info([ f'[ check_time_interval ] observation time {state_data["observation_time"].strftime("%b %d")} outside of requested time interval {time_interval}'])
         process_data = False
 
     return process_data
 
-def set_time_window_endpoint(state_data, endpoint, endpoint_day):
+def set_time_window_endpoint(time_window, endpoint, endpoint_day):
     dt = None
     try:
-        dt = datetime.strptime(f'{state_data["observation_time"].strftime("%Y")}{endpoint_day}', '%Y%b%d')
+        dt = datetime.strptime(f'{endpoint_day}', '%b%d')
     except:
         try:
-            dt = datetime.strptime(f'{state_data["observation_time"].strftime("%Y")}{endpoint_day}', '%Y%m%d')
+            dt = datetime.strptime(f'{endpoint_day}', '%m%d')
         except:
             try:
-                dt = datetime.strptime(f'{state_data["observation_time"].strftime("%Y")}{endpoint_day}', '%Y%B%d')
+                dt = datetime.strptime(f'{endpoint_day}', '%B%d')
             except:
-                print(f'WARNING: invalid time window endpoint {state_data[endpoint]}; ignoring', sys_stderr)
+                log.write_info([ f'[ set_time_window_endpoint ] WARNING: invalid time window endpoint {endpoint_day}; ignoring' ])
 
     if dt is not None:
-        state_data[endpoint] = datetime(dt.year, dt.month, dt.day, tzinfo=state_data["observation_time"].tzinfo)
+        time_window[endpoint] = dt
+        log.write_debug([ f'[ set_time_window_endpoint ] window endpoint time {time_window[endpoint].strftime("%b %d")}' ])
 
 def process_content(*, state, line_content, state_data):
     return_state = state
@@ -300,6 +301,7 @@ def process_content(*, state, line_content, state_data):
 
             swpc_observation_time_str = f'{observation_year}.{state_data["observation_month"]}.{observation_day}_{observation_hour}:{observation_minute}_UT'
             state_data['swpc_observation_time_str'] = swpc_observation_time_str
+            log.write_debug([ f'[ process_content ] swpc observation time string {swpc_observation_time_str}' ])
 
             return_state = ParseState.PART_1
     elif state == ParseState.PART_1:
@@ -336,6 +338,7 @@ def process_content(*, state, line_content, state_data):
                 keyword_dict['swpc_file_mod_time'] = state_data['swpc_file_mod_time'].strftime('%Y%m%d_%H%M%S')
 
                 state_data['keyword_dict'] = keyword_dict
+                log.write_debug([ f'[ process_content ] keyword dict {str(keyword_dict)}' ])
             else:
                 state_data['keyword_dict'] = None
                 match_obj = PartIAStartRegex.search(line_content)
@@ -378,6 +381,7 @@ def process_content(*, state, line_content, state_data):
                 keyword_dict['swpc_file_mod_time'] = state_data['swpc_file_mod_time'].strftime('%Y%m%d_%H%M%S')
 
                 state_data['keyword_dict'] = keyword_dict
+                log.write_debug([ f'[ process_content ] keyword dict {str(keyword_dict)}' ])
             else:
                 state_data['keyword_dict'] = None
                 match_obj = PartIIStartRegex.search(line_content)
@@ -396,17 +400,17 @@ def process_content(*, state, line_content, state_data):
     return return_state
 
 def fetch_mod_times():
+    log.write_debug([ f'[ fetch_mod_times ] fetching data-file modification times' ])
     mod_times = None
 
     # check all files
-    # midnight_today = datetime.strptime(datetime.today().strftime('%Y%m%d'), '%Y%m%d')
     command = [ JSOC_INFO_BIN, f'ds={ACTIVE_REGION_SERIES}[][]', f'op=rs_list', f's=1', f'key={ACTIVE_REGION_SERIES_FILE},{ACTIVE_REGION_SERIES_FILE_MOD}', f'DRMS_DBUTF8CLIENTENCODING=1', f'JSOC_DBHOST=hmidb2' ]
 
     try:
-        # print(f'running {" ".join(command)}')
+        log.write_debug([ f'[ fetch_mod_times ] running {" ".join(command)}' ])
         completed_proc = run(command, encoding='utf8', capture_output=True)
         if completed_proc.returncode != 0:
-            raise ChildProcessError(f'return code: {str(completed_proc.returncode)}')
+            raise ChildProcessError(f'non-zero return code: {str(completed_proc.returncode)}')
 
         response = json_loads(completed_proc.stdout)
         if response.get('keywords', None) is not None:
@@ -416,14 +420,17 @@ def fetch_mod_times():
     except Exception as exc:
         raise ChildProcessError(f'failure obtaining modification times of previously ingested data files (command was `{" ".join(command)}``)')
 
+    log.write_info([ f'[ fetch_mod_times ] successfully fetched modification time for {str(len(mod_times)) if mod_times is not None else "0"} files' ])
     return mod_times
 
 def get_new_files(files, mod_times):
+    log.write_debug([ f'[ get_new_files ] filtering out up-to-date files' ])
     files_to_process = {}
     for file in files:
         file_name = file[0]
 
         if SwpcFileNameRegex.search(file_name) == None:
+            log.write_info([ f'[ get_new_files ] WARNING: invalid file-name format `{file_name}`; ignoring' ])
             continue
 
         file_mod_time = datetime.strptime(file[1]["modify"], "%Y%m%d%H%M%S") #YYYMMDDHHMMSS
@@ -431,43 +438,49 @@ def get_new_files(files, mod_times):
         # exclude files that have already been ingested (using file name and timestamp)
         last_mod_time = mod_times.get(file_name, None) if mod_times is not None else None
         if last_mod_time is None or file_mod_time > last_mod_time:
+            log.write_debug([ f'[ get_new_files ] file `{file_name}` (modification time {file_mod_time.strftime("%Y-%m-%dT%H:%M:%S")}) has not been ingested' ])
             files_to_process[file_name] = file_mod_time
 
+    log.write_info([ f'[ get_new_files ] found {str(len(files_to_process))} files to process' ])
     return files_to_process
 
 def set_observation_time():
     # call time_convert to get proper DRMS time string
+    log.write_debug([ f'[ set_observation_time ] converting SWPC observation time `{state_data["swpc_observation_time_str"]}` to a DRMS time string'])
     command = [ TIME_CONVERT_BIN, f'time={state_data["swpc_observation_time_str"]}', f'o=cal']
 
     try:
-        # print(f'running {" ".join(command)}')
+        log.write_debug([ f'[ set_observation_time ] running {" ".join(command)}'])
         completed_proc = run(command, encoding='utf8', capture_output=True)
-        if completed_proc.returncode != 0:
-            raise ChildProcessError(f'return code: {str(completed_proc.returncode)}')
+    except Exception as exc:
+        raise ChildProcessError(f'{str(exc)}')
 
-        # state_data['observation_time'] = datetime.strptime(completed_proc.stdout.strip(), '%Y.%m.%d_%H:%M:%S')
+    if completed_proc.returncode != 0:
+        raise ChildProcessError(f'non-zero return code: {str(completed_proc.returncode)}')
 
-        # python does not have a way to parse time zone from a non-standardized time string (like a DRMS time string)
-        drms_time_string = completed_proc.stdout.strip()
-        match_obj = DrmsTimeStringRegex.search(drms_time_string)
-        if match_obj is not None:
-            matches = match_obj.groups()
+    # python does not have a way to parse time zone from a non-standardized time string (like a DRMS time string);
+    # use a regular expression
+    drms_time_string = completed_proc.stdout.strip()
+    log.write_debug([ f'[ set_observation_time ] DRMS time string `{drms_time_string}`'])
+    match_obj = DrmsTimeStringRegex.search(drms_time_string)
+    if match_obj is not None:
+        matches = match_obj.groups()
 
-            if len(matches) == 14:
-                year_str, month_str, day_str = matches[0:3]
-                hour_str = matches[5] if matches[5] is not None else '0'
-                minute_str = matches[7] if matches[7] is not None else '0'
-                second_str = matches[10] if matches[10] is not None else '0'
-                microsecond = float(matches[11]) * 1000000 if matches[11] is not None else 0
-                time_zone_str = matches[13] if matches[13] else None
-            else:
-                raise DrmsTimeStringFormatError(f'invalid DRMS time string `{drms_time_string}`')
+        if len(matches) == 14:
+            year_str, month_str, day_str = matches[0:3]
+            hour_str = matches[5] if matches[5] is not None else '0'
+            minute_str = matches[7] if matches[7] is not None else '0'
+            second_str = matches[10] if matches[10] is not None else '0'
+            microsecond = float(matches[11]) * 1000000 if matches[11] is not None else 0
+            time_zone_str = matches[13] if matches[13] else None
         else:
             raise DrmsTimeStringFormatError(f'invalid DRMS time string `{drms_time_string}`')
+    else:
+        raise DrmsTimeStringFormatError(f'invalid DRMS time string `{drms_time_string}`')
 
-        state_data['observation_time'] = datetime(int(year_str), int(month_str), int(day_str), hour=int(hour_str), minute=int(minute_str), second=int(second_str), microsecond=microsecond, tzinfo=timezone(time_zone_str) if time_zone_str is not None else None)
-    except Exception as exc:
-        print(f'{str(exc)}', file=sys_stderr)
+    state_data['observation_time'] = datetime(int(year_str), int(month_str), int(day_str), hour=int(hour_str), minute=int(minute_str), second=int(second_str), microsecond=microsecond, tzinfo=timezone(time_zone_str) if time_zone_str is not None else None)
+
+    log.write_info([ f'[ set_observation_time ] observation time `{state_data["observation_time"].strftime("%Y-%m-%dT%H:%M:%S%Z")}`' ])
 
 if __name__ == "__main__":
     exit_code = None
@@ -482,49 +495,53 @@ if __name__ == "__main__":
         except Exception as exc:
             raise LoggingError(f'{str(exc)}')
 
+        log.write_info([ f'[ __main__ ] arguments: {str(arguments)}' ])
+
         create_regexes(REGEX_PATTERNS)
         log.write_debug([f'successfully created regular expression metaclasses {str(RegExType.get_regex_names())}'])
 
+        time_window = {}
+        if arguments.start_day is not None:
+            set_time_window_endpoint(time_window, 'start_day', arguments.start_day)
+
+        if arguments.end_day is not None:
+            set_time_window_endpoint(time_window, 'end_day', arguments.end_day)
+
+        if 'start_day' in time_window and 'end_day' in time_window and time_window['start_day'] > time_window['end_day']:
+            raise ArgumentsError(f'start day argument `{time_window["start_day"].strftime("%b %d")}` is AFTER end day argument `{time_window["end_day"].strftime("%b %d")}`')
+
+        log.write_info([ f'[ __main__ ] requested time interval {time_window["start_day"].strftime("%b %d") if time_window["start_day"] is not None else "*"} <-> {time_window["end_day"].strftime("%b %d") if time_window["end_day"] is not None else "*"}' ])
+
         with FTP(SWPC_FTP_HOST) as ftp_client:
+            log.write_info([ f'[ __main__ ] connected to {SWPC_FTP_HOST}' ])
             ftp_client.login()
+            log.write_debug([ f'[ __main__ ] logged in' ])
             ftp_client.cwd(SWPC_FTP_DIRECTORY)
+            log.write_debug([ f'[ __main__ ] cwd to {SWPC_FTP_DIRECTORY}' ])
             files = ftp_client.mlsd()
 
             mod_times = fetch_mod_times()
             files_to_process = get_new_files(files, mod_times)
-            print(f'got files to process {str(len(files_to_process))}')
 
             for file_name, file_mod_time in files_to_process.items():
                 state = ParseState.START
                 with BytesIO() as stream:
-                    state_data = { "swpc_file" : file_name, "swpc_file_mod_time" : file_mod_time }
+                    state_data = { "swpc_file" : file_name, "swpc_file_mod_time" : file_mod_time, "time_window" : time_window }
 
-                    print(f'downloading {file_name}')
+                    log.write_debug([ f'[ __main__ ] downloading `{file_name}`' ])
                     ftp_client.retrbinary(f'RETR {file_name}', stream.write)
 
                     stream.seek(0)
                     while True:
                         line_content = stream.readline().decode().strip()
-                        # print(f'processing line {line_content}')
+                        log.write_debug([ f'[ __main__ ] processing line {line_content}' ])
 
                         if line_content != b'':
-                            # print(f'state is {str(state)}')
+                            log.write_debug([ f'[ __main__ ] state is {str(state)}' ])
                             next_state = process_content(state=state, line_content=line_content, state_data=state_data)
-                            # print(f'next state is {str(next_state)}')
 
                             if state == ParseState.HEADER_2:
                                 set_observation_time()
-
-                                # observation time must be set before checking time window
-                                if arguments.start_day is not None:
-                                    set_time_window_endpoint(state_data, 'start_day', arguments.start_day)
-
-                                if arguments.end_day is not None:
-                                    set_time_window_endpoint(state_data, 'end_day', arguments.end_day)
-
-                                if state_data['start_day'] > state_data['end_day']:
-                                    raise ArgumentsError(f'start day argument `{state_data["start_day"].strftime("%b %d")}` is AFTER end day argument `{state_data["end_day"].strftime("%b %d")}`')
-
                             elif state == ParseState.PART_1 or state == ParseState.PART_1A:
                                 # call set_info with key=val pairs
                                 keyword_dict = state_data.get('keyword_dict', None)
@@ -532,7 +549,7 @@ if __name__ == "__main__":
                                 if keyword_dict is not None:
                                     command = [ SET_INFO_BIN, '-c', f'ds=ACTIVE_REGION_SERIES' ]
                                     command.extend([ f'{element[0]}={str(element[1])}' for element in keyword_dict.items() ])
-                                    print(f'running {" ".join(command)}')
+                                    log.write_info([ f'running {" ".join(command)}' ])
                             elif state == ParseState.END:
                                 break
 
@@ -541,11 +558,10 @@ if __name__ == "__main__":
                             break
 
         exit_code = ErrorCode.NONE
-        print(f'{exit_code.description}')
+        log.write_info([ f'[ __main__] {exit_code.description}' ])
     except NoaaBaseException as exc:
         exit_code = exc.error_code
-
-        print(f'failure : "{exit_code.description}", : error message "{str(exc)}"')
+        log.write_error([ f'[ __main__] failure : "{exit_code.description}", : error message "{str(exc)}"' ])
 
     sys_exit(int(exit_code))
 
