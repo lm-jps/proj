@@ -316,8 +316,8 @@ def process_content(*, state, line_content, state_data):
 
                 part_i_id = matches[0]
                 part_i_location = []
-                part_i_location.append(f'-{matches[2]}' if matches[1].lower() == 'e' else f'{matches[2]}')
-                part_i_location.append(f'-{matches[4]}' if matches[3].lower() == 's' else f'{matches[4]}')
+                part_i_location.append(f'-{matches[2]}' if matches[1].lower() == 's' else f'{matches[2]}')
+                part_i_location.append(f'-{matches[4]}' if matches[3].lower() == 'e' else f'{matches[4]}')
                 part_i_carrington_lon, part_i_area = matches[5:7]
                 part_i_zurich_classification = f'{matches[7][0].upper()}{matches[7][1:].replace("-", "").lower()}'
                 part_i_extent, part_i_number_spots, = matches[8:10]
@@ -331,8 +331,9 @@ def process_content(*, state, line_content, state_data):
                 keyword_dict['latitudehg'] = part_i_location[0]
                 keyword_dict['longitudehg'] = part_i_carrington_lon
                 keyword_dict['longitudecm'] = part_i_location[1]
-                keyword_dict['longitudnalextent'] = part_i_extent
+                keyword_dict['longitudinalextent'] = part_i_extent
                 keyword_dict['zurichclass'] = part_i_zurich_classification
+                keyword_dict['spotcount'] = part_i_number_spots
                 keyword_dict['magnetictype'] = part_i_magnetic_classification
                 keyword_dict['swpc_file'] = state_data['swpc_file']
                 keyword_dict['swpc_file_mod_time'] = state_data['swpc_file_mod_time'].strftime('%Y%m%d_%H%M%S')
@@ -358,8 +359,8 @@ def process_content(*, state, line_content, state_data):
 
                 part_ia_id = matches[0]
                 part_ia_location = []
-                part_ia_location.append(f'-{matches[2]}' if matches[1].lower() == 'e' else f'{matches[2]}')
-                part_ia_location.append(f'-{matches[4]}' if matches[3].lower() == 's' else f'{matches[4]}')
+                part_ia_location.append(f'-{matches[2]}' if matches[1].lower() == 's' else f'{matches[2]}')
+                part_ia_location.append(f'-{matches[4]}' if matches[3].lower() == 'e' else f'{matches[4]}')
                 part_ia_carrington_lon = matches[5]
                 part_ia_area = PART_IA_DEFAULT_AREA
                 part_ia_zurich_classification = f'{PART_IA_DEFAULT_ZURICH_CLASSIFICATION[0].upper()}{PART_IA_DEFAULT_ZURICH_CLASSIFICATION[1:].replace("-", "").lower()}'
@@ -374,8 +375,9 @@ def process_content(*, state, line_content, state_data):
                 keyword_dict['latitudehg'] = part_ia_location[0]
                 keyword_dict['longitudehg'] = part_ia_carrington_lon
                 keyword_dict['longitudecm'] = part_ia_location[1]
-                keyword_dict['longitudnalextent'] = part_ia_extent
+                keyword_dict['longitudinalextent'] = part_ia_extent
                 keyword_dict['zurichclass'] = part_ia_zurich_classification
+                keyword_dict['spotcount'] = part_ia_number_spots
                 keyword_dict['magnetictype'] = part_ia_magnetic_classification
                 keyword_dict['swpc_file'] = state_data['swpc_file']
                 keyword_dict['swpc_file_mod_time'] = state_data['swpc_file_mod_time'].strftime('%Y%m%d_%H%M%S')
@@ -414,7 +416,7 @@ def fetch_mod_times():
 
         response = json_loads(completed_proc.stdout)
         if response.get('keywords', None) is not None:
-            mod_times = dict(zip(response['keywords'][0]['values'], response['keywords'][1]['values']))
+            mod_times = dict(zip(response['keywords'][0]['values'], [ datetime.strptime(time_string, '%Y%m%d_%H%M%S') for time_string in response['keywords'][1]['values'] ]))
     except decoder.JSONDecodeError as exc:
         raise ChildProcessError(f'child process did not return valid JSON response (command was `{" ".join(command)}``)')
     except Exception as exc:
@@ -438,8 +440,10 @@ def get_new_files(files, mod_times):
         # exclude files that have already been ingested (using file name and timestamp)
         last_mod_time = mod_times.get(file_name, None) if mod_times is not None else None
         if last_mod_time is None or file_mod_time > last_mod_time:
-            log.write_debug([ f'[ get_new_files ] file `{file_name}` (modification time {file_mod_time.strftime("%Y-%m-%dT%H:%M:%S")}) has not been ingested' ])
+            log.write_debug([ f'[ get_new_files ] * file `{file_name}` (modification time {file_mod_time.strftime("%Y-%m-%dT%H:%M:%S")}) has NOT been ingested' ])
             files_to_process[file_name] = file_mod_time
+        else:
+            log.write_debug([ f'[ get_new_files ] file `{file_name}` (modification time {file_mod_time.strftime("%Y-%m-%dT%H:%M:%S")}) has ALREADY been ingested' ])
 
     log.write_info([ f'[ get_new_files ] found {str(len(files_to_process))} files to process' ])
     return files_to_process
@@ -547,9 +551,17 @@ if __name__ == "__main__":
                                 keyword_dict = state_data.get('keyword_dict', None)
 
                                 if keyword_dict is not None:
-                                    command = [ SET_INFO_BIN, '-c', f'ds=ACTIVE_REGION_SERIES' ]
+                                    command = [ SET_INFO_BIN, '-c', f'ds={ACTIVE_REGION_SERIES}', f'DRMS_DBUTF8CLIENTENCODING=1', f'JSOC_DBHOST=hmidb2' ]
                                     command.extend([ f'{element[0]}={str(element[1])}' for element in keyword_dict.items() ])
-                                    log.write_info([ f'running {" ".join(command)}' ])
+
+                                    try:
+                                        log.write_info([ f'running {" ".join(command)}' ])
+                                        completed_proc = run(command, encoding='utf8', capture_output=True)
+                                        if completed_proc.returncode != 0:
+                                            raise ChildProcessError(f'non-zero return code: {str(completed_proc.returncode)}')
+                                    except Exception as exc:
+                                        raise ChildProcessError(f'failure ingesting active-region data for ({state_data["observation_time"].strftime("%Y-%m-%dT%H:%M:%S%Z")}, {str(keyword_dict["regionnumber"])})')
+
                             elif state == ParseState.END:
                                 break
 
