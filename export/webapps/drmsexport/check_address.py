@@ -15,15 +15,17 @@
 #   checkonly (optional) - If set to 1, then no attept is made to register an unregistered email. In this case, if no error occurs then the possible return status codes are StatusCode.REGISTERED_ADDRESS, StatusCode.REGISTRATION_PENDING, or StatusCode.UNREGISTERED_ADDRESS. The default is False (unknown addresses are registered).
 
 from argparse import Action as ArgsAction
+from copy import deepcopy
+from json import loads as json_loads, dumps as json_dumps
 from os.path import join as path_join
 import psycopg2
 import re
 import uuid
 from urllib.parse import unquote
 import smtplib
-from sys import exc_info as sys_exc_info, exit as sys_exit
+from sys import exc_info as sys_exc_info, exit as sys_exit, stdout as sys_stdout
 
-from drms_export import Error as ExportError, ErrorCode as ExportErrorCode, Response
+from drms_export import Connection, Error as ExportError, ErrorCode as ExportErrorCode, ExpServerBaseError, get_arguments as ss_get_arguments, get_message, Response, send_message
 from drms_parameters import DRMSParams, DPMissingParameterError
 from drms_utils import Arguments as Args, ArgumentsError as ArgsError, CmdlParser, Formatter as DrmsLogFormatter, Log as DrmsLog, LogLevel as DrmsLogLevel, LogLevelAction as DrmsLogLevelAction, StatusCode as ExportStatusCode
 from utils import extract_program_and_module_args
@@ -45,6 +47,7 @@ class ErrorCode(ExportErrorCode):
     DB_CONNECTION = (6, 'failure connecting to database')
     DUPLICATION = (7, 'address is already registered')
     UNHANDLED_EXCEPTION = (8, 'unhandled exception')
+    EXPORT_SERVER = (9, 'export-server communication error')
 
 class CaBaseError(ExportError):
     def __init__(self, *, exc_info=None, error_message=None):
@@ -88,6 +91,9 @@ class DuplicationError(CaBaseError):
 
 class UnhandledExceptionError(CaBaseError):
     _error_code = ErrorCode.UNHANDLED_EXCEPTION
+
+class ExportServerError(CaBaseError):
+    _error_code = ErrorCode.EXPORT_SERVER
 
 class CheckAddressResponse(Response):
     _status_code = None
@@ -239,6 +245,13 @@ def generate_registered_or_pending_response(cursor, arguments, confirmation):
 
     return response
 
+def send_request(request, connection, log):
+    json_message = json_dumps(request)
+    send_message(connection, json_message)
+    message = get_message(connection)
+
+    return message
+
 # for use in export web app
 from action import Action
 class CheckAddressAction(Action):
@@ -284,6 +297,117 @@ class CheckAddressAction(Action):
     @classmethod
     def get_log(cls):
         return cls._log
+
+class CheckAddressLegacyResponse(Response):
+    def remove_extraneous(self, response_dict, keys):
+        for key in keys:
+            if key in response_dict:
+                del response_dict[key]
+
+        return response_dict
+
+    # override parent to remove attributes not present in legacy API
+    def generate_serializable_dict(self):
+        serializable_dict = deepcopy(super().generate_serializable_dict())
+        sanitized_serializable_dict = self.remove_extraneous(serializable_dict, [ 'drms_export_status', 'drms_export_status_code', 'drms_export_status_description', 'address'] )
+
+        return sanitized_serializable_dict
+
+class CheckAddressLegacyAction(Action):
+    actions = [ 'legacy_check_address' ]
+
+    _log = None
+
+    def __init__(self, *, method, address, db_host=None, log=None, **kwargs):
+        self._method = getattr(self, method)
+        self._address = address
+        self._options = {}
+        self._options['db_host'] = db_host
+        self._options['log'] = log if log is not None else DrmsLog(None, None, None)
+        self._legacy_arguments = self.convert_booleans(kwargs)
+
+    def convert_booleans(self, args_dict):
+        converted = {}
+        for key, val in args_dict.items():
+            if type(val) == bool:
+                converted[key] = int(val)
+            else:
+                converted[key] = val
+
+        return converted
+
+    def legacy_check_address(self):
+        # pass through to check-address
+        log = self._options['log']
+
+        try:
+            if self._options['db_host'] is None:
+                drms_params = DRMSParams()
+
+                if drms_params is None:
+                    raise ParametersError(error_message='unable to locate DRMS parameters package')
+
+                self._options['db_host'] = drms_params.get_required('SERVER')
+
+            # use socket server to call jsoc_fetch
+            nested_arguments = ss_get_arguments(is_program=False, module_args={})
+
+            try:
+                with Connection(server=nested_arguments.server, listen_port=nested_arguments.listen_port, timeout=nested_arguments.message_timeout, log=log) as connection:
+                    message = { 'request_type' : 'legacy_check_address', 'address' : self._address, 'db_host' : self._options['db_host'] }
+                    message.update(self._legacy_arguments) # error if the user has provided non-expected arguments
+                    response = send_request(message, connection, log)
+
+                    # message is raw JSON from checkAddress.py
+                    legacy_check_address_dict = json_loads(response)
+
+                    if legacy_check_address_dict.get('export_server_status') == 'export_server_error':
+                        raise ExportServerError(error_message=f'{legacy_check_address_dict["error_message"]}')
+
+                    message = { 'request_type' : 'quit' }
+                    send_request(message, connection, log)
+
+                response = self.get_response(legacy_check_address_dict, log)
+            except ExpServerBaseError as exc:
+                raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+            except Exception as exc:
+                raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+        except CaBaseError as exc:
+            response = exc.response
+            error_message = exc.message
+
+            if log:
+                log.write_error([ error_message ])
+        except Exception as exc:
+            response = UnhandledExceptionError(exc_info=sys_exc_info(), error_message=f'{str(exc)}').response
+            error_message = str(exc)
+
+            if log:
+                log.write_error([ error_message ])
+
+        return response
+
+    def get_response(self, client_response_dict, log):
+        log.write_debug([ f'[ get_response ]' ])
+
+        response_dict = deepcopy(client_response_dict)
+        check_address_status = response_dict['status']
+
+        if check_address_status == 1:
+            response_dict['status_code'] = StatusCode.REGISTRATION_INITIATED
+        elif check_address_status == 2:
+            response_dict['status_code'] = StatusCode.REGISTERED_ADDRESS
+        elif check_address_status == 3:
+            response_dict['status_code'] = StatusCode.REGISTERATION_PENDING
+        elif check_address_status == 4:
+            response_dict['status_code'] = StatusCode.UNREGISTERED_ADDRESS
+        else:
+            # there should be no other status possible
+            response_dict['status_code'] = StatusCode.FAILURE
+
+        response = CheckAddressLegacyResponse.generate_response(address=self._address, **response_dict)
+
+        return response
 
 def initiate_registration(cursor, arguments, log):
     # the address is not in the db, and the user did request registration ==> registration initiated
@@ -424,6 +548,16 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
             print(error_message)
 
     return response
+
+def run_tests():
+    formatter = DrmsLogFormatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+    log = DrmsLog(sys_stdout, DrmsLogLevelAction.string_to_level('debug'), formatter)
+
+    log.write_debug([ 'testing `legacy_check_address`'])
+    cala = CheckAddressLegacyAction(method='legacy_check_address', address='arta@sun.stanford.edu', checkonly=True, db_host='hmidb2', log=log)
+    response = cala()
+    response_dict = response.generate_serializable_dict()
+    log.write_debug([ str(response_dict) ])
 
 if __name__ == "__main__":
     response = perform_action(action_obj=None, is_program=True)

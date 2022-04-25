@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 
 from argparse import Action as ArgsAction
+from collections import OrderedDict
 from copy import deepcopy
 from distutils.util import strtobool
-from collections import OrderedDict
 from enum import Enum
+from json import loads as json_loads, dumps as json_dumps
 from os.path import join as path_join
 from psycopg2 import Error as PGError, connect as pg_connect
-from sys import exc_info as sys_exc_info, exit as sys_exit
+from sys import exc_info as sys_exc_info, exit as sys_exit, stdout as sys_stdout
 
-from drms_export import Error as ExportError, ErrorCode as ExportErrorCode, ErrorResponse, Response
+from drms_export import Connection, Error as ExportError, ErrorCode as ExportErrorCode, ErrorResponse, ExpServerBaseError, get_arguments as ss_get_arguments, get_message, Response, send_message
 from drms_parameters import DRMSParams, DPMissingParameterError
 from drms_utils import Arguments as Args, ArgumentsError as ArgsError, Choices, CmdlParser, Formatter as DrmsLogFormatter, ListAction, Log as DrmsLog, LogLevel as DrmsLogLevel, LogLevelAction as DrmsLogLevelAction, MakeObject, StatusCode as SC
 from utils import extract_program_and_module_args, get_db_host
@@ -32,6 +33,7 @@ class ErrorCode(ExportErrorCode):
     DB_CONNECTION = (106, 'failure connecting to database')
     DB_COMMAND = (107, 'failure executing database command')
     UNHANDLED_EXCEPTION = (108, 'unhandled exception')
+    EXPORT_SERVER = (109, 'export-server communication error')
 
 class RecordScope(Enum):
     VARIABLE = (0, 'variable')
@@ -106,6 +108,9 @@ class DBCommandError(GsiBaseError):
 
 class UnhandledExceptionError(GsiBaseError):
     _error_code = ErrorCode.UNHANDLED_EXCEPTION
+
+class ExportServerError(GsiBaseError):
+    _error_code = ErrorCode.EXPORT_SERVER
 
 def name_to_ws_obj(name, drms_params):
     webserver_dict = {}
@@ -552,6 +557,13 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
 
     return response
 
+def send_request(request, connection, log):
+    json_message = json_dumps(request)
+    send_message(connection, json_message)
+    message = get_message(connection)
+
+    return message
+
 # for use in export web app
 from action import Action
 from parse_specification import ParseSpecificationAction
@@ -629,6 +641,210 @@ class GetSeriesInfoAction(Action):
 
         return is_valid
 
+class ShowSeriesLegacyResponse(Response):
+    def remove_extraneous(self, response_dict, keys):
+        for key in keys:
+            if key in response_dict:
+                del response_dict[key]
+
+        return response_dict
+
+    # override parent to remove attributes not present in legacy API
+    def generate_serializable_dict(self):
+        serializable_dict = deepcopy(super().generate_serializable_dict())
+        sanitized_serializable_dict = self.remove_extraneous(serializable_dict, [ 'drms_export_status', 'drms_export_status_code', 'drms_export_status_description' ] )
+
+        return sanitized_serializable_dict
+
+class ShowSeriesLegacyAction(Action):
+    actions = [ 'legacy_get_series_list' ]
+
+    _log = None
+
+    def __init__(self, *, method, series_regex, db_host=None, log=None, **kwargs):
+        self._method = getattr(self, method)
+        self._series_regex = series_regex # ds
+        self._options = {}
+        self._options['db_host'] = db_host
+        self._options['log'] = log if log is not None else DrmsLog(None, None, None)
+        self._legacy_arguments = self.convert_booleans(kwargs)
+
+    def convert_booleans(self, args_dict):
+        converted = {}
+        for key, val in args_dict.items():
+            if type(val) == bool:
+                converted[key] = int(val)
+            else:
+                converted[key] = val
+
+        return converted
+
+    def perform_action(self):
+        try:
+            log = self._options['log']
+            nested_arguments = self.get_nested_arguments()
+
+            try:
+                response = self.send_request(nested_arguments=nested_arguments)
+            except ExpServerBaseError as exc:
+                raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+            except Exception as exc:
+                raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+        except GsiBaseError as exc:
+            response = exc.response
+            error_message = exc.message
+
+            if log:
+                log.write_error([ error_message ])
+        except Exception as exc:
+            response = UnhandledExceptionError(exc_info=sys_exc_info(), error_message=f'{str(exc)}').response
+            error_message = str(exc)
+
+            if log:
+                log.write_error([ error_message ])
+
+        return response
+
+    def get_nested_arguments(self):
+        log = self._options['log']
+
+        if self._options['db_host'] is None:
+            drms_params = DRMSParams()
+
+            if drms_params is None:
+                raise ParametersError(error_message='unable to locate DRMS parameters package')
+
+            self._options['db_host'] = drms_params.get_required('SERVER')
+
+        # use socket server to call jsoc_fetch
+        return ss_get_arguments(is_program=False, module_args={})
+
+    def get_request_status_code(self, response_dict):
+        error_code, status_code = self.get_request_status(response_dict)
+        code = error_code if error_code is not None else status_code
+
+        return code
+
+    def get_response(self, client_response_dict, log):
+        log.write_debug([ f'[ {self.__class__.__name__}.get_response ]' ])
+
+        response_dict = deepcopy(client_response_dict)
+        response_dict['status_code'] = self.get_request_status_code(response_dict)
+        response = ShowSeriesLegacyResponse.generate_response(**response_dict)
+
+        return response
+
+    def legacy_get_series_list(self):
+        return self.perform_action()
+
+    def send_request(self, *, nested_arguments):
+        log = self._options['log']
+
+        with Connection(server=nested_arguments.server, listen_port=nested_arguments.listen_port, timeout=nested_arguments.message_timeout, log=log) as connection:
+            message = { 'request_type' : 'legacy_show_series', 'series_regex' : self._series_regex, 'db_host' : self._options['db_host'] }
+            message.update(self._legacy_arguments) # error if the user has provided non-expected arguments
+            response = send_request(message, connection, log)
+
+            # message is raw JSON from checkAddress.py
+            legacy_show_series_dict = json_loads(response)
+
+            if legacy_show_series_dict.get('export_server_status') == 'export_server_error':
+                raise ExportServerError(error_message=f'{legacy_show_series_dict["error_message"]}')
+
+            message = { 'request_type' : 'quit' }
+            send_request(message, connection, log)
+
+        response = self.get_response(legacy_show_series_dict, log)
+        return response
+
+    def get_request_status(self, response_dict):
+        error_code = None
+        status_code = None
+
+        try:
+            error_code = ErrorCode(int(response_dict['status']))
+        except KeyError:
+            pass
+
+        if error_code is None:
+            try:
+                status_code = StatusCode(int(response_dict['status']))
+            except KeyError:
+                raise ExportServerError(exc_info=sys_exc_info(), error_message=f'unexpected show_series status returned {str(response_dict["status"])}')
+
+        return (error_code, status_code)
+
+class ShowSeriesPublicLegacyAction(ShowSeriesLegacyAction):
+    actions = [ 'legacy_get_public_series_list' ]
+
+    _log = None
+
+    def __init__(self, *, method, series_regex, db_host=None, log=None, **kwargs):
+        self._method = getattr(self, method)
+        self._series_regex = series_regex
+        self._options = {}
+        self._options['db_host'] = db_host
+        self._options['log'] = log if log is not None else DrmsLog(None, None, None)
+        self._legacy_arguments = self.convert_booleans(kwargs)
+
+    def legacy_get_public_series_list(self):
+        return self.perform_action()
+
+    def send_request(self, *, nested_arguments):
+        log = self._options['log']
+
+        with Connection(server=nested_arguments.server, listen_port=nested_arguments.listen_port, timeout=nested_arguments.message_timeout, log=log) as connection:
+            message = { 'request_type' : 'legacy_show_ext_series', 'series_regex' : self._series_regex, 'db_host' : self._options['db_host'] }
+            message.update(self._legacy_arguments) # error if the user has provided non-expected arguments
+            response = send_request(message, connection, log)
+
+            # message is raw JSON from checkAddress.py
+            legacy_show_series_dict = json_loads(response)
+
+            if legacy_show_series_dict.get('export_server_status') == 'export_server_error':
+                raise ExportServerError(error_message=f'{legacy_show_series_dict["error_message"]}')
+
+            message = { 'request_type' : 'quit' }
+            send_request(message, connection, log)
+
+        response = self.get_response(legacy_show_series_dict, log)
+        return response
+
+    def get_request_status(self, response_dict):
+        error_code = None
+        status_code = None
+
+        error_str = response_dict.get('errMsg')
+        error_val = int(error_str is not None and len(error_str.strip()) > 0)
+
+        try:
+            error_code = ErrorCode(error_val)
+        except KeyError:
+            pass
+
+        if error_code is None:
+            try:
+                status_code = StatusCode(error_val)
+            except KeyError:
+                raise ExportServerError(exc_info=sys_exc_info(), error_message=f'unexpected show_series status returned {error_str}')
+
+        return (error_code, status_code)
+
+def run_tests():
+    formatter = DrmsLogFormatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+    log = DrmsLog(sys_stdout, DrmsLogLevelAction.string_to_level('debug'), formatter)
+
+    log.write_debug([ 'testing `legacy_get_series_list`'])
+    sspla = ShowSeriesLegacyAction(method='legacy_get_series_list', series_regex='^su_arta', db_host='hmidb', log=log)
+    response = sspla()
+    response_dict = response.generate_serializable_dict()
+    log.write_debug([ str(response_dict), '' ])
+
+    log.write_debug([ 'testing `legacy_get_public_series_list`'])
+    sspla = ShowSeriesPublicLegacyAction(method='legacy_get_public_series_list', series_regex='^hmi[.]m', info=1, db_host='hmidb2', log=log)
+    response = sspla()
+    response_dict = response.generate_serializable_dict()
+    log.write_debug([ str(response_dict), '' ])
 
 if __name__ == "__main__":
     response = perform_action(action_obj=None, is_program=True)

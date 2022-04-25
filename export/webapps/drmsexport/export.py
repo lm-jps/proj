@@ -636,7 +636,6 @@ class CheckAddressLegacyResource(Resource):
         arguments = { 'address' : address, 'db_host' : request.environ.get('DB_HOST', DEFAULT_DB_HOST), 'log' : APP_LOG }
         arguments.update(kwargs)
         # the legacy code requires checkonly to be an integer
-        arguments['checkonly'] = 1 if kwargs['checkonly'] else 0
         action = Action.action(action_type='legacy_check_address', args=arguments)
         return action().generate_serializable_dict()
 
@@ -644,7 +643,7 @@ from initiate_request import JsocFetchStatusLegacyAction, JsocFetchExportLegacyA
 class JsocFetchLegacyResource(Resource):
     _arguments_get = { 'address' : fields.Email(required=True, data_key='notify'), 'request_id' : fields.Str(required=True, data_key='requestid') }
 
-    _arguments_post = { 'address' : fields.Email(required=True, data_key='notify'), 'operation' : fields.Str(required=True, validate=lambda a: a.strip().lower() == 'exp_request' or a.strip().lower() == 'exp_status' or a.strip().lower() == 'exp_su', data_key='op'), 'specification' : fields.Str(required=True, validate=lambda a: GetRecordInfoAction.is_valid_specification(a, None, urlparse(request.base_url).hostname, APP_LOG), data_key='ds'), 'seg' : fields.DelimitedList(fields.Str, delimiter=',', required=False), 'sunum' : fields.DelimitedList(fields.Str, delimiter=',', required=False), 'process' : fields.Str(required=False), 'processing' : fields.Str(required=False, validate=lambda a: JsocInfoAction.is_valid_processing(a, None, urlparse(request.base_url).hostname, APP_LOG)), 'n' : fields.Int(required=False), 'requestor' : fields.Str(required=False), 'shipto' : fields.Str(required=False), 'protocol' : fields.Str(required=False, validate=lambda a: a.strip().lower() == 'as-is' or a.strip().lower() == 'su-as-is' or a.strip().lower() == 'fits' or a.strip().lower() == 'mpg' or a.strip().lower() == 'jpg' or a.strip().lower() == 'png' or a.strip().lower() == 'mp4', load_default='as-is'), 'filenamefmt' : fields.Str(required=False, load_default='{seriesname}.{recnum:%d}.{segment}'), 'format' : fields.Str(required=False, default='json'), 'formatvar' : fields.Str(required=False), 'method' : fields.Str(required=False, validate=lambda a: a.strip().lower() == 'url' or a.strip().lower() == 'url_quick' or a.strip().lower() == 'url_direct' or a.strip().lower() == 'ftp' or a.strip().lower() == 'url-tar' or a.strip().lower() == 'ftp-tar', load_default='url'), 'file' : fields.Str(required=False), 'sizeratio' : fields.Float(required=False, load_default=1.0), 't' : fields.Boolean(required=False, load_default=False), 'p' : fields.Boolean(required=False, load_default=False), 'W' : fields.Boolean(required=False, load_default=False), 'o' : fields.Boolean(required=False, load_default=True), 'q' : fields.Boolean(required=False, load_default=False) }
+    _arguments_post = { 'address' : fields.Email(required=True, data_key='notify'), 'operation' : fields.Str(required=True, validate=lambda a: a.strip().lower() == 'exp_request' or a.strip().lower() == 'exp_status' or a.strip().lower() == 'exp_su', data_key='op'), 'specification' : fields.Str(required=True, validate=lambda a: GetRecordInfoAction.is_valid_specification(a, None, urlparse(request.base_url).hostname, APP_LOG), data_key='ds'), 'seg' : fields.DelimitedList(fields.Str, delimiter=',', required=False), 'sunum' : fields.DelimitedList(fields.Str, delimiter=',', required=False), 'process' : fields.Str(required=False), 'processing' : fields.Str(required=False, validate=lambda a: JsocInfoAction.is_valid_processing(a, None, urlparse(request.base_url).hostname, APP_LOG)), 'n' : fields.Int(required=False), 'requestor' : fields.Str(required=False), 'shipto' : fields.Str(required=False), 'protocol' : fields.Str(required=False, validate=lambda a: a.strip().lower() == 'as-is' or a.strip().lower() == 'su-as-is' or a.strip().lower() == 'fits' or a.strip().lower() == 'mpg' or a.strip().lower() == 'jpg' or a.strip().lower() == 'png' or a.strip().lower() == 'mp4', load_default='as-is'), 'filenamefmt' : fields.Str(required=False, load_default='{seriesname}.{recnum:%d}.{segment}'), 'format' : fields.Str(required=False, default='json'), 'formatvar' : fields.Str(required=False), 'method' : fields.Str(required=False, validate=lambda a: a.strip().lower() == 'url' or a.strip().lower() == 'url_quick' or a.strip().lower() == 'url_direct' or a.strip().lower() == 'ftp' or a.strip().lower() == 'url-tar' or a.strip().lower() == 'ftp-tar', load_default='url'), 'file' : fields.Str(required=False), 'sizeratio' : fields.Float(required=False, load_default=1.0), 't' : fields.Boolean(required=False, load_default=False), 'p' : fields.Boolean(required=False, load_default=False), 'o' : fields.Boolean(required=False, load_default=True), 'q' : fields.Boolean(required=False, load_default=False) }
 
     @use_kwargs(_arguments_get, location='querystring')
     def get(self, address, request_id, **kwargs):
@@ -664,13 +663,13 @@ class JsocFetchLegacyResource(Resource):
 
 from get_record_info import JsocInfoLegacyAction
 class JsocInfoLegacyResource(Resource):
-    _arguments = { 'operation' : fields.Str(required=True, validate=lambda a: a.strip().lower() == 'rs_list' or a.strip().lower() == 'rs_summary' or a.strip().lower() == 'series_struct', data_key='op'), 'specification' : fields.Str(required=False, validate=lambda a: GetRecordInfoAction.is_valid_specification(a, None, urlparse(request.base_url).hostname, APP_LOG), data_key='ds'), 'key' : fields.List(fields.Str, required=False), 'link' : fields.List(fields.Str, required=False), 'seg' : fields.List(fields.Str, required=False), 'processing' : fields.Str(required=False, validate=lambda a: JsocInfoAction.is_valid_processing(a, None, urlparse(request.base_url).hostname, APP_LOG)), 'B' : fields.Boolean(required=False, load_default=False), 'l' : fields.Boolean(required=False, load_default=False), 'M' : fields.Boolean(required=False, load_default=False), 'n' : fields.Int(required=False, load_default=0), 'R' : fields.Boolean(required=False, load_default=False), 'o' : fields.Boolean(required=False, load_default=False), 'f' : fields.Boolean(required=False, load_default=False), 'r' : fields.Boolean(required=False, load_default=False), 's' : fields.Boolean(required=False, load_default=False) }
+    _arguments = { 'operation' : fields.Str(required=True, validate=lambda a: a.strip().lower() == 'rs_list' or a.strip().lower() == 'rs_summary' or a.strip().lower() == 'series_struct', data_key='op'), 'specification' : fields.Str(required=True, validate=lambda a: GetRecordInfoAction.is_valid_specification(a, None, urlparse(request.base_url).hostname, APP_LOG), data_key='ds'), 'key' : fields.List(fields.Str, required=False), 'link' : fields.List(fields.Str, required=False), 'seg' : fields.List(fields.Str, required=False), 'processing' : fields.Str(required=False, validate=lambda a: JsocInfoLegacyAction.is_valid_processing(a, None, urlparse(request.base_url).hostname, APP_LOG)), 'B' : fields.Boolean(required=False, load_default=False), 'l' : fields.Boolean(required=False, load_default=False), 'M' : fields.Boolean(required=False, load_default=False), 'n' : fields.Int(required=False, load_default=0), 'R' : fields.Boolean(required=False, load_default=False), 'o' : fields.Boolean(required=False, load_default=False), 'f' : fields.Boolean(required=False, load_default=False), 'r' : fields.Boolean(required=False, load_default=False), 's' : fields.Boolean(required=False, load_default=False) }
 
     @use_kwargs(_arguments, location='querystring')
     def get(self, operation, specification, **kwargs):
         arguments = { 'operation' : operation, 'specification' : specification, 'db_host' : request.environ.get('DB_HOST', DEFAULT_DB_HOST), 'log' : APP_LOG }
         arguments.update(kwargs)
-        action = Action.action(action_type='legacy_get_record_set_info', args=arguments)
+        action = Action.action(action_type='legacy_get_record_info_json', args=arguments)
         return action().generate_serializable_dict()
 
 from get_record_info import ShowInfoLegacyAction
@@ -681,29 +680,31 @@ class ShowInfoLegacyResource(Resource):
     def get(self, specification, **kwargs):
         arguments = { 'specification' : specification, 'db_host' : request.environ.get('DB_HOST', DEFAULT_DB_HOST), 'log' : APP_LOG }
         arguments.update(kwargs)
-        action = Action.action(action_type='legacy_get_record_set_table', args=self._action_arguments)
+        action = Action.action(action_type='legacy_get_record_info_text', args=self._action_arguments)
         return action().generate_serializable_dict()
 
+# either public or private site; does NOT use whitelist (so if public, then only the series that are public and not
+# on whitelist are returned)
 from get_series_info import ShowSeriesLegacyAction
 class ShowSeriesLegacyResource(Resource):
-    _arguments = { 'series_regex' : fields.Str(required=True, data_key='series-regex') }
+    _arguments = { 'series_regex' : fields.Str(required=True) }
 
     @use_args(_arguments, location='querystring')
     def get(self, args):
         # args is a dict where the order of arguments in _arguments corresponds to the order in the query string
         arguments = { 'series_regex' : args['series_regex'], 'db_host' : request.environ.get('DB_HOST', DEFAULT_DB_HOST), 'log' : APP_LOG }
-        action = Action.action(action_type='legacy_get_private_series_list', args=arguments)
+        action = Action.action(action_type='legacy_get_series_list', args=arguments)
         return action().generate_serializable_dict()
 
-# public site only!
-from get_series_info import ShowExtSeriesLegacyAction
+# public site only! uses whitelist
+from get_series_info import ShowSeriesPublicLegacyAction
 class ShowExtSeriesLegacyResource(Resource):
     _arguments = { 'series_regex' : fields.Str(required=False, load_default=None, data_key='filter'), 'series_regex_short' : fields.Boolean(required=False, load_default=None, data_key='f'), 'full_info' : fields.Boolean(required=False, load_default=None, data_key='info'), 'full_info_short' : fields.Boolean(required=False, load_default=False, data_key='i') }
 
     @use_kwargs(_arguments, location='querystring')
     def get(self, series_regex, series_regex_short, full_info, full_info_short):
         show_info = full_info if full_info is not None else full_info_short
-        arguments = { 'series_regex' : series_regex if series_regex is not None else series_regex_short, 'info' : int(show_info), 'dbhost' : request.environ.get('DB_HOST', DEFAULT_DB_HOST), 'log' : APP_LOG }
+        arguments = { 'series_regex' : series_regex if series_regex is not None else series_regex_short, 'info' : show_info, 'dbhost' : request.environ.get('DB_HOST', DEFAULT_DB_HOST), 'log' : APP_LOG }
         action = Action.action(action_type='legacy_get_public_series_list', args=arguments)
         return action().generate_serializable_dict()
 

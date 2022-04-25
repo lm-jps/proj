@@ -4,7 +4,7 @@ from argparse import Action as ArgsAction
 from copy import deepcopy
 from json import loads as json_loads, dumps as json_dumps
 from os.path import join as path_join
-from sys import exc_info as sys_exc_info, exit as sys_exit
+from sys import exc_info as sys_exc_info, exit as sys_exit, stdout as sys_stdout
 
 from drms_export import Connection, ExpServerBaseError, Error as ExportError, ErrorCode as ExportErrorCode, ErrorResponse, Response, get_arguments as ss_get_arguments, get_message, send_message
 from drms_parameters import DRMSParams, DPMissingParameterError
@@ -200,19 +200,35 @@ class Arguments(Args):
 
         return cls._arguments
 
+def get_request_status(response_dict):
+    error_code = None
+    status_code = None
+
+    try:
+        error_code = ErrorCode(int(response_dict['status']))
+    except KeyError:
+        pass
+
+    if error_code is None:
+        try:
+            status_code = StatusCode(int(response_dict['status']))
+        except KeyError:
+            raise ExportServerError(exc_info=sys_exc_info(), error_message=f'unexpected show_series status returned {str(response_dict["status"])}')
+
+    return (error_code, status_code)
+
+def get_request_status_code(response_dict):
+    # socket server returns status 0 or 1
+    error_code, status_code = get_request_status(response_dict)
+    code = error_code if error_code is not None else status_code
+
+    return code
+
 def get_response(client_response_dict, requesting_table, log):
     log.write_debug([ f'[ get_response ]' ])
 
     response_dict = deepcopy(client_response_dict)
-    info_status = response_dict['status']
-
-    if info_status == 0:
-        response_dict['status_code'] = StatusCode.SUCCESS
-    elif info_status == 1:
-        response_dict['status_code'] = StatusCode.FAILURE
-    else:
-        # there should be no other status possible
-        response_dict['status_code'] = StatusCode.FAILURE
+    response_dict['status_code'] = get_request_status_code(response_dict)
 
     if requesting_table:
         # special response that has generate_text() method (which returns a table of text)
@@ -425,12 +441,12 @@ class GetRecordInfoAction(Action):
 class GetRecordTableActionResponse(Response):
     def __init__(self, *, status_code, **kwargs):
         super().__init__(status_code=status_code, **kwargs)
+        self._text_response = None
 
     def generate_text(self):
         if self._text_response is None:
-            self.generate_serializable_dict()
-            # the `table` attribute has the table text
-            self._text_response = self._serializable_dict_response.attributes.table
+            # the `table` attribute has the table text; the `attributes` property will make all kwargs available as properties
+            self._text_response = self.attributes.table
 
         return self._text_response
 
@@ -440,8 +456,8 @@ class GetRecordTableActionErrorResponse(GetRecordTableActionResponse):
 
     def generate_text(self):
         if self._text_response is None:
-            # use self._error_message for an error message
-            self._text_response = self._error_message
+            # the `attributes` property will make all kwargs available as properties; use the `error_message` property
+            self._text_response = self.attributes.error_message
 
         return self._text_response
 
@@ -449,7 +465,7 @@ class GetRecordTableAction(GetRecordInfoAction):
     actions = [ 'get_record_set_table' ]
 
     def __init__(self, *, method, specification, table_flags, db_host, keywords=None, links=None, log=None, db_name=None, number_records=None, db_port=None, segments=None, db_user=None, webserver=None):
-        super().__init__(specification=specification, db_host=db_host, keywords=keywords, links=links, log=log, db_name=db_name, number_records=number_records, db_port=db_port, segments=segments, db_user=db_user, webserver=webserver)
+        super().__init__(method=method, specification=specification, db_host=db_host, keywords=keywords, links=links, log=log, db_name=db_name, number_records=number_records, db_port=db_port, segments=segments, db_user=db_user, webserver=webserver)
 
         self._table_flags = table_flags # dict
 
@@ -465,6 +481,225 @@ class GetRecordTableAction(GetRecordInfoAction):
     def generate_error_response(cls, *, error_code=None, gri_error, **kwargs):
         # gri_error._error_message has appropriate error message
         return GetRecordTableActionErrorResponse.generate_response(status_code=error_code, error_message=gri_error._error_message, **kwargs)
+
+class GetRecordInfoLegacyResponse(Response):
+    def remove_extraneous(self, response_dict, keys):
+        for key in keys:
+            if key in response_dict:
+                del response_dict[key]
+
+        return response_dict
+
+    # override parent to remove attributes not present in legacy API
+    def generate_serializable_dict(self):
+        serializable_dict = deepcopy(super().generate_serializable_dict())
+        sanitized_serializable_dict = self.remove_extraneous(serializable_dict, [ 'drms_export_status', 'drms_export_status_code', 'drms_export_status_description' ] )
+
+        return sanitized_serializable_dict
+
+class GetRecordInfoLegacyAction(Action):
+    actions = [] # abstract
+
+    def convert_booleans(self, args_dict):
+        converted = {}
+        for key, val in args_dict.items():
+            if type(val) == bool:
+                converted[key] = int(val)
+            else:
+                converted[key] = val
+
+        return converted
+
+    def perform_action(self):
+        try:
+            log = self._options['log']
+            nested_arguments = self.get_nested_arguments()
+
+            try:
+                response = self.send_request(nested_arguments=nested_arguments)
+            except ExpServerBaseError as exc:
+                raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+            except Exception as exc:
+                raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+        except GriBaseError as exc:
+            response = exc.response
+            error_message = exc.message
+
+            if log:
+                log.write_error([ error_message ])
+        except Exception as exc:
+            response = UnhandledExceptionError(exc_info=sys_exc_info(), error_message=f'{str(exc)}').response
+            error_message = str(exc)
+
+            if log:
+                log.write_error([ error_message ])
+
+        return response
+
+    def get_nested_arguments(self):
+        log = self._options['log']
+
+        if self._options['db_host'] is None:
+            drms_params = DRMSParams()
+
+            if drms_params is None:
+                raise ParametersError(error_message='unable to locate DRMS parameters package')
+
+            self._options['db_host'] = drms_params.get_required('SERVER')
+
+        # use socket server to call jsoc_fetch
+        return ss_get_arguments(is_program=False, module_args={})
+
+    def get_request_status_code(self, response_dict):
+        error_code, status_code = self.get_request_status(response_dict)
+        code = error_code if error_code is not None else status_code
+
+        return code
+
+    def get_response(self, client_response_dict, log):
+        log.write_debug([ f'[ {self.__class__.__name__}.get_response ]' ])
+
+        response_dict = deepcopy(client_response_dict)
+        response_dict['status_code'] = self.get_request_status_code(response_dict)
+        response = GetRecordInfoLegacyResponse.generate_response(**response_dict)
+
+        return response
+
+    def get_request_status(self, response_dict):
+        error_code = None
+        status_code = None
+
+        try:
+            error_code = ErrorCode(int(response_dict['status']))
+        except KeyError:
+            pass
+
+        if error_code is None:
+            try:
+                status_code = StatusCode(int(response_dict['status']))
+            except KeyError:
+                raise ExportServerError(exc_info=sys_exc_info(), error_message=f'unexpected {str(self)} status returned {str(response_dict["status"])}')
+
+        return (error_code, status_code)
+
+    def __str__(self):
+        return self.__class__.__name__
+
+class JsocInfoLegacyAction(GetRecordInfoLegacyAction):
+    actions = [ 'legacy_get_record_info_json' ]
+
+    _log = None
+
+    def __init__(self, *, method, operation, specification, db_host=None, log=None, **kwargs):
+        self._method = getattr(self, method)
+        self._operation = operation
+        self._specification = specification
+        self._options = {}
+        self._options['db_host'] = db_host
+        self._options['log'] = log if log is not None else DrmsLog(None, None, None)
+        self._legacy_arguments = self.convert_booleans(kwargs)
+
+    def legacy_get_record_info_json(self):
+        return self.perform_action()
+
+    def send_request(self, *, nested_arguments):
+        log = self._options['log']
+
+        with Connection(server=nested_arguments.server, listen_port=nested_arguments.listen_port, timeout=nested_arguments.message_timeout, log=log) as connection:
+            message = { 'request_type' : 'legacy_jsoc_info', 'operation' : self._operation, 'specification' : self._specification, 'db_host' : self._options['db_host'] }
+            message.update(self._legacy_arguments) # error if the user has provided non-expected arguments
+            response = send_request(message, connection, log)
+
+            # message is raw JSON from checkAddress.py
+            legacy_jsoc_info_dict = json_loads(response)
+
+            if legacy_jsoc_info_dict.get('export_server_status') == 'export_server_error':
+                raise ExportServerError(error_message=f'{legacy_jsoc_info_dict["error_message"]}')
+
+            message = { 'request_type' : 'quit' }
+            send_request(message, connection, log)
+
+        response = self.get_response(legacy_jsoc_info_dict, log)
+        return response
+
+    @classmethod
+    def is_valid_processing(cls, arguments_json, log):
+        cls.set_log(log)
+        is_valid = None
+        try:
+            json_loads(arguments_json)
+            is_valid = True
+        except:
+            is_valid = False
+
+        return is_valid
+
+class ShowInfoLegacyAction(GetRecordInfoLegacyAction):
+    actions = [ 'legacy_get_record_info_text' ]
+
+    _log = None
+
+    def __init__(self, *, method, specification, db_host=None, log=None, **kwargs):
+        self._method = getattr(self, method)
+        self._specification = specification
+        self._options = {}
+        self._options['db_host'] = db_host
+        self._options['log'] = log if log is not None else DrmsLog(None, None, None)
+        self._legacy_arguments = self.convert_booleans(kwargs)
+
+    def legacy_get_record_info_text(self):
+        return self.perform_action()
+
+    def send_request(self, *, nested_arguments):
+        log = self._options['log']
+
+        with Connection(server=nested_arguments.server, listen_port=nested_arguments.listen_port, timeout=nested_arguments.message_timeout, log=log) as connection:
+            message = { 'request_type' : 'legacy_show_info', 'specification' : self._specification, 'db_host' : self._options['db_host'] }
+            message.update(self._legacy_arguments) # error if the user has provided non-expected arguments
+            response = send_request(message, connection, log)
+
+            # message is raw JSON from checkAddress.py
+            legacy_show_info_dict = json_loads(response)
+
+            if legacy_show_info_dict.get('export_server_status') == 'export_server_error':
+                raise ExportServerError(error_message=f'{legacy_show_info_dict["error_message"]}')
+
+            message = { 'request_type' : 'quit' }
+            send_request(message, connection, log)
+
+        response = self.get_response(legacy_show_info_dict, log)
+        return response
+
+    def get_request_status(self, response_dict):
+        # will be either 0 or 1 (socket server calls show_info, which prints text and sets exit code, but does not
+        # print a status code); socket server returns text in JSON obj with a status of 0 or 1)
+        return super().get_request_status(response_dict)
+
+def run_tests():
+    formatter = DrmsLogFormatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+    log = DrmsLog(sys_stdout, DrmsLogLevelAction.string_to_level('debug'), formatter)
+
+    log.write_debug([ 'testing `legacy_get_record_info_json`'])
+    jila = JsocInfoLegacyAction(method='legacy_get_record_info_json', operation='series_struct', specification='hmi.v_720s', db_host='hmidb2', log=log)
+    response = jila()
+    response_dict = response.generate_serializable_dict()
+    log.write_debug([ str(response_dict) ])
+
+    jila = JsocInfoLegacyAction(method='legacy_get_record_info_json', operation='rs_summary', specification='hmi.m_720s[2018.8.15/144m]', db_host='hmidb2', log=log)
+    response = jila()
+    response_dict = response.generate_serializable_dict()
+    log.write_debug([ str(response_dict) ])
+
+    jila = JsocInfoLegacyAction(method='legacy_get_record_info_json', operation='rs_list', key='t_rec,obs_vr', specification='hmi.m_720s[2018.8.15/144m]', db_host='hmidb2', log=log)
+    response = jila()
+    response_dict = response.generate_serializable_dict()
+    log.write_debug([ str(response_dict), '' ])
+
+    log.write_debug([ 'testing `legacy_get_record_info_text`'])
+    sila = ShowInfoLegacyAction(method='legacy_get_record_info_text', specification='hmi.m_720s[2018.8.8]', key='t_rec,obs_vr', db_host='hmidb2', log=log)
+    response = sila()
+    response_dict = response.generate_serializable_dict()
+    log.write_debug([ str(response_dict) ])
 
 if __name__ == "__main__":
     response = perform_action(action_obj=None, is_program=True)

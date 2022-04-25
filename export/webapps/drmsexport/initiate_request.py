@@ -1119,6 +1119,174 @@ class InitiateRequestAction(Action):
     def get_log(cls):
         return cls._log
 
+class JsocFetchLegacyResponse(Response):
+    def remove_extraneous(self, response_dict, keys):
+        for key in keys:
+            if key in response_dict:
+                del response_dict[key]
+
+        return response_dict
+
+    # override parent to remove attributes not present in legacy API
+    def generate_serializable_dict(self):
+        serializable_dict = deepcopy(super().generate_serializable_dict())
+        sanitized_serializable_dict = self.remove_extraneous(serializable_dict, [ 'drms_export_status', 'drms_export_status_code', 'drms_export_status_description' ] )
+
+        return sanitized_serializable_dict
+
+class JsocFetchLegacyAction(Action):
+    actions = [] # abstract
+
+    def convert_booleans(self, args_dict):
+        converted = {}
+        for key, val in args_dict.items():
+            if type(val) == bool:
+                converted[key] = int(val)
+            else:
+                converted[key] = val
+
+        return converted
+
+    def perform_action(self):
+        try:
+            log = self._options['log']
+            nested_arguments = self.get_nested_arguments()
+
+            try:
+                response = self.send_request(nested_arguments=nested_arguments)
+            except ExpServerBaseError as exc:
+                raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+            except Exception as exc:
+                raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+        except IrBaseError as exc:
+            response = exc.response
+            error_message = exc.message
+
+            if log:
+                log.write_error([ error_message ])
+        except Exception as exc:
+            response = UnhandledExceptionError(exc_info=sys_exc_info(), error_message=f'{str(exc)}').response
+            error_message = str(exc)
+
+            if log:
+                log.write_error([ error_message ])
+
+        return response
+
+    def get_nested_arguments(self):
+        log = self._options['log']
+
+        if self._options['db_host'] is None:
+            drms_params = DRMSParams()
+
+            if drms_params is None:
+                raise ParametersError(error_message='unable to locate DRMS parameters package')
+
+            self._options['db_host'] = drms_params.get_required('SERVER')
+
+        # use socket server to call jsoc_fetch
+        return ss_get_arguments(is_program=False, module_args={})
+
+    def get_response(self, client_response_dict, log):
+        log.write_debug([ f'[ {self.__class__.__name__}.get_response ]' ])
+
+        response_dict = deepcopy(client_response_dict)
+        response_dict['status_code'] = get_request_status_code(response_dict)
+        response = JsocFetchLegacyResponse.generate_response(**response_dict)
+
+        return response
+
+class JsocFetchStatusLegacyAction(JsocFetchLegacyAction):
+    actions = [ 'legacy_get_export_status' ]
+
+    _log = None
+
+    def __init__(self, *, method, address, request_id, db_host=None, log=None, **kwargs):
+        self._method = getattr(self, method)
+        self._address = address
+        self._request_id = request_id
+        self._options = {}
+        self._options['db_host'] = db_host
+        self._options['log'] = log if log is not None else DrmsLog(None, None, None)
+        self._legacy_arguments = self.convert_booleans(kwargs)
+
+    def legacy_get_export_status(self):
+        return self.perform_action()
+
+    def send_request(self, *, nested_arguments):
+        log = self._options['log']
+
+        with Connection(server=nested_arguments.server, listen_port=nested_arguments.listen_port, timeout=nested_arguments.message_timeout, log=log) as connection:
+            message = { 'request_type' : 'legacy_jsoc_fetch', 'operation' : 'exp_status', 'address' : self._address, 'request_id' : self._request_id, 'db_host' : self._options['db_host'] }
+            message.update(self._legacy_arguments) # error if the user has provided non-expected arguments
+            response = send_request(message, connection, log)
+
+            # message is raw JSON from checkAddress.py
+            legacy_jsoc_fetch_dict = json_loads(response)
+
+            if legacy_jsoc_fetch_dict.get('export_server_status') == 'export_server_error':
+                raise ExportServerError(error_message=f'{legacy_jsoc_fetch_dict["error_message"]}')
+
+            message = { 'request_type' : 'quit' }
+            send_request(message, connection, log)
+
+        response = self.get_response(legacy_jsoc_fetch_dict, log)
+        return response
+
+class JsocFetchExportLegacyAction(JsocFetchLegacyAction):
+    actions = [ 'legacy_start_export' ]
+
+    _log = None
+
+    def __init__(self, *, method, address, operation, specification, db_host=None, log=None, **kwargs):
+        self._method = getattr(self, method)
+        self._address = address
+        self._operation = operation # theoretically we could have export, re-export, ...
+        self._specification = specification
+        self._options = {}
+        self._options['db_host'] = db_host
+        self._options['log'] = log if log is not None else DrmsLog(None, None, None)
+        self._legacy_arguments = self.convert_booleans(kwargs)
+
+    def legacy_start_export(self):
+        return self.perform_action()
+
+    def send_request(self, *, nested_arguments):
+        log = self._options['log']
+
+        with Connection(server=nested_arguments.server, listen_port=nested_arguments.listen_port, timeout=nested_arguments.message_timeout, log=log) as connection:
+            message = { 'request_type' : 'legacy_jsoc_fetch', 'address' : self._address, 'operation' : self._operation, 'specification' : self._specification, 'db_host' : self._options['db_host'] }
+            message.update(self._legacy_arguments) # error if the user has provided non-expected arguments
+            response = send_request(message, connection, log)
+
+            # message is raw JSON from checkAddress.py
+            legacy_jsoc_fetch_dict = json_loads(response)
+
+            if legacy_jsoc_fetch_dict.get('export_server_status') == 'export_server_error':
+                raise ExportServerError(error_message=f'{legacy_jsoc_fetch_dict["error_message"]}')
+
+            message = { 'request_type' : 'quit' }
+            send_request(message, connection, log)
+
+        response = self.get_response(legacy_jsoc_fetch_dict, log)
+        return response
+
+def run_tests():
+    formatter = DrmsLogFormatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+    log = DrmsLog(sys_stdout, DrmsLogLevelAction.string_to_level('debug'), formatter)
+
+    log.write_debug([ 'testing `legacy_get_export_status`'])
+    jfsla = JsocFetchStatusLegacyAction(method='legacy_get_export_status', address='arta@sun.stanford.edu', request_id='JSOC_20220320_028', db_host='hmidb2', log=log)
+    response = jfsla()
+    response_dict = response.generate_serializable_dict()
+    log.write_debug([ str(response_dict), '' ])
+
+    log.write_debug([ 'testing `legacy_start_export`'])
+    jfela = JsocFetchExportLegacyAction(method='legacy_start_export', operation='exp_request', address='arta@sun.stanford.edu', specification='hmi.m_720s[2018.8.12]', db_host='hmidb2', log=log)
+    response = jfela()
+    response_dict = response.generate_serializable_dict()
+    log.write_debug([ str(response_dict), '' ])
+
 if __name__ == "__main__":
     response, (destination, generator) = perform_action(action_obj=None, is_program=True)
 
