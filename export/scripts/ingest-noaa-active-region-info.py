@@ -19,9 +19,10 @@ SWPC_FTP_DIRECTORY = 'pub/forecasts/SRS'
 SWPC_FILE_NAME_PATTERN = r'^\s*\d\d\d\dSRS.txt\s*$'
 DRMS_TIME_STRING_PATTERN = r'^\s*(\d+)[.](\d+)[.](\d+)(_((\d+)(:(\d+)(:((\d+)([.]\d+)?))?)?)?)?(_([a-z]+))?\s*$'
 
-JSOC_INFO_BIN = '/home/jsoc/cvs/Development/JSOC/bin/linux_avx/jsoc_info'
-SET_INFO_BIN = '/home/jsoc/cvs/Development/JSOC/bin/linux_avx/set_info'
-TIME_CONVERT_BIN = '/home/jsoc/cvs/Development/JSOC/bin/linux_avx/time_convert'
+JSOC_INFO_BIN = 'jsoc_info'
+SET_INFO_BIN = 'set_info'
+TIME_CONVERT_BIN = 'time_convert'
+DEFAULT_BIN_PATH = '/home/jsoc/cvs/Development/JSOC/bin/linux_avx'
 ACTIVE_REGION_SERIES = 'jsoc.noaa_active_regions'
 ACTIVE_REGION_SERIES_FILE = 'swpc_file'
 ACTIVE_REGION_SERIES_FILE_MOD = 'swpc_file_mod_time'
@@ -203,6 +204,7 @@ class Arguments(Args):
         parser = CmdlParser(**parser_args)
 
         # optional
+        parser.add_argument('-b', '--bin-path', help='the path containing the DRMS executables', metavar='<bin path>', dest='bin_path', default=DEFAULT_BIN_PATH)
         parser.add_argument('-e', '--end-day', help='end observation day (%m%d)', metavar='<end day>', dest='end_day', default=None)
         parser.add_argument('-l', '--log-file', help='the path to the log file', metavar='<log file>', dest='log_file', default=log_file)
         parser.add_argument('-L', '--logging-level', help='the amount of logging to perform; in order of increasing verbosity: critical, error, warning, info, debug', metavar='<logging level>', dest='logging_level', action=DrmsLogLevelAction, default=DrmsLogLevel.ERROR)
@@ -422,12 +424,12 @@ def process_content(*, state, line_content, state_data):
 
     return return_state
 
-def fetch_mod_times():
+def fetch_mod_times(bin_path):
     log.write_debug([ f'[ fetch_mod_times ] fetching data-file modification times' ])
     mod_times = None
 
     # check all files
-    command = [ JSOC_INFO_BIN, f'ds={ACTIVE_REGION_SERIES}[][]', f'op=rs_list', f's=1', f'key={ACTIVE_REGION_SERIES_FILE},{ACTIVE_REGION_SERIES_FILE_MOD}', f'DRMS_DBUTF8CLIENTENCODING=1', f'JSOC_DBHOST=hmidb2' ]
+    command = [ path_join(bin_path, JSOC_INFO_BIN), f'ds={ACTIVE_REGION_SERIES}[][]', f'op=rs_list', f's=1', f'key={ACTIVE_REGION_SERIES_FILE},{ACTIVE_REGION_SERIES_FILE_MOD}', f'DRMS_DBUTF8CLIENTENCODING=1', f'JSOC_DBHOST=hmidb2' ]
 
     try:
         log.write_debug([ f'[ fetch_mod_times ] running {" ".join(command)}' ])
@@ -460,6 +462,9 @@ def get_new_files(files, mod_times):
 
         # exclude files that have already been ingested (using file name and timestamp)
         last_mod_time = mod_times.get(file_name, None) if mod_times is not None else None
+
+        log.write_debug([ f'[ get_new_files ] file {file_name}, ingested mod time {last_mod_time.strftime("%Y%m%d_%H%M%S") if last_mod_time is not None else "none"}, file mod time {file_mod_time.strftime("%Y%m%d_%H%M%S") if file_mod_time is not None else "none"}' ])
+
         if last_mod_time is None or file_mod_time > last_mod_time:
             log.write_debug([ f'[ get_new_files ] * file `{file_name}` (modification time {file_mod_time.strftime("%Y-%m-%dT%H:%M:%S")}) has NOT been ingested' ])
             files_to_process[file_name] = file_mod_time
@@ -469,10 +474,10 @@ def get_new_files(files, mod_times):
     log.write_info([ f'[ get_new_files ] found {str(len(files_to_process))} files to process' ])
     return files_to_process
 
-def set_observation_time():
+def set_observation_time(bin_path):
     # call time_convert to get proper DRMS time string
     log.write_debug([ f'[ set_observation_time ] converting SWPC observation time `{state_data["swpc_observation_time_str"]}` to a DRMS time string'])
-    command = [ TIME_CONVERT_BIN, f'time={state_data["swpc_observation_time_str"]}', f'o=cal']
+    command = [ path_join(bin_path, TIME_CONVERT_BIN), f'time={state_data["swpc_observation_time_str"]}', f'o=cal']
 
     try:
         log.write_debug([ f'[ set_observation_time ] running {" ".join(command)}'])
@@ -545,7 +550,7 @@ if __name__ == "__main__":
             log.write_debug([ f'[ __main__ ] cwd to {SWPC_FTP_DIRECTORY}' ])
             files = ftp_client.mlsd()
 
-            mod_times = fetch_mod_times()
+            mod_times = fetch_mod_times(arguments.bin_path)
             files_to_process = get_new_files(files, mod_times)
 
             for file_name, file_mod_time in files_to_process.items():
@@ -566,13 +571,13 @@ if __name__ == "__main__":
                             next_state = process_content(state=state, line_content=line_content, state_data=state_data)
 
                             if state == ParseState.HEADER_2:
-                                set_observation_time()
+                                set_observation_time(arguments.bin_path)
                             elif state == ParseState.PART_1 or state == ParseState.PART_1A:
                                 # call set_info with key=val pairs
                                 keyword_dict = state_data.get('keyword_dict', None)
 
                                 if keyword_dict is not None:
-                                    command = [ SET_INFO_BIN, '-c', f'ds={ACTIVE_REGION_SERIES}', f'DRMS_DBUTF8CLIENTENCODING=1', f'JSOC_DBHOST=hmidb2' ]
+                                    command = [ path_join(arguments.bin_path, SET_INFO_BIN), '-c', f'ds={ACTIVE_REGION_SERIES}', f'DRMS_DBUTF8CLIENTENCODING=1', f'JSOC_DBHOST=hmidb2' ]
                                     command.extend([ f'{element[0]}={str(element[1])}' for element in keyword_dict.items() ])
 
                                     try:
