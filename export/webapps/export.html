@@ -272,6 +272,8 @@ var MINI_EXPORT_REQUEST_FROM_FORM_RESOURCE = 'new-mini-request-from-form';
 var MINI_EXPORT_REQUEST_FROM_FORM_PATH = [ EXPORT_PATH, MINI_EXPORT_REQUEST_FROM_FORM_RESOURCE ].join('/');
 var STREAMED_EXPORT_REQUEST_RESOURCE = 'new-streamed-request';
 var STREAMED_EXPORT_REQUEST_PATH = [ EXPORT_PATH, STREAMED_EXPORT_REQUEST_RESOURCE ].join('/');
+var STREAMED_EXPORT_REQUEST_FROM_FORM_RESOURCE = 'new-streamed-request-from-form';
+var STREAMED_EXPORT_REQUEST_FROM_FORM_PATH = [ EXPORT_PATH, STREAMED_EXPORT_REQUEST_FROM_FORM_RESOURCE ].join('/');
 var RE_EXPORT_REQUEST_RESOURCE = '?';
 var RE_EXPORT_REQUEST_PATH = [ EXPORT_PATH, RE_EXPORT_REQUEST_RESOURCE ].join('/');
 var PENDING_REQUEST_STATUS_RESOURCE = 'pending-request-status';
@@ -1219,6 +1221,7 @@ function FileUploadWanted()
     if (box_checked)
     {
         // box is now in checked state
+        alert("effl 0");
         $('ExportRecordSet').value = '*file*';
         $('ExportRecordSet').store({ "valid" : true });
         $('RecordSetRow').style.display = 'none';
@@ -1231,6 +1234,7 @@ function FileUploadWanted()
     else
     {
         // box is now in unchecked state
+        alert("effl 1");
         $('FileUploadInfoRow').style.display='none';
         file_upload_on_init();
         $('FileUploadRow').style.display='none';
@@ -1317,6 +1321,8 @@ function MakeFileUploadRequest()
     var export_endpoint_arguments = null;
     var action = null;
 
+    alert("make file upload");
+
     if (CheckExportParams() == 0)
     {
         return;
@@ -1346,10 +1352,15 @@ function MakeFileUploadRequest()
         action = window.location.origin + PREMIUM_EXPORT_REQUEST_FROM_FORM_PATH;
     }
 
+    // $('FileUploadFormID').action = action;
+    // $('FileUploadFormID').submit();
+
     $('EFormAddress').value = $('ExportNotify').value.trim();
     $('EFormDbHost').value = db_host;
     $('EFormArguments').value = JSON.stringify(export_endpoint_arguments);
     $('EFormRequestor').value = $('ExportRequestor').value.trim();
+
+    alert('form data ' + $('EFormAddress').value + ' ' + $('EFormDbHost').value + ' ' + $('EFormArguments').value + ' ' + $('EFormRequestor').value);
 
     $('ExportFormElement').action = action;
     $('ExportFormElement').submit();
@@ -1898,54 +1909,82 @@ function DownloadRecordInfo(callback)
 <script type="text/javascript">
 
 
-// called after the click on "Submit Export Request" button when url_direct is the selected export method
-function CreateExportDownloadLink(err, callback)
+function do_stream_export(event, form)
 {
-    // extract arguments
-    var args = $('ExportRecordSet').retrieve('exportArgs', null);
-    var argsStr = null;
-    var host = null;
-    var drmsexportCGI = null;
-    var url = null;
-    var linkUrl = null;
+    // disable the beforeunload event handler
+    window.onbeforeunload = null; $('FileUploadFormID').store({ 'beforeunloadOverride' : true });
+
+    // HTTP POST
+    try
+    {
+        form.submit()
+    }
+    catch(err)
+    {
+        alert('error ' + err);
+    }
+}
+
+// called after the click on "Submit Export Request" button when url_direct is the selected export method
+function CreateExportDownloadButton(err, callback)
+{
+    var db_host = null;
+    var export_arguments = null;
+    var export_endpoint_arguments = null;
     var errMsg = null;
+    var form_element = null;
+    var address_input = null;
+    var db_host_input = null;
+    var export_arguments_input = null;
+    var requestor_input = null;
+    var button_input = null;
 
     if (err && err.length > 0)
     {
         errMsg = err;
     }
-    else if (args === null)
-    {
-        errMsg = 'arguments to drms-export CGI missing';
-    }
     else
     {
         localStorage.removeItem('request-id');
 
-        $("ExportButtonMsg").innerHTML = 'Please use the link below to download data prior to initiating a new request';
-        $("ExportButton").value = 'Submit Export Request'; // if user clicks, then export-complete message displays
-        $("ExportButton").style.backgroundColor = "#D8D8D8"; // grey
+        if ($('PrivateHostElement').retrieve('is_private', false))
+        {
+            db_host = INTERNAL_SERVER;
+        }
+        else
+        {
+            db_host = EXTERNAL_SERVER;
+        }
+        export_arguments = $('ExportRecordSet').retrieve('exportArgs', null);
+        export_endpoint_arguments = { "specification" : export_arguments.specification, "file-name-format" : export_arguments.filenamefmt };
 
-        host = Host.toLowerCase();
-        args.dbhost = serverMap[host];
-        args.webserver = host;
+        // create POST form that returns an HTTP response that either opens a new tab/window or uses mime-type info
+        // to open a FITS view like ds9
+        form_element = new Element('form', { "id" : "se_form", "name" : "stream_export_form", "method" : "post", "action" : "", "target" : "_blank", "enctype" : "multipart/form-data" })
+        address_input = new Element('input', { "id" : "se_form_address", "name" : "se-address", "type" : "hidden", "value" : export_arguments.address, "style" : "display:none" })
+        db_host_input = new Element('input', { "id" : "se_form_db_host", "name" : "se-db-host", "type" : "hidden", "value" : db_host, "style" : "display:none" })
+        export_arguments_input = new Element('input', { "id" : "se_form_export_arguments", "name" : "se-export-arguments", "type" : "hidden", "value" : JSON.stringify(export_endpoint_arguments), "style" : "display:none" })
+        requestor_input = new Element('input', { "id" : "se_form_requestor", "name" : "se-requestor", "type" : "hidden", "value" : export_arguments.requestor, "style" : "display:none" })
 
-        argsStr = Object.keys(args).map(function(key) { return key + '=' + encodeURIComponent(args[key]); }).join('&');
-        url = 'http://' + host + '/cgi-bin/' + DRMS_EXPORT + '?' + argsStr;
+        form_element.insert(address_input);
+        form_element.insert(db_host_input);
+        form_element.insert(export_arguments_input);
+        form_element.insert(requestor_input);
+        // form_element.insert(button_input);
+        form_element.action = STREAMED_EXPORT_REQUEST_FROM_FORM_PATH;
 
-        // make an href - when the user clicks on this link, either a save-file dialog will display or, if the user
-        // has set-up their mime-type file association, the file will display in a viewer like ds9
+        // create button in $('ExportLocation'); when clicked, JSON data are sent to STREAMED_EXPORT_REQUEST_FROM_FORM_PATH;
+        // either a save-file dialog will display or, if the user has set-up their mime-type file association, the
+        // file will display in a viewer like ds9
+        button_input = new Element('input', { "class" : "button", "type" : "button", "value" : "stream export" })
+        button_input.observe('click', function(event) { do_stream_export(event, form_element); });
 
-        // disable the beforeunload event handler
-        $('ExportLocation').observe('click', function(event) { window.onbeforeunload = null; $('FileUploadFormID').store({ 'beforeunloadOverride' : true }); });
-        // make an href - when the user clicks on this link, either a save-file dialog will display or, if the user
-        // has set-up their mime-type file association, the file will display in a viewer like ds9
-        linkUrl = new Element('a', { 'href' : url } ).update(args.spec);
+        $('SubmitResponseDiv').insert(form_element);
 
         $('DataLocation').store({ "header" : "Download" });
-        $('ExportLocation').store({ "link" : linkUrl });
+        $('ExportLocation').store({ "button" : button_input });
 
-        update_request_section_ui(null, null, null, null, $('ExportRecordSet').retrieve('sizeSU', null), null, null, null, null, null, null, null, null, null, null, false);
+        update_request_section_ui(null, null, null, null, $('ExportRecordSet').retrieve('sizeSU', null), null, null, null, null, null, null, null, null, null, null, true);
     }
 
     if (callback !== null)
@@ -2286,16 +2325,6 @@ function CreateAssimilateParsedSpecFn()
 
                     // if we have skipped the requestRSInfo callback, then we need to do that later
 
-                    // clear out disabled_state state of all proc steps (CreateAssimilateRecordInfoFn() and CreateAssimilateSeriesInfoFn()
-                    // will set them to true if the record-set warrants)
-                    for (proc_step_index = 1; proc_step_index < ExportProcessingOptions.length; proc_step_index++)
-                    {
-                        if ($(ExportProcessingOptions[proc_step_index].id).retrieve('disabled_state_rec_dep', false))
-                        {
-                            $(ExportProcessingOptions[proc_step_index].id).store({ "disabled_state" : null});
-                        }
-                    }
-
                     enable_processing_options_fn = CreateEnableProcessingOptionsFn();
 
                     assimilate_record_info_fn = CreateAssimilateRecordInfoFn(enable_processing_options_fn);
@@ -2536,7 +2565,7 @@ function CreateEnableProcessingOptionsFn()
                 CheckNoProcessingList();
                 // NotifyProcessingCode requires the first jsoc_info to have completed (the one started by SetRecordLimit()).
                 // It also requires that SetProcessing() has completed its asynchronous running.
-                NotifyProcessingCode(function () { $('ExportRecordSet').disabled = false; $('CountButton').disabled = false; update_processing_ui(false); });
+                NotifyProcessingCode(function () { $('ExportRecordSet').disabled = false; $('CountButton').disabled = false; });
 
                 // check each export processing step's disabled_state (except for processing option 0 - that is no_op)
                 for (option_index = 1; option_index < ExportProcessingOptions.length; option_index++)
@@ -2551,8 +2580,8 @@ function CreateEnableProcessingOptionsFn()
                         // on the record information
                         if ($(processing_option_id).retrieve('disabled_state', null) === null)
                         {
-                            // ART - this is an error condition; we should have already determined disabled_state
-                            // in the CreateAssimilateRecordInfoFn() function; just assume that the option is disabled
+                            // ART - this is an error condition; we should have already determined disabled_state in CreateAssimilateRecordInfoFn() function;
+                            // however, just assume that the option is disabled
                             $(processing_option_id).store({ "disabled_state" : true });
                         }
                     }
@@ -2642,12 +2671,19 @@ function ExportNewRS()
         $('ExportRecordSet').store({ 'old_set' : $('ExportRecordSet').value });
     }
 
+    if (set_changed)
+    {
+        $('OptionAiaScale').store({ 'disabled_state' : null }); // means aia_scale compatibility not determined yet; also
+                                                                // means that $('OptionAiaScale') has a disabledState property;
+                                                                // changing record-set invalidates the existing validation
+    }
+
     // disable the 'Enable Processing' checkbox - will be enabled once the record-set has been examined for processing-step checkbox
     // disabled state
     $('ProcessingCheckbox').disabled = true;
     $('ProcessingCheckboxLabel').style.color = 'grey';
 
-    // close the processing checkboxes (until we check for the series not changing)
+    // close the processing checkboxes
     $('ProcessingCheckbox').checked = false;
     update_processing_ui(false);
 
@@ -2659,10 +2695,11 @@ function ExportNewRS()
     $('ProcessingWaitMessage').style.display = 'table-row';
 
     // disable processing step checkboxes for now, since we are about to change the record-set, and some processing steps
-    // need the record-set analzyed to determine if they should be enabled
+    // need the record-set to be present
     for (iProc = 0; iProc < ExportProcessingOptions.length; iProc++)
     {
-        $(ExportProcessingOptions[iProc].id).disabled = true;
+        var ExpOpt = ExportProcessingOptions[iProc];
+        $(ExpOpt.id).disabled = true;
     }
 
     $("CountButton").style.backgroundColor = colorNeutral;
@@ -3089,7 +3126,7 @@ function unserialize_arguments(serialized_arguments)
     }
     else
     {
-        argument_obj[serialized_arguments] = { "unnamed" : [] };
+        argument_obj[serialized_arguments] = {};
     }
 
     return argument_obj;
@@ -3111,8 +3148,6 @@ function get_max_records()
 function runSetProcessing(intervalFn, spCallback)
 {
     var max_records_str = null;
-    var disabled_state = null
-    var iProc = null;
 
     // 0 if no procesing enabled (Enable Processing is not checked),  -1 if same seriesname, -2 if series has changed between export processing requests.
     // ichecked > 0 if the user clicks on/off a processing-step checkbox.
@@ -3144,7 +3179,7 @@ function runSetProcessing(intervalFn, spCallback)
 
     var isok = 1;
     var nchecked = 0;
-
+    var iProc = 0;
     var nProcs = ExportProcessingOptions.length;
     SizeRatio = 1.0;
 
@@ -3230,20 +3265,16 @@ function runSetProcessing(intervalFn, spCallback)
 
         if (nchecked > 0)
         {
-            // make sure that the processing checkbox is checked - when update_processing_ui() is called
-            // this will ensure the 'hide' processing is showing
-            $('ProcessingCheckbox').checked = true;
-
             // The Set() functions can run asynchronously. We have at least one Set() function that succeeded (which means
             // there could be AJAX running).
             ExportProcessingArgsPoll = setInterval(function(){ GetExportProcessingArguments(spCallback); }, 50);
 
-            // disable all processing-step checkboxes, until GetExportProcessingArguments() resolves; the
-            // options will be enabled, unless the 'disabled_state' state is true (which was set when the
-            // new record set parsed and downloaded)
+            // Disable all processing-step checkboxes, until GetExportProcessingArguments() resolves.
             for (iProc = 0; iProc < nProcs; iProc++)
             {
-                $(ExportProcessingOptions[iProc].id).disabled = true;
+                var ExpOpt = ExportProcessingOptions[iProc];
+                $(ExpOpt.id).store({ 'disabled_state' : $(ExpOpt.id).disabled })
+                $(ExpOpt.id).disabled = true;
             }
         }
     }
@@ -3339,7 +3370,6 @@ function GetExportProcessingArguments(spCallback)
     var argument_namespace = null;
     var processing_obj = null;
     var processing_argument_str = null;
-    var disabled_state = null;
 
     if (!ExportProcessingArgsReady())
     {
@@ -3392,6 +3422,7 @@ function GetExportProcessingArguments(spCallback)
                 SizeRatio *= ExpOpt.Size;
             }
         }
+
     }
 
     $('ExportProcessing').store({ "processing_obj" : processing_obj });
@@ -3403,19 +3434,12 @@ function GetExportProcessingArguments(spCallback)
 
     $('ExportProcessing').store({ "processing_argument_str" : processing_argument_str });
 
-    // Re-enable all processing-step checkboxes, now hat GetExportProcessingArguments() has resolved
+    // Re-enable all processing-step checkboxes, until GetExportProcessingArguments() resolves.
     for (iProc = 0; iProc < ExportProcessingOptions.length; iProc++)
     {
-        ExpOpt = ExportProcessingOptions[iProc];
+        var ExpOpt = ExportProcessingOptions[iProc];
 
-        if ($(ExpOpt.id).retrieve('disabled_state_rec_dep', false))
-        {
-            $(ExpOpt.id).disabled = $(ExportProcessingOptions[iProc].id).retrieve('disabled_state', false);
-        }
-        else
-        {
-            $(ExpOpt.id).disabled = false;
-        }
+        $(ExpOpt.id).disabled = $(ExpOpt.id).retrieve('disabled_state', false);
     }
 
     $("ExportSizeRatio").value = SizeRatio;
@@ -5610,15 +5634,10 @@ function CheckExportButtonOnClickAction()
             {
                 if ($('ExportRecordSet').retrieve('allSUsOnline', false))
                 {
-                    // call drms-export-to-stdout CGI
-                    // the tar file will have the name of the file; there will be only one image file in the tar file
-                    args.skiptar = 'true';
-                    args.spec = $('ExportRecordSet').value;
-                    args.filename = $('ExportFilenameFmt').value;
-                    // dbhost added to args when submit button clicked
-
-                    // no compression - url_direct is for streaming a single FITS file, uncompressed
-                    args.compression = 'none';
+                    args.address = $('ExportNotify').value;
+                    args.specification = $('ExportRecordSet').value;
+                    args.filenamefmt = $('ExportFilenameFmt').value;
+                    args.requestor = $("ExportRequestor").value;
                 }
             }
         }
@@ -5840,7 +5859,7 @@ function ExportButtonOnClickAction()
         }
         else
         {
-            CreateExportDownloadLink(null, null);
+            CreateExportDownloadButton(null, null);
         }
 
         return;
@@ -6688,22 +6707,22 @@ function update_request_section_ui(endpoint_status, endpoint_status_wordy, error
     {
         $('DataLocation').innerHTML = '';
         $('ExportLocation').innerHTML = '';
-        $('StreamedLinkRow').disabled = true;
-
+        $('StreamedLinkRow').style.display = 'none';
     }
     else
     {
         if (is_streamed)
         {
             $('DataLocation').innerHTML = $('DataLocation').retrieve('header', '');
-            $('ExportLocation').innerHTML = $('ExportLocation').retrieve('link', '');
-            $('StreamedLinkRow').disabled = false;
+            $('ExportLocation').insert($('ExportLocation').retrieve('button', ''));
+            $('StreamedLinkRow').style.display = 'table-row';
+
         }
         else
         {
             $('DataLocation').innerHTML = '';
             $('ExportLocation').innerHTML = '';
-            $('StreamedLinkRow').disabled = true;
+            $('StreamedLinkRow').style.display = 'none';
         }
     }
 
