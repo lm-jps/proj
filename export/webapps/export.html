@@ -5,10 +5,8 @@
 <title>JSOC Export Data</title>
 
 <script type="text/javascript" src="/tp/js/prototype.js"></script>
-<script type="text/javascript" src="/tp/js/cookies.js"></script>
 <script type="text/javascript" src="/tp/js/prototip.js"></script>
-<link rel="stylesheet" type="text/css" href="tp/css/prototip.css">
-<link rel='icon' type='image/png' href='/assets/icons/favicon.png'>
+<link rel="stylesheet" type="text/css" href="/tp/css/prototip.css">
 
 <style type='text/css'>
 .data-cell {
@@ -29,7 +27,7 @@ body {
 function private_host_callback()
 {
     var is_private = null;
-     
+
     is_private = $('PrivateHostElement').innerHTML.length > 0;
     $('PrivateHostElement').store({ "is_private" : is_private });
 }
@@ -104,7 +102,8 @@ function include_html()
             onComplete: create_include_html_on_complete(callback_name)
         };
 
-        resource = window.location.origin + "/" + file_resource;
+        resource = "/_includes/" + file_resource;
+        // resource = window.location.origin + "/" + file_resource;
 
         new Ajax.Request(resource, options);
     }
@@ -148,7 +147,7 @@ function stringify_obj(obj)
         index = null;
         attribute = null;
         value = null;
-        
+
         for (index = 0; index < keys.length; index++)
         {
             attribute = keys[index];
@@ -297,13 +296,13 @@ var HELP_LOCAL_NAME = 'jsoc_help';
 </script>
 
 <!-- Add functions for export processing (no more protocols js)  -->
-<script type="text/javascript" src="js/processing.elements.js"></script>
+<script type="text/javascript" src="/assets/js/processing.elements.js"></script>
 
 <!-- Add list of seriesnames for which processing on export is not suportted -->
-<script type="text/javascript" src="js/processing.exclusions.js"></script>
+<script type="text/javascript" src="/assets/js/processing.exclusions.js"></script>
 
 <!-- Add export email checking code. -->
-<script type="text/javascript" src="js/user.registration.js"></script>
+<script type="text/javascript" src="/assets/js/user.registration.js"></script>
 
 <style type="text/css">
 
@@ -853,12 +852,12 @@ var colorYellow = "#FFF8DC";
 function initVars()
 {
     Host = location.host;
- 
-    $('RequestIdPlace').innerHTML = ''; 
+
+    $('RequestIdPlace').innerHTML = '';
     $('ExportRecordSet').store({ "count" : null, "series" : null, "valid" : null });
     update_record_set_ui(true);
     $('ExportRecordLimit').value = 'none';
-    $('ExportRecordLimit').store({ "limit" : null })  
+    $('ExportRecordLimit').store({ "limit" : null })
   TipsEnabled = 1;
   firstTimePrime = "";
 
@@ -914,10 +913,10 @@ function initVars()
     $("TarFileLocationRow").style.display = "none";
     $("KeywordFileLocationRow").style.display = "none";
     $("ShowQueryCheckbox").checked = 0;
-    
+
     update_export_method_ui(true);
     }
-    
+
     // removes all registration statuses
     email_initVars($("ExportNotify"), $("ExportRequestor"));
 
@@ -939,107 +938,52 @@ function initVars()
 
 function getargs()
 {
-    // as far as I can tell, state never equals anything but 0 here; it gets set to 2 in GetExport() - called when user clicks 'submit',
-    // it gets set to 2 in GetReExport, it gets touched in AssimilateSubmissionResponse() - that function first sets to 3 then to 0, setting to
-    // 0 always, and it gets set to either 2 (error jsoc_fetch status) or 1 (non-error jsoc_fetch status) after jsoc_fetch op=status returns
-    // but that state never gets used anywhere; the state is only read here, and it is always 0
-    //
-    // it seems as if 2 means something is asynchronously evaluating whether or not the URL is going to be 'good', 1 means
-    // we have a good URL stored in `search`, and 0 means get the URL from the browser address box; so, this function
-    // will clear-out jsoc_fetch args if we don't know the status of the existing args, it will use the known-to-be-good
-    // args if we have good args stored in `search`, and it will get the args from the URL otherwise, overwriting the
-    // `search` args stored in the cookie; but the other functions will force the last option by setting the state to 0, even
-    // if we have good args in the `search` attribute
-    state = Cookie.getData("state");
+    var exportargs = location.search;
+    var args = null;
 
-    if (state == 1)
+    exportargs = decodeURIComponent(exportargs);
+    exportargs = exportargs.substr(1);
+    exportargs = exportargs.replace(/\?/g,"QUESTIONMARK");
+    args = exportargs.toQueryParams();
+
+    if (args.ds === undefined)
     {
-        // the export-request record-set is stored in the 'search' cookie attribute; the limit and requestid might also be stored
-        var exportargs = Cookie.data["search"];
-
-        if (exportargs != undefined)
-        {
-            exportargs = decodeURIComponent(exportargs);
-            exportargs = exportargs.substr(1);
-            exportargs = exportargs.replace(/\?/g,"QUESTIONMARK");
-            args = exportargs.toQueryParams();
-            if (args.ds == undefined)
-            {
-                args.ds = "";
-            }
-
-            args.ds = args.ds.replace(/QUESTIONMARK/g, "?");
-        }
-        else
-        {
-            args = new Object;
-            args.ds = "";
-        }
-    }
-    else if (state > 1)
-    {
-        args = new Object;
         args.ds = "";
-        args.requestid = "";
-        args.limit= "none";
-    }
-    else
-    {
-        // cookie state 0 - attempt to get the record-set specification (ds) from the exportdata.html URL
-        var exportargs = location.search;
-
-        exportargs = decodeURIComponent(exportargs);
-        exportargs = exportargs.substr(1);
-        exportargs = exportargs.replace(/\?/g,"QUESTIONMARK");
-        args = exportargs.toQueryParams();
-        if (args.ds == undefined)
-        {
-            args.ds = "";
-        }
-
-        args.ds = args.ds.replace(/QUESTIONMARK/g, "?");
-        state = 1;
-        Cookie.setData("state", state);
-        Cookie.setData("search", location.search);
     }
 
-    // load email address and username from cookie
-    email_getargs($("ExportNotify"), $("ExportRequestor"));
+    args.ds = args.ds.replace(/QUESTIONMARK/g, '?');
+    args.id = localStorage.getItem('request-id');
+
+    email_getargs($('ExportNotify'), $('ExportRequestor'));
 
     return args;
 }
 
-// cookie state is 0
 function on_load_init_callback()
 {
-    var needcount = 0;
-
     // fix ImageSize options
     for (index = 0; index < $('ImageSize').options.length; index += 1)
     {
         $('ImageSize').options[index].value = $('ImageSize').options[index].value.trim().substr(4);
     }
 
-    Cookie.init({ "name" : "exportdata", "expires" : 14});
     initVars(); // This call runs code that requires RecordSet to be set. However, that is not true
               // before it is set below [ $('ExportRecordSet').value = args.ds ]
 
     $('HeaderLink').href = window.location.origin;
     $('FooterLink').href = window.location.origin;
 
-    state = 0;
-    Cookie.setData("state", state);
     args = getargs();
 
     if (args.ds)
     {
         $('ExportRecordSet').value = args.ds;
-        needcount = 1;
     }
 
-    if (args.id)
+    if (args.id !== null && args.id.length > 0)
     {
         $('RequestIdPlace').innerHTML = args.id;
+        $('StatusRequestID').value = args.id;
     }
 
     if (args.limit)
@@ -1048,7 +992,7 @@ function on_load_init_callback()
         update_record_limit_ui(false);
     }
 
-    if (needcount && $('ExportRecordSet').value != "")
+    if ($('ExportRecordSet').value.trim().length > 0)
     {
         update_record_set_ui(true);
     }
@@ -1079,10 +1023,9 @@ function OnLoadInit()
 }
 
 function ReInitPage()
-  {
-  Cookie.setData("state", 0);
-  OnLoadInit();
-  }
+{
+    OnLoadInit();
+}
 
 // tester success
 
@@ -1148,7 +1091,7 @@ function MainTips(tipstyle)
         'Note that e.g. AIA data can be more than 5 times larger if not compressed.  Do not request uncompressed ' +
         'exports for more than a few files.',tipstyle);
     new Tip('RequestorHelp','Optional place for your name, this will be used later when we have a way of saving your ' +
-        'preferred export options.  This value will be saved in a Cookie if allowed.',tipstyle);
+        'preferred export options.  This value will be saved in a local storage if allowed.',tipstyle);
     new Tip('NotifyHelp','Email address to be used to notify you when the export is complete and ready to be ' +
         'fetched using the RequestID. NOTE - an email address is required for exports from jsoc2.',tipstyle);
     new Tip('SendFileHelp','This action will submit the export request with the RecordSet specified in the upload file.',tipstyle);
@@ -1170,7 +1113,7 @@ function MainTips(tipstyle)
 // tester success
 
 </script>
-<script type="text/javascript" src="js/tooltips.definitions.js"></script>
+<script type="text/javascript" src="/assets/js/tooltips.definitions.js"></script>
 <script type="text/javascript">
 
 function CreateTips()
@@ -1239,7 +1182,7 @@ function CheckNoProcessingList()
         }
     }
 
-    $('ProcessingShowCheckbox').store({ "enabled" : !disable_processing}); 
+    $('ProcessingShowCheckbox').store({ "enabled" : !disable_processing});
 
     update_processing_ui(false);
 }
@@ -1276,7 +1219,6 @@ function FileUploadWanted()
     if (box_checked)
     {
         // box is now in checked state
-        alert("effl 0");
         $('ExportRecordSet').value = '*file*';
         $('ExportRecordSet').store({ "valid" : true });
         $('RecordSetRow').style.display = 'none';
@@ -1289,7 +1231,6 @@ function FileUploadWanted()
     else
     {
         // box is now in unchecked state
-        alert("effl 1");
         $('FileUploadInfoRow').style.display='none';
         file_upload_on_init();
         $('FileUploadRow').style.display='none';
@@ -1353,7 +1294,7 @@ function create_export_endpoint_arguments(method)
 
     if (method === EXP_METH_QUICK)
     {
-       export_endpoint_arguments = { "file-name-format" : $('ExportFilenameFmt').value, "number-records" : get_max_records(), "specification" : $('ExportRecordSet').value }; 
+       export_endpoint_arguments = { "file-name-format" : $('ExportFilenameFmt').value, "number-records" : get_max_records(), "specification" : $('ExportRecordSet').value };
     }
     else if (method == EXP_METH_STREAMED)
     {
@@ -1363,7 +1304,7 @@ function create_export_endpoint_arguments(method)
     {
         ignore_processing = !$('ExportProcessing').retrieve('apply_processing', false);
 
-        export_endpoint_arguments = { "access" : access, "package" : export_package, "specification" : $('ExportRecordSet').value, "file-format" : file_format, "file-format-args" : file_format_args, "file-name-format" : $('ExportFilenameFmt').value, "number-records" : get_max_records(), "processing" : ignore_processing ? '{}' : $('ExportProcessing').procesing_obj };
+        export_endpoint_arguments = { "access" : access, "package" : export_package, "specification" : $('ExportRecordSet').value, "file-format" : file_format, "file-format-args" : file_format_args, "file-name-format" : $('ExportFilenameFmt').value, "number-records" : get_max_records(), "processing" : ignore_processing ? {} : $('ExportProcessing').procesing_obj };
     }
 
     return export_endpoint_arguments;
@@ -1375,8 +1316,6 @@ function MakeFileUploadRequest()
     var db_host = null;
     var export_endpoint_arguments = null;
     var action = null;
-
-    alert("make file upload");
 
     if (CheckExportParams() == 0)
     {
@@ -1407,15 +1346,10 @@ function MakeFileUploadRequest()
         action = window.location.origin + PREMIUM_EXPORT_REQUEST_FROM_FORM_PATH;
     }
 
-    // $('FileUploadFormID').action = action;
-    // $('FileUploadFormID').submit();
-
     $('EFormAddress').value = $('ExportNotify').value.trim();
     $('EFormDbHost').value = db_host;
     $('EFormArguments').value = JSON.stringify(export_endpoint_arguments);
     $('EFormRequestor').value = $('ExportRequestor').value.trim();
-
-    alert('form data ' + $('EFormAddress').value + ' ' + $('EFormDbHost').value + ' ' + $('EFormArguments').value + ' ' + $('EFormRequestor').value);
 
     $('ExportFormElement').action = action;
     $('ExportFormElement').submit();
@@ -1435,7 +1369,7 @@ function process_file_upload_response()
     {
         response = iframe_html.responseJSON;
         AssimilateSubmissionResponse(response);
-    }    
+    }
 }
 
 function file_upload_on_complete()
@@ -1497,7 +1431,7 @@ function WlSeriesInfo()
 {
 }
 
-// onSuccess() function for ParseSpec() 
+// onSuccess() function for ParseSpec()
 // callback assimilates parsed-spec info
 function CreateParseSpecOnSuccess(callback)
 {
@@ -1986,8 +1920,7 @@ function CreateExportDownloadLink(err, callback)
     }
     else
     {
-        Cookie.setData("state", 0);
-        Cookie.setData("requestid", "");
+        localStorage.removeItem('request-id');
 
         $("ExportButtonMsg").innerHTML = 'Please use the link below to download data prior to initiating a new request';
         $("ExportButton").value = 'Submit Export Request'; // if user clicks, then export-complete message displays
@@ -2347,11 +2280,21 @@ function CreateAssimilateParsedSpecFn()
                     // we only need to do this if the record count has not yet been obtained
                     // ART - as far as I can tell, there is no need to wait this long to get record count, and there
                     // is no processing to do after the count has been calculated - do this much earlier
-                    // instead, this can be done at the same time RequestSeriesInfo() is called - we just need the 
+                    // instead, this can be done at the same time RequestSeriesInfo() is called - we just need the
                     // record-set to be modified, if need be. And there should be no call back to call after the
                     // the number of records has been counted
 
                     // if we have skipped the requestRSInfo callback, then we need to do that later
+
+                    // clear out disabled_state state of all proc steps (CreateAssimilateRecordInfoFn() and CreateAssimilateSeriesInfoFn()
+                    // will set them to true if the record-set warrants)
+                    for (proc_step_index = 1; proc_step_index < ExportProcessingOptions.length; proc_step_index++)
+                    {
+                        if ($(ExportProcessingOptions[proc_step_index].id).retrieve('disabled_state_rec_dep', false))
+                        {
+                            $(ExportProcessingOptions[proc_step_index].id).store({ "disabled_state" : null});
+                        }
+                    }
 
                     enable_processing_options_fn = CreateEnableProcessingOptionsFn();
 
@@ -2431,7 +2374,7 @@ function GetCompatibleFormat(series, attributes, keywords)
 </script>
 <script type="text/javascript">
 
-// load the series endpoint; the securedrms client caches the series information, so if 
+// load the series endpoint; the securedrms client caches the series information, so if
 // the endpoint is loaded for a previous invocation, the response will be returned quickly;
 // the series information is NOT cached in the javascript - that is something to consider
 function GenerateFileFormatString(gsi_response_obj)
@@ -2593,7 +2536,7 @@ function CreateEnableProcessingOptionsFn()
                 CheckNoProcessingList();
                 // NotifyProcessingCode requires the first jsoc_info to have completed (the one started by SetRecordLimit()).
                 // It also requires that SetProcessing() has completed its asynchronous running.
-                NotifyProcessingCode(function () { $('ExportRecordSet').disabled = false; $('CountButton').disabled = false; });
+                NotifyProcessingCode(function () { $('ExportRecordSet').disabled = false; $('CountButton').disabled = false; update_processing_ui(false); });
 
                 // check each export processing step's disabled_state (except for processing option 0 - that is no_op)
                 for (option_index = 1; option_index < ExportProcessingOptions.length; option_index++)
@@ -2608,8 +2551,8 @@ function CreateEnableProcessingOptionsFn()
                         // on the record information
                         if ($(processing_option_id).retrieve('disabled_state', null) === null)
                         {
-                            // ART - this is an error condition; we should have already determined disabled_state in CreateAssimilateRecordInfoFn() function; 
-                            // however, just assume that the option is disabled
+                            // ART - this is an error condition; we should have already determined disabled_state
+                            // in the CreateAssimilateRecordInfoFn() function; just assume that the option is disabled
                             $(processing_option_id).store({ "disabled_state" : true });
                         }
                     }
@@ -2681,7 +2624,7 @@ function ExportNewRS()
     var set_changed = true;
 
     // NO alert()!
-    
+
     // disable elements that allow user to change record-set spec until current set is handled completely
     $('ExportRecordSet').disabled = true;
     $('CountButton').disabled = true;
@@ -2699,19 +2642,12 @@ function ExportNewRS()
         $('ExportRecordSet').store({ 'old_set' : $('ExportRecordSet').value });
     }
 
-    if (set_changed)
-    {
-        $('OptionAiaScale').store({ 'disabled_state' : null }); // means aia_scale compatibility not determined yet; also
-                                                                // means that $('OptionAiaScale') has a disabledState property;
-                                                                // changing record-set invalidates the existing validation
-    }
-
     // disable the 'Enable Processing' checkbox - will be enabled once the record-set has been examined for processing-step checkbox
     // disabled state
     $('ProcessingCheckbox').disabled = true;
     $('ProcessingCheckboxLabel').style.color = 'grey';
 
-    // close the processing checkboxes
+    // close the processing checkboxes (until we check for the series not changing)
     $('ProcessingCheckbox').checked = false;
     update_processing_ui(false);
 
@@ -2723,11 +2659,10 @@ function ExportNewRS()
     $('ProcessingWaitMessage').style.display = 'table-row';
 
     // disable processing step checkboxes for now, since we are about to change the record-set, and some processing steps
-    // need the record-set to be present
+    // need the record-set analzyed to determine if they should be enabled
     for (iProc = 0; iProc < ExportProcessingOptions.length; iProc++)
     {
-        var ExpOpt = ExportProcessingOptions[iProc];
-        $(ExpOpt.id).disabled = true;
+        $(ExportProcessingOptions[iProc].id).disabled = true;
     }
 
     $("CountButton").style.backgroundColor = colorNeutral;
@@ -2741,7 +2676,7 @@ function ExportNewRS()
     // get rid of the results tables in the upper and lower sections
     $('ExportButton').store({"reset" : true });
     update_request_section_ui(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, false);
-    
+
     $('StatusButton').store({ "reset" : true });
     update_status_section_ui(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
@@ -2858,7 +2793,7 @@ function validate_export_method()
     var export_method = export_method_element.options[export_method_element.selectedIndex].value.trim().toLowerCase();
 
     valid = export_method_element.retrieve('valid', null);
-    
+
     if (valid === null)
     {
         if (export_method === EXP_METHOD_STREAMED || export_method === EXP_METHOD_QUICK || export_method === EXP_METHOD_FULL || export_method === EXP_METHOD_FULL_FTP || export_method === EXP_METHOD_FULL_TAR || export_method === EXP_METHOD_FULL_FTP_TAR)
@@ -2893,7 +2828,7 @@ function disable_processing()
 
     // hide processing altogether
     $('ProcessRow').style.display = 'none';
-   
+
     // set processing checkbox to none/noop
     $(ExportProcessingOptions[0].id).checked = true;
 
@@ -2901,7 +2836,7 @@ function disable_processing()
     {
         $(ExportProcessingOptions[index].id).checked = false;
         $(ExportProcessingOptions[index].rowid).style.display = 'none';
-    } 
+    }
 }
 
 function update_export_method_ui(reset)
@@ -2921,7 +2856,7 @@ function update_export_method_ui(reset)
             update_export_method(true);
         }
     }
-    
+
     if (method === EXP_METH_STREAMED)
     {
         disable_processing();
@@ -2985,7 +2920,7 @@ function validate_filename_format()
 }
 
 // onChange() for 2 checkboxes: ProcessingCheckbox and ProcessingCheckboxHide
-// 
+//
 function ProcessingEnabled(element)
 {
     // the user cannot uncheck ether checkbox, so the checked attribute must be true
@@ -3069,7 +3004,7 @@ function update_processing_ui(reset)
         else
         {
             // ignore processing
-            // the user clicked on the hide (processing) checkbox (ProcessingCheckboxHide); 
+            // the user clicked on the hide (processing) checkbox (ProcessingCheckboxHide);
             $('ProcessingShowCheckbox').style.display = 'table-row';
             $('ExportProcessing').style.display = 'none';
 
@@ -3079,7 +3014,7 @@ function update_processing_ui(reset)
                 processing_option_row_id = ExportProcessingOptions[option_index].rowid;
 
                 // if disabled-state metadata do not exist, then set disabled to false (the second arg to retrieve() is the default)
-                $(processing_option_row_id).style.display = 'none'; 
+                $(processing_option_row_id).style.display = 'none';
             }
 
             // ignore current set of processing options (but do not unset them)
@@ -3154,7 +3089,7 @@ function unserialize_arguments(serialized_arguments)
     }
     else
     {
-        argument_obj[serialized_arguments] = {};
+        argument_obj[serialized_arguments] = { "unnamed" : [] };
     }
 
     return argument_obj;
@@ -3176,6 +3111,8 @@ function get_max_records()
 function runSetProcessing(intervalFn, spCallback)
 {
     var max_records_str = null;
+    var disabled_state = null
+    var iProc = null;
 
     // 0 if no procesing enabled (Enable Processing is not checked),  -1 if same seriesname, -2 if series has changed between export processing requests.
     // ichecked > 0 if the user clicks on/off a processing-step checkbox.
@@ -3207,7 +3144,7 @@ function runSetProcessing(intervalFn, spCallback)
 
     var isok = 1;
     var nchecked = 0;
-    var iProc = 0;
+
     var nProcs = ExportProcessingOptions.length;
     SizeRatio = 1.0;
 
@@ -3274,7 +3211,7 @@ function runSetProcessing(intervalFn, spCallback)
 
                     // initialize Check() function globals when the user clicks on a processing option checkbox
                     // 0 --> do not reset page, initialization could be asynchronous, Check() can modify UI
-                    ExpOpt.Init(0); 
+                    ExpOpt.Init(0);
                 }
             }
             else
@@ -3293,16 +3230,20 @@ function runSetProcessing(intervalFn, spCallback)
 
         if (nchecked > 0)
         {
+            // make sure that the processing checkbox is checked - when update_processing_ui() is called
+            // this will ensure the 'hide' processing is showing
+            $('ProcessingCheckbox').checked = true;
+
             // The Set() functions can run asynchronously. We have at least one Set() function that succeeded (which means
             // there could be AJAX running).
             ExportProcessingArgsPoll = setInterval(function(){ GetExportProcessingArguments(spCallback); }, 50);
 
-            // Disable all processing-step checkboxes, until GetExportProcessingArguments() resolves.
+            // disable all processing-step checkboxes, until GetExportProcessingArguments() resolves; the
+            // options will be enabled, unless the 'disabled_state' state is true (which was set when the
+            // new record set parsed and downloaded)
             for (iProc = 0; iProc < nProcs; iProc++)
             {
-                var ExpOpt = ExportProcessingOptions[iProc];
-                $(ExpOpt.id).store({ 'disabled_state' : $(ExpOpt.id).disabled })
-                $(ExpOpt.id).disabled = true;
+                $(ExportProcessingOptions[iProc].id).disabled = true;
             }
         }
     }
@@ -3376,7 +3317,7 @@ function SetProcessing(ichecked, spCallback)
 {
   	var intervalFn;
 
-    $('ExportCheckButton').store({ "dirty" : true }); 
+    $('ExportCheckButton').store({ "dirty" : true });
     set_eb_state_disabled(true);
 
   	setProcessingQueue.push(ichecked)
@@ -3398,6 +3339,7 @@ function GetExportProcessingArguments(spCallback)
     var argument_namespace = null;
     var processing_obj = null;
     var processing_argument_str = null;
+    var disabled_state = null;
 
     if (!ExportProcessingArgsReady())
     {
@@ -3435,7 +3377,7 @@ function GetExportProcessingArguments(spCallback)
             if (args.length > 0)
             {
                 processing_argument_str += '|' + args;
-                
+
                 argument_argument_obj = unserialize_arguments(args);
                 argument_namespace = Object.keys(argument_argument_obj)[0];
                 processing_obj[argument_namespace] = argument_argument_obj[argument_namespace];
@@ -3450,7 +3392,6 @@ function GetExportProcessingArguments(spCallback)
                 SizeRatio *= ExpOpt.Size;
             }
         }
-
     }
 
     $('ExportProcessing').store({ "processing_obj" : processing_obj });
@@ -3462,12 +3403,19 @@ function GetExportProcessingArguments(spCallback)
 
     $('ExportProcessing').store({ "processing_argument_str" : processing_argument_str });
 
-    // Re-enable all processing-step checkboxes, until GetExportProcessingArguments() resolves.
+    // Re-enable all processing-step checkboxes, now hat GetExportProcessingArguments() has resolved
     for (iProc = 0; iProc < ExportProcessingOptions.length; iProc++)
     {
-        var ExpOpt = ExportProcessingOptions[iProc];
+        ExpOpt = ExportProcessingOptions[iProc];
 
-        $(ExpOpt.id).disabled = $(ExpOpt.id).retrieve('disabled_state', false);
+        if ($(ExpOpt.id).retrieve('disabled_state_rec_dep', false))
+        {
+            $(ExpOpt.id).disabled = $(ExportProcessingOptions[iProc].id).retrieve('disabled_state', false);
+        }
+        else
+        {
+            $(ExpOpt.id).disabled = false;
+        }
     }
 
     $("ExportSizeRatio").value = SizeRatio;
@@ -3537,13 +3485,13 @@ function ProtocolImageUserSet(opt)
 // called when...
 // 1. initializing image options with color-table metadata
 // 2. the user has clicked on the reset-defaults button
-// if the user modifies the ImageCT UI element, the result is a change to the 
+// if the user modifies the ImageCT UI element, the result is a change to the
 // text elements that appear to the right of the image-option elements;
 // there is no `reset` argument since this function is called only when resetting
 // the options UI
 function reset_image_protocol_options(record_set_series, record_set_wavelength, color_table_metadata)
 {
-    // use the specified wavelength to choose an appropriate color table, and then 
+    // use the specified wavelength to choose an appropriate color table, and then
     // use the values from the color table to set the UI element values
     var series_wave = null;
     var series_wave_map = null;
@@ -3610,7 +3558,7 @@ function validate_image_protocol_options(series, wavelength, color_table_metadat
     var protocol = $('ExportProtocol').value.trim();
     var protocol_argument = null;
     var hidden_protocol = $('ExportProtocolHidden').value.trim();
-    var image_ct = null; 
+    var image_ct = null;
     var image_scaling = null;
     var image_zoom = null; // 1, 4, 8, or 16
     var image_min = null; // number or not specified
@@ -3647,7 +3595,7 @@ function validate_image_protocol_options(series, wavelength, color_table_metadat
         image_zoom = $('ImageSize').value.trim();
     }
 
-    valid = $('ProtocolImageOptions').retrieve('valid', null); 
+    valid = $('ProtocolImageOptions').retrieve('valid', null);
 
     if (valid === null)
     {
@@ -3661,7 +3609,7 @@ function validate_image_protocol_options(series, wavelength, color_table_metadat
         if ($('ImageMax').retrieve('specified', false))
         {
             image_max = parseFloat($('ImageMax').value.trim());
-        } 
+        }
 
         if (image_zoom !== 'NaN' && image_zoom > 0 && image_min !== 'NaN' && image_max !== 'NaN' && image_min < image_max)
         {
@@ -3725,8 +3673,8 @@ function initialize_image_protocol_options(update_options_callback)
             var record_set_series = $('ExportRecordSet').retrieve('series', null);
             var record_set_wavelength = $('ExportRecordSet').retrieve('wavelength', null);
 
-            // unlike most error cases, do not set the EB state to disabled; we basically just ignore the filling-in-of image 
-            // parameters with a color-table 
+            // unlike most error cases, do not set the EB state to disabled; we basically just ignore the filling-in-of image
+            // parameters with a color-table
             update_options_callback(record_set_series, record_set_wavelength, color_table_metadata);
         };
 
@@ -3905,7 +3853,7 @@ function initialize_image_protocol_options(update_options_callback)
 
                                     // insert into mapping
                                     color_table_map[color_table] = { "series" : series, "ct" : color_table, "min" : min, "max" : max, "scaling" : scale };
-                                    
+
                                     color_table_option_index += 1;
                                 }
 
@@ -3952,13 +3900,13 @@ function initialize_image_protocol_options(update_options_callback)
             on428: function(response)
             {
                 var error_message = 'invalid arguments to record-set endpoint: ' + stringify_obj(response.responseJSON.error_message);
- 
+
                 on_failure(update_options_callback);
             }
         };
 
         options['parameters'] = export_app_arguments;
-   
+
         new Ajax.Request(window.location.origin + RECORD_SET_PATH, options);
     };
 
@@ -4024,7 +3972,7 @@ function update_protocol_options(reset)
 
     if (reset)
     {
-        // now, we need to reset the options html elements (re-populate with defaults); and if the color tables 
+        // now, we need to reset the options html elements (re-populate with defaults); and if the color tables
         // have not been loaded already, we need to do that first
         if (protocol === 'as-is')
         {
@@ -4052,7 +4000,7 @@ function update_protocol_options(reset)
         else if (protocol === 'fits')
         {
             // there are no fits-specific options to update
-        } 
+        }
         if (protocol === 'jpeg' || protocol === 'mpeg' || protocol === 'mp4')
         {
             if ($('ImageMin').value.trim().length > 0)
@@ -4245,12 +4193,12 @@ function update_compression_ui(reset)
 
         // impacts hidden protocol string too
         update_hidden_protocol(false);
-        
+
         // set valid to null - compression changed, which changes the hidden protocol string
         $('ExportProtocolHidden').store({ "valid" : null});
         if (!validate_protocol_options())
         {
-            update_hidden_protocol(true); 
+            update_hidden_protocol(true);
         }
     }
 }
@@ -4276,7 +4224,7 @@ function update_compression(reset)
 function validate_compression()
 {
     var compression_element = $('ExportCompress');
-    var compression = compression_element.options[compression_element.selectedIndex].value.trim().toLowerCase();    
+    var compression = compression_element.options[compression_element.selectedIndex].value.trim().toLowerCase();
     var valid = null;
 
     valid = compression_element.retrieve('valid', null);
@@ -4427,7 +4375,7 @@ function update_hidden_protocol(reset)
                 image_list.push('size=' + image_zoom.toString());
 
                 $('ExportProtocolHidden').value = hidden_protocol;
-                
+
                 if (image_list.length > 0)
                 {
                     $('ExportProtocolHidden').value = hidden_protocol + ',' + image_list.join(',');
@@ -4455,7 +4403,7 @@ function validate_protocol()
     var valid = null;
 
     valid = $('ExportProtocol').retrieve('valid', null);
-   
+
     if (valid === null)
     {
         if (protocol === 'as-is' || protocol === 'fits' || protocol === 'jpeg' || protocol === 'mpeg' || protocol === 'mp4')
@@ -4498,7 +4446,7 @@ function validate_hidden_protocol()
     if (valid === null)
     {
         hidden_protocol = $('ExportProtocolHidden').value.trim();
-        protocol = $('ExportProtocol').options[$('ExportProtocol').selectedIndex].value.trim().toLowerCase(); 
+        protocol = $('ExportProtocol').options[$('ExportProtocol').selectedIndex].value.trim().toLowerCase();
 
         if (hidden_protocol.length == 0)
         {
@@ -4586,7 +4534,7 @@ function validate_hidden_protocol()
                 if (protocol_argument !== null)
                 {
                     image_list.push(protocol_argument);
-                    
+
                     if ($('ImageMin').retrieve('specified', false))
                     {
                         image_list.push('min=' + parseFloat($('ImageMin').value.trim()).toString());
@@ -4623,7 +4571,7 @@ function validate_hidden_protocol()
                     {
                         image_zoom = $('ImageSize').value.trim();
                     }
-                
+
 
                     image_list.push('CT=' + image_ct);
                     image_list.push('scaling=' + image_scaling);
@@ -4660,7 +4608,7 @@ function validate_hidden_protocol()
                 {
                     valid = false;
                 }
-            } 
+            }
         }
 
         $('ExportProtocolHidden').store({ "valid": valid });
@@ -4677,7 +4625,7 @@ function validate_fits_protocol_options()
 function validate_as_is_protocol_options()
 {
     return true;
-} 
+}
 
 function validate_protocol_options()
 {
@@ -5818,7 +5766,7 @@ function ExportButtonOnClickAction()
         $('ExportButton').store('state', EB_state);
         update_export_buttons();
 
-        // start up interval function (so we know when export request has been completely processed) 
+        // start up interval function (so we know when export request has been completely processed)
         interval_fn_timer = $("ExportButton").retrieve('interval', null);
         if (interval_fn_timer === null)
         {
@@ -5862,12 +5810,12 @@ function ExportButtonOnClickAction()
     }
     else if (EB_state === EB_STATE_PATH)
     {
-        // need to use the PENDING_REQUEST_STATUS_PATH endpoint and AssimilateInquiryResponse() 
+        // need to use the PENDING_REQUEST_STATUS_PATH endpoint and AssimilateInquiryResponse()
         // as the onSuccess() - we update just the upper/request section's status ui
         // GetStatus();
         // set state to disabled (for new export)
         set_eb_state_disabled(true);
-        $('ExportButton').store({ "ajax-state" : "post-click" });        
+        $('ExportButton').store({ "ajax-state" : "post-click" });
         update_request_section_ui(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, false);
         $('ExportButton').store({ "ajax-state" : "pre-click" });
         return;
@@ -6003,7 +5951,7 @@ function ExportButtonOnClickAction()
 
             // no longer a need to provide size ratio to back-end; jsoc_fetch will calculate it using the processing
             // steps as input
-            export_endpoint_arguments = { "access" : access, "package" : export_package, "specification" : export_arguments.ds, "file-format" : file_format, "file-format-args" : file_format_args, "file-name-format" : export_arguments.filenamefmt, "number-records" : get_max_records(), "processing" : ignore_processing ? '{}' : export_arguments.processing };
+            export_endpoint_arguments = { "access" : access, "package" : export_package, "specification" : export_arguments.ds, "file-format" : file_format, "file-format-args" : file_format_args, "file-name-format" : export_arguments.filenamefmt, "number-records" : get_max_records(), "processing" : ignore_processing ? {} : export_arguments.processing };
         }
 
         if (export_endpoint !== null)
@@ -6037,7 +5985,7 @@ function ExportButtonOnClickAction()
                     var error_message = 'invalid arguments to ' + export_endpoint + ' endpoint: '+ stringify_obj(response.responseJSON.error_message);
 
                     $('ExportButton').store({ "ajax-state" : "post-click" });
-                    
+
                     AssimilateSubmissionResponse({ "error_message" : error_message });
                 },
                 onComplete: function(response)
@@ -6172,8 +6120,6 @@ function GetReExport()
     // endpoint is not implemented; the original code is in the exp_repeat branch of jsoc_fetch.c
     export_arguments = null;
 
-    Cookie.setData("state", 2);
-
     $("ExportStatus").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
     $("ExportLocation").innerHTML = "";
     $("ReExportButtonMsg").innerHTML = "Export request submitted, please wait...";
@@ -6219,14 +6165,14 @@ function GetReExport()
 </script>
 <script type="text/javascript">
 
-// called after ajax complete, so export button is in post-click state (called only in response to 
+// called after ajax complete, so export button is in post-click state (called only in response to
 // export-button click); sets export-button state to pre-click upon return
 function AssimilateSubmissionResponse(ir_response_obj)
 {
     var endpoint_status = null;
     var endpoint_status_wordy = null;
     var request_id = null;
-    var payload_size = null;    
+    var payload_size = null;
     var seconds_elapsed = null;
     var sums_directory = null;
     var number_records = null;
@@ -6241,9 +6187,6 @@ function AssimilateSubmissionResponse(ir_response_obj)
     var interval_fn_timer = null;
     var interval_fn_timeout = null;
     var eb_state = null;
-
-    // state gets set to 0 before leaving this function, so this statement has no effect
-    Cookie.setData("state", 3);
 
     if (ir_response_obj !== null)
     {
@@ -6321,12 +6264,17 @@ function AssimilateSubmissionResponse(ir_response_obj)
         endpoint_status = 'ErrorCode.REQUEST_FATAL_ERROR';
     }
 
-    if (endpoint_status === 'ErrorCode.REQUEST_TOO_MANY')
+    if (endpoint_status === 'ErrorCode.REQUEST_SEGMENT_OFFLINE')
     {
-        update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_reccords, number_files, access, data_package, file_format, keywords_file, export_data, contact, false);
+        update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact, false);
 
         set_eb_state_disabled(true);
-        Cookie.setData('state', 0);
+    }
+    else if (endpoint_status === 'ErrorCode.REQUEST_TOO_MANY')
+    {
+        update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact, false);
+
+        set_eb_state_disabled(true);
     }
     else if (endpoint_status === 'StatusCode.REQUEST_NOT_QUEUED')
     {
@@ -6336,29 +6284,25 @@ function AssimilateSubmissionResponse(ir_response_obj)
         endpoint_status = 'ErrorCode.REQUEST_FATAL_ERROR';
 
         set_eb_state_disabled(true);
-        Cookie.setData('state', 0);
     }
     else if (endpoint_status == 'ErrorCode.REQUEST_NOT_ONLINE')
     {
         // can only happen for re-export
-        update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_reccords, number_files, access, data_package, file_format, keywords_file, export_data, contact, false); 
+        update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact, false);
 
         set_eb_state_disabled(true);
-        Cookie.setData('state', 0);
     }
     else if (endpoint_status == 'ErrorCode.REQUEST_FATAL_ERROR')
     {
-        update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_reccords, number_files, access, data_package, file_format, keywords_file, export_data, contact, false); 
+        update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact, false);
 
         set_eb_state_disabled(true);
-        Cookie.setData('state', 0);
     }
     else if (endpoint_status == 'ErrorCode.REQUEST_TOO_LARGE')
     {
-        update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_reccords, number_files, access, data_package, file_format, keywords_file, export_data, contact, false); 
+        update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact, false);
 
         set_eb_state_disabled(true);
-        Cookie.setData('state', 0);
     }
     else if (endpoint_status === 'StatusCode.REQUEST_QUEUED' || endpoint_status === 'StatusCode.REQUEST_QUEUED_DEBUG' || endpoint_status === 'StatusCode.REQUEST_PROCESSING')
     {
@@ -6406,7 +6350,7 @@ function AssimilateSubmissionResponse(ir_response_obj)
             console.log('unexpected eb state 1');
         }
 
-        Cookie.setData('requestid', request_id);
+        localStorage.setItem('request-id', request_id);
 
         if ($('FileUploadCheckbox').checked)
         {
@@ -6418,11 +6362,10 @@ function AssimilateSubmissionResponse(ir_response_obj)
     }
     else if (endpoint_status === 'StatusCode.REQUEST_COMPLETE')
     {
-        // two cases: 1. url_quick format and all online as-is; there should be no request ID; 2. url (premium) and initiate_request sent an exp 
+        // two cases: 1. url_quick format and all online as-is; there should be no request ID; 2. url (premium) and initiate_request sent an exp
         // status request, and got a StatusCode.REQUEST_COMPLETE response
 
-        Cookie.setData('state', 0);
-        Cookie.setData('requestid', '');
+        localStorage.removeItem('request-id');
 
         eb_state = $('ExportButton').retrieve('state', EB_STATE_DISABLED);
 
@@ -6467,10 +6410,9 @@ function AssimilateSubmissionResponse(ir_response_obj)
         error_message = 'unexpected endpoint error ' + endpoint_status;
         endpoint_status = 'ErrorCode.REQUEST_FATAL_ERROR';
 
-        update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_reccords, number_files, access, data_package, file_format, keywords_file, export_data, contact, false);
+        update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact, false);
 
         set_eb_state_disabled(true);
-        Cookie.setData('state', 0);
     }
     else
     {
@@ -6478,10 +6420,9 @@ function AssimilateSubmissionResponse(ir_response_obj)
         error_message = 'unexpected endpoint status ' + endpoint_status;
         endpoint_status = 'ErrorCode.REQUEST_FATAL_ERROR';
 
-        update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_reccords, number_files, access, data_package, file_format, keywords_file, export_data, contact, false); 
-   
-        set_eb_state_disabled(true); 
-        Cookie.setData('state', 0);
+        update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact, false);
+
+        set_eb_state_disabled(true);
     }
 
     $('ExportButton').store({ "ajax-state" : "pre-click" });
@@ -6511,7 +6452,7 @@ function update_request_section_ui(endpoint_status, endpoint_status_wordy, error
     //   row 4, column 1 $('')
     // second column:
     //   row 1, column 2 - $('RequestIdPlace'), the requestID for an export that was initiated successfully
-    //   row 2, column 2 - $('ExportStatus'), information like if the export is being processed, data are ready for download, the size of data exported, error 
+    //   row 2, column 2 - $('ExportStatus'), information like if the export is being processed, data are ready for download, the size of data exported, error
     //   messages if the data could not be exported
     //   row 3, column 2 - $('ExportLocation'), used only for url_direct/streamed export result; row is visible only for streamed export results
     // third column:
@@ -6748,7 +6689,7 @@ function update_request_section_ui(endpoint_status, endpoint_status_wordy, error
         $('DataLocation').innerHTML = '';
         $('ExportLocation').innerHTML = '';
         $('StreamedLinkRow').disabled = true;
-        
+
     }
     else
     {
@@ -6844,12 +6785,12 @@ function update_request_section_ui(endpoint_status, endpoint_status_wordy, error
 <script type="text/javascript">
 
 // update the UI of the lower/status section
-// can be called from after export button click (when the user clicks 'get path')
-function update_status_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_reccords, number_files, access, data_package, file_format, keywords_file, export_data, contact)
+// can be called from after export button click (when the user clicks 'get path'):
+function update_status_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact)
 {
-    // the lower status section is a table with 4 columns, but there is no real table structure in the display; there 
+    // the lower status section is a table with 4 columns, but there is no real table structure in the display; there
     // are essentially 5 rows, followed by a table of export urls:
-    //   row 1 (4 columns) - header 'RequestID' [const], request ID text box, description (This is the ID tag for your export request) [const], 
+    //   row 1 (4 columns) - header 'RequestID' [const], request ID text box, description (This is the ID tag for your export request) [const],
     //     status string (success, export status error code string, blank)
     //   row 2 (3 columns) - request button, instructions for button (please only click once for status request), another random description
     //     (List formats are index.html, index.json, and index.txt; export script file is JSOC_20211103_932.drmsrun) - when rendered, this
@@ -6885,7 +6826,7 @@ function update_status_section_ui(endpoint_status, endpoint_status_wordy, error_
 
     if (!export_button_click && $('StatusButton').retrieve('ajax-state', 'pre-click') !== 'pre-click')
     {
-        // can be called by export-button code; if so, then status-button ajax state will be 'running' if 
+        // can be called by export-button code; if so, then status-button ajax state will be 'running' if
         // get-status endpoint running
         status_button_click = true;
         status_button_error = $('StatusButton').retrieve('error', false);
@@ -7031,7 +6972,7 @@ function update_status_section_ui(endpoint_status, endpoint_status_wordy, error_
                     button_disabled = false;
                 }
             }
-            
+
             $('StatusButton').value = button_label;
             $('StatusButton').style.color = button_disabled ? null : colorWhite;
             $('StatusButton').style.backgroundColor = button_color;
@@ -7058,7 +6999,7 @@ function update_status_section_ui(endpoint_status, endpoint_status_wordy, error_
     else
     {
         if (status_button_click)
-        { 
+        {
             message = $('StatusButtonMsg').retrieve('message', null);
             if (message === null || message.length == 0)
             {
@@ -7131,10 +7072,10 @@ function update_status_section_ui(endpoint_status, endpoint_status_wordy, error_
         }
     }
 
-    // row 2, col 3 (more info, 'List formats...') - affected by status click only 
+    // row 2, col 3 (more info, 'List formats...') - affected by status click only
     if (reset)
     {
-       $('StatusOther').innerHTML = ''; 
+       $('StatusOther').innerHTML = '';
     }
     else
     {
@@ -7185,7 +7126,7 @@ function update_status_section_ui(endpoint_status, endpoint_status_wordy, error_
                 }
             }
 
-            $('StatusOther').innerHTML = message; 
+            $('StatusOther').innerHTML = message;
         }
     }
 
@@ -7337,7 +7278,7 @@ function update_status_section_ui(endpoint_status, endpoint_status_wordy, error_
         $('TarFileLocation').innerHTML = '';
         $('TarFileLocationRow').style.display = 'none';
     }
-    else 
+    else
     {
         if (status_button_click)
         {
@@ -7454,7 +7395,7 @@ function update_status_section_ui(endpoint_status, endpoint_status_wordy, error_
 </script>
 <script type="text/javascript">
 
-// called after ajax call complete, so export/status button will be in post-click state; 
+// called after ajax call complete, so export/status button will be in post-click state;
 // can be called after export-button click (EB_STATE_PATH), or status-button click
 function AssimilateInquiryResponse(mr_response_obj)
 {
@@ -7552,18 +7493,16 @@ function AssimilateInquiryResponse(mr_response_obj)
         error_message = 'failure obtaining export status';
         endpoint_status = 'ErrorCode.REQUEST_FATAL_ERROR';
     }
-    
+
     if ($('ExportButton').retrieve('ajax-state', 'pre-click') === 'post-click')
     {
         export_button_click = true;
     }
-    else 
+    else
     {
         // assume this was a lower/status click by default
         export_button_click = false;
     }
-
-    Cookie.setData("state", 2);
 
     if (endpoint_status === 'ErrorCode.REQUEST_NOT_ONLINE')
     {
@@ -7571,7 +7510,6 @@ function AssimilateInquiryResponse(mr_response_obj)
         if (export_button_click)
         {
             update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact, false);
-            Cookie.setData('state', 0);
         }
         else
         {
@@ -7579,7 +7517,6 @@ function AssimilateInquiryResponse(mr_response_obj)
             update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, null, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact, false);
 
             update_status_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact);
-            Cookie.setData('state', 2);
         }
 
         set_eb_state_disabled(true);
@@ -7589,12 +7526,10 @@ function AssimilateInquiryResponse(mr_response_obj)
         if (export_button_click)
         {
             update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact, false);
-            Cookie.setData('state', 0);
         }
         else
         {
             update_status_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact);
-            Cookie.setData('state', 2);
         }
 
         set_eb_state_disabled(true);
@@ -7604,26 +7539,23 @@ function AssimilateInquiryResponse(mr_response_obj)
         if (export_button_click)
         {
             // updates $('StatusRequestID') too since request_id is not null
-            update_status_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_reccords, number_files, access, data_package, file_format, keywords_file, export_data, contact);
-            
+            update_status_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact);
+
             update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact, false);
-            Cookie.setData('requestid', request_id);
-            Cookie.setData('state', 3);
+            localStorage.setItem('request-id', request_id);
 
             file_upload_on_complete();
         }
         else
         {
             update_status_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact);
-            Cookie.setData('state', 1);
         }
     }
     else if (endpoint_status === 'StatusCode.REQUEST_COMPLETE')
     {
         if (export_button_click)
         {
-            Cookie.setData('requestid', '');
-            Cookie.setData('state', 0);
+            localStorage.removeItem('request-id');
 
             eb_state = $('ExportButton').retrieve('state', EB_STATE_DISABLED);
             // export-button click changes EB state (but status-button click does not) back to disabled
@@ -7642,17 +7574,14 @@ function AssimilateInquiryResponse(mr_response_obj)
                 console.log('unexpected eb state 3');
             }
 
-           update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact, false); 
+           update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact, false);
         }
         else
         {
             update_status_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact);
-
-            Cookie.setData('state', 1);
         }
 
         file_upload_on_complete();
-        Cookie.setData("state", 1);
     }
     else if (endpoint_status.search(/errorcode/i) == 0)
     {
@@ -7660,12 +7589,10 @@ function AssimilateInquiryResponse(mr_response_obj)
         if (export_button_click)
         {
             update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact, false);
-            Cookie.setData('state', 0);
         }
         else
         {
             update_status_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact);
-            Cookie.setData('state', 2);
         }
 
         set_eb_state_disabled(true);
@@ -7679,12 +7606,10 @@ function AssimilateInquiryResponse(mr_response_obj)
         if (export_button_click)
         {
             update_request_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact, false);
-            Cookie.setData('state', 0);
         }
         else
         {
             update_status_section_ui(endpoint_status, endpoint_status_wordy, error_message, request_id, payload_size, seconds_elapsed, sums_directory, number_records, number_files, access, data_package, file_format, keywords_file, export_data, contact);
-            Cookie.setData('state', 2);
         }
 
         set_eb_state_disabled(true);
@@ -7721,12 +7646,12 @@ function GetStatus()
     {
         export_button_click = true;
     }
-    else 
+    else
     {
         export_button_click = false;
     }
 
-    // if a status check is currently running, bail (an onClick() and an onChange() will be called when 
+    // if a status check is currently running, bail (an onClick() and an onChange() will be called when
     // a user changes the request ID andajax_ then clicks the `request status` button)
     if ($('StatusButton').retrieve('ajax_state', 'pre-click') !== 'ajax-running')
     {
@@ -7869,7 +7794,7 @@ function GetStatus()
 
 <!-- Start Message of the Day -->
 <div class='include-html' file-resource='motd.html' target-element='MOTD' id='MOTD'></div>
-<!-- END MODT DIV -->
+<!-- END MOTD DIV -->
 
 <span id="RecordSetExample">
 &nbsp; &nbsp;
@@ -7880,7 +7805,7 @@ function GetStatus()
 <p>
 If the Method is neither "url_quick" nor "url_direct", additional options will need to be specified.
 If the Method is "url", "ftp", "url-tar" or "ftp-tar", an export ID will be provided
-in the RequestID elements below. The ID can be used in the "JSOC Data Export Status and Retrieval" 
+in the RequestID elements below. The ID can be used in the "JSOC Data Export Status and Retrieval"
 section to obtain the processing-status of the export. It can also be used to obtain links to the completed export.
 
 <p>
