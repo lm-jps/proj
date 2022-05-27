@@ -4,6 +4,8 @@
  *  Functions for mapping between plate, heliographic, and various map
  *    coordinate systems, including scaling.
  *
+ *  Responsible:  Rick Bogart                   RBogart@solar.Stanford.EDU
+ *
  *  Contents:
  *      img2sphere		Map from plate location to heliographic
  *				coordinates
@@ -16,7 +18,13 @@
  *	name2proj		Convert name to key value of projection
  *	proj2name		Convert projection key value to name
  *
- *  Responsible:  Rick Bogart                   RBogart@solar.Stanford.EDU
+ *  This version of the code library is known to be included by the following
+ *    modules or programs or code under /home/rick/src/:
+ *	maproj/maproj.c v 1.4
+ *	mtrack/mtrack.c v 2.5 ->
+ *	rings/hmi/maicalc.c v 2.5
+ *	rings/hmi/rdtcontext.c
+ *	
  *
  *  Usage:
  *    int img2sphere (double x, double y, double ang_r, double latc,
@@ -703,4 +711,5 @@ char *proj2name(int proj_in) {
  *  v 1.0 frozen 2018.05.04
  *  19.09.17	declared version number as global; trapped several more
  *	roundoff problems for arg of asin in plane2sphere and img2sphere
+ *  v 1.1 frozen 2021.11.05
  */

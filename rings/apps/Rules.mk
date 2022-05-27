@@ -21,7 +21,7 @@ MODEXE_USEF	:= $(MODEXE_USEF) $(MODEXE_USEF_$(d))
 CEXE_$(d)	:= $(addprefix $(d)/, gentargs) 
 CEXE		:= $(CEXE) $(CEXE_$(d))
 
-EXE_$(d)        := $(MODEXE_$(d)) $(MODEXE_USEF_$(d)) $(CEXE_$(d))
+EXE_$(d)        := $(MODEXE_$(d)) $(MODEXE_USEF_$(d) $(CEXE_$(d))
 OBJ_F_$(d)      := $(addprefix $(d)/, cart_to_polar.o fourier_filter.o ring_pass.o polyval.o multfactor.o func1.o first_deriv_1.o second_deriv.o dogleg3.o hmifits.o ringanalysis.o ccint2.o fourierlibn32.o)
 
 OBJ_$(d)	:= $(EXE_$(d):%=%.o) $(OBJ_F_$(d))

@@ -239,4 +239,5 @@ TIME SOHO_meridian_crossing (double lonn, int crr) {
  *  v 1.0 frozen 2020.06.04
  *  20.06.04	Added version number definition; ; replaced define of table
  *		name with DRMS serverdefs define; trap undefined case
+ *  v 1.1 frozen 2021.11.05
  */

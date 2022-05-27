@@ -104,12 +104,18 @@
 /******************************************************************************/
 
 /******************** defines, includes, and global declarations **************/
-#define MODULE_VERSION_NUMBER	("2.4")
+#define MODULE_VERSION_NUMBER	("2.5")
 #define KEYSTUFF_VERSION "keystuff_v11.c"
+#define SELSTUFF_VERSION "selstuff_v10.c"
+#define SOHO_EPHEM_VERSION "soho_ephem_v11.c"
+#define CARTOGRAPHY_VERSION "cartography_v11.c"
 
 #include <jsoc_main.h>
 
 #include KEYSTUFF_VERSION
+#include SELSTUFF_VERSION
+#include SOHO_EPHEM_VERSION
+#include CARTOGRAPHY_VERSION
 
 char *module_name = "maicalc";
 char *module_desc = "integration of mapped and tracked magnetogram data";
@@ -174,9 +180,6 @@ ModuleArgs_t module_args[] = {
   {}
 };
 
-#include "selstuff.c"
-#include "soho_ephem.c"
-#include "cartography.c"
 #include "imginfo.c"
 #include "mdistuff.c"
 
@@ -752,7 +755,6 @@ int drms_key_is_slotted (DRMS_Env_t *drms_env, const char *keyname,
   if (!key) return 0;
   status = (key->info->recscope > 1);
   drms_free_keyword_struct (key);
-  drms_free_record (rec);
   return status;
 }
 
@@ -1016,7 +1018,6 @@ int DoIt (void) {
       fprintf (stderr, "Error: unable to locate output series %s\n", maiser);
       return 1;
     }
-    drms_close_record (rec, DRMS_FREE_RECORD);
   }
 				       /*  determine data segment(s) to used  */
   if (uselos) {
@@ -1040,7 +1041,6 @@ return 1;
 	    seg->info->name);
       }
       segct = 1;
-      drms_close_record (rec, DRMS_FREE_RECORD);
     }
     source_series = losset;
   }
@@ -1114,7 +1114,6 @@ return 1;
     free (pkindx);
     free (pkbase);
     free (pkstep);
-    drms_free_record (rec);
   } else snprintf (rec_query, 256, "%s[?%s between %23.16e and %23.16e?]",
       source_series, trec_key, tstrt - t_eps, tstop + t_eps);
   if (!(ds = drms_open_records (drms_env, rec_query, &status))) {
@@ -1682,6 +1681,10 @@ printf ("sf = %f, sb = %f\n", sf[0], sb[0]);
  *  2021.01.08	Fixed additional possible bug introduced in previous version for
  *	correction of SDO CMLon (but probably never reached)
  *  v 2.4 frozen 2021.02.15
+ *  21.11.03	Removed potentially dangerous frees of template records
+ *	added version control for included ephemeris code and other utils,
+ *	use DRMS localization defs only; removed unused include
+ *  v 2.5 frozen 2021.11.05
  *		
  */
 /******************************************************************************/

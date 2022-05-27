@@ -84,11 +84,15 @@
  *  Revision history is at end of file
  */
 
+#define MODULE_VERSION_NUMBER	("1.4")
+#define EARTH_EPHEM_VERSION "earth_ephem_v12.c"
+#define SOHO_EPHEM_VERSION "soho_ephem_v11.c"
+
 #include <jsoc_main.h>
 						       /*  module identifier  */
 char *module_name = "rdcoverage";
 char *module_desc = "report input data coverage for tracking options";
-char *version_id = "1.2";
+char *version_id = MODULE_VERSION_NUMBER;
 
 ModuleArgs_t module_args[] = {
   {ARG_STRING,	"ds", "", "input data series or dataset"}, 
@@ -120,8 +124,8 @@ ModuleArgs_t module_args[] = {
   {}
 };
 
-#include "earth_ephem.c"
-#include "soho_ephem.c"
+#include EARTH_EPHEM_VERSION
+#include SOHO_EPHEM_VERSION
 
 static int key_params_from_dspec (const char *dspec) {
 /*
@@ -393,7 +397,6 @@ int DoIt (void) {
     status = verify_keys (irec, trec_key, clon_key, clat_key, &pkeyslotted);
     if (status) {
       fprintf (stderr, "Error: unable to verify keys from template record\n");
-      drms_free_record (irec);
       return 1;
     }
     if ((keywd = drms_keyword_lookup (irec, tstp_key, 1))) {
@@ -411,7 +414,6 @@ int DoIt (void) {
           "Error: data cadence keyword %s not in input series %s\n",
 	  tstp_key, inset);
       fprintf (stderr, "       Specify desired output cadence as tstep\n");
-      drms_free_record (irec);
       return 1;
     }
     data_cadence = drms_getkey_double (irec, tstp_key, &status);
@@ -486,7 +488,6 @@ int DoIt (void) {
 	} else {
 	  fprintf (stderr,
 	      "Time specification in CR:CL for observing platform not supported\n");
-	  drms_free_record (irec);
 	  return 1;
 	}
       } else {
@@ -501,7 +502,6 @@ int DoIt (void) {
 	fprintf (stderr,
 	    "Error: requested end time before or at start time for ");
 	fprintf (stderr, "length= %d\n", length);
-	drms_free_record (irec);
 	return 1;
       }
 			  /*  adjust stop time to reflect sampling symmetry  */
@@ -527,12 +527,10 @@ int DoIt (void) {
 	fprintf (stderr,
 	    "Error: if data set not explicitly selected, either tmid and length\n");
 	fprintf (stderr, "       or tstart and tstop must be specified\n");
-	drms_free_record (irec);
 	return 1;
       }
       length = (tstop - tstrt + 1.01 * tstep) / tstep;
     }
-    drms_free_record (irec);
     if (pkeyslotted) {
       TIME pbase;
       double pstep;
@@ -775,5 +773,8 @@ int DoIt (void) {
  *	function from selstuff used, and included earth_ephem
  *  18.05.04	removed unused include file
  *  v 1.3 frozen 2018.05.04
- *
+ *  21.11.03	removed potentially dangerous free of template record;
+ *	added version control for included ephemeris code, use DRMS
+ *	localization defs only; fixed module version (incorrect for v 1.3)
+ *  v 1.4 frozen 2021.11.05
  */

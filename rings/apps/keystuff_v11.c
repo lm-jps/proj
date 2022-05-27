@@ -14,6 +14,17 @@
  *  drms_wcs_timestep()
  *  propagate_keys()
  *
+ *  This version of the code library is known to be included by the following
+ *    modules or programs or code under /home/rick/src/:
+ *	drms/addnoise.c
+ *	drms/drms_rebin.c v 1.2
+ *	maproj/(maproj.c v 1.4)
+ *	mtrack/mtrack.c v 2.6
+ *	pspec/pspec.c c 1.2 ->
+ *	ringfit/rdfitf/rdfitf.c v 0.8 ->
+ *	rings/hmi/maicalc.c v 2.3 ->
+ *	sun/deorbit.c
+ *
  *  Bugs:
  *    Commented out warnings of type mis-matches in check_and_copy_key
  *    There is evidently a bug in append_keyval_to_primekeyval(),
@@ -647,13 +658,11 @@ int drms_verify_links (char *oldser, char *newser, int *keyct, int *segct) {
     fprintf (stderr,
 	"Error: drms_template_record returned %d for data series:\n", status);
     fprintf (stderr, "       %s\n", newser);
-    if (nrec) drms_free_record (nrec);
     return -1;
   }
 				/*  check whether there are any links at all  */
   lnkct = nrec->links.num_total;
   if (!lnkct) {
-    drms_free_record (nrec);
     return 0;
   }
 						/*  get old series structure  */
@@ -663,7 +672,6 @@ int drms_verify_links (char *oldser, char *newser, int *keyct, int *segct) {
 	"Error: drms_template_record returned %d for data series:\n", status);
     fprintf (stderr, "       %s\n", oldser);
     if (orec) drms_free_record (orec);
-    drms_free_record (nrec);
     return -1;
   }
   while ((nlnk = drms_record_nextlink (nrec, &last))) {
@@ -672,24 +680,16 @@ int drms_verify_links (char *oldser, char *newser, int *keyct, int *segct) {
       continue;
     }
     linknam = strdup (nlnk->info->name);
-/*
-    lnkdser = strdup (nlnk->info->target_series);
-*/
     break;
   }
   if (last) hiter_destroy (&last);
   if (!lnkct) {
 		       /*  nothing in the new series links to the old series  */
-    drms_free_record (nrec);
     return 0;
   }
 		/*  count keyword and segment links to old series separately  */
   while ((nkey = drms_record_nextkey (nrec, &last, 0))) {
     if (!nkey->info->islink) continue;
-/*
-fprintf (stderr, "for key %s comparing %s with %s\n", nkey->info->name,
-nkey->info->linkname, linknam);
-*/
     if (strcasecmp (nkey->info->linkname, linknam)) continue;
     keylnkct++;
     okey = drms_keyword_lookup (orec, nkey->info->target_key, 0);
@@ -698,22 +698,14 @@ nkey->info->linkname, linknam);
   if (last) hiter_destroy (&last);
   while ((nseg = drms_record_nextseg (nrec, &last, 0))) {
     if (!nseg->info->islink) continue;
-/*
-fprintf (stderr, "for seg %s comparing %s with %s\n", nseg->info->name,
-nseg->info->linkname, linknam);
-*/
     if (strcasecmp (nseg->info->linkname, linknam)) continue;
     seglnkct++;
     oseg = drms_segment_lookup (orec, nseg->info->target_seg);
     if (oseg) seglnkct--;
   }
   if (last) hiter_destroy (&last);
-/*
-fprintf (stderr, "key links = %d + seg links = %d\n", keylnkct, seglnkct);
-*/
   free (linknam);
   drms_free_record (orec);
-  drms_free_record (nrec);
   *keyct = keylnkct;
   *segct = seglnkct;
   return (keylnkct + seglnkct);
@@ -939,5 +931,8 @@ int drms_wcs_timestep (DRMS_Record_t *rec, int axis, double *tstep) {
  *  10.04.24		added copy_prime_keys()
  *  10.06.11		added construct_stringlist() (orig in drms_rebin)
  *  12.03.21		added check_and_set_key_longlong()
+ *  v 1.0 frozen 2014.04.18
  *  19.04.23		added drms_verify_links(), version number definition
+ *  21.11.04		removed potentially dangerous frees of template record
+ *  v 1.1 frozen 2021.11.05
  */

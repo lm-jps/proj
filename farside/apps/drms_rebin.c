@@ -414,8 +414,6 @@ static int check_output_segment (DRMS_Segment_t *seg, int rank, int *axes,
   *fixed_point = seg->info->type == DRMS_TYPE_CHAR ||
       seg->info->type == DRMS_TYPE_SHORT ||seg->info->type == DRMS_TYPE_INT ||
       seg->info->type == DRMS_TYPE_LONGLONG;
-fprintf (stderr, "type = %s\n", drms_type_names[seg->info->type]);
-fprintf (stderr, "fixed_point = %d\n", *fixed_point);
   return 0;
 }
 
@@ -560,6 +558,12 @@ int DoIt (void) {
     oslice_strt = (int *)malloc (mrank * sizeof (int));
     oslice_stop = (int *)malloc (mrank * sizeof (int));
 		     /*  forbid both collapse and merge, too complex for now  */
+    if (collapse) {
+      fprintf (stderr,
+	  "Warning: merge and collapse options cannot both be invoked\n");
+      fprintf (stderr,
+	  "         collapse option will be ignored\n");
+    }
     collapse = 0;
   }
 	  /*  fill the per-axis arrays of bin, start, stop, and wmin values,
@@ -614,7 +618,7 @@ int DoIt (void) {
      /*  initialize arrays and calculate target pixel lists for first record  */
 		 /*  determine source locations for each binned target pixel  */
   in_axes = (int *)malloc (rank * sizeof (int));
-  out_axes = (int *)malloc (rank * sizeof (int));
+  out_axes = (int *)malloc (mrank * sizeof (int));
   nssub = (long long *)malloc (rank * sizeof (long long));
   ntsub = (long long *)malloc (rank * sizeof (long long));
   ntdat = ntbin = npmax = 1;
@@ -644,21 +648,20 @@ int DoIt (void) {
     }
   }
   if (collapse) {
-    int *new_axes = (int *)malloc (rank * sizeof (int));
+    int *new_axes = (int *)malloc (mrank * sizeof (int));
     for (n = 0, m = 0; n < rank; n++) {
       if (out_axes[n] == 1) crank--;
       else new_axes[m++] = out_axes[n];
     }
 					   /*  do not collapse to zero rank  */
-    if (crank < 1) {
+    if ((crank) < 1) {
       crank = 1;
       new_axes[0] = 1;
     }
     if (crank == rank) collapse = 0;
     else for (n = 0; n < crank; n++) out_axes[n] = new_axes[n];
     free (new_axes);
-  }
-  if (merge) {
+  } else if (merge) {
     strt[rank] = 0;
     stop[rank] = rec_ct - 1;
     out_axes[rank] = rec_ct;
@@ -1020,28 +1023,28 @@ int DoIt (void) {
 	      kstat += check_and_set_key_short (orec, idkey, sval);
 	      break;
 	  case (DRMS_TYPE_INT):
-	  ival = params_get_short (params, "idval");
-	  kstat += check_and_set_key_int (orec, idkey, ival);
-	  break;
+	    ival = params_get_short (params, "idval");
+	    kstat += check_and_set_key_int (orec, idkey, ival);
+	    break;
 	  case (DRMS_TYPE_FLOAT):
-	  fval = params_get_float (params, "idval");
-	  kstat += check_and_set_key_float (orec, idkey, fval);
-	  break;
+	    fval = params_get_float (params, "idval");
+	    kstat += check_and_set_key_float (orec, idkey, fval);
+	    break;
 	  case (DRMS_TYPE_DOUBLE):
-	  dval = params_get_double (params, "idval");
-	  kstat += check_and_set_key_double (orec, idkey, dval);
-	  break;
+	    dval = params_get_double (params, "idval");
+	    kstat += check_and_set_key_double (orec, idkey, dval);
+	    break;
 	  case (DRMS_TYPE_TIME):
-	  tval = params_get_time (params, "idval");
-	  kstat += check_and_set_key_time (orec, idkey, tval);
-	  break;
+	    tval = params_get_time (params, "idval");
+	    kstat += check_and_set_key_time (orec, idkey, tval);
+	    break;
 	  case (DRMS_TYPE_STRING):
-	  strval = strdup (params_get_str (params, "idval"));
-	  kstat += check_and_set_key_str (orec, idkey, strval);
-	  break;
+	    strval = strdup (params_get_str (params, "idval"));
+	    kstat += check_and_set_key_str (orec, idkey, strval);
+	    break;
 	  default:
-	  fprintf (stderr, "Warning unsupported type %s for keyword %s\n",
-	      drms_type_names[keytyp], idkey);
+	    fprintf (stderr, "Warning unsupported type %s for keyword %s\n",
+		drms_type_names[keytyp], idkey);
 	  }
 	} else if (verbose) {
 	  printf ("Warning: requested ID key %s is not in output data series\n",
@@ -1239,8 +1242,10 @@ int DoIt (void) {
       maxscale = (vmax - vmin) / 256.0;
       if (oseg->info->type == DRMS_TYPE_SHORT) maxscale /= 256.0;
       if (oseg->info->type == DRMS_TYPE_INT) maxscale /= 65536.0 / 256.0;
+/*
 fprintf (stderr, "scaling range: %10.3e, midpoint %10.3e\n", maxscale,
 0.5 * (vmax + vmin));
+*/
     }
 					  /*  adjust scaling of binned array  */
     if (bias_values) {
@@ -1411,4 +1416,6 @@ fprintf (stderr, "scaling range: %10.3e, midpoint %10.3e\n", maxscale,
  *  v 1.2	Added handling and propagation of logarithmic-scaled data
  *		Added check for table insert permission
  *		Modified set_stats_keys to eliminate no longer supported macro
+ *  2021.07.29	removed potentially dangerous frees of template record;
+ *  v 1.2 frozen 2022.05.27
  */

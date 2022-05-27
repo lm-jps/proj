@@ -57,7 +57,7 @@
  *  Revision history is at end of file.
  */
 
-#define MODULE_VERSION_NUMBER	("1.2")
+#define MODULE_VERSION_NUMBER	("1.3")
 #define KEYSTUFF_VERSION "keystuff_v11.c"
 
 char *module_name = "pspec3";
@@ -244,12 +244,12 @@ int DoIt (void) {
   double bzero, bscale, scale_range;
   float *data, *xdata;
   float ftrb, ftib, fval, vmin, vmax, vmin2;
-  long long cube, ntot, l, m, n;
+  long long planes, area, cube, ntot, l, m, n;
+  long long bin, is, js;
   int axes[3];
-  int rank, col, cols, row, rows, plane, planes, area;
+  int rank, col, cols, row, rows, plane;
   int hcols, hrows, hplanes, opln, xcols, cols_even, rows_even;
   int rgn, rgnct, segs, isegnum, osegnum, found;
-  int bin, is, js;
   int key_n, kstat, propct, status;
   int bigcube, unlnkeyct, unlnsegct;
   char **copykeylist;
@@ -292,13 +292,11 @@ int DoIt (void) {
     fprintf (stderr,
 	"Error: drms_template_record returned %d for data series:\n", status);
     fprintf (stderr, "       %s\n", out_series);
-    if (orec) drms_free_record (orec);
     return 1;
   }
   if ((segs = orec->segments.num_total) < 1) {
     fprintf (stderr, "Error: no data segments in output data series:\n");
     fprintf (stderr, "  %s\n", out_series);
-    drms_free_record (orec);
     return 1;
   }
   found = 0;
@@ -343,7 +341,6 @@ int DoIt (void) {
     fprintf (stderr, "Error (%s): drms_open_records() returned %d for dataset:\n",
 	module_ident, status);
     fprintf (stderr, "  %s\n", inds);
-    drms_free_record (orec);
     return cleanup (1, irecs, NULL, orig, pspec, dispose);
   }
 
@@ -363,7 +360,6 @@ int DoIt (void) {
   if ((segs = drms_record_numsegments (irec)) < 1) {
     fprintf (stderr, "Error: no data segments in input data series:\n");
     fprintf (stderr, "  %s\n", inser);
-    drms_free_record (orec);
     return cleanup (1, irecs, NULL, orig, pspec, dispose);
   }
   found = 0;
@@ -376,7 +372,6 @@ int DoIt (void) {
   if (!found) {
     fprintf (stderr, "Error: no segment of rank 3 in input data series:\n");
     fprintf (stderr, "  %s\n", inser);
-    drms_free_record (orec);
     return cleanup (1, irecs, NULL, orig, pspec, dispose);
   }
   if (status = drms_verify_links (irec->seriesinfo->seriesname, out_series,
@@ -385,7 +380,6 @@ int DoIt (void) {
 	out_series, status);
     fprintf (stderr, "         input series %s\n", irec->seriesinfo->seriesname);
   }
-  drms_free_record (orec);
   if (found > 1) {
     if (strcmp (seg_name, "Not Specified")) {
       iseg = drms_segment_lookup (irec, seg_name);
@@ -489,10 +483,18 @@ int DoIt (void) {
 					    /*  Initialize FFT working space  */
     if (dp_calc) {
       wdata = (double *)malloc (planes * rows * xcols * sizeof (double));
+      if (!wdata) {
+	fprintf (stderr, "Error: unable to allocate working space\n");
+	return cleanup (1, irecs, orec, orig, pspec, dispose);
+      }
       plan = fftw_plan_dft_r2c_3d (planes, rows, cols, wdata,
 	  (fftw_complex *)wdata, FFTW_ESTIMATE);
     } else {
       xdata = (float *)malloc (planes * rows * xcols * sizeof (float));
+      if (!xdata) {
+	fprintf (stderr, "Error: unable to allocate working space\n");
+	return cleanup (1, irecs, orec, orig, pspec, dispose);
+      }
       fplan = fftwf_plan_dft_r2c_3d (planes, rows, cols, xdata,
 	  (fftwf_complex *)xdata, FFTW_ESTIMATE);
     }
@@ -822,7 +824,7 @@ exp(scale_range), target_min);
  *  v 0.6 frozen 2009.07.14
  *  v 0.7:	fix to run with NetDRMS 2.0 (09.07.14);
  *		Modify and add to list of keywords copied from input
- *  v 0.7 frozen 2009.09.08.05
+ *  v 0.7 frozen 2009.08.05
  *  v 0.8:	general code cleanup; added copying of all standard (and
  *	additional "standard") keys;
  *		removed defaults for I/O;
@@ -858,5 +860,9 @@ exp(scale_range), target_min);
  *  v 1.2	Fixed error in reporting of CRPIXn (1,2) values;
  *	use drms_template_record() to check output series validity; verify
  *	that any destination links to source exist in source
+ *  v 1.2 frozen 2019.04.23
+ *  v 1.3	Fixed errors involving large input cubes (>= 2G elements)
+ *		Removed potentially dangerous frees of template records
+ *  v 1.3 frozen 2021.11.05
  *
  */

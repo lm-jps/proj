@@ -130,6 +130,8 @@
  *				distance from sun for of each image
  *	cvkey	 string	CalVer64	Key name of 64-bit mask type keyword
  *				describing calibration version used
+ *	idkey	 string	Ident		Key name of keyword whose string value
+ *				is to be set to value of ident (if specified)
  *	cvok	string	any		Acceptable value of cvkey
  *	cvno	string	none		Uncceptable value of cvkey
  *      mai	 float*  NaN	MAI (Magnetic Activity Index) value to
@@ -225,20 +227,13 @@
 /******************************************************************************/
 
 /******************** defines, includes, and global declarations **************/
-#define MODULE_VERSION_NUMBER	("2.5")
+#define MODULE_VERSION_NUMBER	("2.6")
 #define CARTOGRAPHY_VERSION "cartography_v11.c"
-#define KEYSTUFF_VERSION "keystuff_v10.c"
-#define EARTH_EPHEM_VERSION "earth_ephem_v11.c"
+#define KEYSTUFF_VERSION "keystuff_v11.c"
+#define EARTH_EPHEM_VERSION "earth_ephem_v12.c"
 #define SOHO_EPHEM_VERSION "soho_ephem_v11.c"
 
 #include <jsoc_main.h>
-			 /*  remove the next six lines for use with DRMS 9.5  */
-#ifndef JPL_EPHEM_TABLEDIR
-#define JPL_EPHEM_TABLEDIR	("/home/rick/src/ephem/tables")
-#endif
-#ifndef SOHO_EPHEM_TABLE
-#define SOHO_EPHEM_TABLE	("/home/soi/CM/tables/ephemeris/summary")
-#endif
 
 #include CARTOGRAPHY_VERSION
 #include KEYSTUFF_VERSION
@@ -314,6 +309,8 @@ ModuleArgs_t module_args[] = {
   {ARG_STRING,  "cvok", "any", "Acceptable value of cvkey"},
   {ARG_STRING,  "cvno", "none", "Unacceptable value of cvkey"},
   {ARG_FLOATS,	"mai", "NaN", "Magnetic Activity Indices"},
+  {ARG_STRING,	"id_key", "Ident",
+      "keyword whose value is to value of ident (if specified)"}, 
   {ARG_STRING,	"ident", "Not Specified", "identifier"}, 
   {ARG_FLAG,	"c",	"", "track at Carrington rate"}, 
   {ARG_FLAG,	"n",	"", "turn off tracking"}, 
@@ -451,7 +448,6 @@ int drms_key_is_slotted (DRMS_Env_t *drms_env, const char *keyname,
   if (!key) return 0;
   status = (key->info->recscope > 1);
   drms_free_keyword_struct (key);
-  drms_free_record (rec);
   return status;
 }
 
@@ -1792,7 +1788,9 @@ double degrad = 180.0 / M_PI;
        /*  Calculate heliographic coordinates corresponding to map location  */
       lat = maplat[n + mset] + delta_lat;
       lon = maplon[n + mset] + delta_lon;
-     /*  Calculate plate coordinates corresponding to heliocentric location  */
+      map_coslat[n + mset] = cos (lat);
+      map_sinlat[n + mset] = sin (lat);
+    /*  Calculate plate coordinates corresponding to heliocentric location  */
       if (sphere2img (lat, lon, latc, lonc, &xx, &yy, xc, yc, radius, pa,
           ellipse_e, ellipse_pa, x_invrt, y_invrt)) {
 	maps[n + mset] = missing_val;
@@ -2087,6 +2085,7 @@ int DoIt (void) {
   char *rsun_key = strdup (params_get_str (params, "rsun_key"));
   char *apsd_key = strdup (params_get_str (params, "apsd_key"));
   char *dsun_key = strdup (params_get_str (params, "dsun_key"));
+  char *id_key = strdup (params_get_str (params, "id_key"));
 
   int carr_track = params_isflagset (params, "c");
   int no_track = params_isflagset (params, "n");
@@ -2249,7 +2248,6 @@ int DoIt (void) {
 					/*  check if limb distance is needed  */
   need_limb_dist = (drms_keyword_lookup (orec, "MeanMu", 1) ||
       drms_keyword_lookup (orec, "MeanPA", 1));
-  drms_free_record (orec);
 
   if (!(ods = drms_create_records (drms_env, rgnct, outser, DRMS_PERMANENT,
       &status))) {
@@ -2597,6 +2595,9 @@ int DoIt (void) {
   maplon = (double *)malloc (pixct * rgnct * sizeof (double));
   if (no_merid_v) {
     map_coslat = maplat;
+    map_sinlat = (double *)malloc (pixct * rgnct * sizeof (double));
+  } else {
+    map_coslat = (double *)malloc (pixct * rgnct * sizeof (double));;
     map_sinlat = (double *)malloc (pixct * rgnct * sizeof (double));
   }
   offsun = (unsigned char *)malloc (pixct * rgnct * sizeof (char));
@@ -3439,7 +3440,7 @@ int DoIt (void) {
     if (pkeyval = create_prime_key (orec))
       kstat += check_and_set_key_str (orec, "PrimeKeyString", pkeyval);
     if (strcmp (identifier, "Not Specified"))
-      kstat += check_and_set_key_str (orec, "Ident", identifier);
+      kstat += check_and_set_key_str (orec, id_key, identifier);
     if (need_stats) kstat += set_stat_keys (orec, nntot, datavalid[rgn],
         minval[rgn], maxval[rgn], datamean[rgn], datarms[rgn], dataskew[rgn],
 	datakurt[rgn]);
@@ -3718,6 +3719,12 @@ int DoIt (void) {
  *	  call to adjust_sdo_clon() in main module body to avoid over-correction
  *	  when table not in use
  *  v 2.5 refrozen 2020.12.28
+ *  v 2.6	Fixed non-initialization bug exposed when merid_v != 0.
+ *	Added option for specifying different name of identifier key
+ *	Removed potentially dangerous frees of template records
+ *	Updated version controlled included ephemeris code and other utils,
+ *	using DRMS localization defs only
+ *  v 2.6 frozen 2021.11.05
  */
 /******************************************************************************/
 
