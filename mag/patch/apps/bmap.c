@@ -857,10 +857,8 @@ int readFullDisk(DRMS_Record_t *inRec, struct mapInfo *mInfo, float *bx_img, flo
 	int xDim = FOURK, yDim = FOURK;
 	
 	int amb = (int)(pow(2,mInfo->ambweak));
-    printf("amb=%d\n", amb);
-    for (char i = 0; i < 8; i++) {
-        printf("i=%d, i0=%d\n", i, (i / amb) % 2);
-    }
+//    printf("amb=%d\n", amb);
+//    for (char i = 0; i < 8; i++) { printf("i=%d, i0=%d\n", i, (i / amb) % 2); }
 	
 	for (jy = 0; jy < yDim; jy++)
 	{
