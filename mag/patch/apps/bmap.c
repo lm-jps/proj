@@ -857,6 +857,10 @@ int readFullDisk(DRMS_Record_t *inRec, struct mapInfo *mInfo, float *bx_img, flo
 	int xDim = FOURK, yDim = FOURK;
 	
 	int amb = (int)(pow(2,mInfo->ambweak));
+    printf("amb=%d\n", amb);
+    for (char i = 0; i < 8; i++) {
+        printf("i=%d, i0=%d\n", i, (i / amb) % 2);
+    }
 	
 	for (jy = 0; jy < yDim; jy++)
 	{
@@ -1929,6 +1933,7 @@ void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *inRec, struct mapInfo *mInfo)
 	drms_copykey(outRec, inRec, "IMCRPIX2");
 	drms_copykey(outRec, inRec, "IMCRVAL1");
 	drms_copykey(outRec, inRec, "IMCRVAL2");
+    drms_setkey_int(outRec, "AMBWEAK", mInfo->ambweak);
 	
 	switch (mInfo->repOpt) {
 		default:
