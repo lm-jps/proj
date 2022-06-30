@@ -500,6 +500,8 @@ int do_ingest(long long bbrec, long long eerec, const char *dpath)
 
     //this loop is for the benefit of the lev1view display to show
     //info on all lev0 records opened
+    long long fsnsav=-999999;
+    long long recnumsav=-999999;
     for(i=0; i < ncnt; i++) {
       flatmiss[i] = 0;		//init quality flags
       orbmiss[i] = 0;
@@ -514,6 +516,18 @@ int do_ingest(long long bbrec, long long eerec, const char *dpath)
       fsnx = drms_getkey_int(rs0, "FSN", &rstatus);
       fsnarray[i] = fsnx;
       printk("*0 %u %u\n", recnum0, fsnx);
+
+      // swap out of order recnums
+      if (fsnx == fsnsav && recnum0 < recnumsav) {
+	  printk("*** fixing wrong recnum order\n");
+	  DRMS_Record_t rectmp;
+	  memcpy(&rectmp, &rptr[i-1], sizeof(DRMS_Record_t));
+	  memcpy(&rptr[i-1], &rptr[i], sizeof(DRMS_Record_t));
+	  memcpy(&rptr[i], &rectmp, sizeof(DRMS_Record_t));
+      }
+      fsnsav=fsnx;
+      recnumsav=recnum0;
+
       //also set up call for get_pointing_info() and iorbit_getinfo()
       tobs[i] = drms_getkey_time(rs0, "t_obs", &rstatus);
       if(rstatus) {
