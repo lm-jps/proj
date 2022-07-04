@@ -1904,7 +1904,7 @@ void outputLatLon(DRMS_Record_t *outRec, DRMS_Record_t *inRec, struct mapInfo *m
 
 void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *inRec, struct mapInfo *mInfo)
 {
-	int status = 0;
+	int status = 0, isFD = 0;
 	char key[64];
 	
 	// All other keywords
@@ -1918,7 +1918,7 @@ void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *inRec, struct mapInfo *mInfo)
 		copy_geo_keys(inRec, outRec);
 		return;
 	}
-	
+    
 	double disk_latc, disk_lonc, disk_xc, disk_yc, rSun, asd, pa;
 	
 	if (getEphemeris(inRec, &disk_lonc, &disk_latc, &disk_xc, &disk_yc, &rSun, &asd, &pa))
@@ -2012,7 +2012,20 @@ void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *inRec, struct mapInfo *mInfo)
 		drms_setkey_string(outRec, "BUNIT_009", "degree");
 		
 	}
-  
+
+    // July 4 2022, no error checking
+    float imcrpix1 = drms_getkey_float(inRec, "IMCRPIX1", &isFD);        // Full disk does not have this key
+    if (isFD) {
+        double imcrpix1 = drms_getkey_double(inRec, "CRPIX1", &status);
+        double imcrpix2 = drms_getkey_double(inRec, "CRPIX2", &status);
+        double imcrval1 = drms_getkey_double(inRec, "CRVAL1", &status);
+        double imcrval2 = drms_getkey_double(inRec, "CRVAL2", &status);
+        drms_setkey_double(outRec, "IMCRPIX1", imcrpix1);
+        drms_setkey_double(outRec, "IMCRPIX2", imcrpix2);
+        drms_setkey_double(outRec, "IMCRVAL1", imcrval1);
+        drms_setkey_double(outRec, "IMCRVAL2", imcrval2);
+    }
+    
     // Info
     TIME val, trec, tnow, UNIX_epoch = -220924792.000; /* 1970.01.01_00:00:00_UTC */
     tnow = (double)time(NULL);
