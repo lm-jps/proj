@@ -1,0 +1,12 @@
+MODULE VOIGT_DATA
+  !
+  ! J M Borrero
+  ! Apr 24, 2008
+  ! HAO-NCAR for HMI-Stanford
+  !
+  USE CONS_PARAM
+  IMPLICIT NONE
+  !
+  REAL(DP),   DIMENSION(3000)  :: FF, HH, UU
+  !
+END MODULE VOIGT_DATA

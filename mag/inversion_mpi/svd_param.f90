@@ -1,0 +1,11 @@
+MODULE SVD_PARAM
+  ! J M Borrero
+  ! Dec 14, 2009
+  ! HAO-NCAR for HMI-Stanford
+  USE CONS_PARAM
+  IMPLICIT NONE
+  REAL(DP),    ALLOCATABLE  :: HESS(:,:), DIVC(:)
+  INTEGER,     ALLOCATABLE  :: FREELOC(:)
+
+!  WRITE(*,*) 'done svd_param'
+END MODULE SVD_PARAM
