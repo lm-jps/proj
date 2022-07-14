@@ -132,11 +132,6 @@ function HmiB2ptrSet(param)
     this.argsReady = false;
     this.paramsValid = null;
 
-    if (param == 'method')
-    {
-        // nothing to do; the index of the selected item in drop-down list will be passed directly to hmib2ptr
-    }
-
     checkRes = this.Check(false);
 
     if (checkRes === null)
@@ -155,26 +150,24 @@ function HmiB2ptrSet(param)
   }
 
 function HmiB2ptrInit(onLoad)
-{
+  {
     if (onLoad)
     {
         $("ProcessHmiB2ptr").style.display="none";
-        $("HmiB2ptrDisambigMethod").selectedIndex = 2; // HmiB2ptrOptionMethodRadial
     }
-}
+  }
 
 function HmiB2ptrCheck(fromSetProcessing)
-{
-    var HmiB2ptrSizeRatio = 1.0;
-    var isok = true;
-    var args = "HmiB2ptr,l=1";
-    var disambigMethod = 2;
+  {
+  var HmiB2ptrSizeRatio = 1.0;
+  var isok = true;
+  var args = "HmiB2ptr,l=1";
 
-    if (!$("OptionHmiB2ptr").checked)
-    {
-        // If this processing option is not selected, then do not check parameter values.
-        return '';
-    }
+  if (!$("OptionHmiB2ptr").checked)
+  {
+    // If this processing option is not selected, then do not check parameter values.
+    return '';
+  }
 
     if (fromSetProcessing)
     {
@@ -202,18 +195,11 @@ function HmiB2ptrCheck(fromSetProcessing)
         return 'error';
     }
 
-    disambigMethod = $("HmiB2ptrDisambigMethod").selectedIndex;
-
-    if (disambigMethod != 2) // 2 is default
-    {
-        args = args + ",ambweak=" + disambigMethod.toString()
-    }
-
-    ExportProcessingOptions[HmiB2ptrOption].Size = HmiB2ptrSizeRatio;
-    this.paramsValid = (isok ? args : "");
-
-    return (isok ? args : "");
-}
+  ExportProcessingOptions[HmiB2ptrOption].Size = HmiB2ptrSizeRatio;
+  this.paramsValid = (isok ? args : "");
+  CheckRediness();
+  return (isok ? args : "");
+  }
 
 // End HmiB2ptr
 
@@ -494,7 +480,7 @@ function AiaScaleCheck(fromSetProcessing)
 
     ExportProcessingOptions[AiaScaleOption].Size = AiaScaleSizeRatio;
     this.paramsValid = (isok ? args : "");
-
+    CheckRediness();
     return (isok ? args : "");
 }
 
@@ -511,7 +497,7 @@ function RebinInit(onLoad)
     if (onLoad)
     {
         // Clear out any old settings.
-        $("RebinMethod").selectedIndex = 0;
+        $("RebinMethod").selectedIndex=0;
         $("RebinSegments").checked = false;
         $("RebinCrop").checked = false;
         $("RebinRotate").checked = false;
@@ -670,7 +656,7 @@ function RebinCheck(fromSetProcessing)
 
   ExportProcessingOptions[RebinOption].Size = RebinSizeRatio*RebinSizeRatio;
   this.paramsValid = (isok ? rv : "");
-
+  CheckRediness();
   return (isok ? rv : "");
   }
 
@@ -800,7 +786,7 @@ function ResizeCheck(fromSetProcessing)
 
   ExportProcessingOptions[ResizeOption].Size = ResizeSizeRatio;
   this.paramsValid = (isok ? rv : "");
-
+  CheckRediness();
   return (isok ? rv : "");
   }
 
@@ -1228,7 +1214,7 @@ function ImPatchCheck(fromSetProcessing)
     }
   ExportProcessingOptions[ImPatchOption].Size = localImPatchSizeRatio;
   this.paramsValid = (isok ? args : "");
-
+  CheckRediness();
   return (isok ? args : "");
   }
 
@@ -1537,7 +1523,7 @@ function MaprojCheck(fromSetProcessing)
 
   ExportProcessingOptions[MaprojOption].Size = MaprojSizeRatio;
   this.paramsValid = (isok ? args : "");
-
+  CheckRediness();
   return (isok ? args : "");
   }
 
