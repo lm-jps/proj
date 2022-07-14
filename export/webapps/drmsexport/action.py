@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 
-from enum import Enum
+import enum
 
 __all__ = [ 'ErrorCode', 'ActionError', 'ActionApiError', 'Action' ]
 
-class ErrorCode(Enum):
+class ErrorCode(enum.Enum):
     UNKNOWN = (1, 'unknown error')
     API_ERROR = (2, 'API error')
 

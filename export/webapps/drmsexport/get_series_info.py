@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 
-from argparse import Action as ArgsAction
-from collections import OrderedDict
-from copy import deepcopy
-from distutils.util import strtobool
-from enum import Enum
-from json import loads as json_loads, dumps as json_dumps
-from os.path import join as path_join
-from psycopg2 import Error as PGError, connect as pg_connect
-from sys import exc_info as sys_exc_info, exit as sys_exit, stdout as sys_stdout
+import argparse
+import collections
+import copy
+import distutils.util
+import enum
+import json
+import os.path
+import psycopg2
+import sys
 
 from drms_export import Connection, Error as ExportError, ErrorCode as ExportErrorCode, ErrorResponse, ExpServerBaseError, get_arguments as ss_get_arguments, get_message, Response, send_message
 from drms_parameters import DRMSParams, DPMissingParameterError
@@ -35,7 +35,7 @@ class ErrorCode(ExportErrorCode):
     UNHANDLED_EXCEPTION = (108, 'unhandled exception')
     EXPORT_SERVER = (109, 'export-server communication error')
 
-class RecordScope(Enum):
+class RecordScope(enum.Enum):
     VARIABLE = (0, 'variable')
     CONSTANT = (1, 'constant')
     INDEX = (100, 'index')
@@ -131,7 +131,7 @@ def webserver_action(self, parser, namespace, value, option_string=None):
     setattr(namespace, self.dest, webserver_obj)
 
 def create_webserver_action(drms_params):
-    cls = type('WebserverAction', (ArgsAction,),
+    cls = type('WebserverAction', (argparse.Action,),
     {
         '_drms_params' : drms_params,
         '__call__' : webserver_action,
@@ -142,7 +142,7 @@ def create_webserver_action(drms_params):
 class AttributeListAction(ListAction):
     def __call__(self, parser, namespace, values, option_string=None):
         try:
-            strtobool(values)
+            distutils.util.strtobool(values)
             self.dest = values
         except ValueError:
             # not a boolean; should be a list
@@ -160,13 +160,13 @@ class Arguments(Args):
                 db_name = drms_params.get_required('DBNAME')
                 db_user = drms_params.get_required('WEB_DBUSER')
             except DPMissingParameterError as exc:
-                raise ParametersError(exc_info=sys_exc_info(), error_message=str(exc))
+                raise ParametersError(exc_info=sys.exc_info(), error_message=str(exc))
 
             if is_program:
                 try:
-                    log_file = path_join(drms_params.get_required('EXPORT_LOG_DIR'), DEFAULT_LOG_FILE)
+                    log_file = os.path.join(drms_params.get_required('EXPORT_LOG_DIR'), DEFAULT_LOG_FILE)
                 except DPMissingParameterError as exc:
-                    raise ParametersError(exc_info=sys_exc_info(), error_message=str(exc))
+                    raise ParametersError(exc_info=sys.exc_info(), error_message=str(exc))
 
                 args = None
 
@@ -234,7 +234,7 @@ class Arguments(Args):
 def get_response(series_info, log):
     log.write_debug([ f'[ get_response ]' ])
 
-    response_dict = deepcopy(series_info._d)
+    response_dict = copy.deepcopy(series_info._d)
     info_status = response_dict['status']
 
     # move status so it does not conflict with response status value
@@ -262,7 +262,7 @@ def get_series_info_from_db(*, series, cursor, keywords=None, links=None, segmen
         try:
             name_space = series[:series.index('.')]
         except ValueError as exc:
-            raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'invalid series `{series}`: {str(exc)}')
+            raise ArgumentsError(exc_info=sys.exc_info(), error_message=f'invalid series `{series}`: {str(exc)}')
 
         # PG stores all timestamp with timezone column values in UTC
         sql = f"SELECT seriesname AS series, author, owner, unitsize, archive, retention, tapegroup, primary_idx as drmsprimekey, dbidx, to_timestamp(created || ' UTC', 'YYYY-MM-DD HH24:MI:SS') AS created, description FROM {name_space}.drms_series WHERE lower(seriesname) = '{series.lower()}'"
@@ -289,8 +289,8 @@ def get_series_info_from_db(*, series, cursor, keywords=None, links=None, segmen
             vals.append(row[10])
 
             series_info[series.lower()]['attributes'] = dict(zip(keys, vals))
-        except PGError as exc:
-            raise DBCommandError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+        except psycopg2.Error as exc:
+            raise DBCommandError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
 
         if keywords is not None:
             # only one series
@@ -361,8 +361,8 @@ def get_series_info_from_db(*, series, cursor, keywords=None, links=None, segmen
                                 series_info[series.lower()]['keywords'][keyword.lower()] = { 'name' : keyword, 'linked-keyword' : None, 'data-type' : None, 'scope' : None, 'default-value' : None, 'constant-value': None, 'physical-unit' : None, 'rank' : None, 'description' : None }
                     except:
                         pass
-                except PGError as exc:
-                    raise DBCommandError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+                except psycopg2.Error as exc:
+                    raise DBCommandError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
 
         if links is not None:
             # only one series
@@ -403,8 +403,8 @@ def get_series_info_from_db(*, series, cursor, keywords=None, links=None, segmen
                                 series_info[series.lower()]['links'][link.lower()] = { 'name' : link, 'child-series' : None, 'type': None, 'description' : None }
                     except:
                         pass
-                except PGError as exc:
-                    raise DBCommandError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+                except psycopg2.Error as exc:
+                    raise DBCommandError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
 
         if segments is not None:
             # only one series
@@ -454,8 +454,8 @@ def get_series_info_from_db(*, series, cursor, keywords=None, links=None, segmen
                                 series_info[series.lower()]['segments'][segment.lower()] = { 'name' : segment, 'data-type' : None, 'segment-number': None, 'scope' : None, 'number-axes' : None, 'dimensions' : None, 'physical-unit' : None, 'protocol' : None,'description' : None }
                     except:
                         pass
-                except PGError as exc:
-                    raise DBCommandError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+                except psycopg2.Error as exc:
+                    raise DBCommandError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
 
 def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
     # catch all expections so we can always generate a response
@@ -473,9 +473,9 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
 
             arguments = Arguments.get_arguments(is_program=is_program, program_name=program_name, program_args=program_args, module_args=module_args, drms_params=drms_params)
         except ArgsError as exc:
-            raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+            raise ArgumentsError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
         except Exception as exc:
-            raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+            raise ArgumentsError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
 
         if action_obj is None or action_obj.log is None:
             try:
@@ -484,7 +484,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
                 if action_obj is not None:
                     action_obj.log = log
             except Exception as exc:
-                raise LoggingError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+                raise LoggingError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
         else:
             log = action_obj.log
 
@@ -519,12 +519,12 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
         # connect to DB directly (fastest method)
         log.write_debug([ f'[ perform_action ] direct DB connection' ])
 
-        with pg_connect(database=arguments.db_name, host=arguments.db_host, port=str(arguments.db_port), user=arguments.db_user) as conn:
+        with psycopg2.pg_connect(database=arguments.db_name, host=arguments.db_host, port=str(arguments.db_port), user=arguments.db_user) as conn:
             with conn.cursor() as cursor:
-                unique_series = list(OrderedDict.fromkeys(series))
-                keywords = arguments.keywords if type(arguments.keywords) == bool else list(OrderedDict.fromkeys(arguments.keywords))
-                links = arguments.links if type(arguments.links) == bool else list(OrderedDict.fromkeys(arguments.links))
-                segments = arguments.segments if type(arguments.segments) == bool else list(OrderedDict.fromkeys(arguments.segments))
+                unique_series = list(collections.OrderedDict.fromkeys(series))
+                keywords = arguments.keywords if type(arguments.keywords) == bool else list(collections.OrderedDict.fromkeys(arguments.keywords))
+                links = arguments.links if type(arguments.links) == bool else list(collections.OrderedDict.fromkeys(arguments.links))
+                segments = arguments.segments if type(arguments.segments) == bool else list(collections.OrderedDict.fromkeys(arguments.segments))
 
                 series_info = {}
 
@@ -544,7 +544,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
         elif is_program:
             print(error_message)
     except Exception as exc:
-        response = UnhandledExceptionError(exc_info=sys_exc_info(), error_message=f'{str(exc)}').response
+        response = UnhandledExceptionError(exc_info=sys.exc_info(), error_message=f'{str(exc)}').response
         error_message = str(exc)
 
         if log:
@@ -558,7 +558,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
     return response
 
 def send_request(request, connection, log):
-    json_message = json_dumps(request)
+    json_message = json.dumps(request)
     send_message(connection, json_message)
     message = get_message(connection)
 
@@ -626,7 +626,7 @@ class GetSeriesInfoAction(Action):
 
                     db_host_resolved = drms_params.get_required('EXPORT_DB_HOST_DEFAULT')
                 except DPMissingParameterError as exc:
-                    raise ParametersError(exc_info=sys_exc_info(), error_message=str(exc))
+                    raise ParametersError(exc_info=sys.exc_info(), error_message=str(exc))
             else:
                 db_host_resolved = db_host
 
@@ -651,7 +651,7 @@ class ShowSeriesLegacyResponse(Response):
 
     # override parent to remove attributes not present in legacy API
     def generate_serializable_dict(self):
-        serializable_dict = deepcopy(super().generate_serializable_dict())
+        serializable_dict = copy.deepcopy(super().generate_serializable_dict())
         sanitized_serializable_dict = self.remove_extraneous(serializable_dict, [ 'drms_export_status', 'drms_export_status_code', 'drms_export_status_description' ] )
 
         return sanitized_serializable_dict
@@ -687,9 +687,9 @@ class ShowSeriesLegacyAction(Action):
             try:
                 response = self.send_request(nested_arguments=nested_arguments)
             except ExpServerBaseError as exc:
-                raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+                raise ExportServerError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
             except Exception as exc:
-                raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+                raise ExportServerError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
         except GsiBaseError as exc:
             response = exc.response
             error_message = exc.message
@@ -697,7 +697,7 @@ class ShowSeriesLegacyAction(Action):
             if log:
                 log.write_error([ error_message ])
         except Exception as exc:
-            response = UnhandledExceptionError(exc_info=sys_exc_info(), error_message=f'{str(exc)}').response
+            response = UnhandledExceptionError(exc_info=sys.exc_info(), error_message=f'{str(exc)}').response
             error_message = str(exc)
 
             if log:
@@ -728,7 +728,7 @@ class ShowSeriesLegacyAction(Action):
     def get_response(self, client_response_dict, log):
         log.write_debug([ f'[ {self.__class__.__name__}.get_response ]' ])
 
-        response_dict = deepcopy(client_response_dict)
+        response_dict = copy.deepcopy(client_response_dict)
         response_dict['status_code'] = self.get_request_status_code(response_dict)
         response = ShowSeriesLegacyResponse.generate_response(**response_dict)
 
@@ -746,7 +746,7 @@ class ShowSeriesLegacyAction(Action):
             response = send_request(message, connection, log)
 
             # message is raw JSON from checkAddress.py
-            legacy_show_series_dict = json_loads(response)
+            legacy_show_series_dict = json.loads(response)
 
             if legacy_show_series_dict.get('export_server_status') == 'export_server_error':
                 raise ExportServerError(error_message=f'{legacy_show_series_dict["error_message"]}')
@@ -770,7 +770,7 @@ class ShowSeriesLegacyAction(Action):
             try:
                 status_code = StatusCode(int(response_dict['status']))
             except KeyError:
-                raise ExportServerError(exc_info=sys_exc_info(), error_message=f'unexpected show_series status returned {str(response_dict["status"])}')
+                raise ExportServerError(exc_info=sys.exc_info(), error_message=f'unexpected show_series status returned {str(response_dict["status"])}')
 
         return (error_code, status_code)
 
@@ -799,7 +799,7 @@ class ShowSeriesPublicLegacyAction(ShowSeriesLegacyAction):
             response = send_request(message, connection, log)
 
             # message is raw JSON from checkAddress.py
-            legacy_show_series_dict = json_loads(response)
+            legacy_show_series_dict = json.loads(response)
 
             if legacy_show_series_dict.get('export_server_status') == 'export_server_error':
                 raise ExportServerError(error_message=f'{legacy_show_series_dict["error_message"]}')
@@ -826,13 +826,13 @@ class ShowSeriesPublicLegacyAction(ShowSeriesLegacyAction):
             try:
                 status_code = StatusCode(error_val)
             except KeyError:
-                raise ExportServerError(exc_info=sys_exc_info(), error_message=f'unexpected show_series status returned {error_str}')
+                raise ExportServerError(exc_info=sys.exc_info(), error_message=f'unexpected show_series status returned {error_str}')
 
         return (error_code, status_code)
 
 def run_tests():
     formatter = DrmsLogFormatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
-    log = DrmsLog(sys_stdout, DrmsLogLevelAction.string_to_level('debug'), formatter)
+    log = DrmsLog(sys.stdout, DrmsLogLevelAction.string_to_level('debug'), formatter)
 
     log.write_debug([ 'testing `legacy_get_series_list`'])
     sspla = ShowSeriesLegacyAction(method='legacy_get_series_list', series_regex='^su_arta', db_host='hmidb', log=log)
@@ -851,6 +851,6 @@ if __name__ == "__main__":
     print(response.generate_json())
 
     # Always return 0. If there was an error, an error code (the 'status' property) and message (the 'statusMsg' property) goes in the returned HTML.
-    sys_exit(0)
+    sys.exit(0)
 else:
     pass

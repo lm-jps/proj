@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 
-from argparse import Action as ArgsAction
+import argparse
 import asyncio
-from copy import deepcopy
-from json import loads as json_loads, dumps as json_dumps
-from os.path import join as path_join
+import copy
+import json
+import os.path
 import re
-from socket import SHUT_RDWR
-from sys import exc_info as sys_exc_info, exit as sys_exit, stdout as sys_stdout
-from time import sleep
-from threading import Timer
-from urllib.parse import urlunsplit
-from werkzeug.datastructures import Headers
+import socket
+import sys
+import time
+import threading
+import urllib.parse
+import werkzeug.datastructures
 
 from drms_export import Connection, create_generator, ExpServerBaseError, Error as ExportError, ErrorCode as ExportErrorCode, ErrorResponse, Response, get_arguments as ss_get_arguments, get_message, send_message
 from drms_parameters import DRMSParams, DPMissingParameterError
@@ -94,7 +94,7 @@ class ExportServerError(IrBaseError):
 class UnhandledExceptionError(IrBaseError):
     _error_code = ErrorCode.UNHANDLED_EXCEPTION
 
-class ExportArgumentsAction(ArgsAction):
+class ExportArgumentsAction(argparse.Action):
     def __call__(self, parser, namespace, value, option_string=None):
         # convert json arguments to dict
         export_arguments = self.json_to_dict(value)
@@ -104,7 +104,7 @@ class ExportArgumentsAction(ArgsAction):
 
     @classmethod
     def json_to_dict(cls, json_text):
-        return json_loads(json_text)
+        return json.loads(json_text)
 
 def name_to_ws_obj(name, drms_params):
     webserver_dict = {}
@@ -125,7 +125,7 @@ def webserver_action(self, parser, namespace, value, option_string=None):
     setattr(namespace, self.dest, webserver_obj)
 
 def create_webserver_action(drms_params):
-    cls = type('WebserverAction', (ArgsAction,),
+    cls = type('WebserverAction', (argparse.Action,),
     {
         '_drms_params' : drms_params,
         '__call__' : webserver_action,
@@ -146,13 +146,13 @@ class Arguments(Args):
                 db_user = drms_params.get_required('WEB_DBUSER')
                 download_web_domain = drms_params.get_required('WEB_DOMAIN_PUBLIC')
             except DPMissingParameterError as exc:
-                raise ParametersError(exc_info=sys_exc_info(), error_message=str(exc))
+                raise ParametersError(exc_info=sys.exc_info(), error_message=str(exc))
 
             if is_program:
                 try:
-                    log_file = path_join(drms_params.get_required('EXPORT_LOG_DIR'), DEFAULT_LOG_FILE)
+                    log_file = os.path.join(drms_params.get_required('EXPORT_LOG_DIR'), DEFAULT_LOG_FILE)
                 except DPMissingParameterError as exc:
-                    raise ParametersError(exc_info=sys_exc_info(), error_message=str(exc))
+                    raise ParametersError(exc_info=sys.exc_info(), error_message=str(exc))
 
                 args = None
 
@@ -357,7 +357,7 @@ def get_response_dict(export_status_dict, log):
 
             if download_web_domain is not None and export_directory is not None:
                 # URL of the export SU
-                request_url = urlunsplit(('https', download_web_domain, export_directory, None, None))
+                request_url = urllib.paprse.urlunsplit(('https', download_web_domain, export_directory, None, None))
 
             if method is not None:
                 try:
@@ -380,7 +380,7 @@ def get_response_dict(export_status_dict, log):
                     file_information_resolved = None
 
                     if file_format in ['mpg', 'mp4']:
-                        file_information_adjusted = deepcopy(file_information)
+                        file_information_adjusted = copy.deepcopy(file_information)
 
                         # look at the first record only (there is only one)
                         if file_information_adjusted[0]['record'].startswith('movie'):
@@ -395,17 +395,17 @@ def get_response_dict(export_status_dict, log):
                         for record in file_information_resolved:
                             url_information['record'].append(record['record'])
                             url_information['filename'].append(path_basename(record['filename']))
-                            url_information['url'].append(urlunsplit((scheme, download_web_domain, record['filename'], None, None)))
+                            url_information['url'].append(urllib.paprse.urlunsplit((scheme, download_web_domain, record['filename'], None, None)))
                     else:
                         # record.filename is base file name
                         for record in file_information_resolved:
                             url_information['record'].append(record['record'])
                             url_information['filename'].append(record['filename'])
-                            url_information['url'].append(urlunsplit((scheme, download_web_domain, path_join(export_directory, record['filename']), None, None)))
+                            url_information['url'].append(urllib.paprse.urlunsplit((scheme, download_web_domain, os.path.join(export_directory, record['filename']), None, None)))
 
                     data = list(zip(url_information['record'], url_information['url']))
 
-    response_dict = deepcopy(export_status_dict)
+    response_dict = copy.deepcopy(export_status_dict)
 
     if isinstance(status_code, ErrorCode):
         contact = export_status_dict.get('contact')
@@ -445,7 +445,7 @@ def get_request_status(export_status_dict):
         try:
             status_code = StatusCode(int(export_status_dict['status']))
         except KeyError:
-            raise InvalidMessageError(exc_info=sys_exc_info(), error_message=f'unexpected fetch status returned {str(export_status_dict["status"])}')
+            raise InvalidMessageError(exc_info=sys.exc_info(), error_message=f'unexpected fetch status returned {str(export_status_dict["status"])}')
 
     return (error_code, status_code)
 
@@ -505,7 +505,7 @@ def export_premium(*, address, requestor=None, db_host, download_web_domain, log
                 message = { 'request_type' : 'premium_export', 'address' : address, 'requestor' : requestor, 'specification' : export_arguments['specification'], 'processing' : export_arguments['processing'], 'method' : method, 'file_format' : export_arguments['file-format'], 'file_format_args' : export_arguments['file-format-args'], 'file_name_format' : export_arguments['file-name-format'], 'number_records' : export_arguments['number-records'], 'db_host' : db_host }
 
                 response = send_request(message, connection, log)
-                export_status_dict = json_loads(response)
+                export_status_dict = json.loads(response)
 
                 if export_status_dict.get('export_server_status') == 'export_server_error':
                     raise ExportServerError(error_message=f'{export_status_dict["error_message"]}')
@@ -526,13 +526,13 @@ def export_premium(*, address, requestor=None, db_host, download_web_domain, log
                     # will return REQUEST_PROCESSING if the export is in jsoc.export_new, but not jsoc.export
                     # ** so this loop is a no-op
                     do_loop = True
-                    timer = Timer(8, stop_loop, args=(do_loop,))
+                    timer = threadingTimer(8, stop_loop, args=(do_loop,))
                     timer.start()
                     while do_loop:
                         message = { 'request_type' : 'export_status', 'address' : address, 'request_id' : export_status_dict['requestid'], 'db_host' : db_host }
 
                         response = send_request(message, connection, log)
-                        export_status_dict = json_loads(response)
+                        export_status_dict = json.loads(response)
 
                         if export_status_dict.get('export_server_status') == 'export_server_error':
                             raise ExportServerError(error_message=f'{export_status_dict["error_message"]}')
@@ -552,7 +552,7 @@ def export_premium(*, address, requestor=None, db_host, download_web_domain, log
                             timer.cancel()
                             break
 
-                        sleep(1)
+                        time.sleep(1)
                 else:
                     # must be an error - get_response() will pass the error code backt to the client
                     log.write_debug([ f'[ export_premium ] export request failed (description `{status_code.description()}`)' ])
@@ -564,16 +564,16 @@ def export_premium(*, address, requestor=None, db_host, download_web_domain, log
                     message = { 'request_type' : 'quit' }
                     send_request(message, connection, log)
     except ExpServerBaseError as exc:
-        raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+        raise ExportServerError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
     except Exception as exc:
-        raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+        raise ExportServerError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
 
     # if jsoc_fetch processed the request synchronously, then it will have returned status == 0 to the socket server - there is no request id created, so `request` will not have an `id` property; if jsoc_fetch processed the request asynchronously (because data were offline), then `request` will have an `id` property that contains the request ID needed by exportdata.html so it can poll for export-processing completion
 
     try:
         response = get_response(export_status_dict, log)
     except Exception as exc:
-        raise ResponseError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+        raise ResponseError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
 
     return response
 
@@ -624,7 +624,7 @@ def export_mini(*, address, requestor=None, db_host, download_web_domain, log, e
                 message = { 'request_type' : 'mini_export', 'address' : address, 'requestor' : requestor, 'specification' : export_arguments['specification'], 'file_name_format' : export_arguments['file-name-format'], 'number_records' : export_arguments['number-records'], 'db_host' : db_host }
 
                 response = send_request(message, connection, log)
-                export_status_dict = json_loads(response)
+                export_status_dict = json.loads(response)
 
                 if export_status_dict.get('export_server_status') == 'export_server_error':
                     raise ExportServerError(error_message=f'{export_status_dict["error_message"]}')
@@ -659,7 +659,7 @@ def export_mini(*, address, requestor=None, db_host, download_web_domain, log, e
                         message = { 'request_type' : 'export_status', 'address' : address, 'request_id' : export_status_dict['requestid'], 'db_host' : db_host }
 
                         response = send_request(message, connection, log)
-                        export_status_dict = json_loads(response)
+                        export_status_dict = json.loads(response)
 
                         if export_status_dict.get('export_server_status') == 'export_server_error':
                             raise ExportServerError(error_message=f'{export_status_dict["error_message"]}')
@@ -680,7 +680,7 @@ def export_mini(*, address, requestor=None, db_host, download_web_domain, log, e
                             timer.cancel()
                             break
 
-                        sleep(1)
+                        time.sleep(1)
                 else:
                     # must be an error - get_response() will pass the error code backt to the client
                     pass
@@ -692,14 +692,14 @@ def export_mini(*, address, requestor=None, db_host, download_web_domain, log, e
                     message = { 'request_type' : 'quit' }
                     send_request(message, connection, log)
     except ExpServerBaseError as exc:
-        raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+        raise ExportServerError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
     except Exception as exc:
-        raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+        raise ExportServerError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
 
     try:
         response = get_response(export_status_dict, log)
     except Exception as exc:
-        raise ResponseError(exc_info=sys_exc_info())
+        raise ResponseError(exc_info=sys.exc_info())
 
     return response
 
@@ -740,7 +740,7 @@ def read_from_connection(*, destination):
         bytes_read = destination['connection'].recv(4096)
         if not bytes_read:
             # server done writing payload data (server shutdown connection) - close client end of connection
-            destination['connection'].shutdown(SHUT_RDWR)
+            destination['connection'].shutdown(socket.SHUT_RDWR)
             destination['connection'].close()
 
             return (False, b'')
@@ -791,7 +791,7 @@ def export_streamed(*, request_action, address, db_host, log, export_arguments):
 
         # response is pretty much empty; as long as it indicates success, the child process was started on the export server
         response = send_request(message, connection, log)
-        export_status_dict = json_loads(response)
+        export_status_dict = json.loads(response)
 
         if export_status_dict.get('export_server_status') == 'export_server_error':
             raise ExportServerError(error_message=f'{export_status_dict["error_message"]}')
@@ -808,7 +808,7 @@ def export_streamed(*, request_action, address, db_host, log, export_arguments):
             file_name = destination.get('file_name')
 
             if download_directory is not None and file_name is not None:
-                destination['file_path'] = path_join(download_directory, file_name)
+                destination['file_path'] = os.path.join(download_directory, file_name)
         else:
             # if this is being run in a module context, then the caller will iterate through generator;
             # the caller also needs access to the destination (which contains the file name for the
@@ -826,7 +826,7 @@ def export_streamed(*, request_action, address, db_host, log, export_arguments):
 
     if close_connection:
         if connection is not None:
-            connection.shutdown(SHUT_RDWR)
+            connection.shutdown(socket.SHUT_RDWR)
             connection.close()
 
     else:
@@ -841,7 +841,7 @@ def export_streamed(*, request_action, address, db_host, log, export_arguments):
     return (response, (destination, generator))
 
 def send_request(request, connection, log):
-    json_message = json_dumps(request)
+    json_message = json.dumps(request)
     send_message(connection, json_message)
     message = get_message(connection)
 
@@ -865,7 +865,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
 
             arguments = Arguments.get_arguments(is_program=is_program, program_name=program_name, program_args=program_args, module_args=module_args, drms_params=drms_params)
         except Exception as exc:
-            raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+            raise ArgumentsError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
 
         if is_program:
             try:
@@ -873,7 +873,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
                 log = DrmsLog(arguments.log_file, arguments.logging_level, formatter)
                 InitiateRequestAction._log = log
             except Exception as exc:
-                raise LoggingError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+                raise LoggingError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
         else:
             log = action_obj.log
 
@@ -953,7 +953,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
                 log.write_info([ f'[ perform_action ] servicing streamed request for user `{arguments.address}`: {str(export_arguments)}' ])
                 (response, (destination, generator)) = export_streamed(request_action=action_obj, address=arguments.address, db_host=resolved_db_host, log=log, export_arguments=export_arguments)
         except Exception as exc:
-            raise ExportActionError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+            raise ExportActionError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
     except IrBaseError as exc:
         response = exc.response
         error_message = exc.message
@@ -963,7 +963,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
         elif is_program:
             print(error_message)
     except Exception as exc:
-        response = UnhandledExceptionError(exc_info=sys_exc_info(), error_message=f'{str(exc)}').response
+        response = UnhandledExceptionError(exc_info=sys.exc_info(), error_message=f'{str(exc)}').response
         error_message = str(exc)
 
         if log:
@@ -1045,7 +1045,7 @@ class InitiateRequestAction(Action):
 
     def generate_headers(self):
         if self.destination is not None and self.destination['header_extracted'] and self.destination['file_name'] is not None:
-            headers = Headers()
+            headers = werkzeug.datastructures.Headers()
             headers.add('Content-Disposition', 'attachment', filename=f'{self.destination["file_name"]}')
             headers.add('Content-Transfer-Encoding', 'BINARY')
             return headers
@@ -1055,7 +1055,7 @@ class InitiateRequestAction(Action):
         cls.set_log(log)
         is_valid = None
         try:
-            json_loads(arguments_json)
+            json.loads(arguments_json)
             is_valid = True
         except:
             is_valid = False
@@ -1089,7 +1089,7 @@ class InitiateRequestAction(Action):
 
                     db_host_resolved = drms_params.get_required('EXPORT_DB_HOST_DEFAULT')
                 except DPMissingParameterError as exc:
-                    raise ParametersError(exc_info=sys_exc_info(), error_message=str(exc))
+                    raise ParametersError(exc_info=sys.exc_info(), error_message=str(exc))
             else:
                 db_host_resolved = db_host
 
@@ -1129,7 +1129,7 @@ class JsocFetchLegacyResponse(Response):
 
     # override parent to remove attributes not present in legacy API
     def generate_serializable_dict(self):
-        serializable_dict = deepcopy(super().generate_serializable_dict())
+        serializable_dict = copy.deepcopy(super().generate_serializable_dict())
         sanitized_serializable_dict = self.remove_extraneous(serializable_dict, [ 'drms_export_status', 'drms_export_status_code', 'drms_export_status_description' ] )
 
         return sanitized_serializable_dict
@@ -1137,11 +1137,17 @@ class JsocFetchLegacyResponse(Response):
 class JsocFetchLegacyAction(Action):
     actions = [] # abstract
 
-    def convert_booleans(self, args_dict):
+    def convert_argument_keys_and_types(self, args_dict):
         converted = {}
         for key, val in args_dict.items():
+            if key.strip().lower() == 'access':
+                # we can't use 'method' in export.py since we have an attribute named 'method' in `Action`
+                key = 'method'
+
             if type(val) == bool:
                 converted[key] = int(val)
+            elif type(val) == list:
+                converted[key] = ','.join(val)
             else:
                 converted[key] = val
 
@@ -1155,9 +1161,9 @@ class JsocFetchLegacyAction(Action):
             try:
                 response = self.send_request(nested_arguments=nested_arguments)
             except ExpServerBaseError as exc:
-                raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+                raise ExportServerError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
             except Exception as exc:
-                raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+                raise ExportServerError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
         except IrBaseError as exc:
             response = exc.response
             error_message = exc.message
@@ -1165,7 +1171,7 @@ class JsocFetchLegacyAction(Action):
             if log:
                 log.write_error([ error_message ])
         except Exception as exc:
-            response = UnhandledExceptionError(exc_info=sys_exc_info(), error_message=f'{str(exc)}').response
+            response = UnhandledExceptionError(exc_info=sys.exc_info(), error_message=f'{str(exc)}').response
             error_message = str(exc)
 
             if log:
@@ -1190,7 +1196,7 @@ class JsocFetchLegacyAction(Action):
     def get_response(self, client_response_dict, log):
         log.write_debug([ f'[ {self.__class__.__name__}.get_response ]' ])
 
-        response_dict = deepcopy(client_response_dict)
+        response_dict = copy.deepcopy(client_response_dict)
         response_dict['status_code'] = get_request_status_code(response_dict)
         response = JsocFetchLegacyResponse.generate_response(**response_dict)
 
@@ -1208,7 +1214,7 @@ class JsocFetchStatusLegacyAction(JsocFetchLegacyAction):
         self._options = {}
         self._options['db_host'] = db_host
         self._options['log'] = log if log is not None else DrmsLog(None, None, None)
-        self._legacy_arguments = self.convert_booleans(kwargs)
+        self._legacy_arguments = self.convert_argument_keys_and_types(kwargs)
 
     def legacy_get_export_status(self):
         return self.perform_action()
@@ -1222,7 +1228,7 @@ class JsocFetchStatusLegacyAction(JsocFetchLegacyAction):
             response = send_request(message, connection, log)
 
             # message is raw JSON from checkAddress.py
-            legacy_jsoc_fetch_dict = json_loads(response)
+            legacy_jsoc_fetch_dict = json.loads(response)
 
             if legacy_jsoc_fetch_dict.get('export_server_status') == 'export_server_error':
                 raise ExportServerError(error_message=f'{legacy_jsoc_fetch_dict["error_message"]}')
@@ -1246,7 +1252,7 @@ class JsocFetchExportLegacyAction(JsocFetchLegacyAction):
         self._options = {}
         self._options['db_host'] = db_host
         self._options['log'] = log if log is not None else DrmsLog(None, None, None)
-        self._legacy_arguments = self.convert_booleans(kwargs)
+        self._legacy_arguments = self.convert_argument_keys_and_types(kwargs)
 
     def legacy_start_export(self):
         return self.perform_action()
@@ -1260,7 +1266,7 @@ class JsocFetchExportLegacyAction(JsocFetchLegacyAction):
             response = send_request(message, connection, log)
 
             # message is raw JSON from checkAddress.py
-            legacy_jsoc_fetch_dict = json_loads(response)
+            legacy_jsoc_fetch_dict = json.loads(response)
 
             if legacy_jsoc_fetch_dict.get('export_server_status') == 'export_server_error':
                 raise ExportServerError(error_message=f'{legacy_jsoc_fetch_dict["error_message"]}')
@@ -1273,7 +1279,7 @@ class JsocFetchExportLegacyAction(JsocFetchLegacyAction):
 
 def run_tests():
     formatter = DrmsLogFormatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
-    log = DrmsLog(sys_stdout, DrmsLogLevelAction.string_to_level('debug'), formatter)
+    log = DrmsLog(sys.stdout, DrmsLogLevelAction.string_to_level('debug'), formatter)
 
     log.write_debug([ 'testing `legacy_get_export_status`'])
     jfsla = JsocFetchStatusLegacyAction(method='legacy_get_export_status', address='arta@sun.stanford.edu', request_id='JSOC_20220320_028', db_host='hmidb2', log=log)
@@ -1305,11 +1311,11 @@ if __name__ == "__main__":
                             file_out.write(data)
                 else:
                     for data in generator:
-                        sys_stdout.buffer.write(data)
+                        sys.stdout.buffer.write(data)
         else:
             print(response.generate_json())
 
     # Always return 0. If there was an error, an error code (the 'status' property) and message (the 'statusMsg' property) goes in the returned HTML.
-    sys_exit(0)
+    sys.exit(0)
 else:
     pass

@@ -17,11 +17,11 @@
 #   { "server" : "hmidb2", "series" : [{ "hmi.M_45s" : { "server" : "hmidb2" } }, { "hmi.not_on_white_list" : { "server" : None }}], "status" : 0 }
 #   { "server" : "hmidb2", "series" : [{ "hmi.M_45s" : { "server" : "hmidb2" } }, { "hmi.does_not_exist" : { "server" : None }}], "status" : 0 }
 
-from argparse import Action as ArgsAction
-from functools import lru_cache
-from json import loads as json_loads, dumps as json_dumps
-from os.path import join as path_join
-from sys import exc_info as sys_exc_info, exit as sys_exit
+import argparse
+import functools
+import json
+import os
+import sys
 
 from drms_parameters import DRMSParams, DPMissingParameterError
 from drms_utils import Arguments as Args, ArgumentsError as ArgsError, CmdlParser, Formatter as DrmsLogFormatter, ListAction, Log as DrmsLog, LogLevel as DrmsLogLevel, LogLevelAction as DrmsLogLevelAction, MakeObject, StatusCode as ExportStatusCode
@@ -82,7 +82,7 @@ class ExportServerError(CdbBaseError):
 class UnhandledExceptionError(CdbBaseError):
     _error_code = ErrorCode.UNHANDLED_EXCEPTION
 
-class ValidateArgumentAction(ArgsAction):
+class ValidateArgumentAction(argparse.Action):
     def __call__(self, parser, namespace, value, option_string=None):
         # the server specified must not be the internal server
         if self.dest == 'wl_file' and not parser.drms_params.WL_HASWL:
@@ -111,7 +111,7 @@ class Arguments(Args):
 
             if is_program:
                 try:
-                    log_file = path_join(drms_params.get_required('EXPORT_LOG_DIR'), DEFAULT_LOG_FILE)
+                    log_file = os.path.join(drms_params.get_required('EXPORT_LOG_DIR'), DEFAULT_LOG_FILE)
                 except DPMissingParameterError as exc:
                     raise ParametersError(error_message=str(exc))
 
@@ -232,7 +232,7 @@ class DetermineDbServerAction(Action):
 
                     db_host_resolved = drms_params.get_required('EXPORT_DB_HOST_DEFAULT')
                 except DPMissingParameterError as exc:
-                    raise ParametersError(exc_info=sys_exc_info(), error_message=str(exc))
+                    raise ParametersError(exc_info=sys.exc_info(), error_message=str(exc))
             else:
                 db_host_resolved = db_host
 
@@ -252,7 +252,7 @@ def get_whitelist(wl_file):
     return white_list
 
 def send_request(request, connection, log):
-    json_message = json_dumps(request)
+    json_message = json.dumps(request)
     send_message(connection, json_message)
     message = get_message(connection)
 
@@ -277,7 +277,7 @@ def determine_series(regex, public_db_host, private_db_host, has_wl, wl_file):
 
         # check both public and private server, and merge
         message = { 'request_type' : 'series_list', 'series_regex' : sanitized_regex, 'db_host' : public_db_host }
-        response = json_loads(send_request(message, connection, log))
+        response = json.loads(send_request(message, connection, log))
 
         if response.get('export_server_status') == 'export_server_error':
             raise ExportServerError(error_message=f'{response["error_message"]}')
@@ -289,7 +289,7 @@ def determine_series(regex, public_db_host, private_db_host, has_wl, wl_file):
 
         if has_wl:
             message = { 'request_type' : 'series_list', 'series_regex' : sanitized_regex, 'db_host' : private_db_host }
-            response = json_loads(send_request(message, connection, log))
+            response = json.loads(send_request(message, connection, log))
 
             if len(response['names']) != 0:
                 white_list = get_whitelist(wl_file) # if no whitelist exists, then this is the empty set
@@ -306,7 +306,7 @@ def determine_series(regex, public_db_host, private_db_host, has_wl, wl_file):
         return series_obj
 
 # the user has provided a list of series
-@lru_cache
+@functools.lru_cache
 def determine_server(series, public_db_host, private_db_host, has_wl, wl_file):
     nested_arguments = ss_get_arguments(is_program=False, module_args={})
     log = DetermineDbServerAction.get_log()
@@ -320,7 +320,7 @@ def determine_server(series, public_db_host, private_db_host, has_wl, wl_file):
         series_regex = f'^{series.strip().lower().replace(".", "[.]")}$'
 
         message = { 'request_type' : 'series_list', 'series_regex' : series_regex, 'db_host' : public_db_host }
-        response = json_loads(send_request(message, connection, log))
+        response = json.loads(send_request(message, connection, log))
 
         if response.get('export_server_status') == 'export_server_error':
             raise ExportServerError(error_message=f'{response["error_message"]}')
@@ -329,7 +329,7 @@ def determine_server(series, public_db_host, private_db_host, has_wl, wl_file):
             if has_wl:
                 # try private server
                 message = { 'request_type' : 'series_list', 'series_regex' : series_regex, 'db_host' : private_db_host }
-                response = json_loads(send_request(message, connection, log))
+                response = json.loads(send_request(message, connection, log))
 
                 white_list = get_whitelist(wl_file) # if no whitelist exists, then this is the empty set
 
@@ -365,9 +365,9 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
 
             arguments = Arguments.get_arguments(is_program=is_program, program_name=program_name, program_args=program_args, module_args=module_args, drms_params=drms_params)
         except ArgsError as exc:
-            raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+            raise ArgumentsError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
         except Exception as exc:
-            raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+            raise ArgumentsError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
 
         if is_program:
             try:
@@ -375,7 +375,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
                 log = DrmsLog(arguments.log_file, arguments.logging_level, formatter)
                 DetermineDbServerAction._log = log
             except Exception as exc:
-                raise LoggingError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+                raise LoggingError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
         else:
             log = action_obj.log
 
@@ -419,7 +419,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
             #   { "server" : "hmidb2", "series" : [{ "hmi.M_45s" : { "server" : "hmidb2" } }, { "hmi.does_not_exist" : { "server" : None }}], "status" : 0 }
             response = Response.generate_response(status_code=StatusCode.SUCCESS, **response_dict)
         except ExpServerBaseError as exc:
-            raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+            raise ExportServerError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
     except CdbBaseError as exc:
         response = exc.response
         error_message = exc.message
@@ -429,7 +429,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
         elif is_program:
             print(error_message)
     except Exception as exc:
-        response = UnhandledExceptionError(exc_info=sys_exc_info(), error_message=f'{str(exc)}').response
+        response = UnhandledExceptionError(exc_info=sys.exc_info(), error_message=f'{str(exc)}').response
         error_message = str(exc)
 
         if log:
@@ -445,6 +445,6 @@ if __name__ == "__main__":
     print(response.generate_json())
 
     # Always return 0. If there was an error, an error code (the 'status' property) and message (the 'statusMsg' property) goes in the returned HTML.
-    sys_exit(0)
+    sys.exit(0)
 else:
     pass

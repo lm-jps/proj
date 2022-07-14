@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 
-from flask import Flask, request
-from flask_restful import Api, Resource
-from logging import DEBUG as LOGGING_LEVEL_DEBUG, INFO as LOGGING_LEVEL_INFO
-from urllib.parse import urlparse
-from webargs import fields, validate, flaskparser, ValidationError
-from webargs.flaskparser import use_args, use_kwargs, parser, abort
+import flask
+import flask_restful
+import logging
+import urllib.parse
+import webargs.flaskparser
 
 from action import Action
 from drms_export import ErrorCode as ExportErrorCode, ErrorResponse as ExportErrorResponse
@@ -387,22 +386,22 @@ from drms_utils import Formatter as DrmsLogFormatter, Log as DrmsLog, LogLevel a
 #     $ kill -9 <uwsgi pid>
 
 # `export` is a Flask app;
-export = Flask(__name__)
-export_api = Api(export)
+export = flask.Flask(__name__)
+export_api = flask_restful.Api(export)
 APP_LOG = None
 APP_LOG_LEVEL = 'debug'
 PRIVATE_DB_HOST = None
-export.logger.setLevel(LOGGING_LEVEL_DEBUG)
+export.logger.setLevel(logging.DEBUG)
 
 class ErrorCode(ExportErrorCode):
     # fetch error codes
     WEBARGS_PARSER = (1, 'failure parsing web arguments') # can only happen with jsoc_fetch op=exp_request call
 
-@parser.error_handler
+@webargs.flaskparser.parser.error_handler
 def handle_request_parser_error(error, req, schema, *, error_status_code, error_headers):
     print(f'webarg error message: {error.messages}')
     response_dict = ExportErrorResponse.generate_response(error_code=ErrorCode.WEBARGS_PARSER, error_message=error.messages).generate_serializable_dict()
-    abort(428, **response_dict)
+    webargs.flaskparser.abort(428, **response_dict)
 
 @export.errorhandler(428)
 def generate_error_response(error):
@@ -410,14 +409,14 @@ def generate_error_response(error):
 
 @export.before_request
 def log_request_info():
-    export.logger.debug(f'Headers: {request.headers}')
-    export.logger.debug(f'Body: {request.get_data()}')
+    export.logger.debug(f'Headers: {flask.request.headers}')
+    export.logger.debug(f'Body: {flask.request.get_data()}')
 
 from check_address import CheckAddressAction
-class AddressRegistrationResource(Resource):
-    _arguments = { 'address' : fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : fields.Str(required=False, data_key='db-host'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'db_user' : fields.Str(required=False, data_key='db-user'), 'user_name' : fields.Str(required=False, data_key='user-name'), 'user_snail' : fields.Str(required=False, data_key='user-snail') }
+class AddressRegistrationResource(flask_restful.Resource):
+    _arguments = { 'address' : webargs.fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : webargs.fields.Str(required=False, data_key='db-host'), 'db_name' : webargs.fields.Str(required=False, data_key='db-name'), 'db_port' : webargs.fields.Int(required=False, data_key='db-port'), 'db_user' : webargs.fields.Str(required=False, data_key='db-user'), 'user_name' : webargs.fields.Str(required=False, data_key='user-name'), 'user_snail' : webargs.fields.Str(required=False, data_key='user-snail') }
 
-    @use_kwargs(_arguments, location='querystring')
+    @webargs.flaskparser.use_kwargs(_arguments, location='querystring')
     def get(self, address, db_host=None, db_name=None, db_port=None, db_user=None, user_name=None, user_snail=None):
         # HTTP GET - get address registration information (if the address is registered)
         arguments = { 'address' : address, 'db_host' : db_host, 'db_name' : db_name, 'db_port' : db_port, 'db_user' : db_user, 'log' : APP_LOG, 'user_name' : user_name, 'user_snail' : user_snail }
@@ -425,7 +424,7 @@ class AddressRegistrationResource(Resource):
         action = Action.action(action_type='check_address', args=arguments)
         return action().generate_serializable_dict()
 
-    @use_kwargs(_arguments)
+    @webargs.flaskparser.use_kwargs(_arguments)
     def post(self, address, db_host=None, db_name=None, db_port=None, db_user=None, user_name=None, user_snail=None):
         # HTTP POST - register address (if it is not alrelady registered)
         arguments = { 'address' : address, 'db_host' : db_host, 'db_name' : db_name, 'db_port' : db_port, 'db_user' : db_user, 'log' : APP_LOG, 'user_name' : user_name, 'user_snail' : user_snail }
@@ -435,20 +434,20 @@ class AddressRegistrationResource(Resource):
 
 # called from public website only
 from check_dbserver import DetermineDbServerAction
-class ServerResource(Resource):
-    _arguments = { 'public_db_host' : fields.Str(required=True, data_key='public-db-host'), 'series' : fields.List(fields.Str, required=True, validate=lambda a: DetermineDbServerAction.is_valid_series_set(a, None, urlparse(request.base_url).hostname, APP_LOG)), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'db_user' : fields.Str(required=False, data_key='db-user') }
+class ServerResource(flask_restful.Resource):
+    _arguments = { 'public_db_host' : webargs.fields.Str(required=True, data_key='public-db-host'), 'series' : webargs.fields.List(webargs.fields.Str, required=True, validate=lambda a: DetermineDbServerAction.is_valid_series_set(a, None, urllib.parse.urlparse(flask.request.base_url).hostname, APP_LOG)), 'db_name' : webargs.fields.Str(required=False, data_key='db-name'), 'db_port' : webargs.fields.Int(required=False, data_key='db-port'), 'db_user' : webargs.fields.Str(required=False, data_key='db-user') }
 
-    @use_kwargs(_arguments, location='querystring')
+    @webargs.flaskparser.use_kwargs(_arguments, location='querystring')
     def get(self, public_db_host, series, db_name=None, db_port=None, db_user=None):
         arguments = { 'public_db_host' : public_db_host, 'series' : series, 'db_name' : db_name, 'db_port' : db_port, 'db_user' : db_user, 'log' : APP_LOG }
 
         action = Action.action(action_type='determine_db_server', args=arguments)
         return action().generate_serializable_dict()
 
-class SeriesListResource(Resource):
-    _arguments = { 'public_db_host' : fields.Str(required=True, data_key='public-db-host'), 'series_regex' : fields.Str(required=True, data_key='series-regex'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'db_user' : fields.Str(required=False, data_key='db-user') }
+class SeriesListResource(flask_restful.Resource):
+    _arguments = { 'public_db_host' : webargs.fields.Str(required=True, data_key='public-db-host'), 'series_regex' : webargs.fields.Str(required=True, data_key='series-regex'), 'db_name' : webargs.fields.Str(required=False, data_key='db-name'), 'db_port' : webargs.fields.Int(required=False, data_key='db-port'), 'db_user' : webargs.fields.Str(required=False, data_key='db-user') }
 
-    @use_kwargs(_arguments, location='querystring')
+    @webargs.flaskparser.use_kwargs(_arguments, location='querystring')
     def get(self, public_db_host, series_regex, db_name=None, db_port=None, db_user=None):
         # underyling API expects `series` to be a list with a single string element that is the series regex
         arguments = { 'public_db_host' : public_db_host, 'series' : [ series_regex ], 'db_name' : db_name, 'db_port' : db_port, 'db_user' : db_user, 'use_regex' : True, 'log' : APP_LOG }
@@ -457,31 +456,31 @@ class SeriesListResource(Resource):
         return action().generate_serializable_dict()
 
 from get_record_info import GetRecordInfoAction
-class RecordSetResource(Resource):
-    _arguments = { 'specification' : fields.Str(required=True, validate=lambda a: GetRecordInfoAction.is_valid_specification(a, None, urlparse(request.base_url).hostname, APP_LOG)), 'db_host' : fields.Str(required=True, data_key='db-host'), 'parse_only' : fields.Bool(required=False, data_key='parse-only'), 'keywords' : fields.List(fields.Str, required=False), 'segments' : fields.List(fields.Str, required=False), 'links' : fields.List(fields.Str, required=False), 'db_name' : fields.Str(required=False, data_key='db-name'), 'number_records' : fields.Int(required=False, data_key='number-records'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'db_user' : fields.Str(required=False, data_key='db-user') }
+class RecordSetResource(flask_restful.Resource):
+    _arguments = { 'specification' : webargs.fields.Str(required=True, validate=lambda a: GetRecordInfoAction.is_valid_specification(a, None, urllib.parse.urlparse(flask.request.base_url).hostname, APP_LOG)), 'db_host' : webargs.fields.Str(required=True, data_key='db-host'), 'parse_only' : webargs.fields.Bool(required=False, data_key='parse-only'), 'keywords' : webargs.fields.List(webargs.fields.Str, required=False), 'segments' : webargs.fields.List(webargs.fields.Str, required=False), 'links' : webargs.fields.List(webargs.fields.Str, required=False), 'db_name' : webargs.fields.Str(required=False, data_key='db-name'), 'number_records' : webargs.fields.Int(required=False, data_key='number-records'), 'db_port' : webargs.fields.Int(required=False, data_key='db-port'), 'db_user' : webargs.fields.Str(required=False, data_key='db-user') }
 
-    @use_kwargs(_arguments, location='querystring')
+    @webargs.flaskparser.use_kwargs(_arguments, location='querystring')
     def get(self, specification, db_host, parse_only=False, keywords=None, segments=None, links=None, db_name=None, number_records=None, db_port=None, db_user=None):
         if parse_only:
-            arguments = { 'specification' : specification, 'db_host' : db_host, 'db_name' : db_name, 'db_port' : db_port, 'db_user' : db_user, 'log' : APP_LOG, 'webserver' : urlparse(request.base_url).hostname }
+            arguments = { 'specification' : specification, 'db_host' : db_host, 'db_name' : db_name, 'db_port' : db_port, 'db_user' : db_user, 'log' : APP_LOG, 'webserver' : urllib.parse.urlparse(flask.request.base_url).hostname }
 
             action = Action.action(action_type='parse_specification', args=arguments)
             return action().generate_serializable_dict()
         else:
-            arguments = { 'specification' : specification, 'db_host' : db_host, 'keywords' : keywords, 'segments' : segments, 'links' : links, 'db_name' : db_name, 'number_records' : number_records, 'db_port' : db_port, 'db_user' : db_user, 'log' : APP_LOG, 'webserver' : urlparse(request.base_url).hostname }
+            arguments = { 'specification' : specification, 'db_host' : db_host, 'keywords' : keywords, 'segments' : segments, 'links' : links, 'db_name' : db_name, 'number_records' : number_records, 'db_port' : db_port, 'db_user' : db_user, 'log' : APP_LOG, 'webserver' : urllib.parse.urlparse(flask.request.base_url).hostname }
 
             action = Action.action(action_type='get_record_set_info', args=arguments)
             return action().generate_serializable_dict()
 
 from get_record_info import GetRecordTableAction
-class RecordSetTableResource(Resource):
-    _arguments = { 'specification' : fields.Str(required=True, validate=lambda a: GetRecordInfoAction.is_valid_specification(a, None, urlparse(request.base_url).hostname, APP_LOG)), 'db_host' : fields.Str(required=True, data_key='db-host'), 'keywords' : fields.List(fields.Str, required=False), 'segments' : fields.List(fields.Str, required=False), 'links' : fields.List(fields.Str, required=False), 'data_types' : fields.Boolean(required=False, data_key='data-types'), 'specifications' : fields.Boolean(required=False, data_key='specifications'), 'linked_records' : fields.Boolean(required=False, data_key='linked-records'), 'all_keywords' : fields.Boolean(required=False, data_key='all-keywords'), 'all_segments' : fields.Boolean(required=False, data_key='all-segments'), 'online_segment_paths' : fields.Boolean(required=False, data_key='online-segment-paths'), 'recnums' : fields.Boolean(required=False), 'sunums' : fields.Boolean(required=False), 'storage_unit_sizes' : fields.Boolean(required=False, data_key='storage-unit-sizes'), 'storage_unit_statuses' : fields.Boolean(required=False, data_key='storage-unit-statuses'), 'storage_unit_expiration_dates' : fields.Boolean(required=False, data_key='storage-unit-expiration-dates'), 'storage_unit_archive_statuses' : fields.Boolean(required=False, data_key='storage-unit-archive-statuses'),'db_name' : fields.Str(required=False, data_key='db-name'), 'number_records' : fields.Int(required=False, data_key='number-records'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'db_user' : fields.Str(required=False, data_key='db-user') }
+class RecordSetTableResource(flask_restful.Resource):
+    _arguments = { 'specification' : webargs.fields.Str(required=True, validate=lambda a: GetRecordInfoAction.is_valid_specification(a, None, urllib.parse.urlparse(flask.request.base_url).hostname, APP_LOG)), 'db_host' : webargs.fields.Str(required=True, data_key='db-host'), 'keywords' : webargs.fields.List(webargs.fields.Str, required=False), 'segments' : webargs.fields.List(webargs.fields.Str, required=False), 'links' : webargs.fields.List(webargs.fields.Str, required=False), 'data_types' : webargs.fields.Boolean(required=False, data_key='data-types'), 'specifications' : webargs.fields.Boolean(required=False, data_key='specifications'), 'linked_records' : webargs.fields.Boolean(required=False, data_key='linked-records'), 'all_keywords' : webargs.fields.Boolean(required=False, data_key='all-keywords'), 'all_segments' : webargs.fields.Boolean(required=False, data_key='all-segments'), 'online_segment_paths' : webargs.fields.Boolean(required=False, data_key='online-segment-paths'), 'recnums' : webargs.fields.Boolean(required=False), 'sunums' : webargs.fields.Boolean(required=False), 'storage_unit_sizes' : webargs.fields.Boolean(required=False, data_key='storage-unit-sizes'), 'storage_unit_statuses' : webargs.fields.Boolean(required=False, data_key='storage-unit-statuses'), 'storage_unit_expiration_dates' : webargs.fields.Boolean(required=False, data_key='storage-unit-expiration-dates'), 'storage_unit_archive_statuses' : webargs.fields.Boolean(required=False, data_key='storage-unit-archive-statuses'),'db_name' : webargs.fields.Str(required=False, data_key='db-name'), 'number_records' : webargs.fields.Int(required=False, data_key='number-records'), 'db_port' : webargs.fields.Int(required=False, data_key='db-port'), 'db_user' : webargs.fields.Str(required=False, data_key='db-user') }
 
-    @use_kwargs(_arguments, location='querystring')
+    @webargs.flaskparser.use_kwargs(_arguments, location='querystring')
     def get(self, specification, db_host, keywords=None, segments=None, links=None, data_types=False, specifications=False, linked_records=False, all_keywords=False, all_segments=False, online_segment_paths=False, recnums=False, sunums=False, storage_unit_sizes=False, storage_unit_statuses=False, storage_unit_expiration_dates=False, storage_unit_archive_statuses=False, db_name=None, number_records=None, db_port=None, db_user=None):
         table_flags = { 'data_types' : data_types, 'specifications' : specifications, 'linked_records' : linked_records, 'all_keywords' : all_keywords, 'all_segments' : all_segments, 'online_segment_paths' : online_segment_paths, 'recnums' : recnums, 'sunums' : sunums, 'storage_unit_sizes' : storage_unit_sizes, 'storage_unit_statuses' : storage_unit_statuses, 'storage_unit_expiration_dates' : storage_unit_expiration_dates, 'storage_unit_archive_statuses' : storage_unit_archive_statuses }
 
-        arguments = { 'specification' : specification, 'db_host' : db_host, 'keywords' : keywords, 'segments' : segments, 'links' : links, 'db_name' : db_name, 'number_records' : number_records, 'table_flags' : table_flags, 'db_port' : db_port, 'db_user' : db_user, 'log' : APP_LOG, 'webserver' : urlparse(request.base_url).hostname }
+        arguments = { 'specification' : specification, 'db_host' : db_host, 'keywords' : keywords, 'segments' : segments, 'links' : links, 'db_name' : db_name, 'number_records' : number_records, 'table_flags' : table_flags, 'db_port' : db_port, 'db_user' : db_user, 'log' : APP_LOG, 'webserver' : urllib.parse.urlparse(flask.request.base_url).hostname }
 
         self._action_arguments = arguments
 
@@ -494,34 +493,34 @@ class RecordSetTableResource(Resource):
         return export.response_class(action().generate_text(), content_type='text/plain')
 
 class RecordSetTableFromFormResource(RecordSetTableResource):
-    @use_kwargs(RecordSetTableResource._arguments, location='form')
+    @webargs.flaskparser.use_kwargs(RecordSetTableResource._arguments, location='form')
     def get(self, specification, db_host, keywords=None, segments=None, data_types=False, specifications=False, linked_records=False, all_keywords=False, all_segments=False, online_segment_paths=False, recnums=False, sunums=False, storage_unit_sizes=False, storage_unit_statuses=False, storage_unit_expiration_dates=False, storage_unit_archive_statuses=False, db_name=None, number_records=None, db_port=None, db_user=None):
         table_flags = { 'data_types' : data_types, 'specifications' : specifications, 'linked_records' : linked_records, 'all_keywords' : all_keywords, 'all_segments' : all_segments, 'online_segment_paths' : online_segment_paths, 'recnums' : recnums, 'sunums' : sunums, 'storage_unit_sizes' : storage_unit_sizes, 'storage_unit_statuses' : storage_unit_statuses, 'storage_unit_expiration_dates' : storage_unit_expiration_dates, 'storage_unit_archive_statuses' : storage_unit_archive_statuses }
 
-        arguments = { 'specification' : specification, 'db_host' : db_host, 'keywords' : keywords, 'segments' : segments, 'links' : links, 'db_name' : db_name, 'number_records' : number_records, 'table_flags' : table_flags, 'db_port' : db_port, 'db_user' : db_user, 'log' : APP_LOG, 'webserver' : urlparse(request.base_url).hostname }
+        arguments = { 'specification' : specification, 'db_host' : db_host, 'keywords' : keywords, 'segments' : segments, 'links' : links, 'db_name' : db_name, 'number_records' : number_records, 'table_flags' : table_flags, 'db_port' : db_port, 'db_user' : db_user, 'log' : APP_LOG, 'webserver' : urllib.parse.urlparse(flask.request.base_url).hostname }
 
         self._action_arguments = arguments
 
         return self.call_action()
 
 from get_series_info import GetSeriesInfoAction
-class SeriesResource(Resource):
-    _arguments = { 'series' : fields.List(fields.Str, required=True, validate=lambda s: GetSeriesInfoAction.is_valid_series_set(s, None, urlparse(request.base_url).hostname, APP_LOG)), 'db_host' : fields.Str(required=True, data_key='db-host'), 'parse_record_sets' : fields.Boolean(required=False, data_key='parse-record-sets'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'db_user' : fields.Str(required=False, data_key='db-user'), 'keywords' : fields.List(fields.Str, required=False), 'links' : fields.List(fields.Str, required=False), 'segments' : fields.List(fields.Str, required=False)}
+class SeriesResource(flask_restful.Resource):
+    _arguments = { 'series' : webargs.fields.List(webargs.fields.Str, required=True, validate=lambda s: GetSeriesInfoAction.is_valid_series_set(s, None, urllib.parse.urlparse(flask.request.base_url).hostname, APP_LOG)), 'db_host' : webargs.fields.Str(required=True, data_key='db-host'), 'parse_record_sets' : webargs.fields.Boolean(required=False, data_key='parse-record-sets'), 'db_name' : webargs.fields.Str(required=False, data_key='db-name'), 'db_port' : webargs.fields.Int(required=False, data_key='db-port'), 'db_user' : webargs.fields.Str(required=False, data_key='db-user'), 'keywords' : webargs.fields.List(webargs.fields.Str, required=False), 'links' : webargs.fields.List(webargs.fields.Str, required=False), 'segments' : webargs.fields.List(webargs.fields.Str, required=False)}
 
-    @use_kwargs(_arguments, location='querystring')
+    @webargs.flaskparser.use_kwargs(_arguments, location='querystring')
     def get(self, series, db_host, parse_record_sets=False, db_name=None, db_port=None, db_user=None, keywords=None, links=None, segments=None):
-        arguments = { 'series' : series, 'db_host' : db_host, 'parse_record_sets' : parse_record_sets, 'db_name' : db_name, 'db_port' : db_port, 'db_user' : db_user, 'keywords' : keywords, 'links' : links, 'log' : APP_LOG, 'segments' : segments, 'webserver' : urlparse(request.base_url).hostname }
+        arguments = { 'series' : series, 'db_host' : db_host, 'parse_record_sets' : parse_record_sets, 'db_name' : db_name, 'db_port' : db_port, 'db_user' : db_user, 'keywords' : keywords, 'links' : links, 'log' : APP_LOG, 'segments' : segments, 'webserver' : urllib.parse.urlparse(flask.request.base_url).hostname }
 
         action = Action.action(action_type='get_series_info', args=arguments)
         return action().generate_serializable_dict()
 
 from initiate_request import InitiateRequestAction, ErrorCode as IRErrorCode
-class PremiumExportRequestResource(Resource):
-    _arguments = { 'address' : fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : fields.Str(required=True, data_key='db-host'), 'export_arguments' : fields.Str(required=True, validate=lambda a: InitiateRequestAction.is_valid_arguments(a, APP_LOG), data_key='export-arguments'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'requestor' : fields.Str(required=False), 'db_user' : fields.Str(required=False, data_key='db-user') }
+class PremiumExportRequestResource(flask_restful.Resource):
+    _arguments = { 'address' : webargs.fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : webargs.fields.Str(required=True, data_key='db-host'), 'export_arguments' : webargs.fields.Str(required=True, validate=lambda a: InitiateRequestAction.is_valid_arguments(a, APP_LOG), data_key='export-arguments'), 'db_name' : webargs.fields.Str(required=False, data_key='db-name'), 'db_port' : webargs.fields.Int(required=False, data_key='db-port'), 'requestor' : webargs.fields.Str(required=False), 'db_user' : webargs.fields.Str(required=False, data_key='db-user') }
 
-    @use_kwargs(_arguments)
+    @webargs.flaskparser.use_kwargs(_arguments)
     def post(self, address, db_host, export_arguments, db_name=None, db_port=None, requestor=None, db_user=None):
-        arguments = { 'address' : address, 'db_host' : db_host, 'webserver' : urlparse(request.base_url).hostname, 'export_arguments' : export_arguments, 'db_name' : db_name, 'db_port' : db_port, 'requestor' : requestor, 'db_user' : db_user, 'log' : APP_LOG }
+        arguments = { 'address' : address, 'db_host' : db_host, 'webserver' : urllib.parse.urlparse(flask.request.base_url).hostname, 'export_arguments' : export_arguments, 'db_name' : db_name, 'db_port' : db_port, 'requestor' : requestor, 'db_user' : db_user, 'log' : APP_LOG }
 
         self._action_arguments = arguments
 
@@ -533,22 +532,22 @@ class PremiumExportRequestResource(Resource):
         return response.generate_serializable_dict()
 
 class PremiumExportRequestFromFormResource(PremiumExportRequestResource):
-    @use_kwargs(PremiumExportRequestResource._arguments, location='form')
+    @webargs.flaskparser.use_kwargs(PremiumExportRequestResource._arguments, location='form')
     def post(self, address, db_host, export_arguments, db_name=None, db_port=None, requestor=None, db_user=None):
-        file_specification = ','.join(request.files['file'].read().decode().split())
+        file_specification = ','.join(flask.request.files['file'].read().decode().split())
 
-        arguments = { 'address' : address, 'db_host' : db_host, 'file_specification' : file_specification, 'webserver' : urlparse(request.base_url).hostname, 'export_arguments' : export_arguments, 'db_name' : db_name, 'db_port' : db_port, 'requestor' : requestor, 'db_user' : db_user, 'log' : APP_LOG }
+        arguments = { 'address' : address, 'db_host' : db_host, 'file_specification' : file_specification, 'webserver' : urllib.parse.urlparse(flask.request.base_url).hostname, 'export_arguments' : export_arguments, 'db_name' : db_name, 'db_port' : db_port, 'requestor' : requestor, 'db_user' : db_user, 'log' : APP_LOG }
 
         self._action_arguments = arguments
 
         return self.call_action()
 
-class MiniExportRequestResource(Resource):
-    _arguments = { 'address' : fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : fields.Str(required=True, data_key='db-host'), 'export_arguments' : fields.Str(required=True, validate=lambda a: InitiateRequestAction.is_valid_arguments(a, APP_LOG), data_key='export-arguments'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'requestor' : fields.Str(required=False), 'db_user' : fields.Str(required=False, data_key='db-user') }
+class MiniExportRequestResource(flask_restful.Resource):
+    _arguments = { 'address' : webargs.fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : webargs.fields.Str(required=True, data_key='db-host'), 'export_arguments' : webargs.fields.Str(required=True, validate=lambda a: InitiateRequestAction.is_valid_arguments(a, APP_LOG), data_key='export-arguments'), 'db_name' : webargs.fields.Str(required=False, data_key='db-name'), 'db_port' : webargs.fields.Int(required=False, data_key='db-port'), 'requestor' : webargs.fields.Str(required=False), 'db_user' : webargs.fields.Str(required=False, data_key='db-user') }
 
-    @use_kwargs(_arguments)
+    @webargs.flaskparser.use_kwargs(_arguments)
     def post(self, address, db_host, export_arguments, db_name=None, db_port=None, requestor=None, db_user=None):
-        arguments = { 'address' : address, 'db_host' : db_host, 'webserver' : urlparse(request.base_url).hostname, 'export_arguments' : export_arguments, 'db_name' : db_name, 'db_port' : db_port, 'requestor' : requestor, 'db_user' : db_user, 'log' : APP_LOG }
+        arguments = { 'address' : address, 'db_host' : db_host, 'webserver' : urllib.parse.urlparse(flask.request.base_url).hostname, 'export_arguments' : export_arguments, 'db_name' : db_name, 'db_port' : db_port, 'requestor' : requestor, 'db_user' : db_user, 'log' : APP_LOG }
 
         self._action_arguments = arguments
 
@@ -560,28 +559,23 @@ class MiniExportRequestResource(Resource):
         return response.generate_serializable_dict()
 
 class MiniExportRequestFromFormResource(MiniExportRequestResource):
-    @use_kwargs(MiniExportRequestResource._arguments, location='form')
+    @webargs.flaskparser.use_kwargs(MiniExportRequestResource._arguments, location='form')
     def post(self, address, db_host, export_arguments, db_name=None, db_port=None, requestor=None, db_user=None):
-        arguments = { 'address' : address, 'db_host' : db_host, 'webserver' : urlparse(request.base_url).hostname, 'export_arguments' : export_arguments, 'db_name' : db_name, 'db_port' : db_port, 'requestor' : requestor, 'db_user' : db_user, 'log' : APP_LOG }
+        arguments = { 'address' : address, 'db_host' : db_host, 'webserver' : urllib.parse.urlparse(flask.request.base_url).hostname, 'export_arguments' : export_arguments, 'db_name' : db_name, 'db_port' : db_port, 'requestor' : requestor, 'db_user' : db_user, 'log' : APP_LOG }
 
         self._action_arguments = arguments
 
         return self.call_action()
 
-class StreamedExportRequestResource(Resource):
-    _arguments = { 'address' : fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : fields.Str(required=True, data_key='db-host'), 'export_arguments' : fields.Str(required=True, validate=lambda a: InitiateRequestAction.is_valid_arguments(a, APP_LOG), data_key='export-arguments'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'requestor' : fields.Str(required=False), 'db_user' : fields.Str(required=False, data_key='db-user') }
+class StreamedExportRequestResource(flask_restful.Resource):
+    _arguments = { 'address' : webargs.fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : webargs.fields.Str(required=True, data_key='db-host'), 'export_arguments' : webargs.fields.Str(required=True, validate=lambda a: InitiateRequestAction.is_valid_arguments(a, APP_LOG), data_key='export-arguments'), 'db_name' : webargs.fields.Str(required=False, data_key='db-name'), 'db_port' : webargs.fields.Int(required=False, data_key='db-port'), 'requestor' : webargs.fields.Str(required=False), 'db_user' : webargs.fields.Str(required=False, data_key='db-user') }
 
-    @use_kwargs(_arguments)
+    @webargs.flaskparser.use_kwargs(_arguments)
     def post(self, address, db_host, export_arguments, db_name=None, db_port=None, requestor=None, db_user=None):
-        arguments = { 'address' : address, 'db_host' : db_host, 'webserver' : urlparse(request.base_url).hostname, 'export_arguments' : export_arguments, 'db_name' : db_name, 'db_port' : db_port, 'requestor' : requestor, 'db_user' : db_user, 'log' : APP_LOG }
+        arguments = { 'address' : address, 'db_host' : db_host, 'webserver' : urllib.parse.urlparse(flask.request.base_url).hostname, 'export_arguments' : export_arguments, 'db_name' : db_name, 'db_port' : db_port, 'requestor' : requestor, 'db_user' : db_user, 'log' : APP_LOG }
 
-        self._action_arguments = arguments
-
-        return self.call_action()
-
-    def call_action(self):
         # creates a SecureExportRequest object, but does not start the child process;
-        action = Action.action(action_type='start_streamed_export', args=self._action_arguments)
+        action = Action.action(action_type='start_streamed_export', args=arguments)
 
         # starts the child process and creates a generator to return data from the output content stream
         # response, when successful, will not be sent back to browser, but it can be used here to check for errors
@@ -601,126 +595,133 @@ class StreamedExportRequestResource(Resource):
         # generator cannot be async generator
         return export.response_class(action.generator, content_type='application/octet-stream', headers=headers)
 
-class StreamedExportRequestResourceFromForm(StreamedExportRequestResource):
-    _arguments = { 'address' : fields.Str(required=True, validate=lambda a: a.find('@') >= 0, data_key='se-address'), 'db_host' : fields.Str(required=True, data_key='se-db-host'), 'export_arguments' : fields.Str(required=True, validate=lambda a: InitiateRequestAction.is_valid_arguments(a, APP_LOG), data_key='se-export-arguments'), 'db_name' : fields.Str(required=False, data_key='se-db-name'), 'db_port' : fields.Int(required=False, data_key='se-db-port'), 'requestor' : fields.Str(required=False, data_key='se-requestor'), 'db_user' : fields.Str(required=False, data_key='se-db-user') }
-
-    @use_kwargs(_arguments, location='form')
-    def post(self, address, db_host, export_arguments, db_name=None, db_port=None, requestor=None, db_user=None):
-        arguments = { 'address' : address, 'db_host' : db_host, 'webserver' : urlparse(request.base_url).hostname, 'export_arguments' : export_arguments, 'db_name' : db_name, 'db_port' : db_port, 'requestor' : requestor, 'db_user' : db_user, 'log' : APP_LOG }
-
-        self._action_arguments = arguments
-
-        return self.call_action()
-
 from manage_request import PendingRequestAction
-class PendingRequestResource(Resource):
-    _arguments = { 'address' : fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : fields.Str(required=True, data_key='db-host'), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'db_user' : fields.Str(required=False, data_key='db-user'), 'pending_requests_table' : fields.Str(required=False, data_key='pending-requests-table'), 'timeout' : fields.Int(required=False) }
+class PendingRequestResource(flask_restful.Resource):
+    _arguments = { 'address' : webargs.fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : webargs.fields.Str(required=True, data_key='db-host'), 'db_name' : webargs.fields.Str(required=False, data_key='db-name'), 'db_port' : webargs.fields.Int(required=False, data_key='db-port'), 'db_user' : webargs.fields.Str(required=False, data_key='db-user'), 'pending_requests_table' : webargs.fields.Str(required=False, data_key='pending-requests-table'), 'timeout' : webargs.fields.Int(required=False) }
 
-    @use_kwargs(_arguments, location='querystring')
+    @webargs.flaskparser.use_kwargs(_arguments, location='querystring')
     def get(self, address, db_host, db_name=None, db_port=None, db_user=None, pending_requests_table=None, timeout=None):
         # HTTP GET - check for the existence of a pending request
-        arguments = { 'address' : address, 'db_host' : db_host, 'webserver' : urlparse(request.base_url).hostname, 'db_name' : db_name, 'db_port' : db_port, 'db_user' : db_user, 'log' : APP_LOG, 'pending_requests_table' : pending_requests_table, 'timeout' : timeout }
+        arguments = { 'address' : address, 'db_host' : db_host, 'webserver' : urllib.parse.urlparse(flask.request.base_url).hostname, 'db_name' : db_name, 'db_port' : db_port, 'db_user' : db_user, 'log' : APP_LOG, 'pending_requests_table' : pending_requests_table, 'timeout' : timeout }
 
         action = Action.action(action_type='check_pending_request', args=arguments)
         return action().generate_serializable_dict()
 
-    @use_kwargs(_arguments)
+    @webargs.flaskparser.use_kwargs(_arguments)
     def post(self, address, db_host, db_name=None, db_port=None, db_user=None, pending_requests_table=None, timeout=None):
         # HTTP POST - cancel an export request
-        arguments = { 'address' : address, 'db_host' : db_host, 'webserver' : urlparse(request.base_url).hostname, 'db_name' : db_name, 'db_port' : db_port, 'db_user' : db_user, 'log' : APP_LOG, 'pending_requests_table' : pending_requests_table, 'timeout' : timeout }
+        arguments = { 'address' : address, 'db_host' : db_host, 'webserver' : urllib.parse.urlparse(flask.request.base_url).hostname, 'db_name' : db_name, 'db_port' : db_port, 'db_user' : db_user, 'log' : APP_LOG, 'pending_requests_table' : pending_requests_table, 'timeout' : timeout }
 
         action = Action.action(action_type='cancel_pending_request', args=arguments)
         return action().generate_serializable_dict()
 
-class PendingRequestStatusResource(Resource):
-    _arguments = { 'address' : fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : fields.Str(required=True, data_key='db-host'), 'request_id' : fields.Str(required=True, data_key='request-id', validate=lambda a: PendingRequestAction.is_valid_request_id(a, APP_LOG)), 'db_name' : fields.Str(required=False, data_key='db-name'), 'db_port' : fields.Int(required=False, data_key='db-port'), 'db_user' : fields.Str(required=False, data_key='db-user'), 'pending_requests_table' : fields.Str(required=False, data_key='pending-requests-table'), 'timeout' : fields.Int(required=False) }
+class PendingRequestStatusResource(flask_restful.Resource):
+    _arguments = { 'address' : webargs.fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'db_host' : webargs.fields.Str(required=True, data_key='db-host'), 'request_id' : webargs.fields.Str(required=True, data_key='request-id', validate=lambda a: PendingRequestAction.is_valid_request_id(a, APP_LOG)), 'db_name' : webargs.fields.Str(required=False, data_key='db-name'), 'db_port' : webargs.fields.Int(required=False, data_key='db-port'), 'db_user' : webargs.fields.Str(required=False, data_key='db-user'), 'pending_requests_table' : webargs.fields.Str(required=False, data_key='pending-requests-table'), 'timeout' : webargs.fields.Int(required=False) }
 
-    @use_kwargs(_arguments, location='querystring')
+    @webargs.flaskparser.use_kwargs(_arguments, location='querystring')
     def get(self, address, db_host, request_id, db_name=None, db_port=None, db_user=None, pending_requests_table=None, timeout=None):
         # HTTP GET - get the export status of a request
-        arguments = { 'address' : address, 'db_host' : db_host, 'webserver' : urlparse(request.base_url).hostname, 'request_id' : request_id, 'db_name' : db_name, 'db_port' : db_port, 'db_user' : db_user, 'log' : APP_LOG, 'pending_requests_table' : pending_requests_table, 'timeout' : timeout }
+        arguments = { 'address' : address, 'db_host' : db_host, 'webserver' : urllib.parse.urlparse(flask.request.base_url).hostname, 'request_id' : request_id, 'db_name' : db_name, 'db_port' : db_port, 'db_user' : db_user, 'log' : APP_LOG, 'pending_requests_table' : pending_requests_table, 'timeout' : timeout }
 
         action = Action.action(action_type='get_export_status', args=arguments)
         return action().generate_serializable_dict()
 
 from check_address import CheckAddressLegacyAction
-class CheckAddressLegacyResource(Resource):
-    _arguments = { 'address' : fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'name' : fields.Str(required=False), 'snail' : fields.Str(required=False), 'checkonly' : fields.Boolean(required=False, load_default=False) }
+class CheckAddressLegacyResource(flask_restful.Resource):
+    _arguments = { 'address' : webargs.fields.Str(required=True, validate=lambda a: a.find('@') >= 0), 'name' : webargs.fields.Str(required=False), 'snail' : webargs.fields.Str(required=False), 'checkonly' : webargs.fields.Boolean(required=False, load_default=False) }
 
-    @use_kwargs(_arguments, location='querystring')
+    @webargs.flaskparser.use_kwargs(_arguments, location='querystring')
     def get(self, address, **kwargs):
-        arguments = { 'address' : address, 'db_host' : request.environ.get('DB_HOST', DEFAULT_DB_HOST), 'log' : APP_LOG }
+        arguments = { 'address' : address, 'db_host' : flask.request.environ.get('DB_HOST', DEFAULT_DB_HOST), 'log' : APP_LOG }
         arguments.update(kwargs)
+        # the legacy code requires checkonly to be an integer
         action = Action.action(action_type='legacy_check_address', args=arguments)
         return action().generate_serializable_dict()
 
 from initiate_request import JsocFetchStatusLegacyAction, JsocFetchExportLegacyAction
-class JsocFetchLegacyResource(Resource):
-    _arguments_get = { 'address' : fields.Email(required=True, data_key='notify'), 'request_id' : fields.Str(required=True, data_key='requestid') }
+class JsocFetchLegacyResource(flask_restful.Resource):
+    _arguments_get = { 'address' : webargs.fields.Email(required=True, data_key='notify'), 'request_id' : webargs.fields.Str(required=True, data_key='requestid') }
 
-    _arguments_post = { 'address' : fields.Email(required=True, data_key='notify'), 'operation' : fields.Str(required=True, validate=lambda a: a.strip().lower() == 'exp_request' or a.strip().lower() == 'exp_status' or a.strip().lower() == 'exp_su', data_key='op'), 'specification' : fields.Str(required=True, validate=lambda a: GetRecordInfoAction.is_valid_specification(a, None, urlparse(request.base_url).hostname, APP_LOG), data_key='ds'), 'seg' : fields.DelimitedList(fields.Str, delimiter=',', required=False), 'sunum' : fields.DelimitedList(fields.Str, delimiter=',', required=False), 'process' : fields.Str(required=False), 'processing' : fields.Str(required=False, validate=lambda a: JsocInfoAction.is_valid_processing(a, None, urlparse(request.base_url).hostname, APP_LOG)), 'n' : fields.Int(required=False), 'requestor' : fields.Str(required=False), 'shipto' : fields.Str(required=False), 'protocol' : fields.Str(required=False, validate=lambda a: a.strip().lower() == 'as-is' or a.strip().lower() == 'su-as-is' or a.strip().lower() == 'fits' or a.strip().lower() == 'mpg' or a.strip().lower() == 'jpg' or a.strip().lower() == 'png' or a.strip().lower() == 'mp4', load_default='as-is'), 'filenamefmt' : fields.Str(required=False, load_default='{seriesname}.{recnum:%d}.{segment}'), 'format' : fields.Str(required=False, default='json'), 'formatvar' : fields.Str(required=False), 'method' : fields.Str(required=False, validate=lambda a: a.strip().lower() == 'url' or a.strip().lower() == 'url_quick' or a.strip().lower() == 'url_direct' or a.strip().lower() == 'ftp' or a.strip().lower() == 'url-tar' or a.strip().lower() == 'ftp-tar', load_default='url'), 'file' : fields.Str(required=False), 'sizeratio' : fields.Float(required=False, load_default=1.0), 't' : fields.Boolean(required=False, load_default=False), 'p' : fields.Boolean(required=False, load_default=False), 'W' : fields.Boolean(required=False, load_default=False), 'o' : fields.Boolean(required=False, load_default=True), 'q' : fields.Boolean(required=False, load_default=False) }
+    _arguments_post = { 'address' : webargs.fields.Email(required=True, data_key='notify'), 'operation' : webargs.fields.Str(required=True, validate=lambda a: a.strip().lower() == 'exp_request' or a.strip().lower() == 'exp_status' or a.strip().lower() == 'exp_su', data_key='op'), 'specification' : webargs.fields.Str(required=True, validate=lambda a: GetRecordInfoAction.is_valid_specification(a, None, urllib.parse.urlparse(flask.request.base_url).hostname, APP_LOG), data_key='ds'), 'seg' : webargs.fields.DelimitedList(webargs.fields.Str, delimiter=',', required=False), 'sunum' : webargs.fields.DelimitedList(webargs.fields.Str, delimiter=',', required=False), 'process' : webargs.fields.Str(required=False), 'processing' : webargs.fields.Str(required=False, validate=lambda a: JsocInfoAction.is_valid_processing(a, None, urllib.parse.urlparse(flask.request.base_url).hostname, APP_LOG)), 'n' : webargs.fields.Int(required=False), 'requestor' : webargs.fields.Str(required=False), 'shipto' : webargs.fields.Str(required=False), 'protocol' : webargs.fields.Str(required=False, validate=lambda a: a.strip().lower() == 'as-is' or a.strip().lower() == 'su-as-is' or a.strip().lower() == 'fits' or a.strip().lower() == 'mpg' or a.strip().lower() == 'jpg' or a.strip().lower() == 'png' or a.strip().lower() == 'mp4', load_default='as-is'), 'filenamefmt' : webargs.fields.Str(required=False, load_default='{seriesname}.{recnum:%d}.{segment}'), 'format' : webargs.fields.Str(required=False, default='json'), 'formatvar' : webargs.fields.Str(required=False), 'access' : webargs.fields.Str(required=False, validate=lambda a: a.strip().lower() == 'url' or a.strip().lower() == 'url_quick' or a.strip().lower() == 'url_direct' or a.strip().lower() == 'ftp' or a.strip().lower() == 'url-tar' or a.strip().lower() == 'ftp-tar', load_default='url', data_key='method'), 'file' : webargs.fields.Str(required=False), 'sizeratio' : webargs.fields.Float(required=False, load_default=1.0), 't' : webargs.fields.Boolean(required=False, load_default=False), 'p' : webargs.fields.Boolean(required=False, load_default=False), 'o' : webargs.fields.Boolean(required=False, load_default=True), 'q' : webargs.fields.Boolean(required=False, load_default=False) }
 
-    @use_kwargs(_arguments_get, location='querystring')
+    @webargs.flaskparser.use_kwargs(_arguments_get, location='querystring')
     def get(self, address, request_id, **kwargs):
         # look for private flag - this is set in nginx with:
         #   uwsgi_param DB_HOST <blah>
         # this is available via the request.environ dict
-        arguments = { 'address' : address, 'request_id' : request_id, 'db_host' : request.environ.get('DB_HOST', DEFAULT_DB_HOST), 'log' : APP_LOG }
+        arguments = { 'address' : address, 'request_id' : request_id, 'db_host' : flask.request.environ.get('DB_HOST', DEFAULT_DB_HOST), 'log' : APP_LOG }
         action = Action.action(action_type='legacy_get_export_status', args=arguments)
         return action().generate_serializable_dict()
 
-    @use_kwargs(_arguments_post, location='querystring')
+    @webargs.flaskparser.use_kwargs(_arguments_post, location='querystring')
     def post(self, address, operation, specification, **kwargs):
-        arguments = { 'address' : address, 'operation' : operation, 'specification' : specification, 'db_host' : request.environ.get('DB_HOST', DEFAULT_DB_HOST), 'log' : APP_LOG }
+        arguments = { 'address' : address, 'operation' : operation, 'specification' : specification, 'db_host' : flask.request.environ.get('DB_HOST', DEFAULT_DB_HOST), 'log' : APP_LOG }
         arguments.update(kwargs)
         action = Action.action(action_type='legacy_start_export', args=arguments)
         return action().generate_serializable_dict()
 
 from get_record_info import JsocInfoLegacyAction
-class JsocInfoLegacyResource(Resource):
-    _arguments = { 'operation' : fields.Str(required=True, validate=lambda a: a.strip().lower() == 'rs_list' or a.strip().lower() == 'rs_summary' or a.strip().lower() == 'series_struct', data_key='op'), 'specification' : fields.Str(required=False, validate=lambda a: GetRecordInfoAction.is_valid_specification(a, None, urlparse(request.base_url).hostname, APP_LOG), data_key='ds'), 'key' : fields.List(fields.Str, required=False), 'link' : fields.List(fields.Str, required=False), 'seg' : fields.List(fields.Str, required=False), 'processing' : fields.Str(required=False, validate=lambda a: JsocInfoAction.is_valid_processing(a, None, urlparse(request.base_url).hostname, APP_LOG)), 'B' : fields.Boolean(required=False, load_default=False), 'l' : fields.Boolean(required=False, load_default=False), 'M' : fields.Boolean(required=False, load_default=False), 'n' : fields.Int(required=False, load_default=0), 'R' : fields.Boolean(required=False, load_default=False), 'o' : fields.Boolean(required=False, load_default=False), 'f' : fields.Boolean(required=False, load_default=False), 'r' : fields.Boolean(required=False, load_default=False), 's' : fields.Boolean(required=False, load_default=False) }
+class JsocInfoLegacyResource(flask_restful.Resource):
+    _arguments = { 'operation' : webargs.fields.Str(required=True, validate=lambda a: a.strip().lower() == 'rs_list' or a.strip().lower() == 'rs_summary' or a.strip().lower() == 'series_struct', data_key='op'), 'specification' : webargs.fields.Str(required=True, validate=lambda a: GetRecordInfoAction.is_valid_specification(a, None, urllib.parse.urlparse(flask.request.base_url).hostname, APP_LOG), data_key='ds'), 'key' : webargs.fields.DelimitedList(webargs.fields.Str, delimiter=',', required=False), 'link' : webargs.fields.DelimitedList(webargs.fields.Str, delimiter=',', required=False), 'seg' : webargs.fields.DelimitedList(webargs.fields.Str, delimiter=',', required=False), 'processing' : webargs.fields.Str(required=False, validate=lambda a: JsocInfoLegacyAction.is_valid_processing(a, None, urllib.parse.urlparse(flask.request.base_url).hostname, APP_LOG)), 'B' : webargs.fields.Boolean(required=False, load_default=False), 'l' : webargs.fields.Boolean(required=False, load_default=False), 'M' : webargs.fields.Boolean(required=False, load_default=False), 'n' : webargs.fields.Int(required=False, load_default=0), 'R' : webargs.fields.Boolean(required=False, load_default=False), 'o' : webargs.fields.Boolean(required=False, load_default=False), 'f' : webargs.fields.Boolean(required=False, load_default=False), 'r' : webargs.fields.Boolean(required=False, load_default=False) }
 
-    @use_kwargs(_arguments, location='querystring')
+    @webargs.flaskparser.use_kwargs(_arguments, location='querystring')
     def get(self, operation, specification, **kwargs):
-        arguments = { 'operation' : operation, 'specification' : specification, 'db_host' : request.environ.get('DB_HOST', DEFAULT_DB_HOST), 'log' : APP_LOG }
+        arguments = { 'operation' : operation, 'specification' : specification, 'db_host' : flask.request.environ.get('DB_HOST', DEFAULT_DB_HOST), 'log' : APP_LOG }
         arguments.update(kwargs)
-        action = Action.action(action_type='legacy_get_record_set_info', args=arguments)
+        action = Action.action(action_type='legacy_get_record_info_json', args=arguments)
         return action().generate_serializable_dict()
 
 from get_record_info import ShowInfoLegacyAction
-class ShowInfoLegacyResource(Resource):
-    _arguments = { 'specification' : fields.Str(required=True, validate=lambda a: GetRecordInfoAction.is_valid_specification(a, None, urlparse(request.base_url).hostname, APP_LOG), data_key='ds'), 'key' : fields.List(fields.Str, required=False), 'link' : fields.List(fields.Str, required=False), 'seg' : fields.List(fields.Str, required=False), 'l' : fields.Boolean(required=False, load_default=False), 'l' : fields.Boolean(required=False, load_default=False), 'a' : fields.Boolean(required=False, load_default=False), 'A' : fields.Boolean(required=False, load_default=False), 'b' : fields.Boolean(required=False, load_default=False), 'B' : fields.Boolean(required=False, load_default=False), 'c' : fields.Boolean(required=False, load_default=False), 'C' : fields.Boolean(required=False, load_default=False), 'd' : fields.Boolean(required=False, load_default=False), 'e' : fields.Boolean(required=False, load_default=False), 'i' : fields.Boolean(required=False, load_default=False), 'I' : fields.Boolean(required=False, load_default=False), 'j' : fields.Boolean(required=False, load_default=False), 'k' : fields.Boolean(required=False, load_default=False), 'K' : fields.Boolean(required=False, load_default=False), 'l' : fields.Boolean(required=False, load_default=False), 'K' : fields.Boolean(required=False, load_default=False), 'l' : fields.Boolean(required=False, load_default=False), 'M' : fields.Boolean(required=False, load_default=False), 'n' : fields.Int(required=False, load_default=0), 'o' : fields.Boolean(required=False, load_default=False), 'O' : fields.Boolean(required=False, load_default=False), 'p' : fields.Boolean(required=False, load_default=False), 'P' : fields.Boolean(required=False, load_default=False), 'q' : fields.Boolean(required=False, load_default=False), 'r' : fields.Boolean(required=False, load_default=False), 'R' : fields.Boolean(required=False, load_default=False), 's' : fields.Boolean(required=False, load_default=False), 'sunum' : fields.DelimitedList(fields.Str, delimiter=',', required=False), 'S' : fields.Boolean(required=False, load_default=False), 't' : fields.Boolean(required=False, load_default=False), 'T' : fields.Boolean(required=False, load_default=False), 'v' : fields.Boolean(required=False, load_default=False), 'x' : fields.Boolean(required=False, load_default=False), 'z' : fields.Boolean(required=False, load_default=False) }
+class ShowInfoLegacyResource(flask_restful.Resource):
+    _arguments = { 'specification' : webargs.fields.Str(required=True, validate=lambda a: GetRecordInfoAction.is_valid_specification(a, None, urllib.parse.urlparse(flask.request.base_url).hostname, APP_LOG), data_key='ds'), 'key' : webargs.fields.DelimitedList(webargs.fields.Str, delimiter=',', required=False), 'link' : webargs.fields.DelimitedList(webargs.fields.Str, delimiter=',', required=False), 'seg' : webargs.fields.DelimitedList(webargs.fields.Str, delimiter=',', required=False), 'l' : webargs.fields.Boolean(required=False, load_default=False), 'l' : webargs.fields.Boolean(required=False, load_default=False), 'a' : webargs.fields.Boolean(required=False, load_default=False), 'A' : webargs.fields.Boolean(required=False, load_default=False), 'b' : webargs.fields.Boolean(required=False, load_default=False), 'B' : webargs.fields.Boolean(required=False, load_default=False), 'c' : webargs.fields.Boolean(required=False, load_default=False), 'C' : webargs.fields.Boolean(required=False, load_default=False), 'd' : webargs.fields.Boolean(required=False, load_default=False), 'e' : webargs.fields.Boolean(required=False, load_default=False), 'i' : webargs.fields.Boolean(required=False, load_default=False), 'I' : webargs.fields.Boolean(required=False, load_default=False), 'j' : webargs.fields.Boolean(required=False, load_default=False), 'k' : webargs.fields.Boolean(required=False, load_default=False), 'K' : webargs.fields.Boolean(required=False, load_default=False), 'l' : webargs.fields.Boolean(required=False, load_default=False), 'K' : webargs.fields.Boolean(required=False, load_default=False), 'l' : webargs.fields.Boolean(required=False, load_default=False), 'M' : webargs.fields.Boolean(required=False, load_default=False), 'n' : webargs.fields.Int(required=False, load_default=0), 'o' : webargs.fields.Boolean(required=False, load_default=False), 'O' : webargs.fields.Boolean(required=False, load_default=False), 'p' : webargs.fields.Boolean(required=False, load_default=False), 'P' : webargs.fields.Boolean(required=False, load_default=False), 'q' : webargs.fields.Boolean(required=False, load_default=False), 'r' : webargs.fields.Boolean(required=False, load_default=False), 'R' : webargs.fields.Boolean(required=False, load_default=False), 's' : webargs.fields.Boolean(required=False, load_default=False), 'sunum' : webargs.fields.DelimitedList(webargs.fields.Str, delimiter=',', required=False), 'S' : webargs.fields.Boolean(required=False, load_default=False), 't' : webargs.fields.Boolean(required=False, load_default=False), 'T' : webargs.fields.Boolean(required=False, load_default=False), 'v' : webargs.fields.Boolean(required=False, load_default=False), 'x' : webargs.fields.Boolean(required=False, load_default=False), 'z' : webargs.fields.Boolean(required=False, load_default=False) }
 
-    @use_kwargs(_arguments, location='querystring')
+    @webargs.flaskparser.use_kwargs(_arguments, location='querystring')
     def get(self, specification, **kwargs):
-        arguments = { 'specification' : specification, 'db_host' : request.environ.get('DB_HOST', DEFAULT_DB_HOST), 'log' : APP_LOG }
+        arguments = { 'specification' : specification, 'db_host' : flask.request.environ.get('DB_HOST', DEFAULT_DB_HOST), 'log' : APP_LOG }
         arguments.update(kwargs)
-        action = Action.action(action_type='legacy_get_record_set_table', args=self._action_arguments)
+        action = Action.action(action_type='legacy_get_record_info_text', args=arguments)
         return action().generate_serializable_dict()
 
+# either public or private site; does NOT use whitelist (so if public, then only the series that are public and not
+# on whitelist are returned)
 from get_series_info import ShowSeriesLegacyAction
-class ShowSeriesLegacyResource(Resource):
-    _arguments = { 'series_regex' : fields.Str(required=True, data_key='series-regex') }
+class ShowSeriesLegacyResource(flask_restful.Resource):
+    _arguments = { 'series_regex' : webargs.fields.Str(required=False, load_default=None) }
 
-    @use_args(_arguments, location='querystring')
-    def get(self, args):
-        # args is a dict where the order of arguments in _arguments corresponds to the order in the query string
-        arguments = { 'series_regex' : args['series_regex'], 'db_host' : request.environ.get('DB_HOST', DEFAULT_DB_HOST), 'log' : APP_LOG }
+    @webargs.flaskparser.use_kwargs(_arguments, location='querystring')
+    def get(self, **kwargs):
+        # the original show_info parses the querystring; if no '=', then it treats the entire string as the regex
+        # otherwise, it treats the RHS as the regex; there is no `series_regex` in the orignal API, but add that
+        # to this API so that flask and flask-restful works
+        series_regex = kwargs.get('series_regex', None)
+
+        if series_regex is None:
+            query_string = flask.request.query_string.decode()
+            try:
+                rhs = query_string.index('=') + 1
+                # '=' exists
+                series_regex = query_string[rhs:]
+            except ValueError:
+                # no '='; use all `query_string`
+                series_regex = query_string
+
+        arguments = { 'series_regex' : series_regex, 'db_host' : flask.request.environ.get('DB_HOST', DEFAULT_DB_HOST), 'log' : APP_LOG }
         action = Action.action(action_type='legacy_get_series_list', args=arguments)
         return action().generate_serializable_dict()
 
-# public site only!
-from get_series_info import ShowExtSeriesLegacyAction
-class ShowExtSeriesLegacyResource(Resource):
-    _arguments = { 'series_regex' : fields.Str(required=True, data_key='filter'), 'info_short' : fields.Boolean(required=False, load_default=False, data_key='i'), 'info_long' : fields.Boolean(required=False, load_default=False, data_key='info'),  }
+# public site only! uses whitelist
+from get_series_info import ShowSeriesPublicLegacyAction
+class ShowExtSeriesLegacyResource(flask_restful.Resource):
+    _arguments = { 'series_regex' : webargs.fields.Str(required=False, load_default=None, data_key='filter'), 'series_regex_short' : webargs.fields.Boolean(required=False, load_default=None, data_key='f'), 'full_info' : webargs.fields.Boolean(required=False, load_default=None, data_key='info'), 'full_info_short' : webargs.fields.Boolean(required=False, load_default=False, data_key='i') }
 
-    @use_kwargs(_arguments, location='querystring')
-    def get(self, series_regex):
-        arguments = { 'series_regex' : series_regex, 'dbhost' : request.environ.get('DB_HOST', DEFAULT_DB_HOST), 'log' : APP_LOG }
-        action = Action.action(action_type='legacy_get_ext_series_list', args=arguments)
+    @webargs.flaskparser.use_kwargs(_arguments, location='querystring')
+    def get(self, series_regex, series_regex_short, full_info, full_info_short):
+        show_info = full_info if full_info is not None else full_info_short
+        arguments = { 'series_regex' : series_regex if series_regex is not None else series_regex_short, 'info' : show_info, 'dbhost' : flask.request.environ.get('DB_HOST', DEFAULT_DB_HOST), 'log' : APP_LOG }
+        action = Action.action(action_type='legacy_get_public_series_list', args=arguments)
         return action().generate_serializable_dict()
 
-class RootResource(Resource):
+class RootResource(flask_restful.Resource):
     def get(self):
         return "<h1 style='color:blue'>Hello There!</h1>"
 
@@ -738,7 +739,6 @@ export_api.add_resource(PremiumExportRequestFromFormResource, '/export/new-premi
 export_api.add_resource(MiniExportRequestResource, '/export/new-mini-request')
 export_api.add_resource(MiniExportRequestFromFormResource, '/export/new-mini-request-from-form')
 export_api.add_resource(StreamedExportRequestResource, '/export/new-streamed-request')
-export_api.add_resource(StreamedExportRequestResourceFromForm, '/export/new-streamed-request-from-form')
 
 export_api.add_resource(PendingRequestResource, '/export/pending-request')
 export_api.add_resource(PendingRequestStatusResource, '/export/pending-request-status')

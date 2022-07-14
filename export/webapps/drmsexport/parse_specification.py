@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 
-from argparse import Action as ArgsAction
-from functools import lru_cache
+import argparse
+import functools
 import inspect
-from json import loads as json_loads, dumps as json_dumps
-from os import environ
-from os.path import join as path_join
-from sys import exc_info as sys_exc_info, exit as sys_exit
+import json
+import os.path
+import sys
+
 from drms_export import Connection, Error as ExportError, ErrorCode as ExportErrorCode, ExpServerBaseError, get_arguments as ss_get_arguments, get_message, Response, send_message
 from drms_parameters import DRMSParams, DPMissingParameterError
 from drms_utils import Arguments as Args, Choices, CmdlParser, Formatter as DrmsLogFormatter, Log as DrmsLog, LogLevel as DrmsLogLevel, LogLevelAction as DrmsLogLevelAction, MakeObject, StatusCode as SC
@@ -78,7 +78,7 @@ def webserver_action(self, parser, namespace, value, option_string=None):
     setattr(namespace, self.dest, webserver_obj)
 
 def create_webserver_action(drms_params):
-    cls = type('WebserverAction', (ArgsAction,),
+    cls = type('WebserverAction', (argparse.Action,),
     {
         '_drms_params' : drms_params,
         '__call__' : webserver_action,
@@ -102,7 +102,7 @@ class Arguments(Args):
 
             if is_program:
                 try:
-                    log_file = path_join(drms_params.get_required('EXPORT_LOG_DIR'), DEFAULT_LOG_FILE)
+                    log_file = os.path.join(drms_params.get_required('EXPORT_LOG_DIR'), DEFAULT_LOG_FILE)
                 except DPMissingParameterError as exc:
                     raise ParametersError(error_message=str(exc))
 
@@ -203,13 +203,13 @@ class ParseSpecificationAction(Action):
         return cls._log
 
 def send_request(request, connection, log):
-    json_message = json_dumps(request)
+    json_message = json.dumps(request)
     send_message(connection, json_message)
     message = get_message(connection)
 
     return message
 
-@lru_cache
+@functools.lru_cache
 def request_parsed_specification(specification):
     nested_arguments = ss_get_arguments(is_program=False, module_args={})
     log = ParseSpecificationAction._log
@@ -219,7 +219,7 @@ def request_parsed_specification(specification):
         response = send_request(message, connection, log)
 
         # message is raw JSON from drms_parserecset
-        parsed_specification_dict = json_loads(response)
+        parsed_specification_dict = json.loads(response)
 
         if parsed_specification_dict.get('export_server_status') == 'export_server_error':
             raise ExportServerError(error_message=f'{parsed_specification_dict["error_message"]}')
@@ -250,7 +250,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
 
             arguments = Arguments.get_arguments(is_program=is_program, program_name=program_name, program_args=program_args, module_args=module_args, drms_params=drms_params)
         except Exception as exc:
-            raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+            raise ArgumentsError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
 
         if is_program:
             try:
@@ -258,7 +258,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
                 log = DrmsLog(arguments.log_file, arguments.logging_level, formatter)
                 ParseSpecificationAction._log = log
             except Exception as exc:
-                raise LoggingError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+                raise LoggingError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
         else:
             log = action_obj.log
 
@@ -273,11 +273,11 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
             # use socket server to call drms_parserecset
             parsed_specification_dict = request_parsed_specification(specification=arguments.specification)
         except ExpServerBaseError as exc:
-            raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{exc.message}')
+            raise ExportServerError(exc_info=sys.exc_info(), error_message=f'{exc.message}')
         except PsBaseError as exc:
-            raise PsBaseError(exc_info=sys_exc_info(), error_message=f'{exc.message}')
+            raise PsBaseError(exc_info=sys.exc_info(), error_message=f'{exc.message}')
         except Exception as exc:
-            raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+            raise ExportServerError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
 
         response = Response.generate_response(status_code=StatusCode.SUCCESS, **parsed_specification_dict)
     except PsBaseError as exc:
@@ -289,7 +289,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
         elif is_program:
             print(error_message)
     except Exception as exc:
-        response = UnhandledExceptionError(exc_info=sys_exc_info(), error_message=f'{str(exc)}').response
+        response = UnhandledExceptionError(exc_info=sys.exc_info(), error_message=f'{str(exc)}').response
         error_message = str(exc)
 
         if log:
@@ -303,6 +303,6 @@ if __name__ == '__main__':
     response = perform_action(action_obj=None, is_program=True)
     print(response.generate_json())
 
-    sys_exit(0)
+    sys.exit(0)
 else:
     pass

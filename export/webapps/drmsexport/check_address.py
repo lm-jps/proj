@@ -14,16 +14,15 @@
 #   dbuser (optional) - The database account to be used when connecting to the database. The default is the value of the WEB_DBUSER parameter in DRMSParams.
 #   checkonly (optional) - If set to 1, then no attept is made to register an unregistered email. In this case, if no error occurs then the possible return status codes are StatusCode.REGISTERED_ADDRESS, StatusCode.REGISTRATION_PENDING, or StatusCode.UNREGISTERED_ADDRESS. The default is False (unknown addresses are registered).
 
-from argparse import Action as ArgsAction
-from copy import deepcopy
-from json import loads as json_loads, dumps as json_dumps
-from os.path import join as path_join
+import argparse
+import copy
+import json
+import os.path
 import psycopg2
 import re
 import uuid
-from urllib.parse import unquote
 import smtplib
-from sys import exc_info as sys_exc_info, exit as sys_exit, stdout as sys_stdout
+import sys
 
 from drms_export import Connection, Error as ExportError, ErrorCode as ExportErrorCode, ExpServerBaseError, get_arguments as ss_get_arguments, get_message, Response, send_message
 from drms_parameters import DRMSParams, DPMissingParameterError
@@ -113,9 +112,9 @@ class RegisteredResponse(CheckAddressResponse):
 class UnregisteredResponse(CheckAddressResponse):
     _status_code = StatusCode(StatusCode.UNREGISTERED_ADDRESS)
 
-class UnquoteAction(ArgsAction):
+class UnquoteAction(argparse.Action):
     def __call__(self, parser, namespace, value, option_string=None):
-        unquoted = unquote(value)
+        unquoted = urllib.parse.unquote(value)
         setattr(namespace, self.dest, unquoted)
 
 class Arguments(Args):
@@ -139,9 +138,9 @@ class Arguments(Args):
 
             if is_program:
                 try:
-                    log_file = path_join(drms_params.get_required('EXPORT_LOG_DIR'), DEFAULT_LOG_FILE)
+                    log_file = os.path.join(drms_params.get_required('EXPORT_LOG_DIR'), DEFAULT_LOG_FILE)
                 except DPMissingParameterError as exc:
-                    raise ParametersError(exc_info=sys_exc_info(), error_message=str(exc))
+                    raise ParametersError(exc_info=sys.exc_info(), error_message=str(exc))
 
                 args = None
 
@@ -246,7 +245,7 @@ def generate_registered_or_pending_response(cursor, arguments, confirmation):
     return response
 
 def send_request(request, connection, log):
-    json_message = json_dumps(request)
+    json_message = json.dumps(request)
     send_message(connection, json_message)
     message = get_message(connection)
 
@@ -308,7 +307,7 @@ class CheckAddressLegacyResponse(Response):
 
     # override parent to remove attributes not present in legacy API
     def generate_serializable_dict(self):
-        serializable_dict = deepcopy(super().generate_serializable_dict())
+        serializable_dict = copy.deepcopy(super().generate_serializable_dict())
         sanitized_serializable_dict = self.remove_extraneous(serializable_dict, [ 'drms_export_status', 'drms_export_status_code', 'drms_export_status_description', 'address'] )
 
         return sanitized_serializable_dict
@@ -359,7 +358,7 @@ class CheckAddressLegacyAction(Action):
                     response = send_request(message, connection, log)
 
                     # message is raw JSON from checkAddress.py
-                    legacy_check_address_dict = json_loads(response)
+                    legacy_check_address_dict = json.loads(response)
 
                     if legacy_check_address_dict.get('export_server_status') == 'export_server_error':
                         raise ExportServerError(error_message=f'{legacy_check_address_dict["error_message"]}')
@@ -369,9 +368,9 @@ class CheckAddressLegacyAction(Action):
 
                 response = self.get_response(legacy_check_address_dict, log)
             except ExpServerBaseError as exc:
-                raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+                raise ExportServerError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
             except Exception as exc:
-                raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+                raise ExportServerError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
         except CaBaseError as exc:
             response = exc.response
             error_message = exc.message
@@ -379,7 +378,7 @@ class CheckAddressLegacyAction(Action):
             if log:
                 log.write_error([ error_message ])
         except Exception as exc:
-            response = UnhandledExceptionError(exc_info=sys_exc_info(), error_message=f'{str(exc)}').response
+            response = UnhandledExceptionError(exc_info=sys.exc_info(), error_message=f'{str(exc)}').response
             error_message = str(exc)
 
             if log:
@@ -390,7 +389,7 @@ class CheckAddressLegacyAction(Action):
     def get_response(self, client_response_dict, log):
         log.write_debug([ f'[ get_response ]' ])
 
-        response_dict = deepcopy(client_response_dict)
+        response_dict = copy.deepcopy(client_response_dict)
         check_address_status = response_dict['status']
 
         if check_address_status == 1:
@@ -476,9 +475,9 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
 
             arguments = Arguments.get_arguments(is_program=is_program, program_name=program_name, program_args=program_args, module_args=module_args, drms_params=drms_params)
         except ArgsError as exc:
-            raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+            raise ArgumentsError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
         except Exception as exc:
-            raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+            raise ArgumentsError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
 
         if is_program:
             try:
@@ -486,7 +485,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
                 log = DrmsLog(arguments.log_file, arguments.logging_level, formatter)
                 CheckAddressAction._log = log
             except Exception as exc:
-                raise LoggingError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+                raise LoggingError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
         else:
             log = action_obj.log
 
@@ -539,7 +538,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
         elif is_program:
             print(error_message)
     except Exception as exc:
-        response = UnhandledExceptionError(exc_info=sys_exc_info(), error_message=f'{str(exc)}').response
+        response = UnhandledExceptionError(exc_info=sys.exc_info(), error_message=f'{str(exc)}').response
         error_message = str(exc)
 
         if log:
@@ -551,7 +550,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
 
 def run_tests():
     formatter = DrmsLogFormatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
-    log = DrmsLog(sys_stdout, DrmsLogLevelAction.string_to_level('debug'), formatter)
+    log = DrmsLog(sys.stdout, DrmsLogLevelAction.string_to_level('debug'), formatter)
 
     log.write_debug([ 'testing `legacy_check_address`'])
     cala = CheckAddressLegacyAction(method='legacy_check_address', address='arta@sun.stanford.edu', checkonly=True, db_host='hmidb2', log=log)
@@ -564,6 +563,6 @@ if __name__ == "__main__":
     print(response.generate_json())
 
     # Always return 0. If there was an error, an error code (the 'status' property) and message (the 'statusMsg' property) goes in the returned HTML.
-    sys_exit(0)
+    sys.exit(0)
 else:
     pass

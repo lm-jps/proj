@@ -18,15 +18,16 @@
 #   to test providing CGI arguments, set `TEST_CGI` to True, and then provide a single QUERY_STRING-like argument, like:
 #   manage-request.py 'address=person@domain&operation=check'
 
-from argparse import Action as ArgsAction
-from copy import deepcopy
-from datetime import timedelta
-from json import dumps as json_dumps, loads as json_loads
-from os.path import join as path_join
+import argparse
+import copy
+import datetime
+import json
+import os.path
 import psycopg2
-from re import compile as re_compile
-from sys import exc_info as sys_exc_info, exit as sys_exit, stdout as sys_stdout
-from urllib.parse import urlunsplit
+import re
+import re
+import sys
+import urllib.parse
 
 from drms_export import Connection, ExpServerBaseError, Error as ExportError, ErrorCode as ExportErrorCode, ErrorResponse, Response, get_arguments as ss_get_arguments, get_message, send_message
 from drms_parameters import DRMSParams, DPMissingParameterError
@@ -144,7 +145,7 @@ def webserver_action(self, parser, namespace, value, option_string=None):
     setattr(namespace, self.dest, webserver_obj)
 
 def create_webserver_action(drms_params):
-    cls = type('WebserverAction', (ArgsAction,),
+    cls = type('WebserverAction', (argparse.Action,),
     {
         '_drms_params' : drms_params,
         '__call__' : webserver_action,
@@ -168,13 +169,13 @@ class Arguments(Args):
                 timeout = drms_params.get_required('EXPORT_PENDING_REQUESTS_TIME_OUT')
                 download_web_domain = drms_params.get_required('WEB_DOMAIN_PUBLIC')
             except DPMissingParameterError as exc:
-                raise ParametersError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+                raise ParametersError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
 
             if is_program:
                 try:
-                    log_file = path_join(drms_params.get_required('EXPORT_LOG_DIR'), DEFAULT_LOG_FILE)
+                    log_file = os.path.join(drms_params.get_required('EXPORT_LOG_DIR'), DEFAULT_LOG_FILE)
                 except DPMissingParameterError as exc:
-                    raise ParametersError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+                    raise ParametersError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
 
                 args = None
 
@@ -284,7 +285,7 @@ class Operation():
                 raise self._generate_exception(exc=DbError, error_message=f'unexpected number of rows returned ({cmd})')
         except psycopg2.Error as exc:
             # handle database-command errors
-            raise self._generate_exception(exc=DbError, exc_info=sys_exc_info(), error_message=str(exc))
+            raise self._generate_exception(exc=DbError, exc_info=sys.exc_info(), error_message=str(exc))
 
         if len(rows) != 0:
             self._request_id = rows[0][0]
@@ -306,7 +307,7 @@ class CheckOperation(Operation):
     _name = 'check'
     _exception = CheckError
 
-    def __call__(self, *, cursor, pending_requests_table, timeout=timedelta(minutes=60)):
+    def __call__(self, *, cursor, pending_requests_table, timeout=datetime.timedelta(minutes=60)):
         super().__call__(cursor, pending_requests_table, timeout)
 
         if not self._request_id:
@@ -318,7 +319,7 @@ class CancelOperation(Operation):
     _name = 'cancel'
     _exception = CancelError
 
-    def __call__(self, *, cursor, pending_requests_table, timeout=timedelta(minutes=60)):
+    def __call__(self, *, cursor, pending_requests_table, timeout=datetime.timedelta(minutes=60)):
         # first run the Operation.process() code to obtain the request_id
         super().__call__(cursor, pending_requests_table, timeout)
 
@@ -334,7 +335,7 @@ class CancelOperation(Operation):
             except psycopg2.Error as exc:
                 # cannot delete the pending request from the pending-requests db table
                 error_msg = f'cannot delete pending request with id={self._request_id} and start_time={self._start_time.strftime("%Y-%m-%d %T")} ({str(exc)})'
-                raise self._generate_exception(exc=self._exception, exc_info=sys_exc_info(), error_message=error_msg)
+                raise self._generate_exception(exc=self._exception, exc_info=sys.exc_info(), error_message=error_msg)
 
             self._response = CancelResponse.generate_response(address=self._address, request_id=self._request_id, start_time=self._start_time.strftime('%Y-%m-%d %T'))
 
@@ -342,11 +343,11 @@ class StatusOperation(Operation):
     _name = 'status'
     _exception = StatusError
 
-    def __call__(self, *, cursor, pending_requests_table, timeout=timedelta(minutes=60), connection, request_id, db_host, download_web_domain):
+    def __call__(self, *, cursor, pending_requests_table, timeout=datetime.timedelta(minutes=60), connection, request_id, db_host, download_web_domain):
         delete_request = None
         message = { 'request_type' : 'export_status', 'address' : self._address, 'request_id' : request_id, 'db_host' : db_host }
         response = send_request(message, connection, self._log)
-        export_status_dict = json_loads(response)
+        export_status_dict = json.loads(response)
 
         if export_status_dict.get('export_server_status') == 'export_server_error':
             raise ExportServerError(error_message=f'{export_status_dict["error_message"]}')
@@ -386,7 +387,7 @@ class StatusOperation(Operation):
                     operation(cursor=cursor, pending_requests_table=pending_requests_table, timeout=timeout)
                 except MrBaseError as exc:
                     error_msg = f'unable to cancel orphaned pending request `{self._request_id}` for user `{self._address}`'
-                    raise self._generate_exception(exc=self._exception, exc_info=sys_exc_info(), error_message=error_msg)
+                    raise self._generate_exception(exc=self._exception, exc_info=sys.exc_info(), error_message=error_msg)
         else:
             # cannot locate the pending request in the pending-requests db table
             if not delete_request:
@@ -459,7 +460,7 @@ class StatusOperation(Operation):
                 download_web_domain = export_status_dict.get('DOWNLOAD_WEB_DOMAIN')
                 if download_web_domain is not None and export_directory is not None:
                     # URL of the export SU
-                    request_url = urlunsplit(('http', download_web_domain, export_directory, None, None))
+                    request_url = urllib.parse.urlunsplit(('http', download_web_domain, export_directory, None, None))
 
                 if method is not None:
                     try:
@@ -481,7 +482,7 @@ class StatusOperation(Operation):
                         file_information_resolved = None
 
                         if file_format in ['mpg', 'mp4']:
-                            file_information_adjusted = deepcopy(file_information)
+                            file_information_adjusted = copy.deepcopy(file_information)
 
                             # look at the first record only (there is only one)
                             if file_information_adjusted[0]['record'].startswith('movie'):
@@ -496,17 +497,17 @@ class StatusOperation(Operation):
                             for record in file_information_resolved:
                                 url_information['record'].append(record['record'])
                                 url_information['filename'].append(path_basename(record['filename']))
-                                url_information['url'].append(urlunsplit((scheme, download_web_domain, record['filename'], None, None)))
+                                url_information['url'].append(urllib.parse.urlunsplit((scheme, download_web_domain, record['filename'], None, None)))
                         else:
                             # record.filename is base file name
                             for record in file_information_resolved:
                                 url_information['record'].append(record['record'])
                                 url_information['filename'].append(record['filename'])
-                                url_information['url'].append(urlunsplit((scheme, download_web_domain, path_join(export_directory, record['filename']), None, None)))
+                                url_information['url'].append(urllib.parse.urlunsplit((scheme, download_web_domain, os.path.join(export_directory, record['filename']), None, None)))
 
                         data = list(zip(url_information['record'], url_information['url']))
 
-        response_dict = deepcopy(export_status_dict)
+        response_dict = copy.deepcopy(export_status_dict)
 
         if isinstance(status_code, ErrorCode):
             contact = export_status_dict.get('contact')
@@ -548,7 +549,7 @@ class StatusOperation(Operation):
             try:
                 status_code = StatusCode(int(export_status_dict['status']))
             except KeyError:
-                raise InvalidMessageError(exc_info=sys_exc_info(), error_message=f'unexpected fetch status returned {str(export_status_dict["status"])}')
+                raise InvalidMessageError(exc_info=sys.exc_info(), error_message=f'unexpected fetch status returned {str(export_status_dict["status"])}')
 
         return (error_code, status_code)
 
@@ -639,7 +640,7 @@ class PendingRequestAction(Action):
     @classmethod
     def get_reg_ex(cls, logging_level=None):
         if cls._reg_ex is None:
-            cls._reg_ex = re_compile(REQUEST_ID_PATTERN)
+            cls._reg_ex = re.compile(REQUEST_ID_PATTERN)
 
         return cls._reg_ex
 
@@ -677,7 +678,7 @@ def requires_private_db(request_id):
     return True if match.group(6) is not None else False
 
 def send_request(request, connection, log):
-    json_message = json_dumps(request)
+    json_message = json.dumps(request)
     send_message(connection, json_message)
     message = get_message(connection)
 
@@ -698,9 +699,9 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
 
             arguments = Arguments.get_arguments(is_program=is_program, program_name=program_name, program_args=program_args, module_args=module_args, drms_params=drms_params)
         except ArgsError as exc:
-            raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+            raise ArgumentsError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
         except Exception as exc:
-            raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+            raise ArgumentsError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
 
         if is_program:
             try:
@@ -708,7 +709,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
                 log = DrmsLog(arguments.log_file, arguments.logging_level, formatter)
                 PendingRequestAction.set_log(log)
             except Exception as exc:
-                raise LoggingError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+                raise LoggingError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
         else:
             log = action_obj.log
 
@@ -735,7 +736,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
                             try:
                                 private_db_needed = requires_private_db(arguments.request_id)
                             except Exception as exc:
-                                raise ExportActionError(exc_info=sys_exc_info(), error_message=str(exc))
+                                raise ExportActionError(exc_info=sys.exc_info(), error_message=str(exc))
 
                             if not private_db_needed and arguments.db_host == arguments.private_db_host:
                                 raise ArgumentsError(error_message=f'request ID {arguments.request_id} requires public database access, but client is the private webserver (uses public database host `{arguments.db_host}`)')
@@ -759,18 +760,18 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
                                     send_request(message, connection, log)
 
                             except ExpServerBaseError as exc:
-                                raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+                                raise ExportServerError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
                             except Exception as exc:
-                                raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+                                raise ExportServerError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
                         else:
                             operation(cursor=cursor, pending_requests_table=arguments.pending_requests_table, timeout=arguments.timeout)
 
                         response = operation.response
             except psycopg2.OperationalError as exc:
                 # closes the cursor and connection
-                raise DBConnectionError(exc_info=sys_exc_info(), error_message=f'unable to connect to the database: {str(exc)}')
+                raise DBConnectionError(exc_info=sys.exc_info(), error_message=f'unable to connect to the database: {str(exc)}')
         except Exception as exc:
-            raise ExportActionError(exc_info=sys_exc_info(), error_message=str(exc))
+            raise ExportActionError(exc_info=sys.exc_info(), error_message=str(exc))
     except ExpServerBaseError as exc:
         response = exc.response
         error_message = exc.message
@@ -780,7 +781,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
         elif is_program:
             print(error_message)
     except Exception as exc:
-        response = UnhandledExceptionError(exc_info=sys_exc_info(), error_message=f'{str(exc)}').response
+        response = UnhandledExceptionError(exc_info=sys.exc_info(), error_message=f'{str(exc)}').response
         error_message = str(exc)
 
         if log:
@@ -798,7 +799,7 @@ if __name__ == "__main__":
     print(response.generate_json())
 
     # Always return 0. If there was an error, an error code (the 'status' property) and message (the 'statusMsg' property) goes in the returned HTML.
-    sys_exit(0)
+    sys.exit(0)
 else:
     pass
 

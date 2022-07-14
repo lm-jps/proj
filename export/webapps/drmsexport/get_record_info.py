@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 
-from argparse import Action as ArgsAction
-from copy import deepcopy
-from json import loads as json_loads, dumps as json_dumps
-from os.path import join as path_join
-from sys import exc_info as sys_exc_info, exit as sys_exit, stdout as sys_stdout
+import argparse
+import copy
+import json
+import os
+import sys
 
 from drms_export import Connection, ExpServerBaseError, Error as ExportError, ErrorCode as ExportErrorCode, ErrorResponse, Response, get_arguments as ss_get_arguments, get_message, send_message
 from drms_parameters import DRMSParams, DPMissingParameterError
@@ -79,7 +79,7 @@ class ExportServerError(GriBaseError):
 class UnhandledExceptionError(GriBaseError):
     _error_code = ErrorCode.UNHANDLED_EXCEPTION
 
-class TableFlagsAction(ArgsAction):
+class TableFlagsAction(argparse.Action):
     def __call__(self, parser, namespace, value, option_string=None):
         # convert json arguments to dict
         table_flags_dict = self.json_to_dict(value)
@@ -87,7 +87,7 @@ class TableFlagsAction(ArgsAction):
 
     @classmethod
     def json_to_dict(cls, json_text):
-        return json_loads(json_text)
+        return json.loads(json_text)
 
 def name_to_ws_obj(name, drms_params):
     webserver_dict = {}
@@ -108,7 +108,7 @@ def webserver_action(self, parser, namespace, value, option_string=None):
     setattr(namespace, self.dest, webserver_obj)
 
 def create_webserver_action(drms_params):
-    cls = type('WebserverAction', (ArgsAction,),
+    cls = type('WebserverAction', (argparse.Action,),
     {
         '_drms_params' : drms_params,
         '__call__' : webserver_action,
@@ -128,13 +128,13 @@ class Arguments(Args):
                 db_name = drms_params.get_required('DBNAME')
                 db_user = drms_params.get_required('WEB_DBUSER')
             except DPMissingParameterError as exc:
-                raise ParametersError(exc_info=sys_exc_info(), error_message=str(exc))
+                raise ParametersError(exc_info=sys.exc_info(), error_message=str(exc))
 
             if is_program:
                 try:
-                    log_file = path_join(drms_params.get_required('EXPORT_LOG_DIR'), DEFAULT_LOG_FILE)
+                    log_file = os.path.join(drms_params.get_required('EXPORT_LOG_DIR'), DEFAULT_LOG_FILE)
                 except DPMissingParameterError as exc:
-                    raise ParametersError(exc_info=sys_exc_info(), error_message=str(exc))
+                    raise ParametersError(exc_info=sys.exc_info(), error_message=str(exc))
 
                 args = None
 
@@ -213,7 +213,7 @@ def get_request_status(response_dict):
         try:
             status_code = StatusCode(int(response_dict['status']))
         except KeyError:
-            raise ExportServerError(exc_info=sys_exc_info(), error_message=f'unexpected show_series status returned {str(response_dict["status"])}')
+            raise ExportServerError(exc_info=sys.exc_info(), error_message=f'unexpected show_series status returned {str(response_dict["status"])}')
 
     return (error_code, status_code)
 
@@ -227,7 +227,7 @@ def get_request_status_code(response_dict):
 def get_response(client_response_dict, requesting_table, log):
     log.write_debug([ f'[ get_response ]' ])
 
-    response_dict = deepcopy(client_response_dict)
+    response_dict = copy.deepcopy(client_response_dict)
     response_dict['status_code'] = get_request_status_code(response_dict)
 
     if requesting_table:
@@ -239,7 +239,7 @@ def get_response(client_response_dict, requesting_table, log):
     return response
 
 def send_request(request, connection, log):
-    json_message = json_dumps(request)
+    json_message = json.dumps(request)
     send_message(connection, json_message)
     message = get_message(connection)
 
@@ -262,9 +262,9 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
 
             arguments = Arguments.get_arguments(is_program=is_program, program_name=program_name, program_args=program_args, module_args=module_args, drms_params=drms_params)
         except ArgsError as exc:
-            raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+            raise ArgumentsError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
         except Exception as exc:
-            raise ArgumentsError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+            raise ArgumentsError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
 
         if is_program:
             try:
@@ -272,7 +272,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
                 log = DrmsLog(arguments.log_file, arguments.logging_level, formatter)
                 GetRecordInfoAction._log = log
             except Exception as exc:
-                raise LoggingError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+                raise LoggingError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
 
             requesting_table = arguments.table_flags is not None
         else:
@@ -318,7 +318,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
                 response = send_request(message, connection, log)
 
                 # message is raw JSON from jsoc_info
-                record_set_info_dict = json_loads(response)
+                record_set_info_dict = json.loads(response)
 
                 if record_set_info_dict.get('export_server_status') == 'export_server_error':
                     raise ExportServerError(error_message=f'{record_set_info_dict["error_message"]}')
@@ -328,9 +328,9 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
 
             response = get_response(record_set_info_dict, requesting_table, log)
         except ExpServerBaseError as exc:
-            raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+            raise ExportServerError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
         except Exception as exc:
-            raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+            raise ExportServerError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
     except GriBaseError as exc:
         response = exc.response
         error_message = exc.message
@@ -340,7 +340,7 @@ def perform_action(*, action_obj, is_program, program_name=None, **kwargs):
         elif is_program:
             print(error_message)
     except Exception as exc:
-        response = UnhandledExceptionError(exc_info=sys_exc_info(), error_message=f'{str(exc)}').response
+        response = UnhandledExceptionError(exc_info=sys.exc_info(), error_message=f'{str(exc)}').response
         error_message = str(exc)
 
         if log:
@@ -425,7 +425,7 @@ class GetRecordInfoAction(Action):
 
                     db_host_resolved = drms_params.get_required('EXPORT_DB_HOST_DEFAULT')
                 except DPMissingParameterError as exc:
-                    raise ParametersError(exc_info=sys_exc_info(), error_message=str(exc))
+                    raise ParametersError(exc_info=sys.exc_info(), error_message=str(exc))
             else:
                 db_host_resolved = db_host
 
@@ -492,7 +492,7 @@ class GetRecordInfoLegacyResponse(Response):
 
     # override parent to remove attributes not present in legacy API
     def generate_serializable_dict(self):
-        serializable_dict = deepcopy(super().generate_serializable_dict())
+        serializable_dict = copy.deepcopy(super().generate_serializable_dict())
         sanitized_serializable_dict = self.remove_extraneous(serializable_dict, [ 'drms_export_status', 'drms_export_status_code', 'drms_export_status_description' ] )
 
         return sanitized_serializable_dict
@@ -500,11 +500,13 @@ class GetRecordInfoLegacyResponse(Response):
 class GetRecordInfoLegacyAction(Action):
     actions = [] # abstract
 
-    def convert_booleans(self, args_dict):
+    def convert_data_types(self, args_dict):
         converted = {}
         for key, val in args_dict.items():
             if type(val) == bool:
                 converted[key] = int(val)
+            elif type(val) == list:
+                converted[key] = ','.join(val)
             else:
                 converted[key] = val
 
@@ -518,9 +520,9 @@ class GetRecordInfoLegacyAction(Action):
             try:
                 response = self.send_request(nested_arguments=nested_arguments)
             except ExpServerBaseError as exc:
-                raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+                raise ExportServerError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
             except Exception as exc:
-                raise ExportServerError(exc_info=sys_exc_info(), error_message=f'{str(exc)}')
+                raise ExportServerError(exc_info=sys.exc_info(), error_message=f'{str(exc)}')
         except GriBaseError as exc:
             response = exc.response
             error_message = exc.message
@@ -528,7 +530,7 @@ class GetRecordInfoLegacyAction(Action):
             if log:
                 log.write_error([ error_message ])
         except Exception as exc:
-            response = UnhandledExceptionError(exc_info=sys_exc_info(), error_message=f'{str(exc)}').response
+            response = UnhandledExceptionError(exc_info=sys.exc_info(), error_message=f'{str(exc)}').response
             error_message = str(exc)
 
             if log:
@@ -559,7 +561,7 @@ class GetRecordInfoLegacyAction(Action):
     def get_response(self, client_response_dict, log):
         log.write_debug([ f'[ {self.__class__.__name__}.get_response ]' ])
 
-        response_dict = deepcopy(client_response_dict)
+        response_dict = copy.deepcopy(client_response_dict)
         response_dict['status_code'] = self.get_request_status_code(response_dict)
         response = GetRecordInfoLegacyResponse.generate_response(**response_dict)
 
@@ -578,7 +580,7 @@ class GetRecordInfoLegacyAction(Action):
             try:
                 status_code = StatusCode(int(response_dict['status']))
             except KeyError:
-                raise ExportServerError(exc_info=sys_exc_info(), error_message=f'unexpected {str(self)} status returned {str(response_dict["status"])}')
+                raise ExportServerError(exc_info=sys.exc_info(), error_message=f'unexpected {str(self)} status returned {str(response_dict["status"])}')
 
         return (error_code, status_code)
 
@@ -597,7 +599,7 @@ class JsocInfoLegacyAction(GetRecordInfoLegacyAction):
         self._options = {}
         self._options['db_host'] = db_host
         self._options['log'] = log if log is not None else DrmsLog(None, None, None)
-        self._legacy_arguments = self.convert_booleans(kwargs)
+        self._legacy_arguments = self.convert_data_types(kwargs)
 
     def legacy_get_record_info_json(self):
         return self.perform_action()
@@ -611,7 +613,7 @@ class JsocInfoLegacyAction(GetRecordInfoLegacyAction):
             response = send_request(message, connection, log)
 
             # message is raw JSON from checkAddress.py
-            legacy_jsoc_info_dict = json_loads(response)
+            legacy_jsoc_info_dict = json.loads(response)
 
             if legacy_jsoc_info_dict.get('export_server_status') == 'export_server_error':
                 raise ExportServerError(error_message=f'{legacy_jsoc_info_dict["error_message"]}')
@@ -627,7 +629,7 @@ class JsocInfoLegacyAction(GetRecordInfoLegacyAction):
         cls.set_log(log)
         is_valid = None
         try:
-            json_loads(arguments_json)
+            json.loads(arguments_json)
             is_valid = True
         except:
             is_valid = False
@@ -645,7 +647,7 @@ class ShowInfoLegacyAction(GetRecordInfoLegacyAction):
         self._options = {}
         self._options['db_host'] = db_host
         self._options['log'] = log if log is not None else DrmsLog(None, None, None)
-        self._legacy_arguments = self.convert_booleans(kwargs)
+        self._legacy_arguments = self.convert_data_types(kwargs)
 
     def legacy_get_record_info_text(self):
         return self.perform_action()
@@ -659,7 +661,7 @@ class ShowInfoLegacyAction(GetRecordInfoLegacyAction):
             response = send_request(message, connection, log)
 
             # message is raw JSON from checkAddress.py
-            legacy_show_info_dict = json_loads(response)
+            legacy_show_info_dict = json.loads(response)
 
             if legacy_show_info_dict.get('export_server_status') == 'export_server_error':
                 raise ExportServerError(error_message=f'{legacy_show_info_dict["error_message"]}')
@@ -677,7 +679,7 @@ class ShowInfoLegacyAction(GetRecordInfoLegacyAction):
 
 def run_tests():
     formatter = DrmsLogFormatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
-    log = DrmsLog(sys_stdout, DrmsLogLevelAction.string_to_level('debug'), formatter)
+    log = DrmsLog(sys.stdout, DrmsLogLevelAction.string_to_level('debug'), formatter)
 
     log.write_debug([ 'testing `legacy_get_record_info_json`'])
     jila = JsocInfoLegacyAction(method='legacy_get_record_info_json', operation='series_struct', specification='hmi.v_720s', db_host='hmidb2', log=log)
@@ -706,6 +708,6 @@ if __name__ == "__main__":
     print(response.generate_json())
 
     # Always return 0. If there was an error, an error code (the 'status' property) and message (the 'statusMsg' property) goes in the returned HTML.
-    sys_exit(0)
+    sys.exit(0)
 else:
     pass
