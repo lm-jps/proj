@@ -46,14 +46,19 @@ S_$(d) := $(notdir $(MODEXE_USEF_$(d)))
 # making object/executable with Rules file and extra options
 $(OBJ_$(d)):	$(SRCDIR)/$(d)/Rules.mk
 $(OBJ_$(d)):	CF_TGT := $(CF_TGT) -fp-model strict -I$(SRCDIR)/$(d)/../../../libs/astro -I$(SRCDIR)/$(d)/../../../libs/stats -I/home/jsoc/lib/$(JSOC_MACHINE)
-# -I$(SRCDIR)/$(d)/../../../libs/interpolate $(FFTWH) $(FFTW3LIBS) $(FMATHLIBSH) 
+# -I$(SRCDIR)/$(d)/../../../libs/interpolate $(FFTWH) $(FFTW3LIBS) $(FMATHLIBSH)
 
 $(WRAPPEDF_OBJ_$(d)): FF_TGT := $(FF_TGT) $(MYCMPFLG_$(d))
 $(MODEXE_USEF_$(d)): LL_TGT := $(LL_TGT) $(MYLNKFLG_$(d)) -lfishpack_r8
 $(MODEXE_USEF_$(d)): $(WRAPPEDF_OBJ_$(d))
 
 ALL_$(d)	:= $(MODEXE_USEF_$(d))
-$(ALL_$(d)) : $(LIBASTRO) $(LIBSTATS) # $(LIBINTERP)
+
+# do not use $(LIBASTRO) since we can't be sure if its Rules.mk, which is where
+# this variable gets set, has been read yet
+# do not use $(LIBSTATS) since we can't be sure if its Rules.mk, which is where
+# this variable gets set, has been read yet
+$(ALL_$(d)) : proj/libs/astro/libastro.a proj/libs/stats/libstats.a
 $(ALL_$(d)) : LL_TGT := $(LL_TGT) # $(GSLLIBS)
 
 ## never touch below ---------------------------------------------------------------------------

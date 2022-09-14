@@ -5,7 +5,8 @@ d		:= $(dir)
 
 # Local variables
 # NOTE: Add the base of the module's filename below (next to mymod)
-MODEXE_$(d)	:= $(addprefix $(d)/, smpl_00)
+#MODEXE_$(d)	:= $(addprefix $(d)/, smpl_00)
+MODEXE_$(d)	:= 
 MODEXE_SOCK_$(d):= $(MODEXE_$(d):%=%_sock)
 
 EXE_$(d)        := $(MODEXE_$(d)) 

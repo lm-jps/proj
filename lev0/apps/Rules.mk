@@ -46,14 +46,14 @@ SUMEXE_$(d)	:= $(ingestlev0_$(d)) $(ingestlev0orig_$(d)) $(xingestlev0_$(d)) $(y
 #SUMEXE_$(d)	:= $(ingestlev0_$(d)) $(ingestlev1_$(d)) $(ingestlev1_mgr_$(d)) $(printtime_$(d))
 CEXE_$(d)       := $(addprefix $(d)/, fix_hmi_config_file_date)
 CEXE		:= $(CEXE) $(CEXE_$(d))
-MODEXESUMS	:= $(MODEXESUMS) $(SUMEXE_$(d)) $(PEEXE_$(d))
+MODEXESUMS_$(d)	:= $(SUMEXE_$(d)) $(PEEXE_$(d))
 
 MODEXE_$(d)	:= $(addprefix $(d)/, convert_fds extract_fds_statev)
-#MODEXEDR_$(d)	:= $(addprefix $(d)/, hmi_import_egse_lev0 aia_import_egse_lev0)
+
 
 # Exclude certain apps from the ia32 build.
 ifeq ($(JSOC_MACHINE), linux_ia32)
-  BUILDLEV1_$(d)		:= 
+  BUILDLEV1_$(d)		:=
 endif
 
 # Remove from ia32 and gcc builds (since they don't build on ia32 and with gcc)
@@ -69,17 +69,13 @@ endif
 MODEXE_USEF_$(d)	:= $(addprefix $(d)/, getorbitinfo) $(BUILDLEV1_$(d))
 MODEXE_USEF 	:= $(MODEXE_USEF) $(MODEXE_USEF_$(d))
 
-MODEXEDR	:= $(MODEXEDR) $(MODEXEDR_$(d))
 MODEXE		:= $(MODEXE) $(SUMEXE_$(d)) $(MODEXE_$(d)) $(MODEXEDR_$(d)) $(PEEXE_$(d))
 
 MODEXE_SOCK_$(d):= $(MODEXE_$(d):%=%_sock) $(MODEXEDR_$(d):%=%_sock)
 MODEXE_SOCK	:= $(MODEXE_SOCK) $(MODEXE_SOCK_$(d))
-MODEXEDR_SOCK	:= $(MODEXEDR_SOCK) $(MODEXEDR_$(d):%=%_sock)
-
-MODEXEDROBJ	:= $(MODEXEDROBJ) $(MODEXEDR_$(d):%=%.o)
 
 ALLEXE_$(d)	:= $(MODEXE_$(d)) $(MODEXEDR_$(d)) $(MODEXE_USEF_$(d)) $(SUMEXE_$(d)) $(CEXE_$(d))
-#OBJ_$(d)	:= $(ALLEXE_$(d):%=%.o) 
+#OBJ_$(d)	:= $(ALLEXE_$(d):%=%.o)
 OBJ_$(d)	:= $(ALLEXE_$(d):%=%.o) $(TESTEXE_USEF_$(d):%=%.o) $(ingestlev0_obj_$(d)) $(ingestlev0orig_obj_$(d))
 DEP_$(d)	:= $(OBJ_$(d):%=%.d)
 CLEAN		:= $(CLEAN) \
@@ -91,7 +87,7 @@ CLEAN		:= $(CLEAN) \
                    $(LIBLIMBFITFXN)\
 		   $(DEP_$(d))
 
-TGT_BIN	        := $(TGT_BIN) $(ALLEXE_$(d)) $(MODEXE_SOCK_$(d)) 
+TGT_BIN	        := $(TGT_BIN) $(ALLEXE_$(d)) $(MODEXE_SOCK_$(d))
 TGT_LIB		:= $(TGT_LIB) $(LIBHKLEV0) $(LIBLIMBFITFXN)
 
 S_$(d)		:= $(notdir $(ALLEXE_$(d)) $(TESTEXE_USEF_$(d)) $(MODEXE_SOCK_$(d)))
@@ -103,19 +99,24 @@ $(xingestlev0_$(d)):	$(xingestlev0_obj_$(d))
 $(BUILDLEV1IRIS_$(d)):	$(buildlev1iris_obj_$(d))
 
 # Local rules
+$(MODEXESUMS_$(d)):	$(LIBSUMSAPI) $(LIBCJSON) $(LIBSUM)
+
+$(MODEXEDR_$(d):%=%.o):		CF_TGT := $(CF_TGT) -I$(SRCDIR)/proj/libs/dr
+
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
 $(SUMEXE_$(d)):		LL_TGT := -L  $(POSTGRES_LIBS) -lecpg -lpq -lpng $(FFTW3LIBS)
 
+$(MODEXEDR_$(d)) $(MODEXEDR_$(d):%=%_sock):		$(LIBDR)
 
 ifeq ($(COMPILER), icc)
-   ifneq ($(JSOC_MACHINE), linux_ia32) 
+   ifneq ($(JSOC_MACHINE), linux_ia32)
      MKL     := -static-intel -lmkl_em64t
    endif
 endif
 
 #$(SUMEXE_$(d)):		LL_TGT := -L/home/production/cvs/jsoc/lib/saved/$(JSOC_MACHINE) -lhmicomp_egse -lecpg -lpq -lpng -L/SGE/lib/lx24-amd64/ -ldrmaa -Wl,-rpath,/SGE/lib/lx24-amd64
 
-$(PEEXE_$(d)):		LL_TGT := -L $(POSTGRES_LIBS) -lecpg -lpq 
+$(PEEXE_$(d)):		LL_TGT := -L $(POSTGRES_LIBS) -lecpg -lpq
 $(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" -I$(SRCDIR)/$(d)/../../libs/interpolate/ -I$(SRCDIR)/$(d)/../../libs/astro -I$(SRCDIR)/$(d)/../../libs/egsehmicomp $(FFTWH) -DLEV0SLOP
 
 #$(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" -I/home/jsoc/cvs/JSOC/proj/libs/interpolate/ -I$(SRCDIR)/$(d)/../../libs/astro -I/home/jsoc/include
@@ -125,7 +126,12 @@ ifeq ($(COMPILER), icc)
 $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)) $(MODEXE_USEF_$(d)) $(TESTEXE_USEF_$(d)): LL_TGT := $(LL_TGT) $(MKL)
    endif
 endif
-$(MODEXE_$(d)) $(MODEXE_SOCK_$(d)) $(MODEXE_USEF_$(d)) $(TESTEXE_USEF_$(d)):	$(LIBASTRO) $(LIBINTERP)
+
+# do not use $(LIBASTRO) since we can't be sure if its Rules.mk, which is where
+# this variable gets set, has been read yet
+# do not use $(LIBINTERP) since we can't be sure if its Rules.mk, which is where
+# this variable gets set, has been read yet
+$(MODEXE_$(d)) $(MODEXE_SOCK_$(d)) $(MODEXE_USEF_$(d)) $(TESTEXE_USEF_$(d)):	proj/libs/astro/libastro.a proj/libs/interpolate/libinterp.a
 
 # decode_hk.c and load_hk_config_files.c both use egsehmicomp.h header (but not libesgehmicomp.a)
 $(LIBHKLEV0_OBJ):	CF_TGT := $(CF_TGT) -I$(SRCDIR)/$(d)/../../libs/egsehmicomp

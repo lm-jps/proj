@@ -11,8 +11,8 @@ MODEXE		:= $(MODEXE) $(MODEXE_$(d))
 MODEXE_SOCK_$(d):= $(MODEXE_$(d):%=%_sock)
 MODEXE_SOCK	:= $(MODEXE_SOCK) $(MODEXE_SOCK_$(d))
 
-EXE_$(d)	:= $(MODEXE_$(d)) 
-OBJ_$(d)	:= $(EXE_$(d):%=%.o) 
+EXE_$(d)	:= $(MODEXE_$(d))
+OBJ_$(d)	:= $(EXE_$(d):%=%.o)
 DEP_$(d)	:= $(OBJ_$(d):%=%.d)
 CLEAN		:= $(CLEAN) \
 		   $(OBJ_$(d)) \
@@ -29,13 +29,16 @@ $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
 $(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" -I $(SRCDIR)/$(d)/../libs/flatfieldlib
 
 # added 10/10
-$(OBJ_$(d)):				CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" -I$(FFTW_INCS) 
+$(OBJ_$(d)):				CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" -I$(FFTW_INCS)
 $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)):	LL_TGT := $(LL_TGT) $(FFTW3FLIBS) -lmkl_em64t
 
 
 
 $(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" -I$(SRCDIR)/$(d)/../../libs/interpolate/
-$(MODEXE_$(d)) $(MODEXE_SOCK_$(d)):	$(LIBINTERP)
+
+# do not use $(LIBINTERP) since we can't be sure if its Rules.mk, which is where
+# this variable gets set, has been read yet
+$(MODEXE_$(d)) $(MODEXE_SOCK_$(d)):	proj/libs/interpolate/libinterp.a
 #added 10.10
 
 
@@ -44,7 +47,9 @@ $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)):	$(LIBINTERP)
 # $(OBJ_$(d)):				CF_TGT := -I$(SRCDIR)/$(d)/../../libs/somelib
 # $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)):	$(LIBSOMELIB)
 
-$(MODEXE_$(d)) $(MODEXE_SOCK_$(d)):	$(LIBFLATFIELD)
+# do not use $(LIBFLATFIELD) since we can't be sure if its Rules.mk, which is where
+# this variable gets set, has been read yet
+$(MODEXE_$(d)) $(MODEXE_SOCK_$(d)):	proj/flatfield/libs/flatfieldlib/libflatfieldlib.a
 
 # Shortcuts
 .PHONY:	$(S_$(d))

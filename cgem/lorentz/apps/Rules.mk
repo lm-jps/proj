@@ -11,8 +11,8 @@ MODEXE		:= $(MODEXE) $(MODEXE_$(d))
 MODEXE_SOCK_$(d):= $(MODEXE_$(d):%=%_sock)
 MODEXE_SOCK	:= $(MODEXE_SOCK) $(MODEXE_SOCK_$(d))
 
-EXE_$(d)	:= $(MODEXE_$(d)) 
-OBJ_$(d)	:= $(EXE_$(d):%=%.o) 
+EXE_$(d)	:= $(MODEXE_$(d))
+OBJ_$(d)	:= $(EXE_$(d):%=%.o)
 DEP_$(d)	:= $(OBJ_$(d):%=%.d)
 CLEAN		:= $(CLEAN) \
 		   $(OBJ_$(d)) \
@@ -26,14 +26,21 @@ TGT_BIN         := $(TGT_BIN) $(EXE_$(d)) $(MODEXE_SOCK_$(d))
 
 # Local rules
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
-$(OBJ_$(d)):		CF_TGT := $(CF_TGT) $(FFTWH) $(GSLH) 
+$(OBJ_$(d)):		CF_TGT := $(CF_TGT) $(FFTWH) $(GSLH)
 $(OBJ_$(d)):		CF_TGT := $(CF_TGT) -I$(SRCDIR)/$(d)/../../../libs/astro -I$(SRCDIR)/$(d)/../../../libs/stats -I$(SRCDIR)/$(d)/../../../libs/interpolate -I$(SRCDIR)/$(d)/src/
 
 MKL     := -lmkl_em64t
 
 ALL_$(d)	:= $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)) $(MODEXE_USEF_$(d)) $(MODEXE_USEF_SOCK_$(d))
 #$(ALL_$(d)) : $(EXTRADEPS_$(d))
-$(ALL_$(d)) : $(LIBASTRO) $(LIBSTATS) $(LIBINTERP)
+
+# do not use $(LIBASTRO) since we can't be sure if its Rules.mk, which is where
+# this variable gets set, has been read yet
+# do not use $(LIBSTATS) since we can't be sure if its Rules.mk, which is where
+# this variable gets set, has been read yet
+# do not use $(LIBINTERP) since we can't be sure if its Rules.mk, which is where
+# this variable gets set, has been read yet
+$(ALL_$(d)) : proj/libs/astro/libastro.a proj/libs/stats/libstats.a proj/libs/interpolate/libinterp.a
 $(ALL_$(d)) : LL_TGT := $(LL_TGT) $(GSLLIBS) $(MKL)
 
 # NOTE: Add dependent libraries with the -I compiler flag, and make the module depend

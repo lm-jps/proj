@@ -13,7 +13,7 @@ d := $(dir)
 EXTRADEPS_$(d)		:= $(addprefix $(d)/, flctsubs.o)
 
 ## C-wrapper name (name must end with .c)
-MODEXE_USEF_$(d) := 
+MODEXE_USEF_$(d) :=
 ifeq ($(JSOC_MACHINE), linux_avx)
 MODEXE_USEF_$(d) := $(addprefix $(d)/, cgem_prep cgem_cutout cgem_map cgem_flct cgem_doppcal cgem_gather cgem_harpinfo)
 endif
@@ -57,12 +57,15 @@ $(EXTRADEPS_$(d)):	CF_TGT := $(CF_TGT) $(FFTWH) $(GSLH) -I$(SRCDIR)/$(d)/../../.
 $(MODEXE_$(d)):			$(EXTRADEPS_$(d))
 $(MODEXE_USEF_$(d)):    $(EXTRADEPS_$(d))
 
-$(WRAPPEDF_OBJ_$(d)): FF_TGT := $(FF_TGT) $(MYCMPFLG_$(d)) -free 
+$(WRAPPEDF_OBJ_$(d)): FF_TGT := $(FF_TGT) $(MYCMPFLG_$(d)) -free
 $(MODEXE_USEF_$(d)): LL_TGT := $(LL_TGT) $(MYLNKFLG_$(d)) -free
 $(MODEXE_USEF_$(d)): $(WRAPPEDF_OBJ_$(d))
 
 ALL_$(d)	:= $(MODEXE_USEF_$(d))
-$(ALL_$(d)) : $(LIBASTRO) $(LIBSTATS) $(LIBINTERP)# $(LIBFFTW3)
+
+# do not use $(LIBASTRO) $(LIBSTATS) $(LIBINTERP) since we can't be sure if their Rules.mk files, which is where
+# these variables get set, have been read yet
+$(ALL_$(d)) :	proj/libs/astro/libastro.a proj/libs/stats/libstats.a proj/libs/interpolate/libinterp.a
 $(ALL_$(d)) : LL_TGT := $(LL_TGT) $(FFTW3LIBS) $(CFITSIOLIBS) $(MKL)
 
 ## never touch below ---------------------------------------------------------------------------

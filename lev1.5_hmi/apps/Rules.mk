@@ -55,7 +55,14 @@ $(OBJ_$(d)):           CF_TGT := $(CF_TGT) -I$(SRCDIR)/$(d)/../libs/lev15 -DCDIR
 $(GSLOBJ_$(d)):        CF_TGT := $(CF_TGT) $(GSLH) $(FFTWH)
 $(GSLEXE_$(d)) $(GSLEXE_SOCK_$(d)):        LL_TGT := $(LL_TGT) $(GSLLIBS) $(FFTW3LIBS) -lmkl_em64t
 
-$(EXE_$(d)) $(MODEXE_SOCK_$(d)):	$(LIBLEV15) $(LIBLIMBFITFXN) $(LIBINTERP)
+# do not use $(LIBLEV15) since we can't be sure if its Rules.mk, which is where
+# this variable gets set, has been read yet
+# do not use $(LIBLIMBFITFXN) since we can't be sure if its Rules.mk, which is where
+# this variable gets set, has been read yet
+# do not use $(LIBINTERP) since we can't be sure if its Rules.mk, which is where
+# this variable gets set, has been read yet
+$(EXE_$(d)) $(MODEXE_SOCK_$(d)):	proj/lev1.5_hmi/libs/lev15/liblev15.a proj/lev0/apps/liblimbfitfxn.a proj/libs/interpolate/libinterp.a
+
 
 # Shortcuts
 .PHONY:	$(S_$(d))
