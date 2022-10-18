@@ -29,7 +29,11 @@ $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
 $(OBJ_$(d)):		CF_TGT := $(CF_TGT) $(FFTWH) $(GSLH)
 $(OBJ_$(d)):		CF_TGT := $(CF_TGT) -I$(SRCDIR)/$(d)/../../../libs/astro -I$(SRCDIR)/$(d)/../../../libs/stats -I$(SRCDIR)/$(d)/../../../libs/interpolate -I$(SRCDIR)/$(d)/src/
 
+ifeq ($(JSOC_MACHINE), linux_avx2)
+MKL     := -lmkl_rt
+else
 MKL     := -lmkl_em64t
+endif
 
 ALL_$(d)	:= $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)) $(MODEXE_USEF_$(d)) $(MODEXE_USEF_SOCK_$(d))
 #$(ALL_$(d)) : $(EXTRADEPS_$(d))
@@ -46,7 +50,11 @@ $(ALL_$(d)) : LL_TGT := $(LL_TGT) $(GSLLIBS) $(MKL)
 # NOTE: Add dependent libraries with the -I compiler flag, and make the module depend
 #   on that library
 # $(OBJ_$(d)):				CF_TGT := -I$(SRCDIR)/$(d)/../../../libs/astro -DCDIR="\"$(SRCDIR)/$(d)\""
+ifeq ($(JSOC_MACHINE), linux_avx2)
+ $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)):	LL_TGT :=  $(LL_TGT) $(CFITSIOLIBS)
+else
  $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)):	LL_TGT :=  $(LL_TGT) $(FFTW3LIBS) $(CFITSIOLIBS)
+endif
 
 # Shortcuts
 .PHONY:	$(S_$(d))

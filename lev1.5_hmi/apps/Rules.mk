@@ -53,7 +53,11 @@ S_$(d)		:= $(notdir $(EXE_$(d)) $(MODEXE_SOCK_$(d)))
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
 $(OBJ_$(d)):           CF_TGT := $(CF_TGT) -I$(SRCDIR)/$(d)/../libs/lev15 -DCDIR="\"$(SRCDIR)/$(d)\"" -I$(SRCDIR)/$(d)/../../libs/interpolate -I$(SRCDIR)/$(d)/../../lev0/apps
 $(GSLOBJ_$(d)):        CF_TGT := $(CF_TGT) $(GSLH) $(FFTWH)
+ifeq ($(JSOC_MACHINE), linux_avx2)
+$(GSLEXE_$(d)) $(GSLEXE_SOCK_$(d)):        LL_TGT := $(LL_TGT) $(GSLLIBS) -lmkl_rt
+else
 $(GSLEXE_$(d)) $(GSLEXE_SOCK_$(d)):        LL_TGT := $(LL_TGT) $(GSLLIBS) $(FFTW3LIBS) -lmkl_em64t
+endif
 
 # do not use $(LIBLEV15) since we can't be sure if its Rules.mk, which is where
 # this variable gets set, has been read yet

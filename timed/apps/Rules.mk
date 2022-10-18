@@ -26,7 +26,11 @@ S_$(d)          := $(notdir $(EXE_$(d)))
 $(OBJ_$(d)):    $(SRCDIR)/$(d)/Rules.mk
 $(OBJ_$(d)):    CF_TGT := $(CF_TGT) $(FFTWH)
 
+ifeq ($(JSOC_MACHINE), linux_avx2)
+$(MODEXE_USEF_$(d)): LL_TGT := $(LL_TGT) -lmkl_rt
+else
 $(MODEXE_USEF_$(d)): LL_TGT := $(LL_TGT) $(FFTW3LIBS) $(FFTW3FLIBS) -mkl
+endif
 
 $(ITH_$(d)):    $(OBJ_ITH_$(d))
 $(TT_$(d)):     $(OBJ_TT_$(d))

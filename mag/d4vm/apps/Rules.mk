@@ -17,7 +17,11 @@ WRAPPEDF_$(d)    := $(addprefix $(d)/, d4vm_preproc.o d4vm_matrix.o d4vm_derivs.
 
 # flags for compiling and linking
 # MYCMPFLG := -O2 -free -nofor-main
+ifeq ($(JSOC_MACHINE), linux_avx2)
+MYLNKFLG := -lmkl_rt
+else
 MYLNKFLG := -lmkl_em64t_sequential -lmkl_core -lifport -lifcore -limf
+endif
 
 ## edit above -----------------------------------------------------
 

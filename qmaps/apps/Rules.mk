@@ -13,14 +13,22 @@ d := $(dir)
 ifeq ($(JSOC_MACHINE), linux_avx) 
 MODEXE_USEF_$(d) := $(addprefix $(d)/, qmap4pfss pfss_q)
 endif
+ifeq ($(JSOC_MACHINE), linux_avx2) 
+MODEXE_USEF_$(d) := $(addprefix $(d)/, qmap4pfss pfss_q)
+endif
 MODEXE_USEF := $(MODEXE_USEF) $(MODEXE_USEF_$(d))
 
 ## wrapped Fortran codes
 WRAPPEDF_OBJ_$(d)    := $(addprefix $(d)/, number_types.o zm_parse_modules.o zm_sds_modules.o zm_spline_modules.o zm_parse.o zm_sds.o zm_spline.o mapfl_func.o mapfl_wrapper.o set_b.o)
 
 # flags for compiling and linking
+ifeq ($(JSOC_MACHINE), linux_avx2)
+MYCMPFLG_$(d) := -O3 -nofor-main -fp-model strict -qopenmp -heap-arrays
+MYLNKFLG_$(d) := -lmkl_rt -lmfhdf -ldf -ljpeg -lz
+else
 MYCMPFLG_$(d) := -O3 -nofor-main -fp-model strict -openmp -heap-arrays
 MYLNKFLG_$(d) := -lmkl_em64t -lmfhdf -ldf -ljpeg -lz
+endif
 
 ## edit above -----------------------------------------------------
 

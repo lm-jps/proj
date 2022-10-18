@@ -99,7 +99,11 @@ S_$(d)		:= $(notdir $(EXE_$(d)))
 # Local rules
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
 $(OBJ_$(d)):		CF_TGT := $(CF_TGT) -I$(MPI_INCS)
+ifeq ($(JSOC_MACHINE), linux_avx2)
+$(EXE_$(d)):            LL_TGT := $(LL_TGT) -lmkl_rt
+else
 $(EXE_$(d)):		LL_TGT := $(LL_TGT) -lmkl_em64t
+endif
 
 # Use a non-standard Fortran compiler for LINKING the modules of this make file.
 $(EXE_$(d)):		FCOMPILER := $(MPIFCOMPILER)

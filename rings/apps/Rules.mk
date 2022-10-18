@@ -40,10 +40,18 @@ S_$(d)		:= $(notdir $(EXE_$(d)) $(MODEXE_SOCK_$(d)))
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
 $(OBJ_$(d)):		CF_TGT := $(CF_TGT) $(FFTWH)
 
-$(MODEXE_$(d)) $(MODEXE_SOCK_$(d)):	LL_TGT := $(LL_TGT) $(FFTW3LIBS) $(FFTW3FLIBS) 
+ifeq ($(JSOC_MACHINE), linux_avx2)
+$(MODEXE_$(d)) $(MODEXE_SOCK_$(d)):	LL_TGT := $(LL_TGT) -lmkl_rt
+else
+$(MODEXE_$(d)) $(MODEXE_SOCK_$(d)):	LL_TGT := $(LL_TGT) -lmkl_em64t
+endif
 
 $(RDFITF_$(d)):				$(OBJ_F_$(d))
+ifeq ($(JSOC_MACHINE), linux_avx2)
+$(RDVINV_$(d)) $(RDFITF_$(d)):				LL_TGT := $(LL_TGT) -lmkl_rt
+else
 $(RDVINV_$(d)) $(RDFITF_$(d)):				LL_TGT := $(LL_TGT) -lmkl_em64t
+endif
 
 # Shortcuts
 .PHONY:	$(S_$(d))

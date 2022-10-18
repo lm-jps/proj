@@ -4,7 +4,7 @@ dirstack_$(sp)  := $(d)
 d               := $(dir)
 
 # ALWAYS put libs subdirectory before other subdirectories.
-ifeq ($(JSOC_MACHINE), linux_avx)
+ifneq ($(JSOC_MACHINE), linux_x86_64)
 dir     := $(d)/libs
 -include                $(SRCDIR)/$(dir)/Rules.mk
 endif
@@ -12,7 +12,7 @@ endif
 # Subdirectories. Directory-specific rules are optional here. The
 # order DOES matter, always define libraries before applications
 # that use those libraries.
-ifeq ($(JSOC_MACHINE), linux_avx)
+ifneq ($(JSOC_MACHINE), linux_x86_64)
 dir     := $(d)/apps
 -include                $(SRCDIR)/$(dir)/Rules.mk
 endif

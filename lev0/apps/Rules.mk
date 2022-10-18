@@ -104,12 +104,18 @@ $(MODEXESUMS_$(d)):	$(LIBSUMSAPI) $(LIBCJSON) $(LIBSUM)
 $(MODEXEDR_$(d):%=%.o):		CF_TGT := $(CF_TGT) -I$(SRCDIR)/proj/libs/dr
 
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
+ifeq ($(JSOC_MACHINE), linux_avx2)
+$(SUMEXE_$(d)):		LL_TGT := -L  $(POSTGRES_LIBS) -lecpg -lpq -lpng -lmkl_rt
+else
 $(SUMEXE_$(d)):		LL_TGT := -L  $(POSTGRES_LIBS) -lecpg -lpq -lpng $(FFTW3LIBS)
+endif
 
 $(MODEXEDR_$(d)) $(MODEXEDR_$(d):%=%_sock):		$(LIBDR)
 
 ifeq ($(COMPILER), icc)
-   ifneq ($(JSOC_MACHINE), linux_ia32)
+   ifeq ($(JSOC_MACHINE), linux_avx2)
+     MKL     := -lmkl_rt
+   else
      MKL     := -static-intel -lmkl_em64t
    endif
 endif
@@ -141,7 +147,11 @@ $(LIBHKLEV0):		$(LIBHKLEV0_OBJ)
 
 
 $(LIBLIMBFITFXN_OBJ):   CF_TGT := $(CF_TGT) $(FFTWH) -I$(SRCDIR)/$(d)/../../libs/interpolate
+ifeq ($(JSOC_MACHINE), linux_avx2)
+$(LIBLIMBFITFXN):       LL_TGT := $(LL_TGT) -lmkl_rt
+else
 $(LIBLIMBFITFXN):       LL_TGT := $(LL_TGT) $(FFTW3LIBS)
+endif
 $(LIBLIMBFITFXN):       $(LIBLIMBFITFXN_OBJ)
 			$(ARCHIVE)
 			$(SLLIB)

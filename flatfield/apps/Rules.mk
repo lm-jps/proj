@@ -30,9 +30,11 @@ $(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" -I $(SRCDIR)/$(d)/
 
 # added 10/10
 $(OBJ_$(d)):				CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" -I$(FFTW_INCS)
+ifeq ($(JSOC_MACHINE), linux_avx2)
+$(MODEXE_$(d)) $(MODEXE_SOCK_$(d)):	LL_TGT := $(LL_TGT) -lmkl_rt
+else
 $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)):	LL_TGT := $(LL_TGT) $(FFTW3FLIBS) -lmkl_em64t
-
-
+endif
 
 $(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" -I$(SRCDIR)/$(d)/../../libs/interpolate/
 

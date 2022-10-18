@@ -43,7 +43,11 @@ $(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\""
 
 #$(EXTRADEPS_$(d)):	CF_TGT := $(CF_TGT) $(GSLH)
 
+ifeq ($(JSOC_MACHINE), linux_avx2)
+MKL     := -lmkl_rt
+else
 MKL     := -lmkl_em64t
+endif
 
 ALL_$(d)	:= $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)) $(MODEXE_USEF_$(d)) $(MODEXE_USEF_SOCK_$(d))
 #$(ALL_$(d)) : $(EXTRADEPS_$(d))

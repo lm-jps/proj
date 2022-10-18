@@ -81,7 +81,9 @@ static double Default_coord[Default_coord_count] = { 1.0, 1.0 };
 /****************** Utilities ******************/
 
 /* simple utilities */ 
-#define ActiveLabel(y) ((!isnan(y)) && ((y) > 0)) /* not NaN and not 0 */
+// isnan() cannot be passed an integer
+//#define ActiveLabel(y) ((!isnan(y)) && ((y) > 0)) /* not NaN and not 0 */
+#define ActiveLabel(y) ((y) > 0)
 
 /*
  * bb_compute: calculate bounding boxes for each region

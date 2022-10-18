@@ -27,7 +27,11 @@ S_$(d)		:= $(notdir $(EXE_$(d))) #$(MODEXE_SOCK_$(d)))
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
 $(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\""
 $(OBJ_$(d)):		CF_TGT := -I$(SRCDIR)/$(d)/../../../libs/astro -I/home/jsoc/include -I$(SRCDIR)/$(d)/src/
+ifeq ($(JSOC_MACHINE), linux_avx2)
+$(EXE_$(d)):		LF_TGT := $(LF_TGT) -lmkl_rt
+else
 $(EXE_$(d)):		LF_TGT := $(LF_TGT) -lmkl_em64t 
+endif
 
 # I removed the compiler flags "-fp-model precise" and "-fp-model source" 
 # from the LINK command.  If the module really needs such precise handling 

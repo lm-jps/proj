@@ -14,7 +14,7 @@ EXTRADEPS_$(d)		:= $(addprefix $(d)/, flctsubs.o)
 
 ## C-wrapper name (name must end with .c)
 MODEXE_USEF_$(d) :=
-ifeq ($(JSOC_MACHINE), linux_avx)
+ifneq ($(JSOC_MACHINE), linux_x86_64)
 MODEXE_USEF_$(d) := $(addprefix $(d)/, cgem_prep cgem_cutout cgem_map cgem_flct cgem_doppcal cgem_gather cgem_harpinfo)
 endif
 MODEXE_USEF := $(MODEXE_USEF) $(MODEXE_USEF_$(d))
@@ -24,7 +24,11 @@ WRAPPEDF_OBJ_$(d)    := $(addprefix $(d)/, azim_mindiff_jsoc.o dilate.o get_pils
 
 # flags for compiling and linking
 MYCMPFLG_$(d) := -O2 -nofor-main -fp-model strict -fomit-frame-pointer
+ifeq ($(JSOC_MACHINE), linux_avx2)
+MYLNKFLG_$(d) := -lmkl_rt
+else
 MYLNKFLG_$(d) := -lmkl_em64t -openmp -lfftw3 -lm
+endif
 
 ## edit above -----------------------------------------------------
 

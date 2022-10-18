@@ -17,7 +17,11 @@ WRAPPEDF_$(d)    := $(addprefix $(d)/, set_geometry.o sizes.o mgram_data.o pad.o
 
 # flags for compiling and linking
 MYCMPFLG := -O2 -free -nofor-main
+ifeq ($(JSOC_MACHINE), linux_avx2)
+MYLNKFLG := -lmkl_rt -qopenmp
+else
 MYLNKFLG := -lmkl_em64t -openmp
+endif
 
 ## edit above -----------------------------------------------------
 

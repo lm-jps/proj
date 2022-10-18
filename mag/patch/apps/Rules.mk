@@ -46,7 +46,11 @@ $(EXTRADEPS_$(d)):	CF_TGT := $(CF_TGT) -I$(SRCDIR)/$(d)
 ALL_$(d)	:= $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)) $(MODEXE_USEF_$(d)) $(MODEXE_USEF_SOCK_$(d))
 $(ALL_$(d)) : $(EXTRADEPS_$(d))
 $(ALL_$(d)) : $(LIBASTRO) $(LIBSTATS) $(LIBINTERP)
+ifeq ($(JSOC_MACHINE), linux_avx2) 
+$(ALL_$(d)) : LL_TGT := $(LL_TGT) $(GSLLIBS) $(CFITSIOLIBS) -lmkl_rt
+else
 $(ALL_$(d)) : LL_TGT := $(LL_TGT) $(GSLLIBS) $(CFITSIOLIBS) -lmkl_em64t
+endif
 
 # Shortcuts
 .PHONY:	$(S_$(d))
