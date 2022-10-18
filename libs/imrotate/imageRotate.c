@@ -16,7 +16,7 @@
  static int  ana_type_size[5]={1,2,4,4,8};
  union	types_ptr { byte *b; short *w; int *l; float *f; double *d;};		
  static	int	nm1, mm1, nm2, mm2, n, data_type, stretchmark_flag;
- static	float	fnm1, fnm5, fmm1, fmm5, xl, yl;
+ static	double	fnm1, fnm5, fmm1, fmm5, xl, yl;
  static	union	types_ptr base, out;
  static	int	regridtypeflag = 0;
  static int regrid(void *, int , int ,float *, float *, int , int ,int , int ,void **, int *, int *);
@@ -161,13 +161,13 @@ int regrid(
  int	iq, nx, ny, ngrun;
  int	iprun, jrun, jprun, ig, ic, jc, jq, result_sym;
  int	i, j, ind;
- float	fn, fm, yrun, ax, bx, cx, dx, ay, by, cy, dy, xq, beta, xinc, yinc;
- float	xl0, yl0;
+ double	fn, fm, yrun, ax, bx, cx, dx, ay, by, cy, dy, xq, beta, xinc, yinc;
+ double	xl0, yl0;
  struct	ahead	*h;
  union	types_ptr jpbase, jbase, ipbase, bb;
  void *bq;
  base.l = (int *) array;
- fn = (float) n;	fm = (float) m;
+ fn = (double) n;	fm = (double) m;
  ngrun = ng;
  /* generate the output array */
  ng--;	mg--;
@@ -184,7 +184,7 @@ int regrid(
  
  *outarray = bq;
  jpbase.l = (int *) *outarray;
- yrun = 1.0/ (float) ms;
+ yrun = 1.0/ (double) ms;
  /* various increments, in bytes! */
  iprun = ns * i;	jrun = ng * iprun;	jprun = ms * jrun;
  ind = 0;
@@ -204,7 +204,7 @@ int regrid(
      dx = xgbase[i] - ax;	dy = ygbase[i] - ay;	i--;
      cx = xgbase[i] - ax;	cy = ygbase[i] - ay;
      dx = dx - bx - cx;	dy = dy - by - cy;	j++;
-     xq = 1.0 /(float) ns;
+     xq = 1.0 /(double) ns;
      bx *= xq;	by *= xq;	dx *= xq * yrun;	dy *= xq * yrun;
      cx *= yrun;	cy *= yrun;
      /* setup for jc loop */
@@ -270,7 +270,7 @@ int regrid(
       dx = xgbase[i] - ax;	dy = ygbase[i] - ay;	i--;
       cx = xgbase[i] - ax;	cy = ygbase[i] - ay;
       dx = dx - bx - cx;	dy = dy - by - cy;	j++;
-      xq = 1.0 /(float) ns;
+      xq = 1.0 /(double) ns;
       bx *= xq;	by *= xq;	dx *= xq * yrun;	dy *= xq * yrun;
       cx *= yrun;	cy *= yrun;
 						      /* setup for jc loop */
@@ -326,7 +326,7 @@ void bicubic_f()	/* internal routine for single pixel */
   }
 */
  int	i1, i2, i3, i4, j1, j2, j3, j4, iq;
- float	c1, c2, c3, c4, b1, b2, b3, b4, dx0, dx1, dx2, dx3, dx4, xq, yq;
+ double	c1, c2, c3, c4, b1, b2, b3, b4, dx0, dx1, dx2, dx3, dx4, xq, yq;
  union	types_ptr bb;
  /* the location is in xl, yl; base is the pointer to array; out is
  pointer to output; both are unions */
@@ -454,7 +454,7 @@ void bicubic_fc()	/* internal routine for single pixel */
  a little slower than the originals, perhaps because of the overhead
  in the call or other adjustments made */
  int	i1, i2, i3, i4, j1, j2, j3, j4, iq;
- float	c1, c2, c3, c4, b1, b2, b3, b4, dx0, dx1, dx2, dx3, dx4, xq, yq;
+ double	c1, c2, c3, c4, b1, b2, b3, b4, dx0, dx1, dx2, dx3, dx4, xq, yq;
  union	types_ptr bb;
  /* the location is in xl, yl; base is the pointer to array; out is
  pointer to output; both are unions */
